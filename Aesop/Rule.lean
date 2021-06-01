@@ -57,7 +57,7 @@ instance : DecidableRel (α := NormalizationRule) (· < ·) :=
   (inferInstance : DecidableRel (α := Rule Int) (· < ·))
 
 protected def blt (r s : NormalizationRule) : Bool :=
-r < s
+  r < s
 
 end NormalizationRule
 
@@ -92,7 +92,7 @@ instance : DecidableRel (α := SafeRule) (· < ·) :=
   fun r s => (inferInstance : Decidable (r.toRule < s.toRule))
 
 protected def blt (r s : SafeRule) : Bool :=
-r < s
+  r < s
 
 end SafeRule
 
@@ -101,18 +101,52 @@ def UnsafeRule := Rule Percent
 
 namespace UnsafeRule
 
-instance : ToFormat UnsafeRule :=
-sorry
+open Percent
 
-instance : LT UnsafeRule :=
-sorry
+instance : ToFormat UnsafeRule where
+  format := format (α := Rule Percent)
 
--- TODO dec lt
+instance : LT UnsafeRule where
+  -- The penalty is really the success probability: favour larger success
+  lt r s := r.penalty > s.penalty
+
+instance : DecidableRel (α := UnsafeRule) (· < ·) :=
+  fun r s => (inferInstance : Decidable (r.penalty > s.penalty))
 
 protected def blt (r s : UnsafeRule) : Bool :=
-sorry -- r < s
+  r < s
 
 end UnsafeRule
 
+
+inductive RegularRule
+  | safeRule (r : SafeRule)
+  | unsafeRule (r : UnsafeRule)
+
+namespace RegularRule
+
+instance : ToFormat RegularRule where
+  format
+    | (safeRule r) => "[safe] " ++ format (α := SafeRule) r
+    | (unsafeRule r) => "[unsafe] " ++ format (α := UnsafeRule) r
+
+-- TODO: we cannot write toRule as the penalty type parameter is different
+
+def successProbability : RegularRule → Percent
+  | (safeRule r) => ⟨100⟩
+  | (unsafeRule r) => r.penalty
+
+def isSafe : RegularRule → Bool
+  | (safeRule _) => true
+  | (unsafeRule _) => false
+
+def isUnsafe : RegularRule → Bool
+  | (safeRule _) => false
+  | (unsafeRule _) => true
+
+end RegularRule
+
+
+/-! ## Rule Indices -/
 
 end Aesop
