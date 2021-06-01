@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
-import Lean.Elab.Tactic.Basic
+import Lean
 
 import Aesop.Percent
 import Aesop.Util
@@ -40,7 +40,7 @@ instance [LT α] : LT (Rule α) where
 
 instance [LT α] [DecidableRel (α := α) (· < ·)] :
     DecidableRel (α := Rule α) (· < ·) :=
-  fun r s => (inferInstance : Decidable (r.penalty < s.penalty))
+  fun r s => inferInstanceAs $ Decidable (r.penalty < s.penalty)
 
 
 def NormalizationRule := Rule Int
@@ -54,7 +54,7 @@ instance : LT NormalizationRule where
   lt r s := LT.lt (α := Rule Int) r s
 
 instance : DecidableRel (α := NormalizationRule) (· < ·) :=
-  (inferInstance : DecidableRel (α := Rule Int) (· < ·))
+  inferInstanceAs $ DecidableRel (α := Rule Int) (· < ·)
 
 protected def blt (r s : NormalizationRule) : Bool :=
 r < s
@@ -89,7 +89,7 @@ instance : LT SafeRule where
   lt r s := r.toRule < s.toRule
 
 instance : DecidableRel (α := SafeRule) (· < ·) :=
-  fun r s => (inferInstance : Decidable (r.toRule < s.toRule))
+  fun r s => inferInstanceAs $ Decidable (r.toRule < s.toRule)
 
 protected def blt (r s : SafeRule) : Bool :=
 r < s
