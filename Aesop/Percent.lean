@@ -15,6 +15,7 @@ Invariant: between 0 and 100
 -/
 structure Percent where
   toNat : Nat
+  deriving Inhabited
 
 namespace Percent
 

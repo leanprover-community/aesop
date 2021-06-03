@@ -51,3 +51,11 @@ def conclusionHeadConstant? (e : Expr) : MetaM (Option Name) :=
   forallTelescope e $ λ _ e => e.getAppFn.constName?
 
 end Lean.Meta
+
+
+namespace Std.Format
+
+def unlines (fs : List Format) : Format :=
+  Format.joinSep fs line
+
+end Std.Format

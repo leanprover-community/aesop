@@ -15,37 +15,36 @@ open Lean
 open Lean.Meta
 open Lean.Elab.Tactic (TacticM)
 
-/-! ## Rule Indexing Modes -/
-
-inductive IndexingMode : Type
-  | unindexed
-  | indexTargetHead (hd : Name)
-
-export IndexingMode (unindexed indexTargetHead)
-
-
 /-! ## Rules -/
 
 structure Rule (α : Type) where
+  name : Name
   tac : TacticM Unit
-  description : Format
-  penalty : α
+  priorityInfo : α
   deriving Inhabited
 
 instance [ToFormat α] : ToFormat (Rule α) where
-  format r := f! "[{r.penalty}] {r.description}"
+  format r := f! "[{r.priorityInfo}] {r.name}" -- TODO don't output raw name?
+
+instance : BEq (Rule α) where
+  beq r s := r.name == s.name
 
 instance [LT α] : LT (Rule α) where
-  lt r s := r.penalty < s.penalty
+  lt r s := r.priorityInfo < s.priorityInfo
 
 instance [LT α] [DecidableRel (α := α) (· < ·)] :
     DecidableRel (α := Rule α) (· < ·) :=
-  fun r s => inferInstanceAs $ Decidable (r.penalty < s.penalty)
+  fun r s => inferInstanceAs $ Decidable (r.priorityInfo < s.priorityInfo)
 
+
+/-! ### Normalisation Rules -/
 
 def NormalizationRule := Rule Int
 
 namespace NormalizationRule
+
+instance : BEq NormalizationRule where
+  beq := BEq.beq (α := Rule Int)
 
 instance : ToFormat NormalizationRule where
   format := format (α := Rule Int)
@@ -62,6 +61,8 @@ protected def blt (r s : NormalizationRule) : Bool :=
 end NormalizationRule
 
 
+/-! ### Safe Rules -/
+
 inductive Safety
   | safe
   | almostSafe
@@ -76,11 +77,14 @@ instance : ToFormat Safety where
 
 end Safety
 
-
 structure SafeRule extends Rule Int where
   safety : Safety
+  deriving Inhabited
 
 namespace SafeRule
+
+instance : BEq SafeRule where
+  beq r s := r.toRule == s.toRule
 
 instance : ToFormat SafeRule where
   format r := format r.toRule
@@ -97,6 +101,8 @@ protected def blt (r s : SafeRule) : Bool :=
 end SafeRule
 
 
+/-! ### Unsafe Rules -/
+
 def UnsafeRule := Rule Percent
 
 namespace UnsafeRule
@@ -106,12 +112,16 @@ open Percent
 instance : ToFormat UnsafeRule where
   format := format (α := Rule Percent)
 
+instance : BEq UnsafeRule where
+  beq := BEq.beq (α := Rule Percent)
+
 instance : LT UnsafeRule where
-  -- The penalty is really the success probability: favour larger success
-  lt r s := r.penalty > s.penalty
+  -- The priority info here is the success probability: favour larger
+  -- probabilities.
+  lt r s := r.priorityInfo > s.priorityInfo
 
 instance : DecidableRel (α := UnsafeRule) (· < ·) :=
-  fun r s => (inferInstance : Decidable (r.penalty > s.penalty))
+  fun r s => (inferInstance : Decidable (r.priorityInfo > s.priorityInfo))
 
 protected def blt (r s : UnsafeRule) : Bool :=
   r < s
@@ -119,9 +129,12 @@ protected def blt (r s : UnsafeRule) : Bool :=
 end UnsafeRule
 
 
+/-! ### Regular Rules -/
+
 inductive RegularRule
   | safeRule (r : SafeRule)
   | unsafeRule (r : UnsafeRule)
+  deriving Inhabited, BEq
 
 namespace RegularRule
 
@@ -130,11 +143,9 @@ instance : ToFormat RegularRule where
     | (safeRule r) => "[safe] " ++ format (α := SafeRule) r
     | (unsafeRule r) => "[unsafe] " ++ format (α := UnsafeRule) r
 
--- TODO: we cannot write toRule as the penalty type parameter is different
-
 def successProbability : RegularRule → Percent
   | (safeRule r) => ⟨100⟩
-  | (unsafeRule r) => r.penalty
+  | (unsafeRule r) => r.priorityInfo
 
 def isSafe : RegularRule → Bool
   | (safeRule _) => true
@@ -147,6 +158,93 @@ def isUnsafe : RegularRule → Bool
 end RegularRule
 
 
+/-! ## Rule Indexing Modes -/
+
+inductive IndexingMode : Type
+  | unindexed
+  | indexTarget (target : Expr)
+  deriving Inhabited, BEq
+
+export IndexingMode (unindexed indexTarget)
+
+
 /-! ## Rule Indices -/
+
+structure GoalInfo where
+  target : Expr
+  deriving Inhabited, BEq
+
+structure RuleIndex (α : Type) where
+  byTarget : DiscrTree α
+  unindexed : Array α
+  deriving Inhabited
+
+namespace RuleIndex
+
+open Std.Format in
+instance [ToFormat α] : ToFormat (RuleIndex α) where
+  format ri := Format.join
+    [ "rules indexed by target:",
+      indentD $ format ri.byTarget, -- TODO revisit
+      line,
+      "unindexed rules:",
+      ri.unindexed.map format |>.toList |> unlines |> indentD ]
+
+def empty : RuleIndex α where
+  byTarget := DiscrTree.empty
+  unindexed := #[] -- TODO keep these sorted?
+
+def add [BEq α] (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
+    MetaM (RuleIndex α) :=
+  match imode with
+  | IndexingMode.unindexed => { ri with unindexed := ri.unindexed.push r }
+  | IndexingMode.indexTarget tgt =>
+    return { ri with byTarget := (← ri.byTarget.insert tgt r) }
+
+def applicableByTargetRules (ri : RuleIndex α) (goalInfo : GoalInfo) :
+    MetaM (Array α) :=
+  ri.byTarget.getMatch goalInfo.target
+
+-- TODO remove Inhabited as soon as qsort doesn't require it any more.
+def applicableRules [Inhabited α] [LT α] [DecidableRel (α := α) (· < ·)]
+    (ri : RuleIndex α) (goalInfo : GoalInfo) : MetaM (Array α) := do
+  let rs₁ ← applicableByTargetRules ri goalInfo
+  let rs₂ := ri.unindexed -- TODO does it help if these are already sorted?
+  return (rs₁ ++ rs₂).qsort (· < ·)
+
+end RuleIndex
+
+
+/-! ## Rule Set Members -/
+
+inductive RuleSetMember
+| normalizationRule (r : NormalizationRule) (imode : IndexingMode)
+| normalizationSimpLemmas (s : SimpLemmas)
+| unsafeRule (r : UnsafeRule) (imode : IndexingMode)
+| safeRule (r : SafeRule) (imode : IndexingMode)
+
+
+/-! ## Rule Set -/
+
+structure RuleSet where
+  normalizationRules : RuleIndex NormalizationRule
+  normalizationSimpLemmas : SimpLemmas
+  unsafeRules : RuleIndex UnsafeRule
+  safeRules : RuleIndex SafeRule
+
+namespace RuleSet
+
+def add (rs : RuleSet) : RuleSetMember → MetaM RuleSet
+  | RuleSetMember.normalizationRule r imode =>
+    return { rs with normalizationRules := (← rs.normalizationRules.add r imode) }
+  | RuleSetMember.normalizationSimpLemmas s =>
+    sorry -- TODO
+    -- return { rs with normalizationSimpLemmas := rs.normalizationSimpLemmas }
+  | RuleSetMember.unsafeRule r imode =>
+    return { rs with unsafeRules := (← rs.unsafeRules.add r imode )}
+  | RuleSetMember.safeRule r imode =>
+    return { rs with safeRules := (← rs.safeRules.add r imode )}
+
+end RuleSet
 
 end Aesop
