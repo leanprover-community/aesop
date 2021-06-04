@@ -43,6 +43,9 @@ def NormalizationRule := Rule Int
 
 namespace NormalizationRule
 
+instance : Inhabited NormalizationRule where
+  default := Inhabited.default (α := Rule Int)
+
 instance : BEq NormalizationRule where
   beq := BEq.beq (α := Rule Int)
 
@@ -108,6 +111,9 @@ def UnsafeRule := Rule Percent
 namespace UnsafeRule
 
 open Percent
+
+instance : Inhabited UnsafeRule where
+  default := Inhabited.default (α := Rule Percent)
 
 instance : ToFormat UnsafeRule where
   format := format (α := Rule Percent)
@@ -201,6 +207,9 @@ def add [BEq α] (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
   | IndexingMode.indexTarget tgt =>
     return { ri with byTarget := (← ri.byTarget.insert tgt r) }
 
+def fromList [BEq α] (rs : List (α × IndexingMode)) : MetaM (RuleIndex α) :=
+  rs.foldlM (λ rs ⟨r, imode⟩ => rs.add r imode) empty
+
 def applicableByTargetRules (ri : RuleIndex α) (goalInfo : GoalInfo) :
     MetaM (Array α) :=
   ri.byTarget.getMatch goalInfo.target
@@ -234,6 +243,18 @@ structure RuleSet where
 
 namespace RuleSet
 
+def empty : RuleSet :=
+{ normalizationRules := RuleIndex.empty,
+  normalizationSimpLemmas :=
+    SimpLemmas.mk
+      (DiscrTree.mk (Std.PersistentHashMap.empty))
+      (DiscrTree.mk (Std.PersistentHashMap.empty))
+      Std.PersistentHashSet.empty
+      Std.PersistentHashSet.empty
+      Std.PersistentHashSet.empty,
+  unsafeRules := RuleIndex.empty,
+  safeRules := RuleIndex.empty }
+
 def add (rs : RuleSet) : RuleSetMember → MetaM RuleSet
   | RuleSetMember.normalizationRule r imode =>
     return { rs with normalizationRules := (← rs.normalizationRules.add r imode) }
@@ -244,6 +265,21 @@ def add (rs : RuleSet) : RuleSetMember → MetaM RuleSet
     return { rs with unsafeRules := (← rs.unsafeRules.add r imode )}
   | RuleSetMember.safeRule r imode =>
     return { rs with safeRules := (← rs.safeRules.add r imode )}
+
+def fromList (rs : List RuleSetMember) : MetaM RuleSet :=
+  rs.foldlM (λ rs r => rs.add r) empty
+
+def applicableNormalizationRules (rs : RuleSet) (goalInfo : GoalInfo) :
+  MetaM (Array NormalizationRule) :=
+  rs.normalizationRules.applicableRules goalInfo
+
+def applicableUnsafeRules (rs : RuleSet) (goalInfo : GoalInfo) :
+  MetaM (Array UnsafeRule) :=
+  rs.unsafeRules.applicableRules goalInfo
+
+def applicableSafeRules (rs : RuleSet) (goalInfo : GoalInfo) :
+  MetaM (Array SafeRule) :=
+  rs.safeRules.applicableRules goalInfo
 
 end RuleSet
 
