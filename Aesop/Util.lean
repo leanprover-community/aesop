@@ -59,3 +59,34 @@ def unlines (fs : List Format) : Format :=
   Format.joinSep fs line
 
 end Std.Format
+
+
+namespace ST.Ref
+
+variable {m} [Monad m] [MonadLiftT (ST σ) m]
+
+@[inline]
+unsafe def modifyMUnsafe (r : Ref σ α) (f : α → m α) : m Unit := do
+  let v ← r.take
+  r.set (← f v)
+
+@[implementedBy modifyMUnsafe]
+def modifyM (r : Ref σ α) (f : α → m α) : m Unit := do
+  let v ← r.get
+  r.set (← f v)
+
+@[inline]
+unsafe def modifyGetMUnsafe (r : Ref σ α) (f : α → m (β × α)) : m β := do
+  let v ← r.take
+  let (b, a) ← f v
+  r.set a
+  return b
+
+@[implementedBy modifyGetMUnsafe]
+def modifyGetM (r : Ref σ α) (f : α → m (β × α)) : m β := do
+  let v ← r.get
+  let (b, a) ← f v
+  r.set a
+  return b
+
+end ST.Ref

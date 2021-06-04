@@ -6,6 +6,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 
 import Lean
 
+import Aesop.MutableAndOrTree
 import Aesop.Percent
 import Aesop.Rule
 
@@ -16,37 +17,35 @@ namespace Aesop
 
 /-! ## Node IDs -/
 
--- TODO remove?
-structure NodeId where
+structure GoalId where
   toNat : Nat
   deriving Inhabited, DecidableEq
 
-namespace NodeId
+namespace GoalId
 
-protected def zero : NodeId :=
+protected def zero : GoalId :=
   ⟨0⟩
 
-protected def one : NodeId :=
+protected def one : GoalId :=
   ⟨1⟩
 
-protected def succ : NodeId → NodeId
+protected def succ : GoalId → GoalId
   | ⟨n⟩ => ⟨n + 1⟩
 
-instance : LT NodeId where
+instance : LT GoalId where
   lt n m := n.toNat < m.toNat
 
-instance : DecidableRel (α := NodeId) (· < ·) :=
+instance : DecidableRel (α := GoalId) (· < ·) :=
   λ n m => inferInstanceAs (Decidable (n.toNat < m.toNat))
 
-instance : ToFormat NodeId where
+instance : ToFormat GoalId where
   format n := format n.toNat
 
-end NodeId
+end GoalId
 
 
 /-! ## Rule Application IDs -/
 
--- TODO remove?
 structure RappId where
   toNat : Nat
   deriving Inhabited, DecidableEq
@@ -74,82 +73,372 @@ instance : ToFormat RappId where
 end RappId
 
 
-/-! ## Nodes and Rule Applications -/
+/-! ## Goal Nodes and Rule Applications -/
 
--- Mutual structures are currently unsupported, so we desugar manually.
-structure Node' (RappRef : Type) : Type where
-  id : NodeId
-  parent : Option RappRef
+structure GoalData : Type where
+  id : GoalId
   goal : Expr
   successProbability : Percent
   normalizationProof : Option Expr
-  rapps : List RappRef
   failedRapps : List RegularRule
   unsafeQueue : Option (List UnsafeRule)
-  isProven : Bool
-  isUnprovable : Bool
-  isIrrelevant : Bool
+  proven? : Bool
+  unprovable? : Bool
+  irrelevant? : Bool
   deriving Inhabited
 
-structure Rapp' (NodeRef : Type) : Type where
+structure RappData : Type where
   id : RappId
-  parent : NodeRef
   appliedRule : RegularRule
   successProbability : Percent
   proof : Expr
-  subgoals : List NodeRef
-  isProven : Bool
-  isUnprovable : Bool
-  isIrrelevant : Bool
+  proven? : Bool
+  unprovable? : Bool
+  irrelevant? : Bool
   deriving Inhabited
 
-mutual
-  unsafe inductive NodeWrap
-    | mkNodeWrap : Node' (IO.Ref RappWrap) → NodeWrap
+abbrev Goal    := MutableAndOrTree IO.RealWorld GoalData RappData
+abbrev GoalRef := IO.Ref Goal
 
-  unsafe inductive RappWrap
-    | mkRappWrap : Rapp' (IO.Ref NodeWrap) → RappWrap
-end
+abbrev Rapp    := MutableAndOrTree IO.RealWorld RappData GoalData
+abbrev RappRef := IO.Ref Rapp
 
-structure NodeRappSpec where
-  Node : Type
-  Rapp : Type
-  unfoldNode : Node → Node' (IO.Ref Rapp)
-  unfoldRapp : Rapp → Rapp' (IO.Ref Node)
+variable {m} [Monad m] [MonadLiftT (ST IO.RealWorld) m]
 
-unsafe def NodeRappImp : NodeRappSpec where
-  Node := NodeWrap
-  Rapp := RappWrap
-  unfoldNode | NodeWrap.mkNodeWrap n => n
-  unfoldRapp | RappWrap.mkRappWrap r => r
+/-! ## Functions on Goals -/
 
-@[implementedBy NodeRappImp]
-constant NodeRapp : NodeRappSpec := {
-  Node := Unit
-  Rapp := Unit
-  unfoldNode := λ _ => arbitrary
-  unfoldRapp := λ _ => arbitrary
-}
+namespace Goal
 
-def Node : Type := NodeRapp.Node
+/-! ### Constructors -/
 
-def Rapp : Type := NodeRapp.Rapp
+@[inline]
+def mk (parent : Option RappRef) (rapps : Array RappRef)
+    (data : GoalData) : Goal :=
+  MutableAndOrTree.mk data parent rapps
 
-namespace Node
+def mkInitial (id : GoalId) (parent : Option RappRef) (goal : Expr)
+    (successProbability : Percent) : Goal :=
+  Goal.mk parent #[]
+    { id := id
+      goal := goal
+      successProbability := successProbability
+      normalizationProof := none
+      failedRapps := []
+      unsafeQueue := none
+      proven? := false
+      unprovable? := false
+      irrelevant? := false }
 
-def unfold (n : Node) : Node' (IO.Ref Rapp) :=
-  NodeRapp.unfoldNode n
+/-! ### Getters -/
 
-def id (n : Node) : NodeId :=
-  n.unfold.id
+@[inline]
+def rapps (g : Goal) : Array RappRef :=
+  g.children
 
-end Node
+@[inline]
+def id (g : Goal) : GoalId :=
+  g.payload.id
+
+@[inline]
+def goal (g : Goal) : Expr :=
+  g.payload.goal
+
+@[inline]
+def successProbability (g : Goal) : Percent :=
+  g.payload.successProbability
+
+@[inline]
+def normalizationProof (g : Goal) : Option Expr :=
+  g.payload.normalizationProof
+
+@[inline]
+def failedRapps (g : Goal) : List RegularRule :=
+  g.payload.failedRapps
+
+@[inline]
+def unsafeQueue (g : Goal) : Option (List UnsafeRule) :=
+  g.payload.unsafeQueue
+
+@[inline]
+def proven? (g : Goal) : Bool :=
+  g.payload.proven?
+
+@[inline]
+def unprovable? (g : Goal) : Bool :=
+  g.payload.unprovable?
+
+@[inline]
+def irrelevant? (g : Goal) : Bool :=
+  g.payload.irrelevant?
+
+/-! ### Setters -/
+
+@[inline]
+def setId (id : GoalId) (g : Goal) : Goal :=
+  g.modifyPayload $ λ d => { d with id := id }
+
+@[inline]
+def setGoal (goal : Expr) (g : Goal) : Goal :=
+  g.modifyPayload $ λ d => { d with goal := goal }
+
+@[inline]
+def setSuccessProbability (successProbability : Percent) (g : Goal) : Goal :=
+  g.modifyPayload $ λ d => { d with successProbability := successProbability }
+
+@[inline]
+def setNormalizationProof (normalizationProof : Expr) (g : Goal) : Goal :=
+  g.modifyPayload $ λ d => { d with normalizationProof := normalizationProof }
+
+@[inline]
+def setFailedRapps (failedRapps : List RegularRule) (g : Goal) : Goal :=
+  g.modifyPayload $ λ d => { d with failedRapps := failedRapps }
+
+@[inline]
+def setProven? (proven? : Bool) (g : Goal) : Goal :=
+  g.modifyPayload $ λ d => { d with proven? := proven? }
+
+@[inline]
+def setUnprovable? (unprovable? : Bool) (g : Goal) : Goal :=
+  g.modifyPayload $ λ d => { d with unprovable? := unprovable? }
+
+@[inline]
+def setIrrelevant? (irrelevant? : Bool) (g : Goal) : Goal :=
+  g.modifyPayload $ λ d => { d with irrelevant? := irrelevant? }
+
+/-! ### Miscellaneous -/
+
+def hasNoUnexpandedUnsafeRule (g : Goal) : Bool :=
+  match g.unsafeQueue with
+  | none => false
+  | some q => q.isEmpty
+
+end Goal
+
+
+/-! ## Functions on Rule Applications -/
 
 namespace Rapp
 
-def unfold (r : Rapp) : Rapp' (IO.Ref Node) :=
-  NodeRapp.unfoldRapp r
+/-! ### Constructors -/
+
+@[inline]
+def mk (parent : Option GoalRef) (subgoals : Array GoalRef)
+    (data : RappData) : Rapp :=
+  MutableAndOrTree.mk data parent subgoals
+
+/-! ### Getters -/
+
+@[inline]
+def subgoals (r : Rapp) : Array GoalRef :=
+  r.children
+
+@[inline]
+def id (r : Rapp) : RappId :=
+  r.payload.id
+
+@[inline]
+def appliedRule (r : Rapp) : RegularRule :=
+  r.payload.appliedRule
+
+@[inline]
+def successProbability (r : Rapp) : Percent :=
+  r.payload.successProbability
+
+@[inline]
+def proof (r : Rapp) : Expr :=
+  r.payload.proof
+
+@[inline]
+def proven? (r : Rapp) : Bool :=
+  r.payload.proven?
+
+@[inline]
+def unprovable? (r : Rapp) : Bool :=
+  r.payload.unprovable?
+
+@[inline]
+def irrelevant? (r : Rapp) : Bool :=
+  r.payload.irrelevant?
+
+-- Setters
+
+@[inline]
+def setId (id : RappId) (r : Rapp) : Rapp :=
+  r.modifyPayload $ λ r => { r with id := id }
+
+@[inline]
+def setAppliedRule (appliedRule : RegularRule) (r : Rapp) : Rapp :=
+  r.modifyPayload $ λ r => { r with appliedRule := appliedRule }
+
+@[inline]
+def setSuccessProbability (successProbability : Percent) (r : Rapp) : Rapp :=
+  r.modifyPayload $ λ r => { r with successProbability := successProbability }
+
+@[inline]
+def setProof (proof : Expr) (r : Rapp) : Rapp :=
+  r.modifyPayload $ λ r => { r with proof := proof }
+
+@[inline]
+def setProven? (proven? : Bool) (r : Rapp) : Rapp :=
+  r.modifyPayload $ λ r => { r with proven? := proven? }
+
+@[inline]
+def setUnprovable? (unprovable? : Bool) (r : Rapp) : Rapp :=
+  r.modifyPayload $ λ r => { r with unprovable? := unprovable? }
+
+@[inline]
+def setIrrelevant? (irrelevant? : Bool) (r : Rapp) : Rapp :=
+  r.modifyPayload $ λ r => { r with irrelevant? := irrelevant? }
+
+/-! ### Miscellaneous -/
+
+def subgoalsProven? (r : Rapp) : m Bool :=
+  r.subgoals.allM λ subgoal => return (← subgoal.get).proven?
 
 end Rapp
+
+/-! ## Miscellaneous Functions on Goals -/
+
+namespace Goal
+
+def mayHaveUnexpandedRapp (g : Goal) : m Bool := do pure $
+  ¬ g.hasNoUnexpandedUnsafeRule ∧
+  ¬ (← g.rapps.anyM λ r => return (← r.get : Rapp).appliedRule.isSafe)
+
+def hasProvableRapp (g : Goal) : m Bool :=
+  g.rapps.anyM λ r => return ¬ (← r.get).unprovable?
+
+end Goal
+
+
+/-! ## The Search Tree -/
+
+structure Tree where
+  root : GoalRef
+  nextGoalId : GoalId
+  nextRappId : RappId
+
+namespace Tree
+
+def singleton (g : Goal) : m Tree := return {
+  root := (← ST.mkRef g)
+  nextGoalId := GoalId.one
+  nextRappId := RappId.zero }
+
+-- Note: Overwrites the goal ID from g.
+def insertGoal (g : GoalData) (parent : RappRef) (t : Tree) :
+    m (GoalId × GoalRef × Tree) := do
+  let id := t.nextGoalId
+  let goalRef ← ST.mkRef $ Goal.mk (some parent) #[] g
+  parent.modify $ λ r => r.addChild goalRef
+  return (id, goalRef, { t with nextGoalId := id.succ })
+
+-- Note: Overwrites the rapp ID from r.
+def insertRapp (r : RappData) (parent : GoalRef) (t : Tree) :
+    m (RappId × RappRef × Tree) := do
+  let id := t.nextRappId
+  let rappRef ← ST.mkRef $ Rapp.mk (some parent) #[] r
+  parent.modify $ λ g => g.addChild rappRef
+  return (id, rappRef, { t with nextRappId := id.succ })
+
+def rootProven? (t : Tree) : m Bool :=
+  return (← t.root.get).proven?
+
+def rootUnprovable? (t : Tree) : m Bool :=
+  return (← t.root.get).unprovable?
+
+partial def linkProofs (t : Tree) : MetaM Unit :=
+  loop t.root
+  where
+    loop (gref : GoalRef) : MetaM Unit := do
+      let g ← gref.get
+      let (some r) ← g.rapps.findSomeM? λ r => do
+        let r ← r.get
+        return if r.proven? then some r else none
+        | throwError "aesop/linkProofs: internal error: node {g.id} not proven"
+      r.subgoals.forM loop
+      let (true) ← isDefEq g.goal r.proof | throwError
+        "aesop/linkProofs: internal error: proof of rule application {r.id} did not unify with the goal of its parent node {g.id}"
+
+def extractProof (t : Tree) : MetaM Expr := do
+  let g ← t.root.get
+  match g.normalizationProof with
+  | none => instantiateMVars g.goal
+  | some prf => instantiateMVars prf
+
+end Tree
+
+/-! ## Propagating Provability/Unprovability/Irrelevance -/
+
+@[inline]
+def Internal.setIrrelevant : Sum GoalRef RappRef → m Unit :=
+  MutableAndOrTree.visitDown'
+    (λ gref => do
+      gref.modify λ g => g.modifyPayload λ gd => { gd with irrelevant? := true }
+      return true)
+    (λ rref => do
+      rref.modify λ r => r.modifyPayload λ rd => { rd with irrelevant? := true }
+      return true)
+
+def GoalRef.setIrrelevant : GoalRef → m Unit :=
+  Internal.setIrrelevant ∘ Sum.inl
+
+def RappRef.setIrrelevant : RappRef → m Unit :=
+  Internal.setIrrelevant ∘ Sum.inr
+
+@[inline]
+def Internal.setProven : Sum GoalRef RappRef → m Unit :=
+  MutableAndOrTree.visitUp'
+    -- Goals are unconditionally marked as proven.
+    (λ gref => do
+      gref.modify λ (g : Goal) => g.setProven? true
+      return true)
+    -- Rapps are marked as proven only if they are in fact proven, i.e. if all
+    -- their subgoals are (marked as) proven. In this case, we also need to
+    -- mark siblings of the rapp (and their descendants) as irrelevant.
+    (λ rref => do
+      let r : Rapp ← rref.get
+      if ¬ (← r.subgoalsProven?)
+        then return false
+        else do
+          rref.set $ r.setProven? true
+          let siblings ← MutableAndOrTree.siblings rref
+          siblings.forM RappRef.setIrrelevant
+          return true)
+
+def GoalRef.setProven : GoalRef → m Unit :=
+  Internal.setProven ∘ Sum.inl
+
+def RappRef.setProven : RappRef → m Unit :=
+  Internal.setProven ∘ Sum.inr
+
+@[inline]
+def Internal.setUnprovable : Sum GoalRef RappRef → m Unit :=
+  MutableAndOrTree.visitUp'
+    -- Goals are marked as unprovable only if they are in fact unprovable, i.e.
+    -- if all their rule applications are unprovable and they do not have
+    -- unexpanded rule applications. In this case, we also need to mark
+    -- siblings of the goal (and their descendants) as irrelevant.
+    (λ gref => do
+      let g : Goal ← gref.get
+      if (← g.mayHaveUnexpandedRapp) ∨ (← g.hasProvableRapp)
+        then return false
+        else do
+          gref.set $ g.setUnprovable? true
+          let siblings ← MutableAndOrTree.siblings gref
+          siblings.forM GoalRef.setIrrelevant
+          return true)
+    -- Rapps are unconditionally marked as unprovable.
+    (λ rref => do
+      rref.modify λ (r : Rapp) => r.setUnprovable? true
+      return true)
+
+def GoalRef.setUnprovable : GoalRef → m Unit :=
+  Internal.setUnprovable ∘ Sum.inl
+
+def RappRef.setUnprovable : RappRef → m Unit :=
+  Internal.setUnprovable ∘ Sum.inr
+
+-- TODO formatting
 
 end Aesop
