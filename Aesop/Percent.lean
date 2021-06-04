@@ -11,28 +11,28 @@ namespace Aesop
 open Lean
 
 /-
-Invariant: between 0 and 100
+Invariant: between 0 and 0.1
 -/
 structure Percent where
-  toNat : Nat
+  toFloat : Float
   deriving Inhabited
 
 namespace Percent
 
-protected def ofNat (n : Nat) : Option Percent :=
-  if n <= 100 then some ⟨n⟩ else none
+protected def ofFloat (f : Float) : Option Percent :=
+  if 0 <= f && f <= 1.0 then some ⟨f⟩ else none
 
 instance : Mul Percent where
-  mul p q := ⟨Nat.max 1 ((p.toNat * q.toNat) / 100)⟩
+  mul p q := ⟨p.toFloat * q.toFloat⟩
 
 instance : LT Percent where
-  lt p q := p.toNat < q.toNat
+  lt p q := p.toFloat < q.toFloat
 
 instance : DecidableRel (α := Percent) (· < ·) :=
-  λ p q => (inferInstance : Decidable (p.toNat < q.toNat))
+  λ p q => (inferInstance : Decidable (p.toFloat < q.toFloat))
 
 protected def toString (p : Percent) : String :=
-  toString p.toNat ++ "%"
+  toString p.toFloat
 
 instance : ToFormat Percent where
   format p := p.toString
