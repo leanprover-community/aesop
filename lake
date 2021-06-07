@@ -1,0 +1,4 @@
+#!/bin/bash
+
+env LEAN_PATH="/home/jannis/src/lean4-lake/build:$(dirname "$(elan which lean)")/../lib/lean" \
+  lake $@

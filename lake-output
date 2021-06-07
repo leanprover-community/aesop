@@ -1,4 +1,0 @@
-package.lean:1:0: error: unknown package 'Init'
-You might need to open '/home/jannis/uni/aesop' as a workspace in your editor
-package.lean:3:14: error: unknown identifier 'Lake.PackageConfig'
-package.lean:3:14: error: unknown constant 'sorryAx'
