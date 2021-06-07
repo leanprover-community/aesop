@@ -6,7 +6,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 
 import Lean
 
-import Aesop.MutableAndOrTree
+import Aesop.MutAltTree
 import Aesop.Percent
 import Aesop.Rule
 
@@ -97,10 +97,10 @@ structure RappData : Type where
   irrelevant? : Bool
   deriving Inhabited
 
-abbrev Goal    := MutableAndOrTree IO.RealWorld GoalData RappData
+abbrev Goal    := MutAltTree IO.RealWorld GoalData RappData
 abbrev GoalRef := IO.Ref Goal
 
-abbrev Rapp    := MutableAndOrTree IO.RealWorld RappData GoalData
+abbrev Rapp    := MutAltTree IO.RealWorld RappData GoalData
 abbrev RappRef := IO.Ref Rapp
 
 variable {m} [Monad m] [MonadLiftT (ST IO.RealWorld) m]
@@ -114,7 +114,7 @@ namespace Goal
 @[inline]
 def mk (parent : Option RappRef) (rapps : Array RappRef)
     (data : GoalData) : Goal :=
-  MutableAndOrTree.mk data parent rapps
+  MutAltTree.mk data parent rapps
 
 def mkInitial (id : GoalId) (parent : Option RappRef) (goal : Expr)
     (successProbability : Percent) : Goal :=
@@ -224,7 +224,7 @@ namespace Rapp
 @[inline]
 def mk (parent : Option GoalRef) (subgoals : Array GoalRef)
     (data : RappData) : Rapp :=
-  MutableAndOrTree.mk data parent subgoals
+  MutAltTree.mk data parent subgoals
 
 /-! ### Getters -/
 
@@ -372,7 +372,7 @@ end Tree
 
 @[inline]
 def Internal.setIrrelevant : Sum GoalRef RappRef → m Unit :=
-  MutableAndOrTree.visitDown'
+  MutAltTree.visitDown'
     (λ gref => do
       gref.modify λ g => g.modifyPayload λ gd => { gd with irrelevant? := true }
       return true)
@@ -388,7 +388,7 @@ def RappRef.setIrrelevant : RappRef → m Unit :=
 
 @[inline]
 def Internal.setProven : Sum GoalRef RappRef → m Unit :=
-  MutableAndOrTree.visitUp'
+  MutAltTree.visitUp'
     -- Goals are unconditionally marked as proven.
     (λ gref => do
       gref.modify λ (g : Goal) => g.setProven? true
@@ -402,7 +402,7 @@ def Internal.setProven : Sum GoalRef RappRef → m Unit :=
         then return false
         else do
           rref.set $ r.setProven? true
-          let siblings ← MutableAndOrTree.siblings rref
+          let siblings ← MutAltTree.siblings rref
           siblings.forM RappRef.setIrrelevant
           return true)
 
@@ -414,7 +414,7 @@ def RappRef.setProven : RappRef → m Unit :=
 
 @[inline]
 def Internal.setUnprovable : Sum GoalRef RappRef → m Unit :=
-  MutableAndOrTree.visitUp'
+  MutAltTree.visitUp'
     -- Goals are marked as unprovable only if they are in fact unprovable, i.e.
     -- if all their rule applications are unprovable and they do not have
     -- unexpanded rule applications. In this case, we also need to mark
@@ -425,7 +425,7 @@ def Internal.setUnprovable : Sum GoalRef RappRef → m Unit :=
         then return false
         else do
           gref.set $ g.setUnprovable? true
-          let siblings ← MutableAndOrTree.siblings gref
+          let siblings ← MutAltTree.siblings gref
           siblings.forM GoalRef.setIrrelevant
           return true)
     -- Rapps are unconditionally marked as unprovable.
