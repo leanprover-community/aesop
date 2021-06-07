@@ -31,11 +31,11 @@ instance : LT Percent where
 instance : DecidableRel (α := Percent) (· < ·) :=
   λ p q => (inferInstance : Decidable (p.toFloat < q.toFloat))
 
-protected def toString (p : Percent) : String :=
-  toString p.toFloat
-
 instance : ToFormat Percent where
-  format p := p.toString
+  format p := toString p.toFloat
+
+def hundred : Percent :=
+  ⟨1⟩
 
 -- TODO: parser for Percent?
 
