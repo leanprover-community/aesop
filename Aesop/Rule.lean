@@ -19,7 +19,7 @@ open Lean.Elab.Tactic (TacticM)
 
 structure Rule (α : Type) where
   name : Name
-  tac : TacticM Unit
+  tac : MVarId → MetaM (List MVarId)
   priorityInfo : α
   deriving Inhabited
 
@@ -160,6 +160,14 @@ def isSafe : RegularRule → Bool
 def isUnsafe : RegularRule → Bool
   | (safeRule _) => false
   | (unsafeRule _) => true
+
+def tac : RegularRule → MVarId → MetaM (List MVarId)
+  | (safeRule r) => r.tac
+  | (unsafeRule r) => r.tac
+
+def name : RegularRule → Name
+  | (safeRule r) => r.name
+  | (unsafeRule r) => r.name
 
 end RegularRule
 
