@@ -4,8 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
-import Lean
-
 import Aesop.MutAltTree
 import Aesop.Percent
 import Aesop.Rule
@@ -77,7 +75,7 @@ end RappId
 
 structure GoalData : Type where
   id : GoalId
-  goal : Expr
+  goal : MVarId
   successProbability : Percent
   normalizationProof : Option Expr
   failedRapps : List RegularRule
@@ -86,6 +84,22 @@ structure GoalData : Type where
   unprovable? : Bool
   irrelevant? : Bool
   deriving Inhabited
+
+namespace GoalData
+
+-- Note: Sets dummy GoalId.
+def mkInitial (goal : MVarId) (successProbability : Percent) : GoalData where
+  id := GoalId.zero
+  goal := goal
+  successProbability := successProbability
+  normalizationProof := none
+  failedRapps := []
+  unsafeQueue := none
+  proven? := false
+  unprovable? := false
+  irrelevant? := false
+
+end GoalData
 
 structure RappData : Type where
   id : RappId
@@ -96,6 +110,20 @@ structure RappData : Type where
   unprovable? : Bool
   irrelevant? : Bool
   deriving Inhabited
+
+namespace RappData
+
+def mkInitial (appliedRule : RegularRule) (successProbability : Percent)
+  (proof : Expr) : RappData where
+  id := RappId.zero
+  appliedRule := appliedRule
+  successProbability := successProbability
+  proof := proof
+  proven? := false
+  unprovable? := false
+  irrelevant? := false
+
+end RappData
 
 abbrev Goal    := MutAltTree IO.RealWorld GoalData RappData
 abbrev GoalRef := IO.Ref Goal
@@ -116,19 +144,6 @@ def mk (parent : Option RappRef) (rapps : Array RappRef)
     (data : GoalData) : Goal :=
   MutAltTree.mk data parent rapps
 
-def mkInitial (id : GoalId) (parent : Option RappRef) (goal : Expr)
-    (successProbability : Percent) : Goal :=
-  Goal.mk parent #[]
-    { id := id
-      goal := goal
-      successProbability := successProbability
-      normalizationProof := none
-      failedRapps := []
-      unsafeQueue := none
-      proven? := false
-      unprovable? := false
-      irrelevant? := false }
-
 /-! ### Getters -/
 
 @[inline]
@@ -140,7 +155,7 @@ def id (g : Goal) : GoalId :=
   g.payload.id
 
 @[inline]
-def goal (g : Goal) : Expr :=
+def goal (g : Goal) : MVarId :=
   g.payload.goal
 
 @[inline]
@@ -178,7 +193,7 @@ def setId (id : GoalId) (g : Goal) : Goal :=
   g.modifyPayload $ λ d => { d with id := id }
 
 @[inline]
-def setGoal (goal : Expr) (g : Goal) : Goal :=
+def setGoal (goal : MVarId) (g : Goal) : Goal :=
   g.modifyPayload $ λ d => { d with goal := goal }
 
 @[inline]
@@ -316,7 +331,7 @@ end Goal
 structure Tree where
   root : GoalRef
   nextGoalId : GoalId
-  nextRappId : RappId
+  nextRappId : RappId -- TODO make these refs as well?
 
 namespace Tree
 
@@ -357,13 +372,18 @@ partial def linkProofs (t : Tree) : MetaM Unit :=
         return if r.proven? then some r else none
         | throwError "aesop/linkProofs: internal error: node {g.id} not proven"
       r.subgoals.forM loop
-      let (true) ← isDefEq g.goal r.proof | throwError
-        "aesop/linkProofs: internal error: proof of rule application {r.id} did not unify with the goal of its parent node {g.id}"
+      let goalMVar := g.goal
+      checkNotAssigned `aesop goalMVar
+      -- TODO check for type-correct assignment?
+      -- let goalType ← getMVarType goalMVar
+      -- let (true) ← isDefEq goalType r.proof | throwError
+      --   "aesop/linkProofs: internal error: proof of rule application {r.id} did not unify with the goal of its parent node {g.id}"
+      assignExprMVar g.goal r.proof
 
 def extractProof (t : Tree) : MetaM Expr := do
   let g ← t.root.get
   match g.normalizationProof with
-  | none => instantiateMVars g.goal
+  | none => instantiateMVars $ mkMVar g.goal
   | some prf => instantiateMVars prf
 
 end Tree
@@ -374,11 +394,19 @@ end Tree
 def Internal.setIrrelevant : Sum GoalRef RappRef → m Unit :=
   MutAltTree.visitDown'
     (λ gref => do
-      gref.modify λ g => g.modifyPayload λ gd => { gd with irrelevant? := true }
-      return true)
+      let g : Goal ← gref.get
+      if g.irrelevant?
+        then return false -- Subtree should already be marked as irrelevant.
+        else do
+          gref.set $ g.setIrrelevant? true
+          return true)
     (λ rref => do
-      rref.modify λ r => r.modifyPayload λ rd => { rd with irrelevant? := true }
-      return true)
+      let r : Rapp ← rref.get
+      if r.irrelevant?
+        then return false
+        else do
+          rref.set $ r.setIrrelevant? true
+          return true)
 
 def GoalRef.setIrrelevant : GoalRef → m Unit :=
   Internal.setIrrelevant ∘ Sum.inl
@@ -421,7 +449,7 @@ def Internal.setUnprovable : Sum GoalRef RappRef → m Unit :=
     -- siblings of the goal (and their descendants) as irrelevant.
     (λ gref => do
       let g : Goal ← gref.get
-      if (← g.mayHaveUnexpandedRapp) ∨ (← g.hasProvableRapp)
+      if (← g.mayHaveUnexpandedRapp <||> g.hasProvableRapp)
         then return false
         else do
           gref.set $ g.setUnprovable? true
