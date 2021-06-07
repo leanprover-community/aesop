@@ -5,6 +5,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Lean
+import Std.Data.BinomialHeap
 
 -- TODO remove
 def as (α : Type _) (a : α) : α := a
@@ -47,8 +48,15 @@ end List
 
 namespace Lean.Meta
 
+-- TODO unused?
 def conclusionHeadConstant? (e : Expr) : MetaM (Option Name) :=
   forallTelescope e $ λ _ e => e.getAppFn.constName?
+
+def copyMVar (mvarId : MVarId) : MetaM MVarId := do
+  let decl ← getMVarDecl mvarId
+  let mv ← mkFreshExprMVarAt decl.lctx decl.localInstances decl.type decl.kind
+    decl.userName decl.numScopeArgs
+  return mv.mvarId!
 
 end Lean.Meta
 
@@ -90,3 +98,33 @@ def modifyGetM (r : Ref σ α) (f : α → m (β × α)) : m β := do
   return b
 
 end ST.Ref
+
+
+namespace Std.BinomialHeap
+
+@[inline]
+def removeMin {lt : α → α → Bool} (h : BinomialHeap α lt) :
+    Option (α × BinomialHeap α lt) :=
+  match h.head? with
+  | some hd => some (hd, h.tail)
+  | none => none
+
+end Std.BinomialHeap
+
+
+namespace MonadStateOf
+
+@[inline]
+def ofLens [Monad m] [MonadStateOf α m] (project : α → β) (inject : β → α → α) :
+    MonadStateOf β m where
+  get := return project (← get)
+  set b := modify λ a => inject b a
+  modifyGet f := modifyGet λ a =>
+    let (r, b) := f (project a)
+    (r, inject b a)
+
+end MonadStateOf
+
+@[inline]
+abbrev setThe (σ) {m} [MonadStateOf σ m] (s : σ) : m PUnit :=
+  MonadStateOf.set s
