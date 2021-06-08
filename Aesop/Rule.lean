@@ -267,8 +267,7 @@ def add (rs : RuleSet) : RuleSetMember → MetaM RuleSet
   | RuleSetMember.normalizationRule r imode =>
     return { rs with normalizationRules := (← rs.normalizationRules.add r imode) }
   | RuleSetMember.normalizationSimpLemmas s =>
-    sorry -- TODO
-    -- return { rs with normalizationSimpLemmas := rs.normalizationSimpLemmas }
+    return { rs with normalizationSimpLemmas := rs.normalizationSimpLemmas.merge s }
   | RuleSetMember.unsafeRule r imode =>
     return { rs with unsafeRules := (← rs.unsafeRules.add r imode )}
   | RuleSetMember.safeRule r imode =>
