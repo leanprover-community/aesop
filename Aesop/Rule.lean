@@ -184,10 +184,6 @@ export IndexingMode (unindexed indexTarget)
 
 /-! ## Rule Indices -/
 
-structure GoalInfo where
-  target : Expr
-  deriving Inhabited, BEq
-
 structure RuleIndex (α : Type) where
   byTarget : DiscrTree α
   unindexed : Array α
@@ -218,14 +214,14 @@ def add [BEq α] (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
 def fromList [BEq α] (rs : List (α × IndexingMode)) : MetaM (RuleIndex α) :=
   rs.foldlM (λ rs ⟨r, imode⟩ => rs.add r imode) empty
 
-def applicableByTargetRules (ri : RuleIndex α) (goalInfo : GoalInfo) :
-    MetaM (Array α) :=
-  ri.byTarget.getMatch goalInfo.target
+def applicableByTargetRules (ri : RuleIndex α) (goal : MVarId) :
+    MetaM (Array α) := do
+  ri.byTarget.getMatch (← getMVarDecl goal).type
 
 -- TODO remove Inhabited as soon as qsort doesn't require it any more.
 def applicableRules [Inhabited α] [LT α] [DecidableRel (α := α) (· < ·)]
-    (ri : RuleIndex α) (goalInfo : GoalInfo) : MetaM (Array α) := do
-  let rs₁ ← applicableByTargetRules ri goalInfo
+    (ri : RuleIndex α) (goal : MVarId) : MetaM (Array α) := do
+  let rs₁ ← applicableByTargetRules ri goal
   let rs₂ := ri.unindexed -- TODO does it help if these are already sorted?
   return (rs₁ ++ rs₂).qsort (· < ·)
 
@@ -276,17 +272,17 @@ def add (rs : RuleSet) : RuleSetMember → MetaM RuleSet
 def fromList (rs : List RuleSetMember) : MetaM RuleSet :=
   rs.foldlM (λ rs r => rs.add r) empty
 
-def applicableNormalizationRules (rs : RuleSet) (goalInfo : GoalInfo) :
+def applicableNormalizationRules (rs : RuleSet) (goal : MVarId) :
   MetaM (Array NormalizationRule) :=
-  rs.normalizationRules.applicableRules goalInfo
+  rs.normalizationRules.applicableRules goal
 
-def applicableUnsafeRules (rs : RuleSet) (goalInfo : GoalInfo) :
+def applicableUnsafeRules (rs : RuleSet) (goal : MVarId) :
   MetaM (Array UnsafeRule) :=
-  rs.unsafeRules.applicableRules goalInfo
+  rs.unsafeRules.applicableRules goal
 
-def applicableSafeRules (rs : RuleSet) (goalInfo : GoalInfo) :
+def applicableSafeRules (rs : RuleSet) (goal : MVarId) :
   MetaM (Array SafeRule) :=
-  rs.safeRules.applicableRules goalInfo
+  rs.safeRules.applicableRules goal
 
 end RuleSet
 
