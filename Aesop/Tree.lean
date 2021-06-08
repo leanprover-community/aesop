@@ -99,6 +99,9 @@ def mkInitial (goal : MVarId) (successProbability : Percent) : GoalData where
   unprovable? := false
   irrelevant? := false
 
+def normal? (g : GoalData) : Bool :=
+  g.normalizationProof.isSome
+
 end GoalData
 
 structure RappData : Type where
@@ -221,6 +224,10 @@ def setIrrelevant? (irrelevant? : Bool) (g : Goal) : Goal :=
   g.modifyPayload $ λ d => { d with irrelevant? := irrelevant? }
 
 /-! ### Miscellaneous -/
+
+@[inline]
+def normal? (g : Goal) : Bool :=
+  g.payload.normal?
 
 def hasNoUnexpandedUnsafeRule (g : Goal) : Bool :=
   match g.unsafeQueue with
