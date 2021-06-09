@@ -212,6 +212,10 @@ def setFailedRapps (failedRapps : List RegularRule) (g : Goal) : Goal :=
   g.modifyPayload λ d => { d with failedRapps := failedRapps }
 
 @[inline]
+def setUnsafeQueue (unsafeQueue : Option (List UnsafeRule)) (g : Goal) : Goal :=
+  g.modifyPayload λ d => { d with unsafeQueue := unsafeQueue }
+
+@[inline]
 def setProven? (proven? : Bool) (g : Goal) : Goal :=
   g.modifyPayload λ d => { d with proven? := proven? }
 

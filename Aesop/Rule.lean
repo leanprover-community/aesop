@@ -138,36 +138,36 @@ end UnsafeRule
 /-! ### Regular Rules -/
 
 inductive RegularRule
-  | safeRule (r : SafeRule)
-  | unsafeRule (r : UnsafeRule)
+  | safe (r : SafeRule)
+  |  «unsafe» (r : UnsafeRule)
   deriving Inhabited, BEq
 
 namespace RegularRule
 
 instance : ToFormat RegularRule where
   format
-    | (safeRule r) => "[safe] " ++ format (α := SafeRule) r
-    | (unsafeRule r) => "[unsafe] " ++ format (α := UnsafeRule) r
+    | (safe r) => "[safe] " ++ format (α := SafeRule) r
+    | («unsafe» r) => "[unsafe] " ++ format (α := UnsafeRule) r
 
 def successProbability : RegularRule → Percent
-  | (safeRule r) => ⟨100⟩
-  | (unsafeRule r) => r.priorityInfo
+  | (safe r) => ⟨100⟩
+  | («unsafe» r) => r.priorityInfo
 
 def isSafe : RegularRule → Bool
-  | (safeRule _) => true
-  | (unsafeRule _) => false
+  | (safe _) => true
+  | («unsafe» _) => false
 
 def isUnsafe : RegularRule → Bool
-  | (safeRule _) => false
-  | (unsafeRule _) => true
+  | (safe _) => false
+  | («unsafe» _) => true
 
 def tac : RegularRule → MVarId → MetaM (List MVarId)
-  | (safeRule r) => r.tac
-  | (unsafeRule r) => r.tac
+  | (safe r) => r.tac
+  | («unsafe» r) => r.tac
 
 def name : RegularRule → Name
-  | (safeRule r) => r.name
-  | (unsafeRule r) => r.name
+  | (safe r) => r.name
+  | («unsafe» r) => r.name
 
 end RegularRule
 
