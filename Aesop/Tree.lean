@@ -30,6 +30,9 @@ protected def one : GoalId :=
 protected def succ : GoalId → GoalId
   | ⟨n⟩ => ⟨n + 1⟩
 
+def dummy : GoalId :=
+  ⟨1000000000000000⟩
+
 instance : LT GoalId where
   lt n m := n.toNat < m.toNat
 
@@ -59,6 +62,9 @@ protected def succ : RappId → RappId
 protected def one : RappId :=
   ⟨1⟩
 
+def dummy : RappId :=
+  ⟨1000000000000000⟩
+
 instance : LT RappId where
   lt n m := n.toNat < m.toNat
 
@@ -87,9 +93,9 @@ structure GoalData : Type where
 
 namespace GoalData
 
--- Note: Sets dummy GoalId.
-def mkInitial (goal : MVarId) (successProbability : Percent) : GoalData where
-  id := GoalId.zero
+def mkInitial (id : GoalId) (goal : MVarId) (successProbability : Percent) :
+    GoalData where
+  id := id
   goal := goal
   successProbability := successProbability
   normalizationProof := none
@@ -116,9 +122,9 @@ structure RappData : Type where
 
 namespace RappData
 
-def mkInitial (appliedRule : RegularRule) (successProbability : Percent)
-  (proof : Expr) : RappData where
-  id := RappId.zero
+def mkInitial (id : RappId) (appliedRule : RegularRule)
+  (successProbability : Percent) (proof : Expr) : RappData where
+  id := id
   appliedRule := appliedRule
   successProbability := successProbability
   proof := proof
@@ -337,67 +343,34 @@ def hasProvableRapp (g : Goal) : m Bool :=
 end Goal
 
 
-/-! ## The Search Tree -/
+/-! ## Proof Extraction -/
 
-structure Tree where
-  root : GoalRef
-  nextGoalId : GoalId
-  nextRappId : RappId -- TODO make these refs as well?
+namespace GoalRef
 
-namespace Tree
+/- May only be called *once*. The given goal must be proven. -/
+partial def linkProofs (gref : GoalRef) : MetaM Unit := do
+  let g ← gref.get
+  let (some r) ← g.rapps.findSomeM? λ r => do
+    let r ← r.get
+    return if r.proven? then some r else none
+    | throwError "aesop/linkProofs: internal error: node {g.id} not proven"
+  r.subgoals.forM linkProofs
+  let goalMVar := g.goal
+  checkNotAssigned `aesop goalMVar
+  -- TODO check for type-correct assignment?
+  -- let goalType ← getMVarType goalMVar
+  -- let (true) ← isDefEq goalType r.proof | throwError
+  --   "aesop/linkProofs: internal error: proof of rule application {r.id} did not unify with the goal of its parent node {g.id}"
+  assignExprMVar g.goal r.proof
 
-def singleton (g : Goal) : m Tree := return {
-  root := (← ST.mkRef g)
-  nextGoalId := GoalId.one
-  nextRappId := RappId.zero }
-
--- Note: Overwrites the goal ID from g.
-def insertGoal (g : GoalData) (parent : RappRef) (t : Tree) :
-    m (GoalId × GoalRef × Tree) := do
-  let id := t.nextGoalId
-  let goalRef ← ST.mkRef $ Goal.mk (some parent) #[] g
-  parent.modify λ r => r.addChild goalRef
-  return (id, goalRef, { t with nextGoalId := id.succ })
-
--- Note: Overwrites the rapp ID from r.
-def insertRapp (r : RappData) (parent : GoalRef) (t : Tree) :
-    m (RappId × RappRef × Tree) := do
-  let id := t.nextRappId
-  let rappRef ← ST.mkRef $ Rapp.mk (some parent) #[] r
-  parent.modify λ g => g.addChild rappRef
-  return (id, rappRef, { t with nextRappId := id.succ })
-
-def rootProven? (t : Tree) : m Bool :=
-  return (← t.root.get).proven?
-
-def rootUnprovable? (t : Tree) : m Bool :=
-  return (← t.root.get).unprovable?
-
-partial def linkProofs (t : Tree) : MetaM Unit :=
-  loop t.root
-  where
-    loop (gref : GoalRef) : MetaM Unit := do
-      let g ← gref.get
-      let (some r) ← g.rapps.findSomeM? λ r => do
-        let r ← r.get
-        return if r.proven? then some r else none
-        | throwError "aesop/linkProofs: internal error: node {g.id} not proven"
-      r.subgoals.forM loop
-      let goalMVar := g.goal
-      checkNotAssigned `aesop goalMVar
-      -- TODO check for type-correct assignment?
-      -- let goalType ← getMVarType goalMVar
-      -- let (true) ← isDefEq goalType r.proof | throwError
-      --   "aesop/linkProofs: internal error: proof of rule application {r.id} did not unify with the goal of its parent node {g.id}"
-      assignExprMVar g.goal r.proof
-
-def extractProof (t : Tree) : MetaM Expr := do
-  let g ← t.root.get
+/- Only call this after `linkProofs` has been run. -/
+def extractProof (gref : GoalRef) : MetaM Expr := do
+  let g ← gref.get
   match g.normalizationProof with
   | none => instantiateMVars $ mkMVar g.goal
   | some prf => instantiateMVars prf
 
-end Tree
+end GoalRef
 
 /-! ## Propagating Provability/Unprovability/Irrelevance -/
 

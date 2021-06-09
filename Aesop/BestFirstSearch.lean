@@ -43,24 +43,30 @@ abbrev ActiveGoalQueue := BinomialHeap ActiveGoal (· > ·)
 structure Context where
   ruleSet : RuleSet
   mainGoal : MVarId
+  rootGoal : GoalRef
 
 structure State where
-  tree : Tree
   activeGoals : ActiveGoalQueue
+  nextGoalId : GoalId
+  nextRappId : RappId
 
-namespace State
-
-def mkInitial (t : Tree) : State where
-  tree := t
-  activeGoals := BinomialHeap.empty
-
-def mkInitialForMainGoal (mainGoal : MVarId) : MetaM State := do
-  let goal ← copyMVar mainGoal
-  let tree ← Tree.singleton $
-    Goal.mk none #[] $ GoalData.mkInitial goal Percent.hundred
-  return State.mkInitial tree
-
-end State
+def mkInitialContextAndState (rs : RuleSet) (mainGoal : MVarId) :
+    MetaM (Context × State) := do
+  let rootGoalMVar ← copyMVar mainGoal
+  let rootGoal :=
+    Goal.mk none #[] $ GoalData.mkInitial GoalId.zero rootGoalMVar
+      Percent.hundred
+  let rootGoalRef ← ST.mkRef rootGoal
+  let ctx := {
+    ruleSet := rs,
+    mainGoal := mainGoal,
+    rootGoal := rootGoalRef }
+  let state := {
+    activeGoals := BinomialHeap.empty.insert
+      { goal := rootGoalRef, successProbability := Percent.hundred }
+    nextGoalId := GoalId.one
+    nextRappId := RappId.zero }
+  return (ctx, state)
 
 abbrev SearchM := ReaderT Context $ StateRefT State MetaM
 
@@ -74,8 +80,11 @@ end SearchM
 instance (priority := 0) : MonadReaderOf RuleSet SearchM where
   read := Context.ruleSet <$> read
 
-instance (priority := 0) : MonadStateOf Tree SearchM :=
-  MonadStateOf.ofLens State.tree (λ t s => { s with tree := t })
+instance (priority := 0) : MonadStateOf GoalId SearchM :=
+  MonadStateOf.ofLens State.nextGoalId (λ id s => { s with nextGoalId := id })
+
+instance (priority := 0) : MonadStateOf RappId SearchM :=
+  MonadStateOf.ofLens State.nextRappId (λ id s => { s with nextRappId := id })
 
 instance (priority := 0) : MonadStateOf ActiveGoalQueue SearchM :=
   MonadStateOf.ofLens State.activeGoals (λ an s => { s with activeGoals := an })
@@ -83,25 +92,51 @@ instance (priority := 0) : MonadStateOf ActiveGoalQueue SearchM :=
 def readMainGoal : SearchM MVarId :=
   Context.mainGoal <$> read
 
-def addGoal (goal : MVarId) (successProbability : Percent)
-    (parent : RappRef) : SearchM GoalRef := do
-  let g ← GoalData.mkInitial goal successProbability
-  let t ← getThe Tree
-  let (_, gref, t) ← t.insertGoal g parent
-  setThe Tree t
+def readRootGoal : SearchM GoalRef :=
+  Context.rootGoal <$> read
+
+def getAndIncrementNextGoalId : SearchM GoalId := do
+  let id ← getThe GoalId
+  setThe GoalId id.succ
+  return id
+
+def getAndIncrementNextRappId : SearchM RappId := do
+  let id ← getThe RappId
+  setThe RappId id.succ
+  return id
+
+/- Overwrites the goal ID from `g`. -/
+def addGoal (g : GoalData) (parent : RappRef) : SearchM GoalRef := do
+  let id ← getAndIncrementNextGoalId
+  let g := { g with id := id }
+  let gref ← ST.mkRef $ Goal.mk (some parent) #[] g
+  parent.modify λ r => r.addChild gref
   modifyThe ActiveGoalQueue λ q => q.insert
     { goal := gref
-      successProbability := successProbability }
+      successProbability := g.successProbability }
   return gref
 
--- TODO array?
-def addGoals (goals : List MVarId) (successProbability : Percent)
-    (parent : RappRef) : SearchM (Array GoalRef) := do
-  let mut acc := #[]
+def addGoals [ForIn SearchM γ GoalData] (goals : γ) (parent : RappRef) :
+    SearchM (Array GoalRef) := do
+  let mut grefs := #[]
   for goal in goals do
-    let gref ← addGoal goal successProbability parent
-    acc := acc.push gref
-  return acc
+    let gref ← addGoal goal parent
+    grefs := grefs.push gref
+  return grefs
+
+def addGoals' (goals : List MVarId) (successProbability : Percent)
+    (parent : RappRef) : SearchM (Array GoalRef) := do
+  let goals ← goals.mapM λ g =>
+    GoalData.mkInitial GoalId.dummy g successProbability
+  addGoals goals parent
+
+/- Overwrites the rapp ID from `r`. -/
+def addRapp (r : RappData) (parent : GoalRef) : SearchM RappRef := do
+  let id ← getAndIncrementNextRappId
+  let r := { r with id := id }
+  let rref ← ST.mkRef $ Rapp.mk (some parent) #[] r
+  parent.modify λ g => g.addChild rref
+  return rref
 
 def runNormalizationRule (goal : MVarId) (r : NormalizationRule) :
     SearchM MVarId := do
@@ -166,18 +201,18 @@ def applyRegularRule (parentRef : GoalRef) (rule : RegularRule) :
     -- Rule succeeded and did not generate subgoals, meaning the parent
     -- node is proven.
     let r :=
-      { RappData.mkInitial rule successProbability (mkMVar proofMVar) with
+      { RappData.mkInitial RappId.dummy rule successProbability
+          (mkMVar proofMVar) with
         proven? := true }
-    let (_, _, tree) ← state.tree.insertRapp r parentRef
-    setThe Tree tree
+    let _ ← addRapp r parentRef
     parentRef.setProven
     return RuleResult.proven
   | some (proofMVar, subgoals) => do
     -- Rule succeeded and generated subgoals.
-    let r := RappData.mkInitial rule successProbability (mkMVar proofMVar)
-    let (_, rappRef, tree) ← state.tree.insertRapp r parentRef
-    setThe Tree tree
-    let _ ← addGoals subgoals successProbability rappRef
+    let r :=
+      RappData.mkInitial RappId.dummy rule successProbability (mkMVar proofMVar)
+    let rappRef ← addRapp r parentRef
+    let _ ← addGoals' subgoals successProbability rappRef
     return RuleResult.succeeded
   | none => do
     -- Rule did not succeed.
@@ -236,17 +271,17 @@ def expandNextGoal : SearchM Unit := do
       modifyThe ActiveGoalQueue λ q => q.insert ag
 
 def finishIfProven : SearchM Bool := do
-  let t ← getThe Tree
-  let (true) ← pure (← t.root.get).proven?
+  let root ← readRootGoal
+  let (true) ← pure (← root.get).proven?
     | return false
-  t.linkProofs
-  let prf ← t.extractProof
+  root.linkProofs
+  let prf ← root.extractProof
   assignExprMVar (← readMainGoal) prf
   return true
 
 partial def search : SearchM Unit := do
-  let t ← getThe Tree
-  let (false) ← t.rootUnprovable?
+  let root ← readRootGoal
+  let (false) ← pure (← root.get).unprovable?
     | throwError "aesop: failed to prove the goal"
   let done ← finishIfProven
   if ¬ done then
@@ -256,8 +291,7 @@ partial def search : SearchM Unit := do
 end Search
 
 def search (rs : RuleSet) (mainGoal : MVarId) : MetaM Unit := do
-  let state ← Search.State.mkInitialForMainGoal mainGoal
-  let ctx := { ruleSet := rs, mainGoal := mainGoal }
+  let (ctx, state) ← Search.mkInitialContextAndState rs mainGoal
   let _ ← Search.search.run ctx state
 
 end Aesop
