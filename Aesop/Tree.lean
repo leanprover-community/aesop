@@ -193,35 +193,35 @@ def irrelevant? (g : Goal) : Bool :=
 
 @[inline]
 def setId (id : GoalId) (g : Goal) : Goal :=
-  g.modifyPayload $ λ d => { d with id := id }
+  g.modifyPayload λ d => { d with id := id }
 
 @[inline]
 def setGoal (goal : MVarId) (g : Goal) : Goal :=
-  g.modifyPayload $ λ d => { d with goal := goal }
+  g.modifyPayload λ d => { d with goal := goal }
 
 @[inline]
 def setSuccessProbability (successProbability : Percent) (g : Goal) : Goal :=
-  g.modifyPayload $ λ d => { d with successProbability := successProbability }
+  g.modifyPayload λ d => { d with successProbability := successProbability }
 
 @[inline]
 def setNormalizationProof (normalizationProof : Expr) (g : Goal) : Goal :=
-  g.modifyPayload $ λ d => { d with normalizationProof := normalizationProof }
+  g.modifyPayload λ d => { d with normalizationProof := normalizationProof }
 
 @[inline]
 def setFailedRapps (failedRapps : List RegularRule) (g : Goal) : Goal :=
-  g.modifyPayload $ λ d => { d with failedRapps := failedRapps }
+  g.modifyPayload λ d => { d with failedRapps := failedRapps }
 
 @[inline]
 def setProven? (proven? : Bool) (g : Goal) : Goal :=
-  g.modifyPayload $ λ d => { d with proven? := proven? }
+  g.modifyPayload λ d => { d with proven? := proven? }
 
 @[inline]
 def setUnprovable? (unprovable? : Bool) (g : Goal) : Goal :=
-  g.modifyPayload $ λ d => { d with unprovable? := unprovable? }
+  g.modifyPayload λ d => { d with unprovable? := unprovable? }
 
 @[inline]
 def setIrrelevant? (irrelevant? : Bool) (g : Goal) : Goal :=
-  g.modifyPayload $ λ d => { d with irrelevant? := irrelevant? }
+  g.modifyPayload λ d => { d with irrelevant? := irrelevant? }
 
 /-! ### Miscellaneous -/
 
@@ -286,31 +286,31 @@ def irrelevant? (r : Rapp) : Bool :=
 
 @[inline]
 def setId (id : RappId) (r : Rapp) : Rapp :=
-  r.modifyPayload $ λ r => { r with id := id }
+  r.modifyPayload λ r => { r with id := id }
 
 @[inline]
 def setAppliedRule (appliedRule : RegularRule) (r : Rapp) : Rapp :=
-  r.modifyPayload $ λ r => { r with appliedRule := appliedRule }
+  r.modifyPayload λ r => { r with appliedRule := appliedRule }
 
 @[inline]
 def setSuccessProbability (successProbability : Percent) (r : Rapp) : Rapp :=
-  r.modifyPayload $ λ r => { r with successProbability := successProbability }
+  r.modifyPayload λ r => { r with successProbability := successProbability }
 
 @[inline]
 def setProof (proof : Expr) (r : Rapp) : Rapp :=
-  r.modifyPayload $ λ r => { r with proof := proof }
+  r.modifyPayload λ r => { r with proof := proof }
 
 @[inline]
 def setProven? (proven? : Bool) (r : Rapp) : Rapp :=
-  r.modifyPayload $ λ r => { r with proven? := proven? }
+  r.modifyPayload λ r => { r with proven? := proven? }
 
 @[inline]
 def setUnprovable? (unprovable? : Bool) (r : Rapp) : Rapp :=
-  r.modifyPayload $ λ r => { r with unprovable? := unprovable? }
+  r.modifyPayload λ r => { r with unprovable? := unprovable? }
 
 @[inline]
 def setIrrelevant? (irrelevant? : Bool) (r : Rapp) : Rapp :=
-  r.modifyPayload $ λ r => { r with irrelevant? := irrelevant? }
+  r.modifyPayload λ r => { r with irrelevant? := irrelevant? }
 
 /-! ### Miscellaneous -/
 
@@ -352,7 +352,7 @@ def insertGoal (g : GoalData) (parent : RappRef) (t : Tree) :
     m (GoalId × GoalRef × Tree) := do
   let id := t.nextGoalId
   let goalRef ← ST.mkRef $ Goal.mk (some parent) #[] g
-  parent.modify $ λ r => r.addChild goalRef
+  parent.modify λ r => r.addChild goalRef
   return (id, goalRef, { t with nextGoalId := id.succ })
 
 -- Note: Overwrites the rapp ID from r.
@@ -360,7 +360,7 @@ def insertRapp (r : RappData) (parent : GoalRef) (t : Tree) :
     m (RappId × RappRef × Tree) := do
   let id := t.nextRappId
   let rappRef ← ST.mkRef $ Rapp.mk (some parent) #[] r
-  parent.modify $ λ g => g.addChild rappRef
+  parent.modify λ g => g.addChild rappRef
   return (id, rappRef, { t with nextRappId := id.succ })
 
 def rootProven? (t : Tree) : m Bool :=
