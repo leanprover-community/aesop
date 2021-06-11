@@ -524,6 +524,4 @@ def GoalRef.setUnprovable : GoalRef → m Unit :=
 def RappRef.setUnprovable : RappRef → m Unit :=
   Internal.setUnprovable ∘ Sum.inr
 
--- TODO formatting
-
 end Aesop
