@@ -37,6 +37,10 @@ instance : ToFormat Percent where
 def hundred : Percent :=
   ⟨1⟩
 
+def formatAsPercent (p : Percent) : Format :=
+  let s := toString (p.toFloat * 100) |>.takeWhile (· ≠ '.')
+  f! "{s}%"
+
 -- TODO: parser for Percent?
 
 end Percent

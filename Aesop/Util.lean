@@ -141,10 +141,65 @@ end Lean.Meta
 
 namespace Std.Format
 
+@[inlineIfReduce]
+def isEmptyShallow : Format → Bool
+  | nil => true
+  | text "" => true
+  | _ => false
+
+@[inline]
+def indentDSkipEmpty (f : Format) : Format :=
+  if f.isEmptyShallow then nil else indentD f
+
+@[inline]
 def unlines (fs : List Format) : Format :=
   Format.joinSep fs line
 
+@[inline]
+def indentDUnlines : List Format → Format :=
+  indentDSkipEmpty ∘ unlines
+
+@[inline]
+def indentDUnlinesSkipEmpty (fs : List Format) : Format :=
+  indentDSkipEmpty $ unlines $ fs.filter (¬ ·.isEmptyShallow)
+
+def formatIf (b : Bool) (f : Thunk Format) : Format :=
+  if b then f.get else nil
+
 end Std.Format
+
+
+namespace Lean.MessageData
+
+@[inline]
+def join (ms : List MessageData) : MessageData :=
+ms.foldl (· ++ ·) nil
+
+@[inlineIfReduce]
+def isEmptyShallow : MessageData → Bool
+  | ofFormat f => f.isEmptyShallow
+  | _ => false
+
+@[inline]
+def indentDSkipEmpty (m : MessageData) : MessageData :=
+  if m.isEmptyShallow then nil else indentD m
+
+@[inline]
+def unlines (ms : List MessageData) : MessageData :=
+  joinSep ms Format.line
+
+@[inline]
+def indentDUnlines : List MessageData → MessageData :=
+  indentDSkipEmpty ∘ unlines
+
+@[inline]
+def indentDUnlinesSkipEmpty (fs : List MessageData) : MessageData :=
+  indentDSkipEmpty $ unlines $ fs.filter (¬ ·.isEmptyShallow)
+
+def toMessageDataIf (b : Bool) (f : Thunk MessageData) : MessageData :=
+  if b then f.get else nil
+
+end Lean.MessageData
 
 
 namespace ST.Ref

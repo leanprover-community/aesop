@@ -11,6 +11,11 @@ import Aesop.Rule
 open Lean
 open Lean.Meta
 
+@[inlineIfReduce]
+private def Bool.toYesNo : Bool → Format
+  | true => "y"
+  | false => "n"
+
 namespace Aesop
 
 /-! ## Node IDs -/
@@ -93,6 +98,35 @@ structure GoalData : Type where
 
 namespace GoalData
 
+def normal? (g : GoalData) : Bool :=
+  g.normalizationProof.isSome
+
+structure MessageInfo where
+  showGoal : Bool
+  showUnsafeQueue : Bool
+  showFailedRapps : Bool
+  deriving Inhabited
+
+open MessageData in
+protected def toMessageData (minfo : MessageInfo) (g : GoalData) : MessageData :=
+  let unsafeQueueLength :=
+    match g.unsafeQueue with
+    | none => f!"<not selected>"
+    | some q => format q.length
+  m!"Goal {g.id} [{g.successProbability}]" ++ indentDUnlinesSkipEmpty
+    [ m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.length}",
+      join
+        [ m!"normal: {g.normal?.toYesNo} | ",
+          m!"proven: {g.proven?.toYesNo} | ",
+          m!"unprovable: {g.unprovable?.toYesNo} | ",
+          m!"irrelevant: {g.irrelevant?.toYesNo}" ],
+      toMessageDataIf minfo.showGoal $
+        m!"Goal:{indentD g.goal}",
+      toMessageDataIf (minfo.showUnsafeQueue && g.unsafeQueue.isSome) $
+        m!"Unsafe queue:{indentDUnlines $ g.unsafeQueue.get!.map toMessageData}",
+      toMessageDataIf minfo.showFailedRapps $
+        m!"Failed rule applications:{indentDUnlines $ g.failedRapps.map toMessageData}" ]
+
 def mkInitial (id : GoalId) (goal : MVarId) (successProbability : Percent) :
     GoalData where
   id := id
@@ -104,9 +138,6 @@ def mkInitial (id : GoalId) (goal : MVarId) (successProbability : Percent) :
   proven? := false
   unprovable? := false
   irrelevant? := false
-
-def normal? (g : GoalData) : Bool :=
-  g.normalizationProof.isSome
 
 end GoalData
 
@@ -121,6 +152,20 @@ structure RappData : Type where
   deriving Inhabited
 
 namespace RappData
+
+structure MessageInfo where
+  showProof : Bool
+
+open MessageData in
+protected def toMessageData (minfo : MessageInfo) (r : RappData) : MessageData :=
+  m!"Rule application {r.id} [{r.successProbability}]" ++ indentDUnlinesSkipEmpty
+    [ toMessageData r.appliedRule,
+      join
+        [ m!"proven: {r.proven?.toYesNo} | ",
+          m!"unprovable: {r.unprovable?.toYesNo} | ",
+          m!"irrelevant: {r.irrelevant?.toYesNo}" ],
+      toMessageDataIf minfo.showProof $
+        m!"Proof:{indentD r.proof}" ]
 
 def mkInitial (id : RappId) (appliedRule : RegularRule)
   (successProbability : Percent) (proof : Expr) : RappData where
@@ -328,6 +373,34 @@ def subgoalsProven? (r : Rapp) : m Bool :=
   r.subgoals.allM λ subgoal => return (← subgoal.get).proven?
 
 end Rapp
+
+/-! ## Formatting -/
+
+mutual
+  private partial def formatTreeGoal (goalMInfo : GoalData.MessageInfo)
+      (rappMInfo : RappData.MessageInfo) (goal : Goal) : m MessageData := do
+    let goalMsg := goal.payload.toMessageData goalMInfo
+    let childrenMsgs ← goal.rapps.mapM λ c => do
+      formatTreeRapp goalMInfo rappMInfo (← c.get)
+    return goalMsg ++ indentD (MessageData.node childrenMsgs)
+
+  private partial def formatTreeRapp (goalMInfo : GoalData.MessageInfo)
+      (rappMInfo : RappData.MessageInfo) (rapp : Rapp) : m MessageData := do
+    let rappMsg := rapp.payload.toMessageData rappMInfo
+    let childrenMsgs ← rapp.subgoals.mapM λ c => do
+      formatTreeGoal goalMInfo rappMInfo (← c.get)
+    return rappMsg ++ indentD (MessageData.node childrenMsgs)
+end
+
+@[inline]
+def Goal.formatTree : GoalData.MessageInfo → RappData.MessageInfo → Goal →
+    m MessageData :=
+  formatTreeGoal
+
+@[inline]
+def Rapp.formatTree : GoalData.MessageInfo → RappData.MessageInfo → Rapp →
+    m MessageData :=
+  formatTreeRapp
 
 /-! ## Miscellaneous Functions on Goals -/
 
