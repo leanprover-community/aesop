@@ -1,0 +1,4 @@
+[submodule "lean4-aesop"]
+	path = lean4-aesop
+	url = https://github.com/JLimperg/lean4-aesop
+	shallow = true
