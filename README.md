@@ -31,7 +31,7 @@ This is a work-in-progress proof search tactic for Lean 4.
    $ cd ../.. # ROOT/lean4-aesop
    $ elan override set lean4-aesop
    $ cd src # ROOT/lean4-aesop/src
-   $ elan override set lean4-stage0
+   $ elan override set lean4-aesop-stage0
    $ cd ../.. # ROOT
    $ elan override set lean4-aesop
    ```
