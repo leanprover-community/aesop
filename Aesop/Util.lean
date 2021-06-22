@@ -127,6 +127,13 @@ end DiscrTree
 
 namespace SimpLemmas
 
+def empty : SimpLemmas where
+  pre := DiscrTree.mk (Std.PersistentHashMap.empty)
+  post := DiscrTree.mk (Std.PersistentHashMap.empty)
+  lemmaNames := Std.PersistentHashSet.empty
+  toUnfold := Std.PersistentHashSet.empty
+  erased := Std.PersistentHashSet.empty
+
 def merge (s t : SimpLemmas) : SimpLemmas where
   pre := s.pre.merge t.pre
   post := s.post.merge t.post

@@ -249,13 +249,7 @@ namespace RuleSet
 
 def empty : RuleSet :=
 { normalizationRules := RuleIndex.empty,
-  normalizationSimpLemmas :=
-    SimpLemmas.mk
-      (DiscrTree.mk (Std.PersistentHashMap.empty))
-      (DiscrTree.mk (Std.PersistentHashMap.empty))
-      Std.PersistentHashSet.empty
-      Std.PersistentHashSet.empty
-      Std.PersistentHashSet.empty,
+  normalizationSimpLemmas := SimpLemmas.empty,
   unsafeRules := RuleIndex.empty,
   safeRules := RuleIndex.empty }
 
