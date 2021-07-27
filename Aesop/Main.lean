@@ -7,11 +7,11 @@ Authors: Jannis Limperg
 import Aesop.BestFirstSearch
 import Aesop.Config
 import Aesop.DefaultRules
-import Lean.Elab.Tactic
-
-namespace Aesop
+import Lean
 
 open Lean.Elab.Tactic
+
+namespace Aesop
 
 @[tactic Parser.Tactic.aesop]
 def evalAesop : Tactic := λ stx =>

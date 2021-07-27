@@ -5,12 +5,6 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Aesop.Util.SudoSetOption
-import Lean.Elab.Syntax
-import Lean.Elab.Tactic.Basic
-import Lean.Message
-import Lean.Meta.DiscrTree
-import Lean.Meta.Tactic.Simp.SimpLemmas
-import Lean.Syntax
 import Std.Data.BinomialHeap
 
 namespace String

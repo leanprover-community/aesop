@@ -9,7 +9,7 @@ Authors: Jannis Limperg
 -- one with the steps taken (displayed in a nice structured manner and hopefully
 -- inspectable).
 
-import Lean.Util.Trace
+import Lean
 
 open Lean
 

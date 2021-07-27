@@ -6,7 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Rule
 import Aesop.RuleTac
-import Lean.Meta.Tactic.Simp.SimpLemmas
+import Lean
 
 open Lean
 open Lean.Meta

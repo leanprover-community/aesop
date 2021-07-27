@@ -24,11 +24,8 @@ def splitHyps : TacticM Unit :=
 
 end DefaultRules
 
--- We could tag the above rule defs with the aesop attribute, and that would
--- certainly be more convenient than what this function does. However, the
--- attribute would come from the stage0 library, so any change to e.g.
--- the attribute syntax would require a stage0 update. These updates are a major
--- PITA when we rebase onto upstream master, so we want to minimise them.
+-- TODO As soon as the Aesop rule supports named rule sets, we can just
+-- tag the above tactics with `@[aesop ... (rule_set default)]` or something.
 def defaultRules : TermElabM (Array RuleSetMember) := do
   mkRules #[
     (``DefaultRules.assumption, ← `(attr|aesop safe 0)),
