@@ -176,5 +176,4 @@ def siblings (tref : MATRef σ α ω) : m (Array (MATRef σ α ω)) := do
   let children := (← parent.get).children
   return (← children.filterM λ cref => return not (← cref.ptrEq tref))
 
-end MutAltTree
-end Aesop
+end Aesop.MutAltTree

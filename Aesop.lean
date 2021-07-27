@@ -1,6 +1,12 @@
 import Aesop.BestFirstSearch
+import Aesop.Config
+import Aesop.DefaultRules
+import Aesop.Main
 import Aesop.MutAltTree
 import Aesop.Percent
+import Aesop.RuleBuilder
 import Aesop.Rule
+import Aesop.RuleTac
+import Aesop.Tracing
 import Aesop.Tree
 import Aesop.Util

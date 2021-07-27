@@ -4,72 +4,108 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
-import Lean
-
 import Aesop.Percent
+import Aesop.RuleTac
 import Aesop.Util
 
 namespace Aesop
 
 open Lean
 open Lean.Meta
-open Lean.Elab.Tactic (TacticM)
+
+
+/-! ## Rule Indexing Modes -/
+
+inductive IndexingMode : Type
+  | unindexed
+  | indexTarget (targetKeys : Array DiscrTree.Key)
+  deriving Inhabited, BEq
+
+export IndexingMode (unindexed indexTarget)
+
 
 /-! ## Rules -/
 
-structure Rule (α : Type) where
+/- The rules in a rule set should be uniquely identified by their name. -/
+structure Rule' (α τ : Type) where
   name : Name
-  tac : MVarId → MetaM (List MVarId)
-  priorityInfo : α
+  indexingMode : IndexingMode
+  extra : α
+  tac : τ
   deriving Inhabited
 
-instance [ToFormat α] : ToFormat (Rule α) where
-  format r := f! "[{r.priorityInfo}] {r.name}" -- TODO don't output raw name?
+namespace Rule'
 
-instance : BEq (Rule α) where
+instance : BEq (Rule' α τ) where
   beq r s := r.name == s.name
 
-instance [LT α] : LT (Rule α) where
-  lt r s := r.priorityInfo < s.priorityInfo
+instance [LT α] : LT (Rule' α τ) where
+  lt r s := r.extra < s.extra
 
 instance [LT α] [DecidableRel (α := α) (· < ·)] :
-    DecidableRel (α := Rule α) (· < ·) :=
-  fun r s => inferInstanceAs $ Decidable (r.priorityInfo < s.priorityInfo)
+    DecidableRel (α := Rule' α τ) (· < ·) :=
+  λ r s => inferInstanceAs $ Decidable (r.extra < s.extra)
+
+@[inline]
+def map (f : α → β) (g : τ → ι) (r : Rule' α τ) : Rule' β ι :=
+  { r with tac := g r.tac, extra := f r.extra }
+
+@[inline]
+def mapExtra (f : α → β) (r : Rule' α τ) : Rule' β τ :=
+  map f id r
+
+@[inline]
+def mapTac (f : τ → ι) (r : Rule' α τ) : Rule' α ι :=
+  map id f r
+
+@[inline]
+def mapM [Monad m] (f : α → m β) (g : τ → m ι) (r : Rule' α τ) : m (Rule' β ι) :=
+  return { r with tac := (← g r.tac), extra := (← f r.extra) }
+
+@[inline]
+def mapExtraM [Monad m] (f : α → m β) (r : Rule' α τ) : m (Rule' β τ) :=
+  mapM f pure r
+
+@[inline]
+def mapTacM [Monad m] (f : τ → m ι) (r : Rule' α τ) : m (Rule' α ι) :=
+  mapM pure f r
+
+def tacToDescr (r : Rule' α RuleTac) : Rule' α (Option RuleTacDescr) :=
+  r.mapTac (·.descr)
+
+def descrToTac (r : Rule' α RuleTacDescr) : MetaM (Rule' α RuleTac) :=
+  return { r with tac := (← r.tac.toRuleTac) }
+
+end Rule'
 
 
 /-! ### Normalisation Rules -/
 
-def NormalizationRule := Rule Int
+structure NormRuleInfo where
+  penalty : Int
+  deriving Inhabited, DecidableEq
 
-namespace NormalizationRule
+instance : LT NormRuleInfo where
+  lt i j := i.penalty < j.penalty
 
-instance : Inhabited NormalizationRule where
-  default := Inhabited.default (α := Rule Int)
+instance : DecidableRel (α := NormRuleInfo) (· < ·) :=
+  λ i j => inferInstanceAs $ Decidable (i.penalty < j.penalty)
 
-instance : BEq NormalizationRule where
-  beq := BEq.beq (α := Rule Int)
+abbrev NormRule' := Rule' NormRuleInfo
+abbrev NormRule := NormRule' RuleTac
 
-instance : ToFormat NormalizationRule where
-  format := format (α := Rule Int)
+instance : ToFormat (NormRule' τ) where
+  format r := f!"[{r.extra.penalty}] {r.name}"
 
-instance : LT NormalizationRule where
-  lt r s := LT.lt (α := Rule Int) r s
-
-instance : DecidableRel (α := NormalizationRule) (· < ·) :=
-  inferInstanceAs $ DecidableRel (α := Rule Int) (· < ·)
-
-protected def blt (r s : NormalizationRule) : Bool :=
-  r < s
-
-end NormalizationRule
+def defaultNormPenalty : Int := 1
 
 
-/-! ### Safe Rules -/
+/-! ### Safe and Almost Safe Rules -/
 
 inductive Safety
   | safe
   | almostSafe
-  deriving DecidableEq, Inhabited
+  deriving Inhabited, DecidableEq
 
 namespace Safety
 
@@ -80,106 +116,86 @@ instance : ToFormat Safety where
 
 end Safety
 
-structure SafeRule extends Rule Int where
+structure SafeRuleInfo where
+  penalty : Int
   safety : Safety
-  deriving Inhabited
+  deriving Inhabited, DecidableEq
 
-namespace SafeRule
+instance : LT SafeRuleInfo where
+  lt i j := i.penalty < j.penalty
 
-instance : BEq SafeRule where
-  beq r s := r.toRule == s.toRule
+instance : DecidableRel (α := SafeRuleInfo) (· < ·) :=
+  λ i j => inferInstanceAs $ Decidable (i.penalty < j.penalty)
 
-instance : ToFormat SafeRule where
-  format r := format r.toRule
+abbrev SafeRule' := Rule' SafeRuleInfo
+abbrev SafeRule := SafeRule' RuleTac
 
-instance : LT SafeRule where
-  lt r s := r.toRule < s.toRule
+instance : ToFormat (SafeRule' τ) where
+  format r := f!"[{r.extra.penalty}/{r.extra.safety}] {r.name}"
 
-instance : DecidableRel (α := SafeRule) (· < ·) :=
-  fun r s => inferInstanceAs $ Decidable (r.toRule < s.toRule)
-
-protected def blt (r s : SafeRule) : Bool :=
-  r < s
-
-end SafeRule
+def defaultSafePenalty : Int := 1
 
 
 /-! ### Unsafe Rules -/
 
-def UnsafeRule := Rule Percent
+structure UnsafeRuleInfo where
+  successProbability : Percent
+  deriving Inhabited
 
-namespace UnsafeRule
+instance : LT UnsafeRuleInfo where
+  lt i j := i.successProbability > j.successProbability
 
-open Percent
+instance : DecidableRel (α := UnsafeRuleInfo) (· < ·) :=
+  λ i j => inferInstanceAs $
+    Decidable (i.successProbability > j.successProbability)
 
-instance : Inhabited UnsafeRule where
-  default := Inhabited.default (α := Rule Percent)
+abbrev UnsafeRule' := Rule' UnsafeRuleInfo
+abbrev UnsafeRule := UnsafeRule' RuleTac
 
-instance : ToFormat UnsafeRule where
-  format := format (α := Rule Percent)
-
-instance : BEq UnsafeRule where
-  beq := BEq.beq (α := Rule Percent)
-
-instance : LT UnsafeRule where
-  -- The priority info here is the success probability: favour larger
-  -- probabilities.
-  lt r s := r.priorityInfo > s.priorityInfo
-
-instance : DecidableRel (α := UnsafeRule) (· < ·) :=
-  fun r s => (inferInstance : Decidable (r.priorityInfo > s.priorityInfo))
-
-protected def blt (r s : UnsafeRule) : Bool :=
-  r < s
-
-end UnsafeRule
+instance : ToFormat (UnsafeRule' τ) where
+  format r := f!"[{r.extra.successProbability.toHumanString}] {r.name}"
 
 
 /-! ### Regular Rules -/
 
-inductive RegularRule
-  | safe (r : SafeRule)
-  |  «unsafe» (r : UnsafeRule)
-  deriving Inhabited, BEq
+inductive RegularRule' τ
+  | safe (r : SafeRule' τ)
+  | «unsafe» (r : UnsafeRule' τ)
+  deriving BEq
 
-namespace RegularRule
+abbrev RegularRule := RegularRule' RuleTac
 
-instance : ToFormat RegularRule where
+instance [Inhabited τ] : Inhabited (RegularRule' τ) where
+  default := RegularRule'.«safe» arbitrary
+
+namespace RegularRule'
+
+instance : ToFormat (RegularRule' τ) where
   format
-    | (safe r) => "[safe] " ++ format (α := SafeRule) r
-    | («unsafe» r) => "[unsafe] " ++ format (α := UnsafeRule) r
+    | (safe r) => format r
+    | («unsafe» r) => format r
 
-def successProbability : RegularRule → Percent
-  | (safe r) => ⟨100⟩
-  | («unsafe» r) => r.priorityInfo
+def successProbability : RegularRule' τ → Percent
+  | (safe r) => Percent.hundred
+  | («unsafe» r) => r.extra.successProbability
 
-def isSafe : RegularRule → Bool
+def isSafe : RegularRule' τ → Bool
   | (safe _) => true
   | («unsafe» _) => false
 
-def isUnsafe : RegularRule → Bool
+def isUnsafe : RegularRule' τ → Bool
   | (safe _) => false
   | («unsafe» _) => true
 
-def tac : RegularRule → MVarId → MetaM (List MVarId)
+def tac : RegularRule' τ → τ
   | (safe r) => r.tac
   | («unsafe» r) => r.tac
 
-def name : RegularRule → Name
+def name : RegularRule' τ → Name
   | (safe r) => r.name
   | («unsafe» r) => r.name
 
-end RegularRule
-
-
-/-! ## Rule Indexing Modes -/
-
-inductive IndexingMode : Type
-  | unindexed
-  | indexTarget (target : Expr)
-  deriving Inhabited, BEq
-
-export IndexingMode (unindexed indexTarget)
+end RegularRule'
 
 
 /-! ## Rule Indices -/
@@ -191,32 +207,31 @@ structure RuleIndex (α : Type) where
 
 namespace RuleIndex
 
-open Std.Format in
-instance [ToFormat α] : ToFormat (RuleIndex α) where
-  format ri := Format.join
-    [ "rules indexed by target:",
-      indentD $ format ri.byTarget, -- TODO revisit
-      line,
-      "unindexed rules:",
-      ri.unindexed.map format |>.toList |> unlines |> indentD ]
+open MessageData in
+instance [ToMessageData α] : ToMessageData (RuleIndex α) where
+  toMessageData ri := node #[
+    "indexed by target:" ++ node (ri.byTarget.values.map toMessageData),
+    "unindexed:" ++ node (ri.unindexed.map toMessageData)
+    ]
 
 def empty : RuleIndex α where
   byTarget := DiscrTree.empty
   unindexed := #[] -- TODO keep these sorted?
 
+instance : EmptyCollection (RuleIndex α) :=
+  ⟨empty⟩
+
 def add [BEq α] (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
-    MetaM (RuleIndex α) :=
+    RuleIndex α :=
   match imode with
   | IndexingMode.unindexed => { ri with unindexed := ri.unindexed.push r }
-  | IndexingMode.indexTarget tgt =>
-    return { ri with byTarget := (← ri.byTarget.insert tgt r) }
-
-def fromList [BEq α] (rs : List (α × IndexingMode)) : MetaM (RuleIndex α) :=
-  rs.foldlM (λ rs ⟨r, imode⟩ => rs.add r imode) empty
+  | IndexingMode.indexTarget targetKeys =>
+    { ri with byTarget := ri.byTarget.insertCore targetKeys r }
 
 def applicableByTargetRules (ri : RuleIndex α) (goal : MVarId) :
     MetaM (Array α) := do
-  ri.byTarget.getMatch (← getMVarDecl goal).type
+  let target ← instantiateMVarsMVarType goal
+  ri.byTarget.getMatch target
 
 -- TODO remove Inhabited as soon as qsort doesn't require it any more.
 def applicableRules [Inhabited α] [LT α] [DecidableRel (α := α) (· < ·)]
@@ -230,45 +245,88 @@ end RuleIndex
 
 /-! ## Rule Set Members -/
 
-inductive RuleSetMember
-| normalizationRule (r : NormalizationRule) (imode : IndexingMode)
-| normalizationSimpLemmas (s : SimpLemmas)
-| unsafeRule (r : UnsafeRule) (imode : IndexingMode)
-| safeRule (r : SafeRule) (imode : IndexingMode)
+inductive RuleSetMember' τ
+  | normRule (r : NormRule' τ)
+  | normSimpEntries (es : Array SimpEntry)
+  | unsafeRule (r : UnsafeRule' τ)
+  | safeRule (r : SafeRule' τ)
+  deriving Inhabited
+
+abbrev RuleSetMember := RuleSetMember' RuleTac
+abbrev RuleSetMemberDescr := RuleSetMember' RuleTacDescr
+
+namespace RuleSetMember'
+
+def map (f : τ → ι) : RuleSetMember' τ → RuleSetMember' ι
+  | normRule r => normRule (r.mapTac f)
+  | normSimpEntries e => normSimpEntries e
+  | unsafeRule r => unsafeRule (r.mapTac f)
+  | safeRule r => safeRule (r.mapTac f)
+
+def mapM [Monad m] (f : τ → m ι) : RuleSetMember' τ → m (RuleSetMember' ι)
+  | normRule r => return normRule (← r.mapTacM f)
+  | normSimpEntries e => normSimpEntries e
+  | unsafeRule r => return unsafeRule (← r.mapTacM f)
+  | safeRule r => return safeRule (← r.mapTacM f)
+
+def toDescr (r : RuleSetMember) : Option RuleSetMemberDescr :=
+  OptionM.run $ r.mapM (·.descr)
+
+def ofDescr (r : RuleSetMemberDescr) : MetaM RuleSetMember :=
+  r.mapM (·.toRuleTac)
+
+end RuleSetMember'
 
 
 /-! ## Rule Set -/
 
 structure RuleSet where
-  normalizationRules : RuleIndex NormalizationRule
-  normalizationSimpLemmas : SimpLemmas
+  normRules : RuleIndex NormRule
+  normSimpLemmas : SimpLemmas
   unsafeRules : RuleIndex UnsafeRule
   safeRules : RuleIndex SafeRule
+  deriving Inhabited
 
 namespace RuleSet
 
-def empty : RuleSet :=
-{ normalizationRules := RuleIndex.empty,
-  normalizationSimpLemmas := SimpLemmas.empty,
-  unsafeRules := RuleIndex.empty,
-  safeRules := RuleIndex.empty }
+open MessageData in
+instance : ToMessageData RuleSet where
+  toMessageData rs :=
+    "Aesop rule set:" ++ node #[
+      "Unsafe rules:" ++ toMessageData rs.unsafeRules,
+      "Safe rules:" ++ toMessageData rs.safeRules,
+      "Normalisation rules:" ++ toMessageData rs.normRules,
+      "Normalisation simp lemmas:" ++ rs.normSimpLemmas.toMessageData
+    ]
 
-def add (rs : RuleSet) : RuleSetMember → MetaM RuleSet
-  | RuleSetMember.normalizationRule r imode =>
-    return { rs with normalizationRules := (← rs.normalizationRules.add r imode) }
-  | RuleSetMember.normalizationSimpLemmas s =>
-    return { rs with normalizationSimpLemmas := rs.normalizationSimpLemmas.merge s }
-  | RuleSetMember.unsafeRule r imode =>
-    return { rs with unsafeRules := (← rs.unsafeRules.add r imode )}
-  | RuleSetMember.safeRule r imode =>
-    return { rs with safeRules := (← rs.safeRules.add r imode )}
+def empty : RuleSet where
+  normRules := RuleIndex.empty
+  normSimpLemmas := {}
+  unsafeRules := RuleIndex.empty
+  safeRules := RuleIndex.empty
 
-def fromList (rs : List RuleSetMember) : MetaM RuleSet :=
-  rs.foldlM (λ rs r => rs.add r) empty
+instance : EmptyCollection RuleSet :=
+  ⟨empty⟩
+
+open RuleSetMember' in
+def add (rs : RuleSet) : RuleSetMember → RuleSet
+  | normRule r =>
+    return { rs with normRules := (← rs.normRules.add r r.indexingMode) }
+  | normSimpEntries es =>
+    return { rs with
+      normSimpLemmas :=
+        es.foldl (init := rs.normSimpLemmas) SimpLemmas.addSimpEntry }
+  | unsafeRule r =>
+    return { rs with unsafeRules := (← rs.unsafeRules.add r r.indexingMode )}
+  | safeRule r =>
+    return { rs with safeRules := (← rs.safeRules.add r r.indexingMode) }
+
+def addArray (rs : RuleSet) (ra : Array RuleSetMember) : RuleSet :=
+  ra.foldl add rs
 
 def applicableNormalizationRules (rs : RuleSet) (goal : MVarId) :
-  MetaM (Array NormalizationRule) :=
-  rs.normalizationRules.applicableRules goal
+  MetaM (Array NormRule) :=
+  rs.normRules.applicableRules goal
 
 def applicableUnsafeRules (rs : RuleSet) (goal : MVarId) :
   MetaM (Array UnsafeRule) :=

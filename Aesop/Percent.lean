@@ -4,18 +4,17 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
-import Lean.Elab.Tactic.Basic
-
 namespace Aesop
 
 open Lean
+open Std
 
 /-
 Invariant: between 0 and 0.1
 -/
 structure Percent where
   toFloat : Float
-  deriving Inhabited
+  deriving Inhabited, BEq
 
 namespace Percent
 
@@ -31,17 +30,16 @@ instance : LT Percent where
 instance : DecidableRel (α := Percent) (· < ·) :=
   λ p q => (inferInstance : Decidable (p.toFloat < q.toFloat))
 
-instance : ToFormat Percent where
-  format p := toString p.toFloat
+instance : ToString Percent where
+  toString p := toString p.toFloat
 
 def hundred : Percent :=
   ⟨1⟩
 
-def formatAsPercent (p : Percent) : Format :=
-  let s := toString (p.toFloat * 100) |>.takeWhile (· ≠ '.')
-  f! "{s}%"
+def toHumanString (p : Percent) : String :=
+  (toString (p.toFloat * 100) |>.takeWhile (· ≠ '.')) ++ "%"
 
--- TODO: parser for Percent?
+protected def ofNat (n : Nat) : Option Percent :=
+  Percent.ofFloat $ n.toFloat / 100
 
-end Percent
-end Aesop
+end Aesop.Percent

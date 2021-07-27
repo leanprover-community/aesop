@@ -1,0 +1,14 @@
+#!/bin/bash
+
+failed=0
+
+pushd tests &>/dev/null
+
+for file in *.lean; do
+  env LEAN_PATH="../build:." lean "$file"
+  [ "$?" -eq 0 ] || failed=1
+done
+
+popd &>/dev/null
+
+exit $failed
