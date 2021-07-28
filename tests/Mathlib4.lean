@@ -24,7 +24,7 @@ def of_eq_true := @ofEqTrue
 theorem not_of_eq_false {p : Prop} (h : p = False) : ¬p := fun hp => h ▸ hp
 
 -- TODO reflexivity default tactic
--- TODO How to use a lemma like this? Imo this is a nice example of e-matching.
+-- TODO How to use a lemma like this? Maybe this is a nice example of e-matching.
 theorem cast_proof_irrel (h₁ h₂ : α = β) (a : α) : cast h₁ a = cast h₂ a := rfl
 
 def cast_eq := @castEq
@@ -78,9 +78,9 @@ theorem Or.symm (h : a ∨ b) : b ∨ a := by
 
 -- TODO use iff in the context as norm rule?
 -- TODO allow local hyps to be added as norm simp rules
-def Iff.elim (f : (a → b) → (b → a) → c) (h : a ↔ b) : c := by
-  admit
-  -- aesop (norm [h (builder simp)])
+def Iff.elim (f : (a → b) → (b → a) → c) (h : a ↔ b) : c :=
+  f h.mp h.mpr
+  -- by aesop (norm [h (builder simp)])
 
 -- TODO add Iff.intro as default rule
 theorem iff_comm : (a ↔ b) ↔ (b ↔ a) := by
