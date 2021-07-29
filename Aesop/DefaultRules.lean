@@ -13,14 +13,16 @@ open Lean.Elab.Tactic
 
 namespace Aesop.DefaultRules
 
-def assumption : TacticM Unit :=
-  liftMetaTactic λ goal => Lean.Meta.assumption goal *> pure []
+def assumption : RuleTac := λ input => do
+  Lean.Meta.assumption input.goal
+  return { goals := #[], dependentGoals := #[] }
 
+-- TODO avoid TacticM
 def intros : TacticM Unit := do
   evalTactic (← `(tactic|intros))
 
-def splitHyps : TacticM Unit :=
-  liftMetaTactic λ goal => return [(← splitAllHyps goal).snd]
+def splitHyps : UserRuleTac := λ input =>
+  return { goals := #[(← splitAllHyps input.goal).snd] }
 
 end DefaultRules
 

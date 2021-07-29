@@ -208,7 +208,7 @@ def addGoal (g : GoalData) (parent : RappRef) : SearchM GoalRef := do
       successProbability := g.successProbability }
   return gref
 
-def addGoals [ForIn SearchM γ GoalData] (goals : γ) (parent : RappRef) :
+def addGoals (goals : Array GoalData) (parent : RappRef) :
     SearchM (Array GoalRef) := do
   let mut grefs := #[]
   for goal in goals do
@@ -216,7 +216,7 @@ def addGoals [ForIn SearchM γ GoalData] (goals : γ) (parent : RappRef) :
     grefs := grefs.push gref
   return grefs
 
-def addGoals' (goals : List MVarId) (successProbability : Percent)
+def addGoals' (goals : Array MVarId) (successProbability : Percent)
     (parent : RappRef) : SearchM (Array GoalRef) := do
   let goals ← goals.mapM λ g =>
     GoalData.mkInitial GoalId.dummy g successProbability
@@ -230,15 +230,24 @@ def addRapp (r : RappData) (parent : GoalRef) : SearchM RappRef := do
   parent.modify λ g => g.addChild rref
   return rref
 
+def runRuleTac' (goal : MVarId) (rule : RuleTac) : MetaM RuleTacOutput :=
+  withMVarContext goal $ rule { goal := goal }
+
+def runRuleTac (goal : Goal) (rule : RuleTac) :
+    SearchM (Option (RuleTacOutput × Meta.SavedState)) := do
+  let (result, finalState) ← goal.runMetaMInParentState $ observing? $
+    runRuleTac' goal.goal rule
+  return result.map (·, finalState)
+
 def runNormRule (goal : MVarId) (r : NormRule) : MetaM (Option MVarId) := do
-  let subgoals ←
-    try runTacticMAsMetaM r.tac.tac goal
+  let ruleOutput ←
+    try runRuleTac' goal r.tac.tac
     catch e => throwError
       m!"aesop: normalization rule {r.name} failed with error:\n  {e.toMessageData}\nIt was run on this goal:" ++
       MessageData.node #[MessageData.ofGoal goal]
-  match subgoals with
-  | [] => return none
-  | [g] => return some g
+  match ruleOutput.goals with
+  | #[] => return none
+  | #[g] => return some g
   | _ => throwError
     m!"aesop: normalization rule {r.name} produced more than one subgoal when run on this goal:" ++
     MessageData.node #[MessageData.ofGoal goal]
@@ -316,20 +325,14 @@ def failed? : RuleResult → Bool
 
 end RuleResult
 
-def runRule (g : Goal) (rule : TacticM Unit) :
-    SearchM (Option (List MVarId × Meta.SavedState)) := do
-  let (result, finalState) ← g.runMetaMInParentState $
-    observing? $ runTacticMAsMetaM rule g.goal
-  return result.map (·, finalState)
-
 def applyRegularRule (parentRef : GoalRef) (rule : RegularRule) :
     SearchM RuleResult := do
   let parent ← parentRef.get
   let successProbability :=
     parent.successProbability * rule.successProbability
-  let result? ← runRule parent rule.tac.tac
-  match result? with
-  | some ([], finalState) => do
+  let ruleOutput? ← runRuleTac parent rule.tac.tac
+  match ruleOutput?  with
+  | some (ruleOutput@{ goals := #[], .. }, finalState) => do
     -- Rule succeeded and did not generate subgoals, meaning the parent
     -- node is proved.
     trace[Aesop.Steps] "Rule succeeded without subgoals. Goal is proven."
@@ -339,7 +342,7 @@ def applyRegularRule (parentRef : GoalRef) (rule : RegularRule) :
     let _ ← addRapp r parentRef
     parentRef.setProven
     return RuleResult.proven
-  | some (subgoals, finalState) => do
+  | some (ruleOutput@{ goals := subgoals, .. }, finalState) => do
     -- Rule succeeded and generated subgoals.
     let r :=
       RappData.mkInitial RappId.dummy finalState rule successProbability

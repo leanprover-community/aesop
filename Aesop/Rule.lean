@@ -70,10 +70,11 @@ def mapExtraM [Monad m] (f : α → m β) (r : Rule' α τ) : m (Rule' β τ) :=
 def mapTacM [Monad m] (f : τ → m ι) (r : Rule' α τ) : m (Rule' α ι) :=
   mapM pure f r
 
-def tacToDescr (r : Rule' α RuleTac) : Rule' α (Option RuleTacDescr) :=
+def tacToDescr (r : Rule' α SerializableRuleTac) :
+    Rule' α (Option RuleTacDescr) :=
   r.mapTac (·.descr)
 
-def descrToTac (r : Rule' α RuleTacDescr) : MetaM (Rule' α RuleTac) :=
+def descrToTac (r : Rule' α RuleTacDescr) : MetaM (Rule' α SerializableRuleTac) :=
   return { r with tac := (← r.tac.toRuleTac) }
 
 end Rule'
@@ -92,7 +93,7 @@ instance : DecidableRel (α := NormRuleInfo) (· < ·) :=
   λ i j => inferInstanceAs $ Decidable (i.penalty < j.penalty)
 
 abbrev NormRule' := Rule' NormRuleInfo
-abbrev NormRule := NormRule' RuleTac
+abbrev NormRule := NormRule' SerializableRuleTac
 
 instance : ToFormat (NormRule' τ) where
   format r := f!"[{r.extra.penalty}] {r.name}"
@@ -128,7 +129,7 @@ instance : DecidableRel (α := SafeRuleInfo) (· < ·) :=
   λ i j => inferInstanceAs $ Decidable (i.penalty < j.penalty)
 
 abbrev SafeRule' := Rule' SafeRuleInfo
-abbrev SafeRule := SafeRule' RuleTac
+abbrev SafeRule := SafeRule' SerializableRuleTac
 
 instance : ToFormat (SafeRule' τ) where
   format r := f!"[{r.extra.penalty}/{r.extra.safety}] {r.name}"
@@ -150,7 +151,7 @@ instance : DecidableRel (α := UnsafeRuleInfo) (· < ·) :=
     Decidable (i.successProbability > j.successProbability)
 
 abbrev UnsafeRule' := Rule' UnsafeRuleInfo
-abbrev UnsafeRule := UnsafeRule' RuleTac
+abbrev UnsafeRule := UnsafeRule' SerializableRuleTac
 
 instance : ToFormat (UnsafeRule' τ) where
   format r := f!"[{r.extra.successProbability.toHumanString}] {r.name}"
@@ -163,7 +164,7 @@ inductive RegularRule' τ
   | «unsafe» (r : UnsafeRule' τ)
   deriving BEq
 
-abbrev RegularRule := RegularRule' RuleTac
+abbrev RegularRule := RegularRule' SerializableRuleTac
 
 instance [Inhabited τ] : Inhabited (RegularRule' τ) where
   default := RegularRule'.«safe» arbitrary
@@ -230,7 +231,7 @@ def add [BEq α] (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
 
 def applicableByTargetRules (ri : RuleIndex α) (goal : MVarId) :
     MetaM (Array α) := do
-  let target ← instantiateMVarsMVarType goal
+  let target ← instantiateMVarsInMVarType goal
   ri.byTarget.getMatch target
 
 -- TODO remove Inhabited as soon as qsort doesn't require it any more.
@@ -252,7 +253,7 @@ inductive RuleSetMember' τ
   | safeRule (r : SafeRule' τ)
   deriving Inhabited
 
-abbrev RuleSetMember := RuleSetMember' RuleTac
+abbrev RuleSetMember := RuleSetMember' SerializableRuleTac
 abbrev RuleSetMemberDescr := RuleSetMember' RuleTacDescr
 
 namespace RuleSetMember'

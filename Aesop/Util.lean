@@ -396,7 +396,7 @@ end ST.Ref
 
 namespace Lean.Meta
 
-def instantiateMVarsMVarType (mvarId : MVarId) : MetaM Expr := do
+def instantiateMVarsInMVarType (mvarId : MVarId) : MetaM Expr := do
   let type ← instantiateMVars (← getMVarDecl mvarId).type
   setMVarType mvarId type
   return type
@@ -517,8 +517,7 @@ constant evalTacticMUnit : Expr → TermElabM (TacticM Unit)
 def evalRunTactic : Tactic
   | `(tactic|run $t:term) => do
     let t ← elabTerm t (some (mkApp (mkConst ``TacticM) (mkConst ``Unit)))
-    let t ← evalTacticMUnit t
-    t
+    (← evalTacticMUnit t)
   | _ => unreachable!
 
 end Lean.Elab.Tactic

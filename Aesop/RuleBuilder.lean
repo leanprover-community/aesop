@@ -15,7 +15,7 @@ namespace Aesop
 
 structure RegularRuleBuilderResult where
   builderName : Name
-  tac : RuleTac
+  tac : SerializableRuleTac
   indexingMode : IndexingMode
   deriving Inhabited
 
@@ -78,23 +78,19 @@ def normSimpLemmas : RuleBuilder NormRuleBuilderResult
     throwError "aesop: local hypotheses cannot be added as simp lemmas"
 
 def applyIndexingMode (type : Expr) : MetaM IndexingMode := do
-  let savedState ← saveState
-  let path ←
-    try
-      let (_, _, conclusion) ← forallMetaTelescope type
-      DiscrTree.mkPath conclusion
-    finally
-      restoreState savedState
-  -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
-  -- turn into `Key.star`) but not fvars.
+  let path ← withoutModifyingState do
+    let (_, _, conclusion) ← forallMetaTelescope type
+    DiscrTree.mkPath conclusion
+    -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
+    -- turn into `Key.star`) but not fvars.
   return IndexingMode.indexTarget path
 
 def apply : RuleBuilder RegularRuleBuilderResult := λ ruleIdent => do
   let type := (← ruleIdent.type)
   let tac ←
     match ruleIdent with
-    | RuleIdent.const decl => RuleTacBuilder.apply decl
-    | RuleIdent.fvar userName => RuleTacBuilder.applyFVar userName
+    | RuleIdent.const decl => SerializableRuleTac.applyConst decl
+    | RuleIdent.fvar userName => SerializableRuleTac.applyFVar userName
   return {
     builderName := `apply
     tac := tac
@@ -105,7 +101,7 @@ def tactic : RuleBuilder RegularRuleBuilderResult
   | RuleIdent.const decl =>
     return {
       builderName := `tactic
-      tac := (← RuleTacBuilder.tactic decl)
+      tac := (← SerializableRuleTac.ofTacticConst decl)
       indexingMode := IndexingMode.unindexed
     }
   | RuleIdent.fvar _ =>
