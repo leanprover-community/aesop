@@ -2,6 +2,9 @@
 
 failed=0
 
+leanpkg build
+[ "$?" -eq 0 ] || exit 1
+
 pushd tests &>/dev/null
 
 for file in *.lean; do
