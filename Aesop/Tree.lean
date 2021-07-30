@@ -102,6 +102,9 @@ end ProofStatus
 
 
 -- Invariant: if proofStatus = provenByNormalization then isNormal = true
+-- Invariant: All goal IDs in a tree are distinct.
+-- Invariant: The goal ID of a node is smaller than the goal IDs of its
+--   descendant goals.
 structure GoalData : Type where
   id : GoalId
   goal : MVarId
@@ -171,6 +174,9 @@ protected def mkInitial (id : GoalId) (goal : MVarId)
 
 end GoalData
 
+-- Invariant: All rapp IDs in a tree are distinct.
+-- Invariant: The rapp ID of a node is smaller than the rapp IDs of its
+--   descendant rapps.
 structure RappData : Type where
   id : RappId
   state : Meta.SavedState
@@ -552,5 +558,76 @@ def GoalRef.setUnprovable : GoalRef → m Unit :=
 
 def RappRef.setUnprovable : RappRef → m Unit :=
   setUnprovableImpl ∘ Sum.inr
+
+
+/-! ## Copying Trees -/
+
+namespace TreeCopy
+
+structure State where
+  nextGoalId : GoalId
+  nextRappId : RappId
+
+abbrev TreeCopyT := StateRefT' IO.RealWorld State
+
+namespace TreeCopyT
+
+def run (s : State) (x : TreeCopyT m α) : m (α × State) :=
+  StateRefT'.run x s
+
+def run' (nextGoalId : GoalId) (nextRappId : RappId) (x : TreeCopyT m α) :
+    m (α × GoalId × RappId) := do
+  let (res, s) ← x.run { nextGoalId := nextGoalId, nextRappId := nextRappId }
+  return (res, s.nextGoalId, s.nextRappId)
+
+end TreeCopyT
+
+def getAndIncrementNextGoalId : TreeCopyT m GoalId := do
+  let s ← get
+  let id := s.nextGoalId
+  set { s with nextGoalId := id.succ }
+  return id
+
+def getAndIncrementNextRappId : TreeCopyT m RappId := do
+  let s ← get
+  let id := s.nextRappId
+  set { s with nextRappId := id.succ }
+  return id
+
+mutual
+  -- Copies `gref` and all its descendants. The copy of `gref` becomes a child
+  -- of `parent`. Returns the copy of `gref`.
+  partial def copyGoalTree (parent : RappRef) (gref : GoalRef) :
+      TreeCopyT m GoalRef := do
+    let g ← gref.get
+    let newGoalId ← getAndIncrementNextGoalId
+    let newGoalRef ← ST.mkRef $
+      Goal.mk (some parent) #[] { g.payload with id := newGoalId }
+    parent.modify λ r => r.addChild newGoalRef
+    g.rapps.forM λ rref => discard $ copyRappTree newGoalRef rref
+    return newGoalRef
+
+  -- Copies `rref` and all its descendants. The copy of `rref` becomes a child
+  -- of `parent`. Returns the copy of `gref`.
+  partial def copyRappTree (parent : GoalRef) (rref : RappRef) :
+      TreeCopyT m RappRef := do
+    let r ← rref.get
+    let newRappId ← getAndIncrementNextRappId
+    let newRappRef ← ST.mkRef $
+      Rapp.mk (some parent) #[] { r.payload with id := newRappId }
+    parent.modify λ g => g.addChild newRappRef
+    r.subgoals.forM λ gref => discard $ copyGoalTree newRappRef gref
+    return newRappRef
+end
+
+end TreeCopy
+
+def GoalRef.copyTree (nextGoalId : GoalId) (nextRappId : RappId)
+  (parent : RappRef) (gref : GoalRef) : m (GoalRef × GoalId × RappId) := do
+  TreeCopy.copyGoalTree parent gref |>.run' nextGoalId nextRappId
+
+def RappRef.copyTree (nextGoalId : GoalId) (nextRappId : RappId)
+  (parent : GoalRef) (rref : RappRef) : m (RappRef × GoalId × RappId) := do
+  TreeCopy.copyRappTree parent rref |>.run' nextGoalId nextRappId
 
 end Aesop
