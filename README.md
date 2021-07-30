@@ -253,6 +253,24 @@ Clauses may be added to configure the tactic. Currently implemented are:
 - `(safe [<ident> <penalty>? <clause>*, ...])`: same for safe rules.
 - `(unsafe [<ident> <percent>% <clause>*, ...])`: same for unsafe rules (but
   with a success probability instead of a penalty).
+  
+### Debugging
+
+To see step-by-step what Aesop is doing, use
+
+``` lean
+sudo set_option trace.Aesop.Steps true
+```
+
+The `sudo` is needed because we currently can't register trace options from
+library code. There are also various `trace.Aesop.Steps.*` options which you can
+set to `false` to disable certain parts of the output. See `Aesop/Tracing.lean`.
+
+To see the rule set used by a particular tactic invocation, use
+
+``` lean
+sudo set_option trace.Aesop.RuleSet true
+```
 
 ## Implementation
 
