@@ -176,4 +176,37 @@ def siblings (tref : MATRef σ α ω) : m (Array (MATRef σ α ω)) := do
   let children := (← parent.get).children
   return (← children.filterM λ cref => return not (← cref.ptrEq tref))
 
+/-! ### Checking Invariants -/
+
+partial def hasConsistentParentChildLinks (tref : MATRef σ ω α) : m Bool := do
+  let t ← tref.get
+  let consistent ←
+    match t.parent with
+    | none => pure true
+    | some parentRef =>
+      (← parentRef.get).children.anyM λ c => c.ptrEq tref
+  pure consistent <&&> t.children.allM hasConsistentParentChildLinks
+
+partial def isAcyclic (tref : MATRef σ ω α) : m Bool :=
+  return (← go #[] #[] tref).fst
+  where
+    -- We use arrays to store the visited nodes (rather than some data structure
+    -- with asymptotically faster lookup) because STRefs only have pointer
+    -- equality, not pointer comparison. Besides, this is probably faster anyway
+    -- for small to medium trees.
+    go {ω α} (visited₁ : Array (MATRef σ ω α)) (visited₂ : Array (MATRef σ α ω))
+        (tref : MATRef σ ω α) :
+        m (Bool × Array (MATRef σ ω α) × Array (MATRef σ α ω)) := do
+      if (← visited₁.anyM λ tref' => tref'.ptrEq tref) then
+        return (false, visited₁, visited₂)
+      let mut v₁ := visited₁.push tref
+      let mut v₂ := visited₂
+      for child in (← tref.get).children do
+        let (res, visited₂, visited₁) ← go v₂ v₁ child
+        if ¬ res then
+          return (false, visited₁, visited₂)
+        v₁ := visited₁
+        v₂ := visited₂
+      return (true, v₁, v₂)
+
 end Aesop.MutAltTree

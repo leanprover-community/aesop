@@ -23,14 +23,20 @@ initialize checkProofReconstructionOption : Lean.Option Bool ←
   registerCheckOption `proofReconstruction false
     "(aesop) Typecheck partial proof terms during proof reconstruction."
 
+initialize checkTreeOption : Lean.Option Bool ←
+  registerCheckOption `tree false
+    "(aesop) Check search tree invariants after every iteration of the search loop. Very expensive."
+
 inductive Check
   | all
+  | tree
   | proofReconstruction
 
 namespace Check
 
 def toOption : Check → Lean.Option Bool
   | all => checkAllOption
+  | tree => checkTreeOption
   | proofReconstruction => checkProofReconstructionOption
 
 def isEnabled [Monad m] [MonadOptions m] : Check → m Bool
@@ -40,6 +46,8 @@ def isEnabled [Monad m] [MonadOptions m] : Check → m Bool
     match c.toOption.get? opts with
     | none => return all.toOption.get opts
     | some v => return v
+
+def name (c : Check) : Name := c.toOption.name
 
 end Check
 

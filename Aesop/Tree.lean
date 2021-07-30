@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
+import Aesop.Check
 import Aesop.MutAltTree
 import Aesop.Rule
 import Aesop.Util
@@ -629,5 +630,17 @@ def GoalRef.copyTree (nextGoalId : GoalId) (nextRappId : RappId)
 def RappRef.copyTree (nextGoalId : GoalId) (nextRappId : RappId)
   (parent : GoalRef) (rref : RappRef) : m (RappRef × GoalId × RappId) := do
   TreeCopy.copyRappTree parent rref |>.run' nextGoalId nextRappId
+
+
+/-! ## Checking Invariants -/
+
+def GoalRef.checkInvariantsIfEnabled [MonadOptions m] [MonadError m]
+    (root : GoalRef) : m Unit := do
+  unless (← Check.tree.isEnabled) do
+    return ()
+  unless (← MutAltTree.hasConsistentParentChildLinks root) do
+    throwError "{Check.tree.name}: search tree is not properly linked"
+  unless (← MutAltTree.isAcyclic root) do
+    throwError "{Check.tree.name}: search tree contains a cycle"
 
 end Aesop

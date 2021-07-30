@@ -466,9 +466,9 @@ mutual
       if (← Check.proofReconstruction.isEnabled) then
         withMVarContext goalMVar do
           check proof <|> throwError
-            "aesop/linkProofs: internal error: reconstructed proof of goal {g.id} is type-incorrect"
+            "{Check.proofReconstruction.name}: reconstructed proof of goal {g.id} is type-incorrect"
           let (true) ← isDefEq (← getMVarType goalMVar) (← inferType proof)
-            | throwError "aesop/linkProofs: internal error: reconstructed proof of goal {g.id} has the wrong type"
+            | throwError "{Check.proofReconstruction.name}: reconstructed proof of goal {g.id} has the wrong type"
       assignExprMVar goalMVar proof
 
   -- Let r be the rapp in rref. This function assigns the goal metavariables of
@@ -511,6 +511,7 @@ partial def search' : SearchM Unit := do
   let done ← finishIfProven
   if ¬ done then
     expandNextGoal
+    (← readRootGoal).checkInvariantsIfEnabled
     search'
 
 def search (rs : RuleSet) (mainGoal : MVarId) : MetaM Unit := do
