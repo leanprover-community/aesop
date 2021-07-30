@@ -253,7 +253,7 @@ Clauses may be added to configure the tactic. Currently implemented are:
 - `(safe [<ident> <penalty>? <clause>*, ...])`: same for safe rules.
 - `(unsafe [<ident> <percent>% <clause>*, ...])`: same for unsafe rules (but
   with a success probability instead of a penalty).
-  
+
 ### Debugging
 
 To see step-by-step what Aesop is doing, use

@@ -6,7 +6,9 @@ Authors: Jannis Limperg
 
 -- TODO clean up this test case
 
-import Aesop.Main
+import Aesop
+
+set_option aesop.check.all true
 
 inductive Even : Nat → Prop
 | zero : Even Nat.zero

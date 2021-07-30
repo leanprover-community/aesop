@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
+import Aesop.Check
 import Aesop.Rule
 import Aesop.Tree
 import Aesop.Util
@@ -462,12 +463,12 @@ mutual
       if (← isExprMVarAssigned g.goal) then do throwError
         "aesop/linkProofs: internal error: goal metavariable of goal {g.id} already assigned.\nPrevious assignment:{indentExpr (← getExprMVarAssignment? g.goal).get!}"
       let goalMVar := g.goal
-      -- TODO provide flag to omit these checks
-      withMVarContext goalMVar do
-        check proof <|> throwError
-          "aesop/linkProofs: internal error: reconstructed proof of goal {g.id} is type-incorrect"
-        let (true) ← isDefEq (← getMVarType goalMVar) (← inferType proof)
-          | throwError "aesop/linkProofs: internal error: reconstructed proof of goal {g.id} has the wrong type"
+      if (← Check.proofReconstruction.isEnabled) then
+        withMVarContext goalMVar do
+          check proof <|> throwError
+            "aesop/linkProofs: internal error: reconstructed proof of goal {g.id} is type-incorrect"
+          let (true) ← isDefEq (← getMVarType goalMVar) (← inferType proof)
+            | throwError "aesop/linkProofs: internal error: reconstructed proof of goal {g.id} has the wrong type"
       assignExprMVar goalMVar proof
 
   -- Let r be the rapp in rref. This function assigns the goal metavariables of

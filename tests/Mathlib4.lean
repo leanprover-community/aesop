@@ -1,4 +1,6 @@
-import Aesop.Main
+import Aesop
+
+set_option aesop.check.all true
 
 theorem EqIffBeqTrue [DecidableEq α] {a b : α} : a = b ↔ ((a == b) = true) :=
 ⟨decideEqTrue, ofDecideEqTrue⟩

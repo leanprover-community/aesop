@@ -1,4 +1,5 @@
 import Aesop.BestFirstSearch
+import Aesop.Check
 import Aesop.Config
 import Aesop.DefaultRules
 import Aesop.Main
