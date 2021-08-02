@@ -20,14 +20,18 @@ structure RuleTacInput where
 -- Rule tactics must accurately report the following information, which is not
 -- checked:
 --
--- - `goals`: All unassigned metavariables produced by the tactic.
--- - `dependentGoals`: Those metavariables `g ∈ goals` such that some `h ∈
---   goals` depends on `g`. We say that `h` depends on `g` iff `g` appears in
---   the target type of `h` or in the type of one of the hypotheses of `h`.
---   TODO explain the purpose of these
+-- - `regularGoals`: a collection of unassigned metavariables. These are goals
+--    produced by the tactic which should be solved by recursive search.
+-- - `unificationGoals`: a collection of unassigned metavariables. These are
+--    goals produced by the tactic which should be solved by unification.
+--    `regularGoals` and `unificationGoals` must be disjoint. If a metavariable
+--    is dependent (i.e. it appears in the target or the local context of
+--    another goal), then it must appear in `unificationGoals`. Non-dependent
+--    metavariables are technically allowed to appear in `unificationGoals`, but
+--    are very unlikely to be solved.
 structure RuleTacOutput where
-  goals : Array MVarId
-  dependentGoals : Array MVarId
+  regularGoals : Array MVarId
+  unificationGoals : Array MVarId
   deriving Inhabited
 
 -- When users want to register a tactic, they may not want to compute all the
@@ -55,15 +59,15 @@ def getTargetMVars (goal : MVarId) : MetaM (Array MVarId) := do
 def getGoalMVars (goal : MVarId) : MetaM (Array MVarId) :=
   return (← getTargetMVars goal) ++ (← getHypMVars goal)
 
-def dependentMVars (ms : Array MVarId) : MetaM (Array MVarId) := do
-  let mvars ← ms.concatMapM getGoalMVars
-  ms.filterM λ m => mvars.contains m
+def nondependentAndDependentMVars (ms : Array MVarId) :
+    MetaM (Array MVarId × Array MVarId) := do
+  let mvarsAppearingInMs ← ms.concatMapM getGoalMVars
+  return ms.partition λ m => ¬ mvarsAppearingInMs.contains m
 
-def UserRuleTacOutput.toRuleTacOutput (o : UserRuleTacOutput) : MetaM RuleTacOutput :=
-  return {
-    goals := o.goals
-    dependentGoals := (← dependentMVars o.goals)
-  }
+def UserRuleTacOutput.toRuleTacOutput (o : UserRuleTacOutput) :
+    MetaM RuleTacOutput := do
+  let (regularGoals, unificationGoals) ← nondependentAndDependentMVars o.goals
+  return { regularGoals := regularGoals, unificationGoals := unificationGoals }
 
 abbrev RuleTac := RuleTacInput → MetaM RuleTacOutput
 

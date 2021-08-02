@@ -13,7 +13,7 @@ open Lean
 open Lean.Meta
 open Lean.Elab
 open Lean.Elab.Tactic
-open Std (BinomialHeap)
+open Std
 
 namespace Aesop
 
@@ -223,11 +223,16 @@ def addGoals' (goals : Array MVarId) (successProbability : Percent)
     GoalData.mkInitial GoalId.dummy g successProbability
   addGoals goals parent
 
-/- Overwrites the rapp ID from `r`. -/
-def addRapp (r : RappData) (parent : GoalRef) : SearchM RappRef := do
+/- Overwrites the rapp ID and the unification goal origins from `r`. -/
+def addRapp (r : RappData) (parent : GoalRef)
+    (newUnificationGoals : Array MVarId) : SearchM RappRef := do
   let id ← getAndIncrementNextRappId
   let r := r.setId id
   let rref ← ST.mkRef $ Rapp.mk (some parent) #[] r
+  let mut unificationGoalOrigins := (← parent.unificationGoalOrigins)
+  for goal in newUnificationGoals do
+    unificationGoalOrigins := unificationGoalOrigins.insert goal rref
+  rref.modify λ r => r.setUnificationGoalOrigins unificationGoalOrigins
   parent.modify λ g => g.addChild rref
   return rref
 
@@ -246,7 +251,11 @@ def runNormRule (goal : MVarId) (r : NormRule) : MetaM (Option MVarId) := do
     catch e => throwError
       m!"aesop: normalization rule {r.name} failed with error:\n  {e.toMessageData}\nIt was run on this goal:" ++
       MessageData.node #[MessageData.ofGoal goal]
-  match ruleOutput.goals with
+  unless ruleOutput.unificationGoals.isEmpty do
+    throwError
+      m!"aesop: normalization rule {r.name} produced a metavariable when run on this goal:" ++
+      MessageData.node #[MessageData.ofGoal goal]
+  match ruleOutput.regularGoals with
   | #[] => return none
   | #[g] => return some g
   | _ => throwError
@@ -333,25 +342,23 @@ def applyRegularRule (parentRef : GoalRef) (rule : RegularRule) :
     parent.successProbability * rule.successProbability
   let ruleOutput? ← runRuleTac parent rule.tac.tac
   match ruleOutput?  with
-  | some (ruleOutput@{ goals := #[], .. }, finalState) => do
+  | some (ruleOutput@{ regularGoals := #[], .. }, finalState) => do
     -- Rule succeeded and did not generate subgoals, meaning the parent
     -- node is proved.
     trace[Aesop.Steps] "Rule succeeded without subgoals. Goal is proven."
     let r :=
-      -- TODO track unification goals
-      RappData.mkInitial RappId.dummy finalState Std.PersistentHashMap.empty
+      RappData.mkInitial RappId.dummy finalState PersistentHashMap.empty
         rule successProbability
       |>.setProven true
-    let _ ← addRapp r parentRef
+    let _ ← addRapp r parentRef #[]
     parentRef.setProven
     return RuleResult.proven
-  | some (ruleOutput@{ goals := subgoals, .. }, finalState) => do
+  | some (ruleOutput@{ regularGoals := subgoals, .. }, finalState) => do
     -- Rule succeeded and generated subgoals.
-    -- TODO track unification goals
     let r :=
       RappData.mkInitial RappId.dummy finalState Std.PersistentHashMap.empty
         rule successProbability
-    let rappRef ← addRapp r parentRef
+    let rappRef ← addRapp r parentRef ruleOutput.unificationGoals
     let newGoals ← addGoals' subgoals successProbability rappRef
     if (← isTracingEnabledFor `Aesop.Steps) then
       _ ← rappRef.runMetaM do

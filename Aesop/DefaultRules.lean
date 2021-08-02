@@ -15,7 +15,7 @@ namespace Aesop.DefaultRules
 
 def assumption : RuleTac := λ input => do
   Lean.Meta.assumption input.goal
-  return { goals := #[], dependentGoals := #[] }
+  return { regularGoals := #[], unificationGoals := #[] }
 
 -- TODO avoid TacticM
 def intros : TacticM Unit := do

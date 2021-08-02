@@ -337,8 +337,8 @@ protected def toMessageData (traceCtx : TraceContext) (r : RappData) :
       then pure none
       else do
         let origins ← r.unificationGoalOrigins.toList.mapM $ λ (mvarId, rref) =>
-          return (mvarId, (← rref.get).payload.id)
-        pure $ some $ toMessageData origins
+          return (mkMVar mvarId, (← rref.get).payload.id)
+        pure $ some $ m!"unification goals:" ++ node #[toMessageData origins]
   return m!"Rapp {r.id} [{r.successProbability.toHumanString}]" ++
     nodeFiltering #[
       toMessageData r.appliedRule,
@@ -622,7 +622,16 @@ def firstProvenRapp? (g : Goal) : m (Option RappRef) :=
   g.rapps.findSomeM? λ rref =>
     return if (← rref.get).isProven then some rref else none
 
+def unificationGoalOrigins (g : Goal) : m (PersistentHashMap MVarId RappRef) :=
+  match g.parent with
+  | some rref => return Rapp.unificationGoalOrigins (← rref.get)
+  | none => return PersistentHashMap.empty
+
 end Goal
+
+def GoalRef.unificationGoalOrigins (gref : GoalRef) :
+    m (PersistentHashMap MVarId RappRef) := do
+  (← gref.get).unificationGoalOrigins
 
 
 /-! ## Propagating Provability/Unprovability/Irrelevance -/
