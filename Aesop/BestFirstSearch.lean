@@ -226,7 +226,7 @@ def addGoals' (goals : Array MVarId) (successProbability : Percent)
 /- Overwrites the rapp ID from `r`. -/
 def addRapp (r : RappData) (parent : GoalRef) : SearchM RappRef := do
   let id ← getAndIncrementNextRappId
-  let r := { r with id := id }
+  let r := r.setId id
   let rref ← ST.mkRef $ Rapp.mk (some parent) #[] r
   parent.modify λ g => g.addChild rref
   return rref
@@ -338,15 +338,19 @@ def applyRegularRule (parentRef : GoalRef) (rule : RegularRule) :
     -- node is proved.
     trace[Aesop.Steps] "Rule succeeded without subgoals. Goal is proven."
     let r :=
-      { RappData.mkInitial RappId.dummy finalState rule successProbability with
-        isProven := true }
+      -- TODO track unification goals
+      RappData.mkInitial RappId.dummy finalState Std.PersistentHashMap.empty
+        rule successProbability
+      |>.setProven true
     let _ ← addRapp r parentRef
     parentRef.setProven
     return RuleResult.proven
   | some (ruleOutput@{ goals := subgoals, .. }, finalState) => do
     -- Rule succeeded and generated subgoals.
+    -- TODO track unification goals
     let r :=
-      RappData.mkInitial RappId.dummy finalState rule successProbability
+      RappData.mkInitial RappId.dummy finalState Std.PersistentHashMap.empty
+        rule successProbability
     let rappRef ← addRapp r parentRef
     let newGoals ← addGoals' subgoals successProbability rappRef
     if (← isTracingEnabledFor `Aesop.Steps) then

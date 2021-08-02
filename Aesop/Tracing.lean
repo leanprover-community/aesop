@@ -21,6 +21,7 @@ initialize
   registerTraceClass `Aesop.Steps.Goals
   registerTraceClass `Aesop.Steps.UnsafeQueues
   registerTraceClass `Aesop.Steps.FailedRuleApplications
+  registerTraceClass `Aesop.Steps.UnificationGoals
   registerTraceClass `Aesop.Steps.RuleSelection
   registerTraceClass `Aesop.Steps.FinalProof
   registerTraceClass `Aesop.Steps.Normalization
@@ -28,6 +29,7 @@ initialize
   registerTraceClass `Aesop.Tree.Goals
   registerTraceClass `Aesop.Tree.UnsafeQueues
   registerTraceClass `Aesop.Tree.FailedRuleApplications
+  registerTraceClass `Aesop.Tree.UnificationGoals
 
 namespace Aesop
 
@@ -48,6 +50,7 @@ inductive TraceOption : TraceContext → Type
   | showGoals : TraceOption c
   | showUnsafeQueues : TraceOption c
   | showFailedRapps : TraceOption c
+  | showUnificationGoals : TraceOption c
   | showRuleSelection : TraceOption TraceContext.steps
   | showFinalProof : TraceOption TraceContext.steps
   | showNormalizationSteps : TraceOption TraceContext.steps
@@ -59,6 +62,7 @@ protected def toTraceOptionSuffix {c} : TraceOption c → Name
   | showGoals => `Goals
   | showUnsafeQueues => `UnsafeQueues
   | showFailedRapps => `FailedRuleApplications
+  | showUnificationGoals => `UnificationGoals
   | showRuleSelection => `RuleSelection
   | showFinalProof => `FinalProof
   | showNormalizationSteps => `Normalization
