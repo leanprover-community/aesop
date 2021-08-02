@@ -27,6 +27,8 @@ namespace Aesop
 
 /-! ## Node IDs -/
 
+-- TODO This could be a performance issue. If so, change `Nat` to `USize` and
+-- maybe remove the `structure` wrapper to ensure unboxing.
 structure GoalId where
   toNat : Nat
   deriving Inhabited, DecidableEq
@@ -800,11 +802,73 @@ def RappRef.copyTree (nextGoalId : GoalId) (nextRappId : RappId)
 
 /-! ## Checking Invariants -/
 
+namespace CheckIdInvariant
+
+structure Context where
+  maxAncestorGoalId : GoalId := GoalId.zero
+  maxAncestorRappId : RappId := RappId.zero
+
+structure State where
+  visitedGoalIds : HashSet GoalId := HashSet.empty
+  visitedRappIds : HashSet RappId := HashSet.empty
+
+abbrev CheckIdInvariantT m :=
+  ReaderT CheckIdInvariant.Context $
+  StateRefT' IO.RealWorld CheckIdInvariant.State m
+
+namespace CheckIdInvariantT
+
+def run (x : CheckIdInvariantT m α) : m α := do
+  let (res, s) ← ReaderT.run x {} |>.run {}
+  return res
+
+end CheckIdInvariantT
+
+instance [AddErrorMessageContext m] :
+    AddErrorMessageContext (CheckIdInvariantT m) where
+  add := λ stx msg => liftM (AddErrorMessageContext.add stx msg : m _)
+
+-- Using a `mutual` block here produces a very weird error when this function
+-- is used (transitively) in `BestFirstSearch.lean`. So for now we manually
+-- desugar the `mutual` block.
+partial def checkIds : Sum GoalRef RappRef → CheckIdInvariantT m Unit
+  | Sum.inl gref => do
+    let g ← gref.get
+    let id := g.id
+    if (← get).visitedGoalIds.contains id then throwError
+      "{Check.tree.name}: duplicate goal ID: {id}"
+    modify λ s => { s with visitedGoalIds := s.visitedGoalIds.insert id }
+    let ctx ← read
+    if id < ctx.maxAncestorGoalId then throwError
+      "{Check.tree.name}: goal ID {id} is smaller than ancestor goal ID {ctx.maxAncestorGoalId}"
+    withReader (λ ctx => { ctx with maxAncestorGoalId := id }) $
+      g.rapps.forM (checkIds ∘ Sum.inr)
+  | Sum.inr rref => do
+    let r ← rref.get
+    let id := r.id
+    if (← get).visitedRappIds.contains id then throwError
+      "{Check.tree.name}: duplicate rapp ID: {id}"
+    modify λ s => { s with visitedRappIds := s.visitedRappIds.insert id }
+    let ctx ← read
+    if id < ctx.maxAncestorRappId then throwError
+      "{Check.tree.name}: rapp ID {id} is smaller than ancestor rapp ID {ctx.maxAncestorRappId}"
+    withReader (λ ctx => { ctx with maxAncestorRappId := id }) $
+      r.subgoals.forM (checkIds ∘ Sum.inl)
+
+end CheckIdInvariant
+
+def GoalRef.checkIds (gref : GoalRef) : m Unit :=
+  CheckIdInvariant.checkIds (Sum.inl gref) |>.run
+
+def RappRef.checkIds (rref : RappRef) : m Unit :=
+  CheckIdInvariant.checkIds (Sum.inr rref) |>.run
+
 def GoalRef.checkInvariantsIfEnabled (root : GoalRef) : m Unit := do
   let (true) ← Check.tree.isEnabled | return ()
   unless (← MutAltTree.hasConsistentParentChildLinks root) do
     throwError "{Check.tree.name}: search tree is not properly linked"
   unless (← MutAltTree.isAcyclic root) do
     throwError "{Check.tree.name}: search tree contains a cycle"
+  root.checkIds
 
 end Aesop
