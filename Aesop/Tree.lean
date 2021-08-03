@@ -136,13 +136,11 @@ namespace GoalData
 def isProven (g : GoalData) : Bool :=
   g.proofStatus.isProven
 
-protected structure MessageInfo where
+structure MessageInfo where
   showGoal : Bool
   showUnsafeQueue : Bool
   showFailedRapps : Bool
   deriving Inhabited
-
-open GoalData (MessageInfo)
 
 protected def getMessageInfo (traceCtx : TraceContext) : m MessageInfo := do
   return {
@@ -153,7 +151,7 @@ protected def getMessageInfo (traceCtx : TraceContext) : m MessageInfo := do
 
 open MessageData in
 protected def toMessageData (traceCtx : TraceContext) (g : GoalData) :
-    MetaM MessageData := do
+    m MessageData := do
   let minfo ← GoalData.getMessageInfo traceCtx
   let unsafeQueueLength :=
     match g.unsafeQueue with
@@ -631,42 +629,63 @@ def GoalRef.runMetaMModifyingParentState (x : MetaM α) (gref : GoalRef) :
 
 /-! ## Formatting -/
 
-mutual
-  private partial def formatTreeGoal (traceCtx : TraceContext) (goal : Goal) :
-      MetaM MessageData := do
-    let goalMsg ← goal.payload.toMessageData traceCtx
-    let childrenMsgs ← goal.rapps.mapM λ c => do
-      formatTreeRapp traceCtx (← c.get)
-    return goalMsg ++ indentD (MessageData.node childrenMsgs)
+def Goal.toMessageData (traceCtx : TraceContext) (g : Goal) :
+    MetaM MessageData :=
+  match g.parent with
+  | none => g.payload.toMessageData traceCtx
+  | some (rref : RappRef) => do
+    let (res, _) ← rref.runMetaM do
+      addMessageContext (← g.payload.toMessageData traceCtx)
+    return res
 
-  private partial def formatTreeRapp (traceCtx : TraceContext) (rapp : Rapp) :
+def GoalRef.toMessageData (traceCtx : TraceContext) (gref : GoalRef) :
+    MetaM MessageData := do
+  (← gref.get).toMessageData traceCtx
+
+def Rapp.toMessageData (traceCtx : TraceContext) (r : Rapp) :
+    MetaM MessageData := do
+  let (res, _) ← r.runMetaM do
+    addMessageContext (← r.payload.toMessageData traceCtx)
+  return res
+
+def RappRef.toMessageData (traceCtx : TraceContext) (rref : RappRef) :
+    MetaM MessageData := do
+  (← rref.get).toMessageData traceCtx
+
+def nodeMessageSeparator : MessageData :=
+  m!"-*-*-*-*-*-\n"
+
+mutual
+  private partial def goalTreeToMessageData (traceCtx : TraceContext) (goal : Goal) :
       MetaM MessageData := do
-    let rappMsg ← rapp.payload.toMessageData TraceContext.tree
+    let goalMsg ← goal.toMessageData traceCtx
+    let childrenMsgs ← goal.rapps.mapM λ c => do
+      rappTreeToMessageData traceCtx (← c.get)
+    return nodeMessageSeparator ++ goalMsg ++ MessageData.node childrenMsgs
+
+  private partial def rappTreeToMessageData (traceCtx : TraceContext) (rapp : Rapp) :
+      MetaM MessageData := do
+    let rappMsg ← rapp.toMessageData traceCtx
     let childrenMsgs ← rapp.subgoals.mapM λ c => do
-      formatTreeGoal traceCtx (← c.get)
-    return rappMsg ++ indentD (MessageData.node childrenMsgs)
+      goalTreeToMessageData traceCtx (← c.get)
+    return nodeMessageSeparator ++ rappMsg ++ MessageData.node childrenMsgs
 end
 
-namespace Goal
+def Goal.treeToMessageData (traceCtx : TraceContext) (g : Goal) :
+    MetaM MessageData :=
+  goalTreeToMessageData traceCtx g
 
-def toMessageData (traceCtx : TraceContext) (g : Goal) : MetaM MessageData :=
-  g.payload.toMessageData traceCtx
-
-def treeToMessageData (traceCtx : TraceContext) (g : Goal) : MetaM MessageData :=
-  formatTreeGoal traceCtx g
-
-end Goal
-
-namespace Rapp
-
-def toMessageData (traceCtx : TraceContext) (r : Rapp) : MetaM MessageData :=
-  r.payload.toMessageData traceCtx
-
-def treeToMessageData (traceCtx : TraceContext) (r : Rapp) :
+def GoalRef.treeToMessageData (traceCtx : TraceContext) (gref : GoalRef) :
     MetaM MessageData := do
-  formatTreeRapp traceCtx r
+  (← gref.get).treeToMessageData traceCtx
 
-end Rapp
+def Rapp.treeToMessageData (traceCtx : TraceContext) (r : Rapp) :
+    MetaM MessageData := do
+  rappTreeToMessageData traceCtx r
+
+def RappRef.treeToMessageData (traceCtx : TraceContext) (rref : RappRef) :
+    MetaM MessageData := do
+  (← rref.get).treeToMessageData traceCtx
 
 
 /-! ## Miscellaneous Functions on Goals -/
