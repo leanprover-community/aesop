@@ -192,7 +192,9 @@ private abbrev UnificationGoalOriginsMap α := PersistentHashMap MVarId α
 -- Invariant: All rapp IDs in a tree are distinct.
 -- Invariant: The rapp ID of a node is smaller than the rapp IDs of its
 --   descendant rapps.
--- Invariant: The rapps referenced by unificationGoalOrigins are ancestors of
+-- Invariant: The mvars in `unificationGoalOrigins` are declared but unassigned
+--   in `state`.
+-- Invariant: The rapps referenced by `unificationGoalOrigins` are ancestors of
 --   this rapp.
 structure RappData' (α : Type) : Type where
   id : RappId
@@ -953,12 +955,39 @@ def GoalRef.checkIds (gref : GoalRef) : m Unit :=
 def RappRef.checkIds (rref : RappRef) : m Unit :=
   CheckIdInvariant.checkIds (Sum.inr rref) |>.run
 
-def GoalRef.checkInvariantsIfEnabled (root : GoalRef) : m Unit := do
+-- TODO check whether the unification goal origins are correct
+mutual
+  private partial def checkUnificationGoalOriginsGoal (gref : GoalRef) :
+      MetaM Unit := do
+    (← gref.get).rapps.forM checkUnificationGoalOriginsRapp
+
+  private partial def checkUnificationGoalOriginsRapp (rref : RappRef) :
+      MetaM Unit := do
+    let r ← rref.get
+    withoutModifyingState do
+      restoreState r.state
+      for (m, _) in r.unificationGoalOrigins do
+        let (some _) ← (← getMCtx).findDecl? m | throwError
+          "{Check.tree.name}: in rapp {r.id}: unification goal {m} is not declared in the metavariable context"
+        if (← isExprMVarAssigned m) then throwError
+          "{Check.tree.name}: in rapp {r.id}: unification goal {m} is assigned"
+    r.subgoals.forM checkUnificationGoalOriginsGoal
+
+end
+
+def GoalRef.checkUnificationGoalOrigins : GoalRef → MetaM Unit :=
+  checkUnificationGoalOriginsGoal
+
+def RappRef.checkUnificationGoalOrigins : RappRef → MetaM Unit :=
+  checkUnificationGoalOriginsRapp
+
+def GoalRef.checkInvariantsIfEnabled (root : GoalRef) : MetaM Unit := do
   let (true) ← Check.tree.isEnabled | return ()
   unless (← MutAltTree.hasConsistentParentChildLinks root) do
     throwError "{Check.tree.name}: search tree is not properly linked"
   unless (← MutAltTree.isAcyclic root) do
     throwError "{Check.tree.name}: search tree contains a cycle"
   root.checkIds
+  root.checkUnificationGoalOrigins
 
 end Aesop
