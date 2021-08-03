@@ -39,6 +39,7 @@ def testNormTactic : TacticM Unit := do
 set_option pp.all false
 sudo set_option trace.Aesop.RuleSet false
 sudo set_option trace.Aesop.Steps false
+sudo set_option trace.Aesop.Tree false
 
 example : EvenOrOdd' 3 := by aesop
 

@@ -446,6 +446,9 @@ partial def search' : SearchM Unit := do
   let done ← finishIfProven
   if ¬ done then
     expandNextGoal
+    if (← isTracingEnabledFor `Aesop.Tree) then do
+      let tree ← (← readRootGoal).treeToMessageData TraceContext.tree
+      trace[Aesop.Tree] "Current search tree:{MessageData.node #[tree]}"
     (← readRootGoal).checkInvariantsIfEnabled
     search'
 
