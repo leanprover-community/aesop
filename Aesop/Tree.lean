@@ -465,6 +465,9 @@ def hasNoUnexpandedUnsafeRule (g : Goal) : Bool :=
   | none => false
   | some q => q.isEmpty
 
+def isActive (g : Goal) : Bool :=
+  ! (g.isProven || g.isUnprovable || g.isIrrelevant)
+
 end Goal
 
 

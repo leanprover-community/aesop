@@ -364,6 +364,7 @@ def mkSimpLemmasFromConst (declName : Name) (post : Bool) (prio : Nat) : MetaM (
     else
       #[← mkSimpLemmaCore (mkConst declName (cinfo.levelParams.map mkLevelParam)) #[] (mkConst declName) post prio declName]
 
+-- TODO unused?
 def copyMVar (mvarId : MVarId) : MetaM MVarId := do
   let decl ← getMVarDecl mvarId
   let mv ← mkFreshExprMVarAt decl.lctx decl.localInstances decl.type decl.kind
@@ -383,6 +384,18 @@ def runMetaMObservingFinalState (x : MetaM α) : MetaM (α × Meta.SavedState) :
     let result ← x
     let finalState ← saveState
     return (result, finalState)
+
+def isValidMVarAssignment (mvarId : MVarId) (e : Expr) : MetaM Bool :=
+  withMVarContext mvarId do
+    let (some _) ← observing? $ check e | return false
+    let et ← inferType e
+    let mt := (← getMVarDecl mvarId).type
+    withTransparency TransparencyMode.all $ isDefEq et mt
+
+def isDeclaredMVar (mvarId : MVarId) : MetaM Bool := do
+  match (← getMCtx).findDecl? mvarId with
+  | some _ => true
+  | none => false
 
 end Lean.Meta
 

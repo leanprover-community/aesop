@@ -27,10 +27,15 @@ initialize checkTreeOption : Lean.Option Bool ←
   registerCheckOption `tree false
     "(aesop) Check search tree invariants after every iteration of the search loop. Very expensive."
 
+initialize checkUnificationGoalAssignmentsOption : Lean.Option Bool ←
+  registerCheckOption `unificationGoalAssignments false
+    "(aesop) Typecheck assignments to unification goal metavariables."
+
 inductive Check
   | all
   | tree
   | proofReconstruction
+  | unificationGoalAssignments
 
 namespace Check
 
@@ -38,6 +43,7 @@ def toOption : Check → Lean.Option Bool
   | all => checkAllOption
   | tree => checkTreeOption
   | proofReconstruction => checkProofReconstructionOption
+  | unificationGoalAssignments => checkUnificationGoalAssignmentsOption
 
 def isEnabled [Monad m] [MonadOptions m] : Check → m Bool
   | all => return all.toOption.get (← getOptions)

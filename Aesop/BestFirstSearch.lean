@@ -4,6 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
+-- TODO If a 'finished' proof contains metavariables, what should we do?
+-- TODO disable safe rules in the presence of unification goals
+
 import Aesop.Check
 import Aesop.Rule
 import Aesop.Tree
@@ -102,10 +105,6 @@ protected def run' (ctx : Context) (state : State) (x : SearchM α) :
 
 end SearchM
 
-@[inline]
-def runMetaMModifyingGlobalState (x : MetaM α) : MetaM α :=
-  x
-
 def readMainGoal : SearchM MVarId :=
   Context.mainGoal <$> read
 
@@ -147,13 +146,14 @@ def addGoals' (goals : Array MVarId) (successProbability : Percent)
     GoalData.mkInitial GoalId.dummy g successProbability
   addGoals goals parent
 
-/- Overwrites the rapp ID and the unification goal origins from `r`. -/
+-- Overwrites the rapp ID of `r`. Adds the `newUnificationGoals` as unification
+-- goals whose origin is the returned rapp.
 def addRapp (r : RappData) (parent : GoalRef)
     (newUnificationGoals : Array MVarId) : SearchM RappRef := do
   let id ← getAndIncrementNextRappId
   let r := r.setId id
   let rref ← ST.mkRef $ Rapp.mk (some parent) #[] r
-  let mut unificationGoalOrigins := (← parent.unificationGoalOrigins)
+  let mut unificationGoalOrigins := r.unificationGoalOrigins
   for goal in newUnificationGoals do
     unificationGoalOrigins := unificationGoalOrigins.insert goal rref
   rref.modify λ r => r.setUnificationGoalOrigins unificationGoalOrigins
@@ -229,6 +229,7 @@ def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Bool := do
     | none =>
       trace[Aesop.Steps] "Normalisation solved the goal"
     return newGoal?
+  -- TODO check whether normalisation assigned any unification goals
   match newGoal? with
   | some newGoal =>
     let g := g.setGoal newGoal
@@ -246,6 +247,134 @@ def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Bool := do
     RappRef.setProven parentRef
     return true
 
+abbrev UnificationGoals := Array (MVarId × Expr × RappRef)
+
+def assignedUnificationGoals (parent : GoalRef)
+    (postRuleState : Meta.SavedState) :
+    SearchM UnificationGoals := do
+  let uGoalOrigins ← parent.unificationGoalOrigins
+  let (result, _) ← runMetaMInSavedState postRuleState do
+    let mut result := #[]
+    for (ugoal, rref) in uGoalOrigins do
+      let (some e) ← getExprMVarAssignment? ugoal | continue
+      result := result.push (ugoal, e, rref)
+    pure result
+  return result
+
+-- This function is called when a rapp R assigns one or more unification goals.
+-- We are given the origins of these unification goals, i.e. the rapps which
+-- introduced them, as `unificationGoalOrigins`. These origin rapps must all be
+-- ancestors of R, so we can find the one highest up in the tree -- the 'least
+-- common ancestor' -- by simply picking the origin with the least ID. This
+-- relies on the invariant that the ID of a node is always strictly smaller than
+-- the ID of its children.
+--
+-- `unificationGoalOrigins` must be nonempty
+def leastCommonUnificationGoalOrigin (unificationGoals : UnificationGoals) :
+    SearchM RappRef := do
+  if unificationGoals.isEmpty then
+    throwError "aesop/leastCommonUnificationGoalOrigin: internal error: empty unificationGoalOrigins"
+  let mut min := unificationGoals.get! 0 |>.snd.snd
+  if unificationGoals.size = 1 then
+    return min
+  let mut minId ← (← min.get).id
+  for (_, _, rref) in unificationGoals do
+    let id ← (← rref.get).id
+    if id < minId then
+      minId := id
+      min := rref
+  return min
+
+def removeUnificationGoals (assigned : UnificationGoals)
+    (unificationGoalOrigins : PersistentHashMap MVarId RappRef) :
+    PersistentHashMap MVarId RappRef := do
+  let mut ugo := unificationGoalOrigins
+  for (m, _, _) in assigned do
+    ugo := ugo.erase m
+  return ugo
+
+-- For each pair `(m, e, _)` in `unificationGoals`, assigns `m := e` in the meta
+-- state of `rref` and removes `m` from the unification goals of `rref`. If `m`
+-- does not exist in that state, the assignment is silently skipped.
+def assignUnificationGoalsInRappState (unificationGoals : UnificationGoals)
+    (rref : RappRef) : SearchM Unit := do
+  rref.modify λ r => r.setUnificationGoalOrigins $
+    removeUnificationGoals unificationGoals r.unificationGoalOrigins
+  rref.runMetaMModifying do
+    for (m, e, _) in unificationGoals do
+      if ! (← isDeclaredMVar m) then
+        continue
+      if (← Check.unificationGoalAssignments.isEnabled) then do
+        if (← isExprMVarAssigned m) then throwError
+          "aesop/runRegularRule: internal error: unification goal is already assigned"
+        unless (← isValidMVarAssignment m e) do throwError
+          "aesop/runRegularRule: internal error: assignment of unification goal is type-incorrect"
+      assignExprMVar m e
+
+mutual
+  -- Runs `assignMetasInRappState unificationGoals` on `root` and all
+  -- descendants of `root`.
+  partial def assignUnificationGoalsInRappBranch
+      (unificationGoals : UnificationGoals) (root : RappRef) : SearchM Unit := do
+    assignUnificationGoalsInRappState unificationGoals root
+    (← root.get).subgoals.forM
+      (assignUnificationGoalsInGoalBranch unificationGoals)
+
+  partial def assignUnificationGoalsInGoalBranch
+      (unificationGoals : UnificationGoals) (root : GoalRef) : SearchM Unit := do
+    (← root.get).rapps.forM
+      (assignUnificationGoalsInRappBranch unificationGoals)
+end
+
+def runCopyTreeT (x : TreeCopy.TreeCopyT SearchM α) : SearchM α := do
+  let (a, s) ← x.run' (← getThe GoalId) (← getThe RappId)
+  setThe GoalId s.nextGoalId
+  setThe RappId s.nextRappId
+  return a
+
+def copyRappBranch (root : RappRef) : SearchM RappRef := do
+  let parent := (← root.get).parent!
+  runCopyTreeT $ TreeCopy.copyRappTree parent root
+
+mutual
+  partial def addActiveGoalsFromGoalBranch (root : GoalRef) : SearchM Unit := do
+      let activeGoal ← ActiveGoal.ofGoalRef root
+      modifyThe ActiveGoalQueue λ q => q.insert activeGoal
+      (← root.get).rapps.forM addActiveGoalsFromRappBranch
+
+  partial def addActiveGoalsFromRappBranch (root : RappRef) : SearchM Unit := do
+    (← root.get).subgoals.forM addActiveGoalsFromGoalBranch
+end
+
+-- If a rule assigned one or more unification goals, this function makes the
+-- necessary adjustments to the search tree:
+--
+-- - Copy the branch of the search tree whose root is the rapp that introduced
+--   the assigned unification goal. If multiple unification goals were assigned,
+--   we take the topmost such rapp, whose branch contains all occurrences of the
+--   assigned unification goals.
+-- - Insert the new branch into the active goal queue.
+-- - In the old branch, propagate the unification goal assignment into the
+--   meta state of every rapp.
+-- - TODO Mark the new branch as deferred in favour of the old branch.
+-- - TODO possibly disallow the ugoal assignment in the whole branch.
+--
+-- If the rule did not assign any unification goals, this function does nothing.
+def processUnificationGoalAssignment (parent : GoalRef)
+    (postRuleState : Meta.SavedState) :
+    SearchM (PersistentHashMap MVarId RappRef) := do
+  let parentUGoalOrigins ← parent.unificationGoalOrigins
+  let assignedUGoals ← assignedUnificationGoals parent postRuleState
+  if assignedUGoals.isEmpty then
+    return parentUGoalOrigins
+  let oldBranchRoot ← leastCommonUnificationGoalOrigin assignedUGoals
+  trace[Aesop.Steps] "Rule assigned unification goals. Copying the branch of rapp {(← oldBranchRoot.get).id}."
+  let newBranchRoot ← copyRappBranch oldBranchRoot
+  trace[Aesop.Steps] "The root of the copied branch has ID {(← newBranchRoot.get).id}"
+  assignUnificationGoalsInRappBranch assignedUGoals oldBranchRoot
+  addActiveGoalsFromRappBranch newBranchRoot
+  return removeUnificationGoals assignedUGoals parentUGoalOrigins
+
 inductive RuleResult
 | proven
 | failed
@@ -259,7 +388,7 @@ def failed? : RuleResult → Bool
 
 end RuleResult
 
-def applyRegularRule (parentRef : GoalRef) (rule : RegularRule) :
+def runRegularRule (parentRef : GoalRef) (rule : RegularRule) :
     SearchM RuleResult := do
   let parent ← parentRef.get
   let successProbability :=
@@ -270,23 +399,24 @@ def applyRegularRule (parentRef : GoalRef) (rule : RegularRule) :
     -- Rule succeeded and did not generate subgoals, meaning the parent
     -- node is proved.
     trace[Aesop.Steps] "Rule succeeded without subgoals. Goal is proven."
+    let uGoals ← processUnificationGoalAssignment parentRef finalState
     let r :=
-      RappData.mkInitial RappId.dummy finalState PersistentHashMap.empty
-        rule successProbability
+      RappData.mkInitial RappId.dummy finalState uGoals rule successProbability
       |>.setProven true
     let _ ← addRapp r parentRef #[]
     parentRef.setProven
     return RuleResult.proven
   | some (ruleOutput@{ regularGoals := subgoals, .. }, finalState) => do
     -- Rule succeeded and generated subgoals.
+    trace[Aesop.Steps] "Rule succeeded with subgoals."
+    let uGoals ← processUnificationGoalAssignment parentRef finalState
     let r :=
-      RappData.mkInitial RappId.dummy finalState Std.PersistentHashMap.empty
-        rule successProbability
+      RappData.mkInitial RappId.dummy finalState uGoals rule successProbability
     let rappRef ← addRapp r parentRef ruleOutput.unificationGoals
     let newGoals ← addGoals' subgoals successProbability rappRef
     if (← isTracingEnabledFor `Aesop.Steps) then
       _ ← rappRef.runMetaM do
-        trace[Aesop.Steps] m!"Rule succeeded. New rapp:" ++ MessageData.node
+        trace[Aesop.Steps] m!"New rapp:" ++ MessageData.node
           #[← (← rappRef.get).payload.toMessageData TraceContext.steps]
         trace[Aesop.Steps] m!"New goals:" ++ MessageData.node
           (← newGoals.mapM λ g => do (← g.get).toMessageData TraceContext.steps)
@@ -294,11 +424,12 @@ def applyRegularRule (parentRef : GoalRef) (rule : RegularRule) :
     return RuleResult.succeeded
   | none => do
     -- Rule did not succeed.
+    trace[Aesop.Steps] "Rule failed."
     parentRef.modify λ (g : Goal) => g.setFailedRapps $ rule :: g.failedRapps
     parentRef.setUnprovable
     return RuleResult.failed
 
-def applyFirstSafeRule (gref : GoalRef) : SearchM RuleResult := do
+def runFirstSafeRule (gref : GoalRef) : SearchM RuleResult := do
   let g ← gref.get
   let (none) ← g.unsafeQueue
     | return RuleResult.failed
@@ -312,7 +443,7 @@ def applyFirstSafeRule (gref : GoalRef) : SearchM RuleResult := do
   let mut result := RuleResult.failed
   for r in rules do
     trace[Aesop.Steps] "Trying {r}"
-    result ← applyRegularRule gref $ RegularRule'.safe r
+    result ← runRegularRule gref $ RegularRule'.safe r
     if result.failed? then continue else break
   return result
 
@@ -330,7 +461,7 @@ def selectRules (gref : GoalRef) : SearchM (List UnsafeRule) := do
       MessageData.node (rules.map toMessageData |>.toArray)
     return rules
 
-def applyFirstUnsafeRule (gref : GoalRef) : SearchM Bool := do
+def runFirstUnsafeRule (gref : GoalRef) : SearchM Bool := do
   let rules ← selectRules gref
   trace[Aesop.Steps] "Trying unsafe rules"
   let mut result := RuleResult.failed
@@ -338,7 +469,7 @@ def applyFirstUnsafeRule (gref : GoalRef) : SearchM Bool := do
   for r in rules do
     trace[Aesop.Steps] "Trying {r}"
     remainingRules := remainingRules.tail!
-    result ← applyRegularRule gref (RegularRule'.unsafe r)
+    result ← runRegularRule gref (RegularRule'.unsafe r)
     if result.failed? then continue else break
   gref.modify λ g => g.setUnsafeQueue remainingRules
   trace[Aesop.Steps] m!"Remaining unsafe rules:" ++ MessageData.node
@@ -353,9 +484,9 @@ def expandGoal (gref : GoalRef) : SearchM Bool := do
   let (false) ← normalizeGoalIfNecessary gref |
     -- Goal was already proven by normalisation.
     return false
-  let result ← applyFirstSafeRule gref
+  let result ← runFirstSafeRule gref
   if result.failed?
-    then applyFirstUnsafeRule gref
+    then runFirstUnsafeRule gref
     else pure false
 
 def expandNextGoal : SearchM Unit := do
@@ -431,7 +562,7 @@ def finishIfProven : SearchM Bool := do
   let (true) ← pure (← root.get).isProven
     | return false
   trace[Aesop.Steps] "Root node is proven. Linking proofs."
-  runMetaMModifyingGlobalState root.linkProofs
+  root.linkProofs
   if (← isTracingEnabledFor `Aesop.Steps.FinalProof) then do
     let mainGoal ← readMainGoal
     _ ← withMVarContext mainGoal do

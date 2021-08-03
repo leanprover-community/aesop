@@ -45,3 +45,25 @@ example : EvenOrOdd' 3 := by aesop
 
 -- In this example, the goal is solved already during normalisation.
 example : 0 = 0 := by aesop
+
+
+-- An example involving transitivity. This tests our handling of metavariables.
+section Transitivity
+
+axiom A : Type
+axiom R : A → A → Prop
+
+@[aesop 20%]
+axiom R_trans : ∀ x y z, R x y → R y z → R x z
+
+@[aesop 100%]
+axiom R_refl : ∀ x, R x x
+
+sudo set_option trace.Aesop.Steps false
+sudo set_option trace.Aesop.Steps.Normalization false
+sudo set_option trace.Aesop.Tree false
+
+example {a b c d} (hab : R a b) (hbc : R b c) (hcd : R c d) : R a d := by
+  aesop
+
+end Transitivity
