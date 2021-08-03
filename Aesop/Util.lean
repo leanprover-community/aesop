@@ -370,6 +370,20 @@ def copyMVar (mvarId : MVarId) : MetaM MVarId := do
     decl.userName decl.numScopeArgs
   return mv.mvarId!
 
+def runMetaMInSavedState (s : Meta.SavedState) (x : MetaM α) :
+    MetaM (α × Meta.SavedState) :=
+  withoutModifyingState do
+    restoreState s
+    let result ← x
+    let finalState ← saveState
+    return (result, finalState)
+
+def runMetaMObservingFinalState (x : MetaM α) : MetaM (α × Meta.SavedState) :=
+  withoutModifyingState do
+    let result ← x
+    let finalState ← saveState
+    return (result, finalState)
+
 end Lean.Meta
 
 
