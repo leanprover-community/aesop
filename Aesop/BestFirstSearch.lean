@@ -137,7 +137,8 @@ def getAndIncrementNextRappId : SearchM RappId := do
   setThe RappId id.succ
   return id
 
-/- Overwrites the goal ID from `g`. -/
+-- Overwrites the goal ID from `g`.
+-- TODO refactor: don't take GoalData as arg?
 def addGoal (g : GoalData) (parent : RappRef) : SearchM GoalRef := do
   let id ← getAndIncrementNextGoalId
   let g := { g with id := id }
@@ -163,12 +164,15 @@ def addGoals' (goals : Array MVarId) (successProbability : Percent)
     GoalData.mkInitial GoalId.dummy g successProbability
   addGoals goals parent
 
--- Overwrites the rapp ID of `r`. Adds the `newUnificationGoals` as unification
--- goals whose origin is the returned rapp.
+-- Overwrites the rapp ID and depth of `r`. Adds the `newUnificationGoals` as
+-- unification goals whose origin is the returned rapp.
+-- TODO refactor: don't take RappData as arg
 def addRapp (r : RappData) (parent : GoalRef)
     (newUnificationGoals : Array MVarId) : SearchM RappRef := do
   let id ← getAndIncrementNextRappId
   let r := r.setId id
+  let depth := (← (← parent.get).parentDepth) + 1
+  let r := r.setDepth depth
   let rref ← ST.mkRef $ Rapp.mk (some parent) #[] r
   let mut unificationGoalOrigins := r.unificationGoalOrigins
   for goal in newUnificationGoals do
@@ -419,7 +423,7 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule) :
     trace[Aesop.Steps] "Rule succeeded without subgoals. Goal is proven."
     let uGoals ← processUnificationGoalAssignment parentRef finalState
     let r :=
-      RappData.mkInitial RappId.dummy finalState uGoals rule successProbability
+      RappData.mkInitial RappId.dummy 0 finalState uGoals rule successProbability
       |>.setProven true
     let _ ← addRapp r parentRef #[]
     parentRef.setProven
@@ -429,7 +433,7 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule) :
     trace[Aesop.Steps] "Rule succeeded with subgoals."
     let uGoals ← processUnificationGoalAssignment parentRef finalState
     let r :=
-      RappData.mkInitial RappId.dummy finalState uGoals rule successProbability
+      RappData.mkInitial RappId.dummy 0 finalState uGoals rule successProbability
     let rappRef ← addRapp r parentRef ruleOutput.unificationGoals
     let newGoals ← addGoals' subgoals successProbability rappRef
     if (← isTracingEnabledFor `Aesop.Steps) then
@@ -553,11 +557,19 @@ def expandNextGoal : SearchM Unit := do
       trace[Aesop.Steps] "Expanding {← g.payload.toMessageData TraceContext.steps}"
   if g.isProven ∨ g.isUnprovable ∨ g.isIrrelevant then
     trace[Aesop.Steps] "Skipping goal since it is already proven, unprovable or irrelevant."
-  else do
-    let hasMoreRules ← expandGoal gref
-    if hasMoreRules then do
-      let ag ← ActiveGoal.ofGoalRef gref
-      modifyThe ActiveGoalQueue λ q => q.insert ag
+    return ()
+  let maxRappDepth := (← readThe Aesop.Options).maxRuleApplicationDepth
+  if maxRappDepth != 0 && (← (← gref.get).parentDepth) >= maxRappDepth then
+    trace[Aesop.Steps] "Skipping goal since it is beyond the maximum rule application depth."
+    gref.modify λ g => g.setUnprovable true
+    match (← gref.get).parent with
+    | none => pure ()
+    | some (rref : RappRef) => rref.setUnprovable
+    return ()
+  let hasMoreRules ← expandGoal gref
+  if hasMoreRules then
+    let ag ← ActiveGoal.ofGoalRef gref
+    modifyThe ActiveGoalQueue λ q => q.insert ag
 
 mutual
   -- Let g be the goal in gref. Assuming that we are in the meta context of g's

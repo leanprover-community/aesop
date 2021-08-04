@@ -198,6 +198,7 @@ private abbrev UnificationGoalOriginsMap α := PersistentHashMap MVarId α
 --   this rapp.
 structure RappData' (α : Type) : Type where
   id : RappId
+  depth : Nat
   state : Meta.SavedState
     -- This is the state *after* the rule was successfully applied, so the goal
     -- mvar is assigned in this state.
@@ -265,6 +266,9 @@ instance : Inhabited RappData where
 def id (r : RappData) : RappId :=
   r.elim.id
 
+def depth (r : RappData) : Nat :=
+  r.elim.depth
+
 @[inline]
 def state (r : RappData) : Meta.SavedState :=
   r.elim.state
@@ -296,6 +300,10 @@ def isIrrelevant (r : RappData) : Bool :=
 @[inline]
 def setId (id : RappId) (r : RappData) : RappData :=
   r.modify λ r => { r with id := id }
+
+@[inline]
+def setDepth (depth : Nat) (r : RappData) : RappData :=
+  r.modify λ r => { r with depth := depth }
 
 @[inline]
 def setState (state : Meta.SavedState) (r : RappData) : RappData :=
@@ -348,10 +356,11 @@ protected def toMessageData (traceCtx : TraceContext) (r : RappData) :
           m!"irrelevant: {r.isIrrelevant.toYesNo}" ],
       unificationGoalOrigins ]
 
-protected def mkInitial (id : RappId) (state : Meta.SavedState)
+protected def mkInitial (id : RappId) (depth : Nat) (state : Meta.SavedState)
     (unificationGoalOrigins : PersistentHashMap MVarId RappRef)
     (appliedRule : RegularRule) (successProbability : Percent) : RappData := mk
   { id := id
+    depth := depth
     state := state
     unificationGoalOrigins := unificationGoalOrigins
     appliedRule := appliedRule
@@ -499,6 +508,10 @@ def id (r : Rapp) : RappId :=
   r.payload.id
 
 @[inline]
+def depth (r : Rapp) : Nat :=
+  r.payload.depth
+
+@[inline]
 def state (r : Rapp) : Meta.SavedState :=
   r.payload.state
 
@@ -535,6 +548,10 @@ def setId (id : RappId) (r : Rapp) : Rapp :=
 @[inline]
 def setState (state : Meta.SavedState) (r : Rapp) : Rapp :=
   r.modifyPayload λ r => r.setState state
+
+@[inline]
+def setDepth (depth : Nat) (r : Rapp) : Rapp :=
+  r.modifyPayload λ r => r.setDepth depth
 
 @[inline]
 def setUnificationGoalOrigins
@@ -717,6 +734,11 @@ def unificationGoalOrigins (g : Goal) : m (PersistentHashMap MVarId RappRef) :=
 -- they need not appear in this goal.
 def hasUnificationGoal (g : Goal) : m Bool :=
   return ! (← g.unificationGoalOrigins).isEmpty
+
+def parentDepth (g : Goal) : m Nat :=
+  match g.parent with
+  | none => pure 0
+  | some rref => return Rapp.depth (← rref.get)
 
 end Goal
 

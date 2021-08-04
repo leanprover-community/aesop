@@ -41,7 +41,7 @@ sudo set_option trace.Aesop.RuleSet false
 sudo set_option trace.Aesop.Steps false
 sudo set_option trace.Aesop.Tree false
 
-example : EvenOrOdd' 3 := by aesop (options { maxDepth := 10 })
+example : EvenOrOdd' 3 := by aesop
 
 -- In this example, the goal is solved already during normalisation.
 example : 0 = 0 := by aesop
@@ -64,13 +64,23 @@ sudo set_option trace.Aesop.Steps.Normalization false
 sudo set_option trace.Aesop.Tree false
 
 example {a b c d} (hab : R a b) (hbc : R b c) (hcd : R c d) : R a d := by
-  aesop (options { maxDepth := 20 })
+  aesop
 
 end Transitivity
 
+
 -- An intentionally looping Aesop call, to test the limiting options
+section Loop
+
+sudo set_option trace.Aesop.Steps false
+sudo set_option trace.Aesop.Steps.Normalization false
+sudo set_option trace.Aesop.Tree false
+
 set_option maxHeartbeats 0 in
 example (h : α → α) : α := by
-  try aesop (safe [h]) (options { maxRuleApplications := 50 })
-  try aesop (safe [h]) (options { maxGoals := 50 })
+  try aesop (safe [h]) (options { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0 })
+  try aesop (safe [h]) (options { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0 })
+  try aesop (safe [h]) (options { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0 })
   admit
+
+end Loop
