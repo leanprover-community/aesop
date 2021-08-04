@@ -4,6 +4,7 @@ import Aesop.Config
 import Aesop.DefaultRules
 import Aesop.Main
 import Aesop.MutAltTree
+import Aesop.Options
 import Aesop.Percent
 import Aesop.RuleBuilder
 import Aesop.Rule

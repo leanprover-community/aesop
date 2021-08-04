@@ -41,7 +41,7 @@ sudo set_option trace.Aesop.RuleSet false
 sudo set_option trace.Aesop.Steps false
 sudo set_option trace.Aesop.Tree false
 
-example : EvenOrOdd' 3 := by aesop
+example : EvenOrOdd' 3 := by aesop (options { maxDepth := 10 })
 
 -- In this example, the goal is solved already during normalisation.
 example : 0 = 0 := by aesop
@@ -64,6 +64,6 @@ sudo set_option trace.Aesop.Steps.Normalization false
 sudo set_option trace.Aesop.Tree false
 
 example {a b c d} (hab : R a b) (hbc : R b c) (hcd : R c d) : R a d := by
-  aesop
+  aesop (options { maxDepth := 20 })
 
 end Transitivity

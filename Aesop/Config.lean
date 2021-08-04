@@ -5,9 +5,11 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Aesop.RuleBuilder
+import Aesop.Options
 
 open Lean
-open Lean.Meta (SimpEntry getSimpLemmas)
+open Lean.Meta
+open Lean.Elab.Term
 
 namespace Aesop
 
@@ -31,9 +33,10 @@ syntax &"simp" : aesop_builder
 syntax &"unfold" : aesop_builder
 syntax &"tactic" : aesop_builder
 
-declare_syntax_cat' aesop_clause force_leading_unreserved_tokens
+declare_syntax_cat' aesop_clause
 
 syntax "(" &"builder" aesop_builder ")" : aesop_clause
+syntax "(" &"options" term ")" : aesop_clause
 
 syntax (name := aesop) &"aesop" aesop_kind aesop_clause* : attr
 
@@ -417,6 +420,7 @@ syntax ruleList := "[" aesop_rule,+,? "]"
 syntax "(" &"unsafe" ruleList ")" : aesop_tactic_clause
 syntax "(" &"safe"   ruleList ")" : aesop_tactic_clause
 syntax "(" &"norm"   ruleList ")" : aesop_tactic_clause
+syntax "(" &"options" term ")" : aesop_tactic_clause
 
 syntax (name := aesop) &"aesop " (aesop_tactic_clause)* : tactic
 
@@ -446,29 +450,50 @@ protected def toRuleSetMember (r : AdditionalRule) : MetaM RuleSetMember :=
 
 end AdditionalRule
 
-def parseAdditionalRuleClause : Syntax → MetaM (Array AdditionalRule)
-  | `(aesop_tactic_clause|(unsafe [$rules:aesop_rule,*])) =>
-    (rules : Array Syntax).mapM
-      (AdditionalRule.parse parsePrioForUnsafeRule RuleKind.unsafe)
-  | `(aesop_tactic_clause|(safe [$rules:aesop_rule,*])) =>
-    (rules : Array Syntax).mapM
-      (AdditionalRule.parse parsePrioForSafeRule RuleKind.safe)
-  | `(aesop_tactic_clause|(norm [$rules:aesop_rule,*])) =>
-    (rules : Array Syntax).mapM
-      (AdditionalRule.parse parsePrioForNormRule RuleKind.norm)
+inductive TacticClause
+  | additionalRules (rs : Array AdditionalRule)
+  | options (opts : Aesop.Options)
+
+namespace TacticClause
+
+def parse : Syntax → TermElabM TacticClause
+  | `(aesop_tactic_clause|(unsafe [$rules:aesop_rule,*])) => additionalRules <$>
+    (rules : Array Syntax).mapM λ stx =>
+      AdditionalRule.parse parsePrioForUnsafeRule RuleKind.unsafe stx
+  | `(aesop_tactic_clause|(safe [$rules:aesop_rule,*])) => additionalRules <$>
+    (rules : Array Syntax).mapM λ stx =>
+      AdditionalRule.parse parsePrioForSafeRule RuleKind.safe stx
+  | `(aesop_tactic_clause|(norm [$rules:aesop_rule,*])) => additionalRules <$>
+    (rules : Array Syntax).mapM λ stx =>
+      AdditionalRule.parse parsePrioForNormRule RuleKind.norm stx
+  | `(aesop_tactic_clause|(options $t:term)) => do
+    let e ← elabTerm t (some (mkConst ``Aesop.Options))
+    return options (← evalOptionsExpr e)
   | _ => unreachable!
 
+end TacticClause
+
+
 structure TacticConfig where
-  additionalRules : Array AdditionalRule
+  additionalRules : Array AdditionalRule := #[]
+  options : Aesop.Options := {}
   deriving Inhabited
 
 namespace TacticConfig
 
--- NOTE: Must be called with the MVar context of the main goal.
-protected def parse : Syntax → MetaM TacticConfig
-  | `(tactic|aesop $[$clauses:aesop_tactic_clause]*) => do
-    let rs ← clauses.concatMapM parseAdditionalRuleClause
-    return { additionalRules := rs }
+def addTacticClause (conf : TacticConfig) : TacticClause → TacticConfig
+  | TacticClause.additionalRules rs =>
+    { conf with additionalRules := conf.additionalRules ++ rs }
+  | TacticClause.options opts =>
+    { conf with options := opts }
+
+def ofTacticClauses (clauses : Array TacticClause) : TacticConfig :=
+  clauses.foldl (init := {}) addTacticClause
+
+-- NOTE: Must be called in the MVar context of the main goal.
+protected def parse : Syntax → TermElabM TacticConfig
+  | `(tactic|aesop $[$clauses:aesop_tactic_clause]*) =>
+    return ofTacticClauses (← clauses.mapM TacticClause.parse)
   | _ => unreachable!
 
 def additionalRuleSetMembers (c : TacticConfig) : MetaM (Array RuleSetMember) :=

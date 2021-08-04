@@ -8,6 +8,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 -- TODO disable safe rules in the presence of unification goals
 
 import Aesop.Check
+import Aesop.Options
 import Aesop.Rule
 import Aesop.Tree
 import Aesop.Util
@@ -48,6 +49,7 @@ abbrev ActiveGoalQueue := BinomialHeap ActiveGoal (· > ·)
 
 structure Context where
   ruleSet : RuleSet
+  options : Aesop.Options
   mainGoal : MVarId
   rootGoal : GoalRef
 
@@ -56,14 +58,15 @@ structure State where
   nextGoalId : GoalId
   nextRappId : RappId
 
-def mkInitialContextAndState (rs : RuleSet) (mainGoal : MVarId) :
-    MetaM (Context × State) := do
+def mkInitialContextAndState (rs : RuleSet) (options : Aesop.Options)
+    (mainGoal : MVarId) : MetaM (Context × State) := do
   let rootGoal := Goal.mk none #[] $
     GoalData.mkInitial GoalId.zero mainGoal Percent.hundred
   let rootGoalRef ← ST.mkRef rootGoal
   let ctx := {
-    ruleSet := rs,
-    mainGoal := mainGoal,
+    ruleSet := rs
+    options := options
+    mainGoal := mainGoal
     rootGoal := rootGoalRef }
   let state := {
     activeGoals := BinomialHeap.empty.insert
@@ -85,6 +88,12 @@ instance (priority := low) : MonadReaderOf RuleSet SearchM where
 
 instance (priority := low) : MonadWithReaderOf RuleSet SearchM where
   withReader f := withReader (λ ctx => { ctx with ruleSet := f ctx.ruleSet })
+
+instance (priority := low) : MonadReaderOf Aesop.Options SearchM where
+  read := return (← read).options
+
+instance (priority := low) : MonadWithReaderOf Aesop.Options SearchM where
+  withReader f := withReader (λ ctx => { ctx with options := f ctx.options })
 
 instance (priority := low) : MonadStateOf GoalId SearchM :=
   MonadStateOf.ofLens State.nextGoalId (λ id s => { s with nextGoalId := id })
@@ -618,11 +627,12 @@ partial def search' : SearchM Unit := do
     (← readRootGoal).checkInvariantsIfEnabled
     search'
 
-def search (rs : RuleSet) (mainGoal : MVarId) : MetaM Unit := do
-  let (ctx, state) ← mkInitialContextAndState rs mainGoal
+def search (rs : RuleSet) (options : Aesop.Options) (mainGoal : MVarId) :
+    MetaM Unit := do
+  let (ctx, state) ← mkInitialContextAndState rs options mainGoal
   search'.run' ctx state
 
-def searchTactic (rs : RuleSet) : TacticM Unit :=
-  liftMetaTactic λ goal => search rs goal *> pure []
+def searchTactic (rs : RuleSet) (options : Aesop.Options) : TacticM Unit :=
+  liftMetaTactic λ goal => search rs options goal *> pure []
 
 end Aesop
