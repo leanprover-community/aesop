@@ -67,3 +67,10 @@ example {a b c d} (hab : R a b) (hbc : R b c) (hcd : R c d) : R a d := by
   aesop (options { maxDepth := 20 })
 
 end Transitivity
+
+-- An intentionally looping Aesop call, to test the limiting options
+set_option maxHeartbeats 0 in
+example (h : α → α) : α := by
+  try aesop (safe [h]) (options { maxRuleApplications := 50 })
+  try aesop (safe [h]) (options { maxGoals := 50 })
+  admit

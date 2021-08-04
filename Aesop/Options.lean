@@ -7,9 +7,9 @@ open Lean.Elab.Term
 namespace Aesop
 
 structure Options where
-  maxDepth := 1000
-  maxRuleApplications := 10000
-  maxGoals := 0
+  maxDepth := 30              -- 0 means no limit
+  maxRuleApplications := 200  -- 0 means no limit
+  maxGoals := 0               -- 0 means no limit
   deriving Inhabited, BEq, Repr
 
 unsafe def evalOptionsExprImpl (e : Expr) : TermElabM Aesop.Options := do

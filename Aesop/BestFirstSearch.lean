@@ -57,6 +57,11 @@ structure State where
   activeGoals : ActiveGoalQueue
   nextGoalId : GoalId
   nextRappId : RappId
+  numGoals : Nat
+    -- As currently implemented, numGoals is exactly nextGoalId (and similar
+    -- for rapps). But these are conceptually different things, so we should
+    -- track them separately.
+  numRapps : Nat
 
 def mkInitialContextAndState (rs : RuleSet) (options : Aesop.Options)
     (mainGoal : MVarId) : MetaM (Context × State) := do
@@ -72,7 +77,9 @@ def mkInitialContextAndState (rs : RuleSet) (options : Aesop.Options)
     activeGoals := BinomialHeap.empty.insert
       { goal := rootGoalRef, successProbability := Percent.hundred }
     nextGoalId := GoalId.one
-    nextRappId := RappId.zero }
+    nextRappId := RappId.zero
+    numGoals := 1
+    numRapps := 0 }
   return (ctx, state)
 
 abbrev SearchM := ReaderT Context $ StateRefT State MetaM
@@ -139,6 +146,7 @@ def addGoal (g : GoalData) (parent : RappRef) : SearchM GoalRef := do
   modifyThe ActiveGoalQueue λ q => q.insert
     { goal := gref
       successProbability := g.successProbability }
+  modify λ s => { s with numGoals := s.numGoals + 1 }
   return gref
 
 def addGoals (goals : Array GoalData) (parent : RappRef) :
@@ -167,6 +175,7 @@ def addRapp (r : RappData) (parent : GoalRef)
     unificationGoalOrigins := unificationGoalOrigins.insert goal rref
   rref.modify λ r => r.setUnificationGoalOrigins unificationGoalOrigins
   parent.modify λ g => g.addChild rref
+  modify λ s => { s with numRapps := s.numRapps + 1 }
   return rref
 
 def runRuleTac' (goal : MVarId) (rule : RuleTac) : MetaM RuleTacOutput :=
@@ -614,23 +623,36 @@ def finishIfProven : SearchM Bool := do
         "Final proof:{indentExpr (← instantiateMVars $ mkMVar mainGoal)}"
   return true
 
-partial def search' : SearchM Unit := do
+def checkGoalLimit : SearchM Unit := do
+  let maxGoals := (← readThe Aesop.Options).maxGoals
+  let currentGoals := (← get).numGoals
+  if maxGoals != 0 && currentGoals >= maxGoals then throwError
+    "aesop: maximum number of goals ({maxGoals}) reached. Set the maxGoals option to increase the limit."
+
+def checkRappLimit : SearchM Unit := do
+  let maxRapps := (← readThe Aesop.Options).maxRuleApplications
+  let currentRapps := (← get).numRapps
+  if maxRapps != 0 && currentRapps >= maxRapps then throwError
+    "aesop: maximum number of rule applications ({maxRapps}) reached. Set the maxRuleApplications option to increase the limit."
+
+partial def searchLoop : SearchM Unit := do
   let root ← readRootGoal
   let (false) ← pure (← root.get).isUnprovable
     | throwError "aesop: failed to prove the goal"
-  let done ← finishIfProven
-  if ¬ done then
-    expandNextGoal
-    if (← isTracingEnabledFor `Aesop.Tree) then do
-      let tree ← (← readRootGoal).treeToMessageData TraceContext.tree
-      trace[Aesop.Tree] "Current search tree:{MessageData.node #[tree]}"
-    (← readRootGoal).checkInvariantsIfEnabled
-    search'
+  let (false) ← finishIfProven | pure ()
+  checkGoalLimit
+  checkRappLimit
+  expandNextGoal
+  if (← isTracingEnabledFor `Aesop.Tree) then do
+    let tree ← (← readRootGoal).treeToMessageData TraceContext.tree
+    trace[Aesop.Tree] "Current search tree:{MessageData.node #[tree]}"
+  (← readRootGoal).checkInvariantsIfEnabled
+  searchLoop
 
 def search (rs : RuleSet) (options : Aesop.Options) (mainGoal : MVarId) :
     MetaM Unit := do
   let (ctx, state) ← mkInitialContextAndState rs options mainGoal
-  search'.run' ctx state
+  searchLoop.run' ctx state
 
 def searchTactic (rs : RuleSet) (options : Aesop.Options) : TacticM Unit :=
   liftMetaTactic λ goal => search rs options goal *> pure []
