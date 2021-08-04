@@ -693,7 +693,7 @@ def RappRef.treeToMessageData (traceCtx : TraceContext) (rref : RappRef) :
   (← rref.get).treeToMessageData traceCtx
 
 
-/-! ## Miscellaneous Functions on Goals -/
+/-! ## Miscellaneous Functions -/
 
 namespace Goal
 
@@ -713,11 +713,16 @@ def unificationGoalOrigins (g : Goal) : m (PersistentHashMap MVarId RappRef) :=
   | some rref => return Rapp.unificationGoalOrigins (← rref.get)
   | none => return PersistentHashMap.empty
 
+-- TODO This is overly coarse. Even if the parent rapp has unification goals,
+-- they need not appear in this goal.
+def hasUnificationGoal (g : Goal) : m Bool :=
+  return ! (← g.unificationGoalOrigins).isEmpty
+
 end Goal
 
-def GoalRef.unificationGoalOrigins (gref : GoalRef) :
-    m (PersistentHashMap MVarId RappRef) := do
-  (← gref.get).unificationGoalOrigins
+
+def Rapp.hasUnificationGoal (r : Rapp) : Bool :=
+  ! r.unificationGoalOrigins.isEmpty
 
 
 /-! ## Propagating Provability/Unprovability/Irrelevance -/

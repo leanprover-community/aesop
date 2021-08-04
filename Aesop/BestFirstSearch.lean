@@ -252,7 +252,7 @@ abbrev UnificationGoals := Array (MVarId × Expr × RappRef)
 def assignedUnificationGoals (parent : GoalRef)
     (postRuleState : Meta.SavedState) :
     SearchM UnificationGoals := do
-  let uGoalOrigins ← parent.unificationGoalOrigins
+  let uGoalOrigins ← (← parent.get).unificationGoalOrigins
   let (result, _) ← runMetaMInSavedState postRuleState do
     let mut result := #[]
     for (ugoal, rref) in uGoalOrigins do
@@ -363,7 +363,7 @@ end
 def processUnificationGoalAssignment (parent : GoalRef)
     (postRuleState : Meta.SavedState) :
     SearchM (PersistentHashMap MVarId RappRef) := do
-  let parentUGoalOrigins ← parent.unificationGoalOrigins
+  let parentUGoalOrigins ← (← parent.get).unificationGoalOrigins
   let assignedUGoals ← assignedUnificationGoals parent postRuleState
   if assignedUGoals.isEmpty then
     return parentUGoalOrigins
@@ -382,7 +382,7 @@ inductive RuleResult
 
 namespace RuleResult
 
-def failed? : RuleResult → Bool
+def isFailed : RuleResult → Bool
   | failed => true
   | _ => false
 
@@ -444,25 +444,48 @@ def runFirstSafeRule (gref : GoalRef) : SearchM RuleResult := do
   for r in rules do
     trace[Aesop.Steps] "Trying {r}"
     result ← runRegularRule gref $ RegularRule'.safe r
-    if result.failed? then continue else break
+    if result.isFailed then continue else break
   return result
 
-def selectRules (gref : GoalRef) : SearchM (List UnsafeRule) := do
+def SafeRule.asUnsafeRule (r : SafeRule) : UnsafeRule where
+  name := r.name
+  tac := r.tac
+  indexingMode := r.indexingMode
+  extra := { successProbability := Percent.ninety }
+
+def selectUnsafeRules (gref : GoalRef) (includeSafeRules : Bool) :
+    SearchM (List UnsafeRule) := do
   let g ← gref.get
   match g.unsafeQueue with
   | some rules => return rules
   | none => do
     let ruleSet ← readThe RuleSet
-    let (rules, _) ← g.runMetaMInParentState $
+    let (unsafeRules, _) ← g.runMetaMInParentState $
       ruleSet.applicableUnsafeRules g.goal
-    let rules := rules.toList
+    let rules ←
+      if includeSafeRules
+        then do
+          let (safeRules, _) ← g.runMetaMInParentState $
+            ruleSet.applicableSafeRules g.goal
+          let rules := safeRules.map (·.asUnsafeRule) ++ unsafeRules
+          -- TODO sort combined rules (this currently makes a test case loop)
+          -- let rules := rules.qsort (· < ·) -- TODO stable merge for efficiency
+          trace[Aesop.Steps] m!"Selected unsafe rules (including safe rules treated as unsafe):" ++
+            MessageData.node (rules.map toMessageData)
+          pure rules.toList
+          -- TODO these toList conversions make me sad. More efficient: treat
+          -- the selected unsafe rules as an array and the unsafe queue as a
+          -- subarray (or just an index).
+        else do
+          trace[Aesop.Steps] m!"Selected unsafe rules:" ++
+            MessageData.node (unsafeRules.map toMessageData)
+          pure unsafeRules.toList
     gref.set $ g.setUnsafeQueue rules
-    trace[Aesop.Steps] m!"Selected unsafe rules:" ++
-      MessageData.node (rules.map toMessageData |>.toArray)
     return rules
 
-def runFirstUnsafeRule (gref : GoalRef) : SearchM Bool := do
-  let rules ← selectRules gref
+def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
+    SearchM Bool := do
+  let rules ← selectUnsafeRules gref includeSafeRules
   trace[Aesop.Steps] "Trying unsafe rules"
   let mut result := RuleResult.failed
   let mut remainingRules := rules
@@ -470,11 +493,11 @@ def runFirstUnsafeRule (gref : GoalRef) : SearchM Bool := do
     trace[Aesop.Steps] "Trying {r}"
     remainingRules := remainingRules.tail!
     result ← runRegularRule gref (RegularRule'.unsafe r)
-    if result.failed? then continue else break
+    if result.isFailed then continue else break
   gref.modify λ g => g.setUnsafeQueue remainingRules
   trace[Aesop.Steps] m!"Remaining unsafe rules:" ++ MessageData.node
     (remainingRules.map toMessageData |>.toArray)
-  if result.failed? && remainingRules.isEmpty then
+  if result.isFailed && remainingRules.isEmpty then
     trace[Aesop.Steps] "Goal is unprovable"
     gref.setUnprovable
   return ¬ remainingRules.isEmpty
@@ -483,11 +506,23 @@ def runFirstUnsafeRule (gref : GoalRef) : SearchM Bool := do
 def expandGoal (gref : GoalRef) : SearchM Bool := do
   let (false) ← normalizeGoalIfNecessary gref |
     -- Goal was already proven by normalisation.
+    -- TODO at least in this case, we must make sure that ugoal assignments
+    -- are propagated or disallowed.
     return false
-  let result ← runFirstSafeRule gref
-  if result.failed?
-    then runFirstUnsafeRule gref
-    else pure false
+  if ← (← gref.get).hasUnificationGoal
+    then do
+      trace[Aesop.Steps] "Goal contains unification goals. Treating safe rules as unsafe."
+      -- TODO This is a bit of a lie. Currently we only check whether the goal's
+      -- parent rapp has unification goals. That doesn't mean any appear in this
+      -- specific goal. It would be better to track this more precisely so that
+      -- we can treat ugoal-free goals as ugoal-free (which is much more
+      -- efficient).
+      runFirstUnsafeRule gref (includeSafeRules := true)
+    else do
+      let safeResult ← runFirstSafeRule gref
+      if safeResult.isFailed
+        then runFirstUnsafeRule gref (includeSafeRules := false)
+        else pure false
 
 def expandNextGoal : SearchM Unit := do
   let some (activeGoal, activeGoals) ← pure (← getThe ActiveGoalQueue).removeMin

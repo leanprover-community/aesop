@@ -33,6 +33,9 @@ instance : DecidableRel (α := Percent) (· < ·) :=
 instance : ToString Percent where
   toString p := toString p.toFloat
 
+def ninety : Percent :=
+  ⟨0.9⟩
+
 def hundred : Percent :=
   ⟨1⟩
 

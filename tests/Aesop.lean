@@ -56,7 +56,7 @@ axiom R : A → A → Prop
 @[aesop 20%]
 axiom R_trans : ∀ x y z, R x y → R y z → R x z
 
-@[aesop 100%]
+@[aesop safe]
 axiom R_refl : ∀ x, R x x
 
 sudo set_option trace.Aesop.Steps false
