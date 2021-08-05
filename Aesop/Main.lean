@@ -20,7 +20,7 @@ def evalAesop : Tactic := λ stx =>
     let rs ← getRuleSet
     let rs := rs.addArray (← defaultRules)
     let rs := rs.addArray (← config.additionalRuleSetMembers)
-    trace[Aesop.RuleSet] m!"{rs}"
+    aesop_trace[ruleSet] "{rs}"
     searchTactic rs config.options
 
 end Aesop

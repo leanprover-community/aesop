@@ -22,10 +22,6 @@ inductive EvenOrOdd : Nat → Prop
 | even {n} : Even n → EvenOrOdd n
 | odd {n} : Odd n → EvenOrOdd n
 
-set_option pp.all false
-sudo set_option trace.Aesop.RuleSet false
-sudo set_option trace.Aesop.Steps false
-
 -- We can add constants as rules.
 example : EvenOrOdd 3 := by
   aesop

@@ -1,0 +1,93 @@
+/-
+Copyright (c) 2021 Jannis Limperg. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Jannis Limperg
+-/
+
+import Lean
+
+open Lean
+
+namespace Aesop
+
+-- A TraceOption determines *whether* a certain piece of information is printed.
+structure TraceOption where
+  traceName : Name
+  option : Lean.Option Bool
+  parentOption : Option (Lean.Option Bool)
+  deriving Inhabited
+
+def registerTraceOption (traceName : Name) (defValue : Bool) (descr : String) :
+    IO TraceOption := do
+  let opt ←
+    Option.register (`trace.aesop ++ traceName)
+      { defValue := defValue, group := "trace", descr := descr }
+  return {
+    traceName := `aesop ++ traceName,
+    option := opt,
+    parentOption := none
+  }
+
+namespace TraceOption
+
+initialize ruleSet : TraceOption ←
+  registerTraceOption `ruleSet false
+    "(aesop) Print the rule set before starting the search."
+
+initialize proof : TraceOption ←
+  registerTraceOption `proof false
+    "(aesop) If the search is successful, print the produced proof term."
+
+initialize steps : TraceOption ←
+  registerTraceOption `steps false
+    "(aesop) Print actions taken by Aesop during the proof search. Set the trace.aesop.steps.* options to choose which actions are printed."
+
+initialize Init.stepsRuleSelection : TraceOption ←
+  registerTraceOption `steps.ruleSelection false
+    s!"(aesop) Print the rules selected for each goal. Has no effect unless trace.aesop.steps is true."
+
+initialize Init.stepsNormalization : TraceOption ←
+  registerTraceOption `steps.normalization false
+    s!"(aesop) Print intermediate goals during normalization. Has no effect unless trace.aesop.steps is true."
+
+initialize Init.stepsTree : TraceOption ←
+  registerTraceOption `steps.tree false
+    s!"(aesop) Print the search tree after every iteration of the search loop. Has no effect unless trace.aesop.steps is true."
+
+end TraceOption
+
+
+
+-- A TraceModifier determines *how* a certain piece of information is printed.
+structure TraceModifier where
+  option : Lean.Option Bool
+  deriving Inhabited
+
+def registerTraceModifier (traceName : Name) (defValue : Bool) (descr : String) :
+    IO TraceModifier := do
+  let opt ←
+    Option.register (`trace.aesop ++ traceName)
+      { defValue := defValue, group := "trace", descr := descr }
+  return { option := opt }
+
+namespace TraceModifier
+
+initialize goals : TraceModifier ←
+  registerTraceModifier `goals true
+    "(aesop) When printing a goal node, print the hypotheses and target."
+
+initialize unsafeQueues : TraceModifier ←
+  registerTraceModifier `unsafeQueues false
+    "(aesop) When printing a goal node, print the unsafe rule queue."
+
+initialize failedRapps : TraceModifier ←
+  registerTraceModifier `failedRuleApplications false
+    "(aesop) When printing a goal node, print the failed rule applications."
+
+initialize unificationGoals : TraceModifier ←
+  registerTraceModifier `unificationGoals false
+    "(aesop) When printing a rule application node, print the unification goals."
+
+end TraceModifier
+
+end Aesop

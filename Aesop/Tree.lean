@@ -15,8 +15,7 @@ open Lean
 open Lean.Meta
 open Std
 
-variable [Monad m] [MonadOptions m] [MonadLiftT (ST IO.RealWorld) m]
-  [MonadError m]
+variable [Monad m] [MonadLiftT (ST IO.RealWorld) m] [MonadError m]
 
 @[inlineIfReduce]
 private def Bool.toYesNo : Bool → Format
@@ -136,23 +135,9 @@ namespace GoalData
 def isProven (g : GoalData) : Bool :=
   g.proofStatus.isProven
 
-structure MessageInfo where
-  showGoal : Bool
-  showUnsafeQueue : Bool
-  showFailedRapps : Bool
-  deriving Inhabited
-
-protected def getMessageInfo (traceCtx : TraceContext) : m MessageInfo := do
-  return {
-    showGoal := (← TraceOption.showGoals.get traceCtx)
-    showUnsafeQueue := (← TraceOption.showUnsafeQueues.get traceCtx)
-    showFailedRapps := (← TraceOption.showFailedRapps.get traceCtx)
-  }
-
 open MessageData in
-protected def toMessageData (traceCtx : TraceContext) (g : GoalData) :
+protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
     m MessageData := do
-  let minfo ← GoalData.getMessageInfo traceCtx
   let unsafeQueueLength :=
     match g.unsafeQueue with
     | none => f!"<not selected>"
@@ -164,11 +149,11 @@ protected def toMessageData (traceCtx : TraceContext) (g : GoalData) :
         m!"proven: {g.isProven.toYesNo} | ",
         m!"unprovable: {g.isUnprovable.toYesNo} | ",
         m!"irrelevant: {g.isIrrelevant.toYesNo}" ],
-    if ¬ minfo.showGoal then none else
+    if ¬ traceMods.goals then none else
       m!"Goal:{indentD $ ofGoal g.goal}",
-    if ¬ minfo.showUnsafeQueue || g.unsafeQueue.isNone then none else
+    if ¬ traceMods.unsafeQueues || g.unsafeQueue.isNone then none else
       m!"Unsafe queue:{indentDUnlines $ g.unsafeQueue.get!.map toMessageData}",
-    if ¬ minfo.showFailedRapps then none else
+    if ¬ traceMods.failedRapps then none else
       m!"Failed rule applications:{indentDUnlines $ g.failedRapps.map toMessageData}" ]
 
 protected def mkInitial (id : GoalId) (goal : MVarId)
@@ -337,11 +322,10 @@ def setIrrelevant (isIrrelevant : Bool) (r : RappData) : RappData :=
   r.modify λ r => { r with isIrrelevant := isIrrelevant }
 
 open MessageData in
-protected def toMessageData (traceCtx : TraceContext) (r : RappData) :
+protected def toMessageData (traceMods : TraceModifiers) (r : RappData) :
     m MessageData := do
-  let showUnificationGoalOrigins ← TraceOption.showUnificationGoals.get traceCtx
   let unificationGoalOrigins : Option MessageData ←
-    if ¬ showUnificationGoalOrigins || r.unificationGoalOrigins.isEmpty
+    if ¬ traceMods.unificationGoals || r.unificationGoalOrigins.isEmpty
       then pure none
       else do
         let origins ← r.unificationGoalOrigins.toList.mapM $ λ (mvarId, rref) =>
@@ -651,63 +635,63 @@ def GoalRef.runMetaMModifyingParentState (x : MetaM α) (gref : GoalRef) :
 
 /-! ## Formatting -/
 
-def Goal.toMessageData (traceCtx : TraceContext) (g : Goal) :
+def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
     MetaM MessageData :=
   match g.parent with
-  | none => g.payload.toMessageData traceCtx
+  | none => g.payload.toMessageData traceMods
   | some (rref : RappRef) => do
     let (res, _) ← rref.runMetaM do
-      addMessageContext (← g.payload.toMessageData traceCtx)
+      addMessageContext (← g.payload.toMessageData traceMods)
     return res
 
-def GoalRef.toMessageData (traceCtx : TraceContext) (gref : GoalRef) :
+def GoalRef.toMessageData (traceMods : TraceModifiers) (gref : GoalRef) :
     MetaM MessageData := do
-  (← gref.get).toMessageData traceCtx
+  (← gref.get).toMessageData traceMods
 
-def Rapp.toMessageData (traceCtx : TraceContext) (r : Rapp) :
+def Rapp.toMessageData (traceMods : TraceModifiers) (r : Rapp) :
     MetaM MessageData := do
   let (res, _) ← r.runMetaM do
-    addMessageContext (← r.payload.toMessageData traceCtx)
+    addMessageContext (← r.payload.toMessageData traceMods)
   return res
 
-def RappRef.toMessageData (traceCtx : TraceContext) (rref : RappRef) :
+def RappRef.toMessageData (traceMods : TraceModifiers) (rref : RappRef) :
     MetaM MessageData := do
-  (← rref.get).toMessageData traceCtx
+  (← rref.get).toMessageData traceMods
 
 def nodeMessageSeparator : MessageData :=
   m!"-*-*-*-*-*-\n"
 
 mutual
-  private partial def goalTreeToMessageData (traceCtx : TraceContext) (goal : Goal) :
-      MetaM MessageData := do
-    let goalMsg ← goal.toMessageData traceCtx
+  private partial def goalTreeToMessageData (traceMods : TraceModifiers)
+      (goal : Goal) : MetaM MessageData := do
+    let goalMsg ← goal.toMessageData traceMods
     let childrenMsgs ← goal.rapps.mapM λ c => do
-      rappTreeToMessageData traceCtx (← c.get)
+      rappTreeToMessageData traceMods (← c.get)
     return nodeMessageSeparator ++ goalMsg ++ MessageData.node childrenMsgs
 
-  private partial def rappTreeToMessageData (traceCtx : TraceContext) (rapp : Rapp) :
-      MetaM MessageData := do
-    let rappMsg ← rapp.toMessageData traceCtx
+  private partial def rappTreeToMessageData (traceMods : TraceModifiers)
+      (rapp : Rapp) : MetaM MessageData := do
+    let rappMsg ← rapp.toMessageData traceMods
     let childrenMsgs ← rapp.subgoals.mapM λ c => do
-      goalTreeToMessageData traceCtx (← c.get)
+      goalTreeToMessageData traceMods (← c.get)
     return nodeMessageSeparator ++ rappMsg ++ MessageData.node childrenMsgs
 end
 
-def Goal.treeToMessageData (traceCtx : TraceContext) (g : Goal) :
+def Goal.treeToMessageData (traceMods : TraceModifiers) (g : Goal) :
     MetaM MessageData :=
-  goalTreeToMessageData traceCtx g
+  goalTreeToMessageData traceMods g
 
-def GoalRef.treeToMessageData (traceCtx : TraceContext) (gref : GoalRef) :
+def GoalRef.treeToMessageData (traceMods : TraceModifiers) (gref : GoalRef) :
     MetaM MessageData := do
-  (← gref.get).treeToMessageData traceCtx
+  (← gref.get).treeToMessageData traceMods
 
-def Rapp.treeToMessageData (traceCtx : TraceContext) (r : Rapp) :
+def Rapp.treeToMessageData (traceMods : TraceModifiers) (r : Rapp) :
     MetaM MessageData := do
-  rappTreeToMessageData traceCtx r
+  rappTreeToMessageData traceMods r
 
-def RappRef.treeToMessageData (traceCtx : TraceContext) (rref : RappRef) :
+def RappRef.treeToMessageData (traceMods : TraceModifiers) (rref : RappRef) :
     MetaM MessageData := do
-  (← rref.get).treeToMessageData traceCtx
+  (← rref.get).treeToMessageData traceMods
 
 
 /-! ## Miscellaneous Functions -/

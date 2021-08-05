@@ -10,8 +10,8 @@ open Lean
 
 namespace Aesop
 
-def registerCheckOption [KVMap.Value α] (checkName : Name) (defValue : α)
-    (descr : String) : IO (Lean.Option α) :=
+def registerCheckOption (checkName : Name) (defValue : Bool)
+    (descr : String) : IO (Lean.Option Bool) :=
   Option.register (`aesop.check ++ checkName)
     { defValue := defValue, group := "aesop", descr := descr }
 
@@ -39,6 +39,7 @@ inductive Check
 
 namespace Check
 
+@[inlineIfReduce]
 def toOption : Check → Lean.Option Bool
   | all => checkAllOption
   | tree => checkTreeOption
