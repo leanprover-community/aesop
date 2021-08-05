@@ -1,17 +1,30 @@
 #!/bin/bash
 
-failed=0
+# Usage:
+#
+# `./test` to build tests/*.lean
+# `./test tests/A.lean tests/B.lean ...` to build the specified files
+#
+# This script must be called from the directory it is located in.
+
+GREEN="\e[0;92m"
+RESET="\e[0m"
 
 leanpkg build
 [ "$?" -eq 0 ] || exit 1
 
-pushd tests &>/dev/null
+if [ -z "$1" ]; then
+  files="tests/*.lean"
+else
+  files="$@"
+fi
 
-for file in *.lean; do
-  env LEAN_PATH="../build:." lean "$file"
+failed=0
+
+for file in ${files[@]}; do
+  echo -e "$GREEN$file$RESET"
+  env LEAN_PATH="build:tests" lean $file
   [ "$?" -eq 0 ] || failed=1
 done
-
-popd &>/dev/null
 
 exit $failed
