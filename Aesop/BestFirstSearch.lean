@@ -137,14 +137,22 @@ def getAndIncrementNextRappId : SearchM RappId := do
   setThe RappId id.succ
   return id
 
+def popActiveGoal : SearchM (Option ActiveGoal) := do
+  let q ← getThe ActiveGoalQueue
+  let (some (ag, q)) ← pure q.removeMin | return none
+  setThe ActiveGoalQueue q
+  return some ag
+
+def pushActiveGoal (ag : ActiveGoal) : SearchM Unit :=
+  modifyThe ActiveGoalQueue (·.insert ag)
+
 -- Overwrites the goal ID from `g`.
--- TODO refactor: don't take GoalData as arg?
 def addGoal (g : GoalData) (parent : RappRef) : SearchM GoalRef := do
   let id ← getAndIncrementNextGoalId
   let g := { g with id := id }
   let gref ← ST.mkRef $ Goal.mk (some parent) #[] g
   parent.modify λ r => r.addChild gref
-  modifyThe ActiveGoalQueue λ q => q.insert
+  pushActiveGoal
     { goal := gref
       successProbability := g.successProbability }
   modify λ s => { s with numGoals := s.numGoals + 1 }
@@ -166,7 +174,6 @@ def addGoals' (goals : Array MVarId) (successProbability : Percent)
 
 -- Overwrites the rapp ID and depth of `r`. Adds the `newUnificationGoals` as
 -- unification goals whose origin is the returned rapp.
--- TODO refactor: don't take RappData as arg
 def addRapp (r : RappData) (parent : GoalRef)
     (newUnificationGoals : Array MVarId) : SearchM RappRef := do
   let id ← getAndIncrementNextRappId
@@ -352,8 +359,7 @@ def copyRappBranch (root : RappRef) : SearchM RappRef := do
 
 mutual
   partial def addActiveGoalsFromGoalBranch (root : GoalRef) : SearchM Unit := do
-      let activeGoal ← ActiveGoal.ofGoalRef root
-      modifyThe ActiveGoalQueue λ q => q.insert activeGoal
+      pushActiveGoal (← ActiveGoal.ofGoalRef root)
       (← root.get).rapps.forM addActiveGoalsFromRappBranch
 
   partial def addActiveGoalsFromRappBranch (root : RappRef) : SearchM Unit := do
@@ -398,6 +404,10 @@ namespace RuleResult
 
 def isFailed : RuleResult → Bool
   | failed => true
+  | _ => false
+
+def isProven : RuleResult → Bool
+  | proven => true
   | _ => false
 
 end RuleResult
@@ -488,6 +498,7 @@ def selectUnsafeRules (gref : GoalRef) (includeSafeRules : Bool) :
     gref.set $ g.setUnsafeQueue rules
     return rules
 
+-- Returns true if the goal should be reinserted into the goal queue.
 def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
     SearchM Bool := do
   let rules ← selectUnsafeRules gref includeSafeRules
@@ -504,7 +515,7 @@ def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
   if result.isFailed && remainingRules.isEmpty then
     aesop_trace[steps] "Goal is unprovable"
     gref.setUnprovable (firstGoalUnconditional := true)
-  return ¬ remainingRules.isEmpty
+  return ! result.isProven && ! remainingRules.isEmpty
 
 -- Returns true if the goal should be reinserted into the goal queue.
 def expandGoal (gref : GoalRef) : SearchM Bool := do
@@ -528,9 +539,8 @@ def expandGoal (gref : GoalRef) : SearchM Bool := do
       else pure false
 
 def expandNextGoal : SearchM Unit := do
-  let some (activeGoal, activeGoals) ← pure (← getThe ActiveGoalQueue).removeMin
+  let some activeGoal ← popActiveGoal
     | throwError "aesop/expandNextGoal: internal error: no active goals left"
-  setThe ActiveGoalQueue activeGoals
   let gref := activeGoal.goal
   let g ← gref.get
   aesop_trace[steps] "Expanding {← g.toMessageData (← TraceModifiers.get)}"
@@ -544,8 +554,7 @@ def expandNextGoal : SearchM Unit := do
     return ()
   let hasMoreRules ← expandGoal gref
   if hasMoreRules then
-    let ag ← ActiveGoal.ofGoalRef gref
-    modifyThe ActiveGoalQueue λ q => q.insert ag
+    pushActiveGoal (← ActiveGoal.ofGoalRef gref)
 
 mutual
   -- Let g be the goal in gref. Assuming that we are in the meta context of g's
