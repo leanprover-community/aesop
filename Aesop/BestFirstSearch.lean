@@ -646,6 +646,11 @@ partial def searchLoop : SearchM Unit := do
   checkRappLimit
   expandNextGoal
   aesop_trace[stepsTree] "Current search tree:{indentD (← (← readRootGoal).treeToMessageData (← TraceModifiers.get))}"
+  aesop_trace[stepsActiveGoalQueue] do
+    let traceMods ← TraceModifiers.get
+    let activeGoalMsgs ← (← getThe ActiveGoalQueue).toArray.mapM λ ag =>
+      ag.goal.toMessageData traceMods
+    m!"Current active goals:{MessageData.node activeGoalMsgs}"
   (← readRootGoal).checkInvariantsIfEnabled
   searchLoop
 

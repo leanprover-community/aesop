@@ -52,7 +52,11 @@ initialize Init.stepsNormalization : TraceOption ←
 
 initialize Init.stepsTree : TraceOption ←
   registerTraceOption `steps.tree false
-    s!"(aesop) Print the search tree after every iteration of the search loop. Has no effect unless trace.aesop.steps is true."
+    s!"(aesop) Print the search tree after each iteration of the search loop. Has no effect unless trace.aesop.steps is true."
+
+initialize Init.stepsActiveGoalQueue : TraceOption ←
+  registerTraceOption `steps.activeGoalQueue false
+    s!"(aesop) Print the active goal queue after each iteration of the search loop. Has no effect unless trace.aesop.steps is true."
 
 end TraceOption
 
