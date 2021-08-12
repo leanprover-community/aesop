@@ -133,7 +133,15 @@ def modifyChildren (f : Array (MATRef σ ω α) → Array (MATRef σ ω α))
     (t : MutAltTree σ α ω) : MutAltTree σ α ω :=
   t.setChildren $ f t.children
 
+@[inline]
+def addChild (c : MATRef σ ω α) (t : MutAltTree σ α ω) : MutAltTree σ α ω :=
+  t.modifyChildren $ λ cs => cs.push c
+
+end MutAltTree
+
 /-! ### Traversals -/
+
+namespace MATRef
 
 variable {σ m} [Monad m] [MonadLiftT (ST σ) m]
 
@@ -163,18 +171,6 @@ def visitUp'
     Sum (MATRef σ α ω) (MATRef σ ω α) → m Unit
   | Sum.inl tref => visitUp fα fω tref
   | Sum.inr tref => visitUp fω fα tref
-
-/-! ### Miscellaneous -/
-
-@[inline]
-def addChild (c : MATRef σ ω α) (t : MutAltTree σ α ω) : MutAltTree σ α ω :=
-  t.modifyChildren $ λ cs => cs.push c
-
-def siblings (tref : MATRef σ α ω) : m (Array (MATRef σ α ω)) := do
-  let t ← tref.get
-  let (some parent) ← pure t.parent | return #[]
-  let children := (← parent.get).children
-  return (← children.filterM λ cref => return not (← cref.ptrEq tref))
 
 /-! ### Checking Invariants -/
 
@@ -209,4 +205,12 @@ partial def isAcyclic (tref : MATRef σ ω α) : m Bool :=
         v₂ := visited₂
       return (true, v₁, v₂)
 
-end Aesop.MutAltTree
+/-! ### Miscellaneous -/
+
+def siblings (tref : MATRef σ α ω) : m (Array (MATRef σ α ω)) := do
+  let t ← tref.get
+  let (some parent) ← pure t.parent | return #[]
+  let children := (← parent.get).children
+  children.filterM λ cref => return ! (← cref.ptrEq tref)
+
+end Aesop.MATRef

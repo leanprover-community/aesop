@@ -257,14 +257,8 @@ def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Bool := do
     gref.set g
     return false
   | none =>
-    let g := g.setProofStatus ProofStatus.provenByNormalization
-    let g := g.setNormal true
-    gref.set g
-    -- Propagate the fact that g was proven up the tree. We start with the
-    -- parent rule application of g (if any). If we were to start with g,
-    -- setProven would set the proof status of g to provenByRuleApplication.
-    let (some parentRef) ← g.parent | return true
-    RappRef.setProven parentRef
+    gref.modify λ g => g.setNormal true
+    gref.setProven (firstGoalProofStatus := ProofStatus.provenByNormalization)
     return true
 
 abbrev UnificationGoals := Array (MVarId × Expr × RappRef)
@@ -410,24 +404,19 @@ end RuleResult
 
 def runRegularRule (parentRef : GoalRef) (rule : RegularRule) :
     SearchM RuleResult := do
-  let parent ← parentRef.get
   let successProbability :=
-    parent.successProbability * rule.successProbability
-  let ruleOutput? ← runRuleTac parent rule.tac.tac
+    (← parentRef.get).successProbability * rule.successProbability
+  let ruleOutput? ← runRuleTac (← parentRef.get) rule.tac.tac
   match ruleOutput?  with
   | some (ruleOutput@{ regularGoals := #[], .. }, finalState) => do
-    -- Rule succeeded and did not generate subgoals, meaning the parent
-    -- node is proved.
     aesop_trace[steps] "Rule succeeded without subgoals. Goal is proven."
     let uGoals ← processUnificationGoalAssignment parentRef finalState
-    let r :=
-      RappData.mkInitial RappId.dummy 0 finalState uGoals rule successProbability
-      |>.setProven true
-    let _ ← addRapp r parentRef #[]
-    parentRef.setProven
+    let r := RappData.mkInitial RappId.dummy 0 finalState uGoals rule
+      successProbability
+    let rref ← addRapp r parentRef #[]
+    rref.setProven (firstRappUnconditional := true)
     return RuleResult.proven
   | some (ruleOutput@{ regularGoals := subgoals, .. }, finalState) => do
-    -- Rule succeeded and generated subgoals.
     aesop_trace[steps] "Rule succeeded with subgoals."
     let uGoals ← processUnificationGoalAssignment parentRef finalState
     let r :=
@@ -444,10 +433,9 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule) :
       -- uninteresting for new goals/rapps
     return RuleResult.succeeded
   | none => do
-    -- Rule did not succeed.
     aesop_trace[steps] "Rule failed."
-    parentRef.modify λ (g : Goal) => g.setFailedRapps $ rule :: g.failedRapps
-    parentRef.setUnprovable
+    parentRef.modify λ g => g.setFailedRapps $ rule :: g.failedRapps
+    parentRef.setUnprovable (firstGoalUnconditional := false)
     return RuleResult.failed
 
 def runFirstSafeRule (gref : GoalRef) : SearchM RuleResult := do
@@ -515,7 +503,7 @@ def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
   aesop_trace[steps] "Remaining unsafe rules:{MessageData.node $ remainingRules.map toMessageData |>.toArray}"
   if result.isFailed && remainingRules.isEmpty then
     aesop_trace[steps] "Goal is unprovable"
-    gref.setUnprovable
+    gref.setUnprovable (firstGoalUnconditional := true)
   return ¬ remainingRules.isEmpty
 
 -- Returns true if the goal should be reinserted into the goal queue.
@@ -552,10 +540,7 @@ def expandNextGoal : SearchM Unit := do
   let maxRappDepth := (← readThe Aesop.Options).maxRuleApplicationDepth
   if maxRappDepth != 0 && (← (← gref.get).parentDepth) >= maxRappDepth then
     aesop_trace[steps] "Skipping goal since it is beyond the maximum rule application depth."
-    gref.modify λ g => g.setUnprovable true
-    match (← gref.get).parent with
-    | none => pure ()
-    | some (rref : RappRef) => rref.setUnprovable
+    gref.setUnprovableUnconditionallyAndSetDescendantsIrrelevant
     return ()
   let hasMoreRules ← expandGoal gref
   if hasMoreRules then

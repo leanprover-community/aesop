@@ -734,83 +734,101 @@ def Rapp.hasUnificationGoal (r : Rapp) : Bool :=
 /-! ## Propagating Provability/Unprovability/Irrelevance -/
 
 @[inline]
-def setIrrelevantImpl : Sum GoalRef RappRef → m Unit :=
-  MutAltTree.visitDown'
-    (λ gref => do
-      let g : Goal ← gref.get
-      if g.isIrrelevant
+def setIrrelevantCore : Sum GoalRef RappRef → m Unit :=
+  MATRef.visitDown'
+    (λ gref : GoalRef => do
+      if (← gref.get).isIrrelevant
         then return false -- Subtree should already be marked as irrelevant.
         else do
-          gref.set $ g.setIrrelevant true
+          gref.modify λ g => g.setIrrelevant true
           return true)
-    (λ rref => do
-      let r : Rapp ← rref.get
-      if r.isIrrelevant
+    (λ rref : RappRef => do
+      if (← rref.get).isIrrelevant
         then return false
         else do
-          rref.set $ r.setIrrelevant true
+          rref.modify λ r => r.setIrrelevant true
           return true)
 
 def GoalRef.setIrrelevant : GoalRef → m Unit :=
-  setIrrelevantImpl ∘ Sum.inl
+  setIrrelevantCore ∘ Sum.inl
 
 def RappRef.setIrrelevant : RappRef → m Unit :=
-  setIrrelevantImpl ∘ Sum.inr
+  setIrrelevantCore ∘ Sum.inr
+
+private def setRappProvenAndSiblingsIrrelevant (rref : RappRef) : m Unit := do
+  rref.modify λ r => r.setProven true
+  (← MATRef.siblings rref).forM RappRef.setIrrelevant
 
 @[inline]
-private def setProvenImpl : Sum GoalRef RappRef → m Unit :=
-  MutAltTree.visitUp'
+def setProvenCore : Sum GoalRef RappRef → m Unit :=
+  MATRef.visitUp'
     -- Goals are unconditionally marked as proven.
-    (λ gref => do
-      gref.modify λ (g : Goal) =>
-        g.setProofStatus ProofStatus.provenByRuleApplication
+    (λ gref : GoalRef => do
+      gref.modify λ g => g.setProofStatus ProofStatus.provenByRuleApplication
       return true)
     -- Rapps are marked as proven only if they are in fact proven, i.e. if all
     -- their subgoals are (marked as) proven. In this case, we also need to
     -- mark siblings of the rapp (and their descendants) as irrelevant.
-    (λ rref => do
-      let r : Rapp ← rref.get
-      if ¬ (← r.allSubgoalsProven)
-        then return false
-        else do
-          rref.set $ r.setProven true
-          let siblings ← MutAltTree.siblings rref
-          siblings.forM RappRef.setIrrelevant
-          return true)
+    (λ rref : RappRef => do
+      if ¬ (← (← rref.get).allSubgoalsProven)
+        then pure false
+        else setRappProvenAndSiblingsIrrelevant rref *> pure true)
 
-def GoalRef.setProven : GoalRef → m Unit :=
-  setProvenImpl ∘ Sum.inl
+def GoalRef.setProven (firstGoalProofStatus : ProofStatus) (gref : GoalRef) :
+    m Unit := do
+  let g ← gref.get
+  gref.set $ g.setProofStatus firstGoalProofStatus
+  match g.parent with
+  | none => return ()
+  | some parent => setProvenCore $ Sum.inr parent
 
-def RappRef.setProven : RappRef → m Unit :=
-  setProvenImpl ∘ Sum.inr
+def RappRef.setProven (firstRappUnconditional : Bool) (rref : RappRef) :
+    m Unit := do
+  if firstRappUnconditional then do
+    setRappProvenAndSiblingsIrrelevant rref
+    setProvenCore $ Sum.inl (← rref.get).parent!
+  else
+    setProvenCore $ Sum.inr rref
+
+private def setGoalUnprovableAndSiblingsIrrelevant (gref : GoalRef) :
+    m Unit := do
+  gref.modify λ g => g.setUnprovable true
+  (← MATRef.siblings gref).forM GoalRef.setIrrelevant
 
 @[inline]
-private def setUnprovableImpl : Sum GoalRef RappRef → m Unit :=
-  MutAltTree.visitUp'
+def setUnprovableCore : Sum GoalRef RappRef → m Unit :=
+  MATRef.visitUp'
     -- Goals are marked as unprovable only if they are in fact unprovable, i.e.
     -- if all their rule applications are unprovable and they do not have
     -- unexpanded rule applications. In this case, we also need to mark
     -- siblings of the goal (and their descendants) as irrelevant.
-    (λ gref => do
-      let g : Goal ← gref.get
+    (λ gref : GoalRef => do
+      let g ← gref.get
       if (← g.mayHaveUnexpandedRapp <||> g.hasProvableRapp)
-        then return false
-        else do
-          gref.set $ g.setUnprovable true
-          let siblings ← MutAltTree.siblings gref
-          siblings.forM GoalRef.setIrrelevant
-          return true)
+        then pure false
+        else setGoalUnprovableAndSiblingsIrrelevant gref *> pure true)
     -- Rapps are unconditionally marked as unprovable.
-    (λ rref => do
-      rref.modify λ (r : Rapp) => r.setUnprovable true
+    (λ rref : RappRef => do
+      rref.modify λ r => r.setUnprovable true
       return true)
 
-def GoalRef.setUnprovable : GoalRef → m Unit :=
-  setUnprovableImpl ∘ Sum.inl
+def GoalRef.setUnprovable (firstGoalUnconditional : Bool) (gref : GoalRef) :
+    m Unit :=
+  if firstGoalUnconditional then do
+    setGoalUnprovableAndSiblingsIrrelevant gref
+    match (← gref.get).parent with
+    | none => return ()
+    | some parent => setUnprovableCore $ Sum.inr parent
+  else
+    setUnprovableCore $ Sum.inl gref
 
 def RappRef.setUnprovable : RappRef → m Unit :=
-  setUnprovableImpl ∘ Sum.inr
+  setUnprovableCore ∘ Sum.inr
 
+def GoalRef.setUnprovableUnconditionallyAndSetDescendantsIrrelevant
+    (gref : GoalRef) : m Unit := do
+  gref.setUnprovable (firstGoalUnconditional := true)
+  (← gref.get).children.forM λ rref : RappRef => rref.setIrrelevant
 
 /-! ## Copying Trees -/
 
@@ -997,9 +1015,9 @@ def RappRef.checkUnificationGoalOrigins : RappRef → MetaM Unit :=
 
 def GoalRef.checkInvariantsIfEnabled (root : GoalRef) : MetaM Unit := do
   let (true) ← Check.tree.isEnabled | return ()
-  unless (← MutAltTree.hasConsistentParentChildLinks root) do
+  unless (← MATRef.hasConsistentParentChildLinks root) do
     throwError "{Check.tree.name}: search tree is not properly linked"
-  unless (← MutAltTree.isAcyclic root) do
+  unless (← MATRef.isAcyclic root) do
     throwError "{Check.tree.name}: search tree contains a cycle"
   root.checkIds
   root.checkUnificationGoalOrigins
