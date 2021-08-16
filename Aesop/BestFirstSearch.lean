@@ -5,7 +5,6 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 -- TODO If a 'finished' proof contains metavariables, what should we do?
--- TODO disable safe rules in the presence of unification goals
 
 import Aesop.Check
 import Aesop.Options
@@ -24,28 +23,46 @@ namespace Aesop
 structure ActiveGoal where
   goal : GoalRef
   successProbability : Percent
+  lastExpandedInIteration : Iteration
+    -- Iteration of the search loop when this goal was last expanded (counting
+    -- from 1), or 0 if the goal was never expanded.
+  addedInIteration : Iteration
+    -- Iteration of the search loop when this goal was added. 0 for the root
+    -- goal.
 
 namespace ActiveGoal
 
-instance : LT ActiveGoal where
-  lt g h := g.successProbability < h.successProbability
+-- We prioritise active goals lexicographically by the following criteria:
+--
+--  1. Goals with higher success probability have priority.
+--  2. Goals which were last expanded in an earlier iteration have priority.
+--  3. Goals which were added in an earlier iteration have priority.
+--
+-- The last two criteria ensure a very weak form of fairness: if a search
+-- produces infinitely many goals with the same success probability, each of
+-- them will be expanded infinitely often.
+--
+-- Note that since we use a min-queue, `le x y` means `x` has priority over `y`.
+protected def le (g h : ActiveGoal) : Bool :=
+  g.successProbability > h.successProbability ||
+    (g.successProbability == h.successProbability &&
+      (g.lastExpandedInIteration <= h.lastExpandedInIteration ||
+        (g.lastExpandedInIteration == h.lastExpandedInIteration &&
+          g.addedInIteration <= h.addedInIteration)))
 
-instance : DecidableRel (α := ActiveGoal) (· < ·) :=
-  λ g h =>
-    inferInstanceAs (Decidable (g.successProbability < h.successProbability))
-
-def ofGoalRef [Monad m] [MonadLiftT (ST IO.RealWorld) m] (gref : GoalRef) :
-    m ActiveGoal :=
+protected def ofGoalRef [Monad m] [MonadLiftT (ST IO.RealWorld) m]
+    (gref : GoalRef) : m ActiveGoal := do
+  let g ← gref.get
   return {
     goal := gref
-    successProbability := (← gref.get).successProbability
+    successProbability := g.successProbability
+    lastExpandedInIteration := g.lastExpandedInIteration
+    addedInIteration := g.addedInIteration
   }
 
 end ActiveGoal
 
-abbrev ActiveGoalQueue := BinomialHeap ActiveGoal (· > ·)
-  -- ActiveGoals are ordered by success probability. Here we want highest
-  -- success probability first.
+abbrev ActiveGoalQueue := BinomialHeap ActiveGoal ActiveGoal.le
 
 structure Context where
   ruleSet : RuleSet
@@ -57,16 +74,17 @@ structure State where
   activeGoals : ActiveGoalQueue
   nextGoalId : GoalId
   nextRappId : RappId
+  iteration : Iteration
   numGoals : Nat
-    -- As currently implemented, numGoals is exactly nextGoalId (and similar
-    -- for rapps). But these are conceptually different things, so we should
-    -- track them separately.
   numRapps : Nat
+    -- As currently implemented, we always have numGoals = nextGoalId and
+    -- iteration - 1 = nextRappId = numRapps. But these are conceptually
+    -- different things, so we should track them separately.
 
 def mkInitialContextAndState (rs : RuleSet) (options : Aesop.Options)
     (mainGoal : MVarId) : MetaM (Context × State) := do
   let rootGoal := Goal.mk none #[] $
-    GoalData.mkInitial GoalId.zero mainGoal Percent.hundred
+    GoalData.mkInitial GoalId.zero mainGoal Percent.hundred Iteration.none
   let rootGoalRef ← ST.mkRef rootGoal
   let ctx := {
     ruleSet := rs
@@ -74,10 +92,10 @@ def mkInitialContextAndState (rs : RuleSet) (options : Aesop.Options)
     mainGoal := mainGoal
     rootGoal := rootGoalRef }
   let state := {
-    activeGoals := BinomialHeap.empty.insert
-      { goal := rootGoalRef, successProbability := Percent.hundred }
+    activeGoals := BinomialHeap.singleton (← ActiveGoal.ofGoalRef rootGoalRef)
     nextGoalId := GoalId.one
     nextRappId := RappId.zero
+    iteration := Iteration.one
     numGoals := 1
     numRapps := 0 }
   return (ctx, state)
@@ -110,6 +128,9 @@ instance (priority := low) : MonadStateOf RappId SearchM :=
 
 instance (priority := low) : MonadStateOf ActiveGoalQueue SearchM :=
   MonadStateOf.ofLens State.activeGoals (λ x s => { s with activeGoals := x })
+
+instance (priority := low) : MonadStateOf Iteration SearchM :=
+  MonadStateOf.ofLens State.iteration (λ x s => { s with iteration := x })
 
 protected def run (ctx : Context) (state : State) (x : SearchM α) :
     MetaM (α × State) :=
@@ -152,9 +173,7 @@ def addGoal (g : GoalData) (parent : RappRef) : SearchM GoalRef := do
   let g := { g with id := id }
   let gref ← ST.mkRef $ Goal.mk (some parent) #[] g
   parent.modify λ r => r.addChild gref
-  pushActiveGoal
-    { goal := gref
-      successProbability := g.successProbability }
+  pushActiveGoal (← ActiveGoal.ofGoalRef gref)
   modify λ s => { s with numGoals := s.numGoals + 1 }
   return gref
 
@@ -168,8 +187,9 @@ def addGoals (goals : Array GoalData) (parent : RappRef) :
 
 def addGoals' (goals : Array MVarId) (successProbability : Percent)
     (parent : RappRef) : SearchM (Array GoalRef) := do
+  let i ← getThe Iteration
   let goals ← goals.mapM λ g =>
-    GoalData.mkInitial GoalId.dummy g successProbability
+    GoalData.mkInitial GoalId.dummy g successProbability i
   addGoals goals parent
 
 -- Overwrites the rapp ID and depth of `r`. Adds the `newUnificationGoals` as
@@ -308,11 +328,8 @@ def leastCommonUnificationGoalOrigin (unificationGoals : UnificationGoals) :
 
 def removeUnificationGoals (assigned : UnificationGoals)
     (unificationGoalOrigins : PersistentHashMap MVarId RappRef) :
-    PersistentHashMap MVarId RappRef := do
-  let mut ugo := unificationGoalOrigins
-  for (m, _, _) in assigned do
-    ugo := ugo.erase m
-  return ugo
+    PersistentHashMap MVarId RappRef :=
+  assigned.foldl (init := unificationGoalOrigins) λ ugo (m, _, _) => ugo.erase m
 
 -- For each pair `(m, e, _)` in `unificationGoals`, assigns `m := e` in the meta
 -- state of `rref` and removes `m` from the unification goals of `rref`. If `m`
@@ -347,24 +364,25 @@ mutual
       (assignUnificationGoalsInRappBranch unificationGoals)
 end
 
-def runCopyTreeT (x : TreeCopy.TreeCopyT SearchM α) : SearchM α := do
-  let (a, s) ← x.run' (← getThe GoalId) (← getThe RappId)
+def runCopyTreeT (afterAddGoal : GoalRef → GoalRef → SearchM Unit)
+    (afterAddRapp : RappRef → RappRef → SearchM Unit)
+    (x : TreeCopy.TreeCopyT SearchM α) : SearchM α := do
+  let (a, s) ←
+    x.run' afterAddGoal afterAddRapp (← getThe GoalId) (← getThe RappId)
   setThe GoalId s.nextGoalId
   setThe RappId s.nextRappId
   return a
 
 def copyRappBranch (root : RappRef) : SearchM RappRef := do
+  let currentIteration ← getThe Iteration
+  let afterAddGoal (oldGref : GoalRef) (newGref : GoalRef) : SearchM Unit := do
+        newGref.modify λ g =>
+          g.setAddedInIteration currentIteration
+          |>.setLastExpandedInIteration Iteration.none
+        pushActiveGoal (← ActiveGoal.ofGoalRef newGref)
   let parent := (← root.get).parent!
-  runCopyTreeT $ TreeCopy.copyRappTree parent root
-
-mutual
-  partial def addActiveGoalsFromGoalBranch (root : GoalRef) : SearchM Unit := do
-      pushActiveGoal (← ActiveGoal.ofGoalRef root)
-      (← root.get).rapps.forM addActiveGoalsFromRappBranch
-
-  partial def addActiveGoalsFromRappBranch (root : RappRef) : SearchM Unit := do
-    (← root.get).subgoals.forM addActiveGoalsFromGoalBranch
-end
+  runCopyTreeT afterAddGoal (λ _ _ => pure ()) $
+    TreeCopy.copyRappTree parent root
 
 -- If a rule assigned one or more unification goals, this function makes the
 -- necessary adjustments to the search tree:
@@ -392,7 +410,6 @@ def processUnificationGoalAssignment (parent : GoalRef)
   let newBranchRoot ← copyRappBranch oldBranchRoot
   aesop_trace[steps] "The root of the copied branch has ID {(← newBranchRoot.get).id}."
   assignUnificationGoalsInRappBranch assignedUGoals oldBranchRoot
-  addActiveGoalsFromRappBranch newBranchRoot
   return removeUnificationGoals assignedUGoals parentUGoalOrigins
 
 inductive RuleResult
@@ -520,8 +537,6 @@ def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
 def expandGoal (gref : GoalRef) : SearchM Bool := do
   let (false) ← normalizeGoalIfNecessary gref |
     -- Goal was already proven by normalisation.
-    -- TODO at least in this case, we must make sure that ugoal assignments
-    -- are propagated or disallowed.
     return false
   if ← (← gref.get).hasUnificationGoal then
     aesop_trace[steps] "Goal contains unification goals. Treating safe rules as unsafe."
@@ -551,6 +566,8 @@ def expandNextGoal : SearchM Unit := do
     aesop_trace[steps] "Skipping goal since it is beyond the maximum rule application depth."
     gref.setUnprovableUnconditionallyAndSetDescendantsIrrelevant
     return ()
+  let currentIteration ← getThe Iteration
+  gref.modify λ g => g.setLastExpandedInIteration currentIteration
   let hasMoreRules ← expandGoal gref
   if hasMoreRules then
     pushActiveGoal (← ActiveGoal.ofGoalRef gref)
@@ -631,6 +648,7 @@ def checkRappLimit : SearchM Unit := do
     "aesop: maximum number of rule applications ({maxRapps}) reached. Set the maxRuleApplications option to increase the limit."
 
 partial def searchLoop : SearchM Unit := do
+  aesop_trace[steps] "=== Search loop iteration {← getThe Iteration}"
   let root ← readRootGoal
   let (false) ← pure (← root.get).isUnprovable
     | throwError "aesop: failed to prove the goal"
@@ -645,6 +663,7 @@ partial def searchLoop : SearchM Unit := do
       ag.goal.toMessageData traceMods
     m!"Current active goals:{MessageData.node activeGoalMsgs}"
   (← readRootGoal).checkInvariantsIfEnabled
+  modifyThe Iteration λ i => i.succ
   searchLoop
 
 def search (rs : RuleSet) (options : Aesop.Options) (mainGoal : MVarId) :

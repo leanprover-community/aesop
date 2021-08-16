@@ -96,6 +96,55 @@ instance : Hashable RappId where
 end RappId
 
 
+/-! ## Iterations -/
+
+def Iteration := Nat
+
+namespace Iteration
+
+@[inline]
+private def toNat : Iteration → Nat :=
+  id
+
+@[inline]
+private def ofNat : Nat → Iteration :=
+  id
+
+@[inline]
+protected def one : Iteration :=
+  ofNat 1
+
+@[inline]
+protected def succ (i : Iteration) : Iteration :=
+  ofNat $ i.toNat + 1
+
+protected def none : Iteration :=
+  ofNat 0
+
+instance : Inhabited Iteration :=
+  ⟨ofNat arbitrary⟩
+
+instance : DecidableEq Iteration :=
+  inferInstanceAs $ DecidableEq Nat
+
+instance : ToString Iteration :=
+  inferInstanceAs $ ToString Nat
+
+instance : LT Iteration :=
+  inferInstanceAs $ LT Nat
+
+instance : LE Iteration :=
+  inferInstanceAs $ LE Nat
+
+instance : DecidableRel (α := Iteration) (· < ·) :=
+  inferInstanceAs $ DecidableRel (α := Nat) (· < ·)
+
+instance : DecidableRel (α := Iteration) (· ≤ ·) :=
+  inferInstanceAs $ DecidableRel (α := Nat) (· ≤ ·)
+
+end Iteration
+
+
 /-! ## Goal Nodes and Rule Applications -/
 
 inductive ProofStatus
@@ -122,6 +171,9 @@ structure GoalData : Type where
   id : GoalId
   goal : MVarId
   successProbability : Percent
+  addedInIteration : Iteration
+  lastExpandedInIteration : Iteration
+    -- Iteration 0 means the node has never been expanded.
   failedRapps : List RegularRule
   unsafeQueue : Option (List UnsafeRule)
   proofStatus : ProofStatus
@@ -149,6 +201,7 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
         m!"proven: {g.isProven.toYesNo} | ",
         m!"unprovable: {g.isUnprovable.toYesNo} | ",
         m!"irrelevant: {g.isIrrelevant.toYesNo}" ],
+    m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration}",
     if ¬ traceMods.goals then none else
       m!"Goal:{indentD $ ofGoal g.goal}",
     if ¬ traceMods.unsafeQueues || g.unsafeQueue.isNone then none else
@@ -157,9 +210,11 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
       m!"Failed rule applications:{indentDUnlines $ g.failedRapps.map toMessageData}" ]
 
 protected def mkInitial (id : GoalId) (goal : MVarId)
-    (successProbability : Percent) : GoalData where
+    (successProbability : Percent) (addedInIteration : Iteration) : GoalData where
   id := id
   goal := goal
+  addedInIteration := addedInIteration
+  lastExpandedInIteration := Iteration.none
   successProbability := successProbability
   failedRapps := []
   unsafeQueue := none
@@ -386,6 +441,14 @@ def successProbability (g : Goal) : Percent :=
   g.payload.successProbability
 
 @[inline]
+def addedInIteration (g : Goal) : Iteration :=
+  g.payload.addedInIteration
+
+@[inline]
+def lastExpandedInIteration (g : Goal) : Iteration :=
+  g.payload.lastExpandedInIteration
+
+@[inline]
 def failedRapps (g : Goal) : List RegularRule :=
   g.payload.failedRapps
 
@@ -426,6 +489,15 @@ def setGoal (goal : MVarId) (g : Goal) : Goal :=
 @[inline]
 def setSuccessProbability (successProbability : Percent) (g : Goal) : Goal :=
   g.modifyPayload λ d => { d with successProbability := successProbability }
+
+@[inline]
+def setAddedInIteration (addedInIteration : Iteration) (g : Goal) : Goal :=
+  g.modifyPayload λ d => { d with addedInIteration := addedInIteration }
+
+def setLastExpandedInIteration (lastExpandedInIteration : Iteration) (g : Goal) :
+    Goal :=
+  g.modifyPayload λ d =>
+    { d with lastExpandedInIteration := lastExpandedInIteration }
 
 @[inline]
 def setFailedRapps (failedRapps : List RegularRule) (g : Goal) : Goal :=
@@ -834,29 +906,42 @@ def GoalRef.setUnprovableUnconditionallyAndSetDescendantsIrrelevant
 
 namespace TreeCopy
 
+structure Context (m : Type → Type _) where
+  -- Hook which is called after a goal has been copied. Receives the old and new
+  -- goal. Note: the new goal does not yet have any child rapps when this hook
+  -- is called.
+  afterAddGoal : GoalRef → GoalRef → m Unit
+  -- Hook which is called after a rapp has been copied. Receives the old and new
+  -- rapp. Note: the new rapp does not yet have any subgoals when this hook is
+  -- called.
+  afterAddRapp : RappRef → RappRef → m Unit
+
 structure State where
   nextGoalId : GoalId
   nextRappId : RappId
   goalMap : HashMap GoalId GoalRef
   rappMap : HashMap RappId RappRef
 
-abbrev TreeCopyT := StateRefT' IO.RealWorld State
+abbrev TreeCopyT m := StateRefT' IO.RealWorld State $ ReaderT (Context m) m
 
 namespace TreeCopyT
 
-def run (s : State) (x : TreeCopyT m α) : m (α × State) :=
-  StateRefT'.run x s
+def run (ctx : Context m) (s : State) (x : TreeCopyT m α) : m (α × State) :=
+  StateRefT'.run x s |>.run ctx
 
-def run' (nextGoalId : GoalId) (nextRappId : RappId) (x : TreeCopyT m α) :
-    m (α × State) :=
+def run' (afterAddGoal : GoalRef → GoalRef → m Unit)
+    (afterAddRapp : RappRef → RappRef → m Unit) (nextGoalId : GoalId)
+    (nextRappId : RappId) (x : TreeCopyT m α) : m (α × State) :=
   x.run
+    { afterAddGoal := afterAddGoal
+      afterAddRapp := afterAddRapp }
     { nextGoalId := nextGoalId,
       nextRappId := nextRappId,
       goalMap := HashMap.empty,
       rappMap := HashMap.empty }
 
 instance [AddErrorMessageContext m] : AddErrorMessageContext (TreeCopyT m) where
-  add := λ stx msg => StateRefT'.lift $ AddErrorMessageContext.add stx msg
+  add := λ stx msg => liftM (AddErrorMessageContext.add stx msg : m _)
 
 end TreeCopyT
 
@@ -893,11 +978,12 @@ mutual
       Goal.mk (some parent) #[] { g.payload with id := newGoalId }
     modify λ s => { s with goalMap := s.goalMap.insert g.id newGoalRef }
     parent.modify λ r => r.addChild newGoalRef
+    (← read).afterAddGoal gref newGoalRef
     g.rapps.forM λ rref => discard $ copyRappTree newGoalRef rref
     return newGoalRef
 
   -- Copies `rref` and all its descendants. The copy of `rref` becomes a child
-  -- of `parent`. Returns the copy of `gref`.
+  -- of `parent`. Returns the copy of `rref`.
   partial def copyRappTree (parent : GoalRef) (rref : RappRef) :
       TreeCopyT m RappRef := do
     let r ← rref.get
@@ -909,19 +995,26 @@ mutual
       return r.setUnificationGoalOrigins
         (← adjustUnificationGoalOrigins r.unificationGoalOrigins)
     parent.modify λ g => g.addChild newRappRef
+    (← read).afterAddRapp rref newRappRef
     r.subgoals.forM λ gref => discard $ copyGoalTree newRappRef gref
     return newRappRef
 end
 
 end TreeCopy
 
-def GoalRef.copyTree (nextGoalId : GoalId) (nextRappId : RappId)
-  (parent : RappRef) (gref : GoalRef) : m (GoalRef × TreeCopy.State) := do
-  TreeCopy.copyGoalTree parent gref |>.run' nextGoalId nextRappId
+def GoalRef.copyTree (afterAddGoal : GoalRef → GoalRef → m Unit)
+    (afterAddRapp : RappRef → RappRef → m Unit) (nextGoalId : GoalId)
+    (nextRappId : RappId) (parent : RappRef) (gref : GoalRef) :
+    m (GoalRef × TreeCopy.State) := do
+  TreeCopy.copyGoalTree parent gref |>.run'
+    afterAddGoal afterAddRapp nextGoalId nextRappId
 
-def RappRef.copyTree (nextGoalId : GoalId) (nextRappId : RappId)
-  (parent : GoalRef) (rref : RappRef) : m (RappRef × TreeCopy.State) := do
-  TreeCopy.copyRappTree parent rref |>.run' nextGoalId nextRappId
+def RappRef.copyTree (afterAddGoal : GoalRef → GoalRef → m Unit)
+    (afterAddRapp : RappRef → RappRef → m Unit) (nextGoalId : GoalId)
+    (nextRappId : RappId) (parent : GoalRef) (rref : RappRef) :
+    m (RappRef × TreeCopy.State) := do
+  TreeCopy.copyRappTree parent rref |>.run'
+    afterAddGoal afterAddRapp nextGoalId nextRappId
 
 
 /-! ## Checking Invariants -/
@@ -987,7 +1080,6 @@ def GoalRef.checkIds (gref : GoalRef) : m Unit :=
 def RappRef.checkIds (rref : RappRef) : m Unit :=
   CheckIdInvariant.checkIds (Sum.inr rref) |>.run
 
--- TODO check whether the unification goal origins are correct
 mutual
   private partial def checkUnificationGoalOriginsGoal (gref : GoalRef) :
       MetaM Unit := do
