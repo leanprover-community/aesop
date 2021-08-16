@@ -14,7 +14,7 @@ Invariant: between 0 and 0.1
 -/
 structure Percent where
   toFloat : Float
-  deriving Inhabited, BEq
+  deriving Inhabited
 
 namespace Percent
 
@@ -32,6 +32,12 @@ instance : DecidableRel (α := Percent) (· < ·) :=
 
 instance : ToString Percent where
   toString p := toString p.toFloat
+
+def δ : Percent :=
+  ⟨0.00001⟩
+
+instance : BEq Percent where
+  beq | ⟨p⟩, ⟨q⟩ => if p > q then p - q < δ.toFloat else q - p < δ.toFloat
 
 def ninety : Percent :=
   ⟨0.9⟩
