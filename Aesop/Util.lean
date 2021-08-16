@@ -421,25 +421,6 @@ def isDeclaredMVar (mvarId : MVarId) : MetaM Bool := do
 end Lean.Meta
 
 
-namespace Std.BinomialHeap
-
-@[inline]
-def removeMin {lt} (h : BinomialHeap α lt) : Option (α × BinomialHeap α lt) :=
-  match h.head? with
-  | some hd => some (hd, h.tail)
-  | none => none
-
-partial def toArray {lt} (h : BinomialHeap α lt) : Array α :=
-  go #[] h
-  where
-    go (acc : Array α) (h : BinomialHeap α lt) : Array α :=
-      match h.head? with
-      | none => acc
-      | some hd => go (acc.push hd) h.tail
-
-end Std.BinomialHeap
-
-
 namespace MonadStateOf
 
 @[inline]

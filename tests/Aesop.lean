@@ -17,12 +17,12 @@ open Lean.Elab.Tactic
 section EvenOdd
 
 inductive Even : Nat → Prop
-| zero : Even Nat.zero
-| plus_two {n} : Even n → Even (Nat.succ (Nat.succ n))
+| zero : Even 0
+| plus_two {n} : Even n → Even (n + 2)
 
 inductive Odd : Nat → Prop
-| one : Odd (Nat.succ Nat.zero)
-| plus_two {n} : Odd n → Odd (Nat.succ (Nat.succ n))
+| one : Odd 1
+| plus_two {n} : Odd n → Odd (n + 2)
 
 inductive EvenOrOdd : Nat → Prop
 | even {n} : Even n → EvenOrOdd n

@@ -139,7 +139,7 @@ def getAndIncrementNextRappId : SearchM RappId := do
 
 def popActiveGoal : SearchM (Option ActiveGoal) := do
   let q ← getThe ActiveGoalQueue
-  let (some (ag, q)) ← pure q.removeMin | return none
+  let (some (ag, q)) ← pure q.deleteMin | return none
   setThe ActiveGoalQueue q
   return some ag
 
