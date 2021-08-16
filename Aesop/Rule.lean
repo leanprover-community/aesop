@@ -312,15 +312,15 @@ instance : EmptyCollection RuleSet :=
 open RuleSetMember' in
 def add (rs : RuleSet) : RuleSetMember → RuleSet
   | normRule r =>
-    return { rs with normRules := (← rs.normRules.add r r.indexingMode) }
+    { rs with normRules := rs.normRules.add r r.indexingMode }
   | normSimpEntries es =>
-    return { rs with
+    { rs with
       normSimpLemmas :=
         es.foldl (init := rs.normSimpLemmas) SimpLemmas.addSimpEntry }
   | unsafeRule r =>
-    return { rs with unsafeRules := (← rs.unsafeRules.add r r.indexingMode )}
+    { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
   | safeRule r =>
-    return { rs with safeRules := (← rs.safeRules.add r r.indexingMode) }
+    { rs with safeRules := rs.safeRules.add r r.indexingMode }
 
 def addArray (rs : RuleSet) (ra : Array RuleSetMember) : RuleSet :=
   ra.foldl add rs
