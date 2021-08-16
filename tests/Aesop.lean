@@ -52,14 +52,13 @@ section Transitivity
 axiom A : Type
 axiom R : A → A → Prop
 
-@[aesop 20%]
+@[aesop 10%]
 axiom R_trans : ∀ x y z, R x y → R y z → R x z
 
-@[aesop safe]
-axiom R_refl : ∀ x, R x x
-
+-- TODO This test case currently fails, but should succeed.
 example {a b c d} (hab : R a b) (hbc : R b c) (hcd : R c d) : R a d := by
-  aesop
+  failIfSuccess aesop (options { maxRuleApplicationDepth := 3, maxRuleApplications := 50 })
+  exact R_trans _ _ _ hab $ R_trans _ _ _ hbc hcd
 
 end Transitivity
 

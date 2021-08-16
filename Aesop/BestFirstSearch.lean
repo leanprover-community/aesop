@@ -485,8 +485,7 @@ def selectUnsafeRules (gref : GoalRef) (includeSafeRules : Bool) :
           let (safeRules, _) ← g.runMetaMInParentState $
             ruleSet.applicableSafeRules g.goal
           let rules := safeRules.map (·.asUnsafeRule) ++ unsafeRules
-          -- TODO sort combined rules (this currently makes a test case loop)
-          -- let rules := rules.qsort (· < ·) -- TODO stable merge for efficiency
+          let rules := rules.qsort (· < ·) -- TODO stable merge for efficiency
           aesop_trace[steps] "Selected unsafe rules (including safe rules treated as unsafe):{MessageData.node $ rules.map toMessageData}"
           pure rules.toList
           -- TODO these toList conversions make me sad. More efficient: treat
