@@ -67,11 +67,13 @@ end Transitivity
 -- An intentionally looping Aesop call, to test the limiting options
 section Loop
 
-set_option maxHeartbeats 0 in
-example (h : α → α) : α := by
-  try aesop (safe [h]) (options { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0 })
-  try aesop (safe [h]) (options { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0 })
-  try aesop (safe [h]) (options { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0 })
-  admit
+structure Wrap (α) where
+  unwrap : α
+
+example (h : α → α) (h' : Wrap α) : α := by
+  failIfSuccess aesop (safe [h]) (options { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0 })
+  failIfSuccess aesop (safe [h]) (options { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0 })
+  failIfSuccess aesop (safe [h]) (options { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0 })
+  exact h'.unwrap
 
 end Loop
