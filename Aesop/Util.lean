@@ -213,6 +213,27 @@ instance [BEq α] [Hashable α] : ForIn m (PersistentHashMap α β) (α × β) w
 end Std.PersistentHashMap
 
 
+namespace Prod.Lex
+
+instance [αeq_dec : DecidableEq α] {r : α → α → Prop} [r_dec : DecidableRel r]
+    {s : β → β → Prop} [s_dec : DecidableRel s] : DecidableRel (Lex r s)
+  | (a, b), (a', b') => by
+    cases r_dec a a' with
+    | isTrue raa' => exact isTrue $ left b b' raa'
+    | isFalse nraa' =>
+      cases αeq_dec a a' with
+      | isTrue eq =>
+        subst eq
+        cases s_dec b b' with
+        | isTrue sbb' => exact isTrue $ right a sbb'
+        | isFalse nsbb' =>
+          apply isFalse; intro contra; cases contra <;> contradiction
+      | isFalse neqaa' =>
+        apply isFalse; intro contra; cases contra <;> contradiction
+
+end Prod.Lex
+
+
 namespace Lean.Meta.DiscrTree.Trie
 
 unsafe def foldMUnsafe [Monad m] (initialKeys : Array Key)
