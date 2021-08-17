@@ -174,14 +174,15 @@ def visitUp'
 
 /-! ### Checking Invariants -/
 
+-- Returns true if the parent pointers of all descendants of `tref` actually
+-- point to their parent nodes.
 partial def hasConsistentParentChildLinks (tref : MATRef σ ω α) : m Bool := do
-  let t ← tref.get
-  let consistent ←
-    match t.parent with
-    | none => pure true
-    | some parentRef =>
-      (← parentRef.get).children.anyM λ c => c.ptrEq tref
-  pure consistent <&&> t.children.allM hasConsistentParentChildLinks
+  (← tref.get).children.allM λ childRef => do
+    let (some parentRef) ← pure (← childRef.get).parent
+      | return false
+    if ← parentRef.ptrEq tref
+      then hasConsistentParentChildLinks childRef
+      else return false
 
 partial def isAcyclic (tref : MATRef σ ω α) : m Bool :=
   return (← go #[] #[] tref).fst
