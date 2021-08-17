@@ -104,7 +104,7 @@ def toList [BEq α] [Hashable α] (s : PersistentHashSet α) : List α :=
 -- Elements are returned in unspecified order. (In fact, they are currently
 -- returned in reverse order of `toList`.)
 def toArray [BEq α] [Hashable α] (s : PersistentHashSet α) : Array α :=
-  s.fold (init := #[]) λ as a => as.push a
+  s.fold (init := Array.mkEmpty s.size) λ as a => as.push a
 
 end Std.PersistentHashSet
 
