@@ -15,14 +15,20 @@ namespace Aesop.DefaultRules
 
 def assumption : RuleTac := λ input => do
   Lean.Meta.assumption input.goal
-  return { regularGoals := #[], unificationGoals := #[] }
+  let postState ← saveState
+  let ro := {
+    regularGoals := #[]
+    unificationGoals := #[]
+    postState := postState
+  }
+  return #[ro]
 
 -- TODO avoid TacticM
 def intros : TacticM Unit := do
   evalTactic (← `(tactic|intros))
 
 def splitHyps : UserRuleTac := λ input =>
-  return { goals := #[(← splitAllHyps input.goal).snd] }
+  return { regularGoals := #[(← splitAllHyps input.goal).snd] }
 
 end DefaultRules
 

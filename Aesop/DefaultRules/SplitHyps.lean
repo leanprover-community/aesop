@@ -166,12 +166,14 @@ partial def splitHypCore (goal : MVarId) (originalUserName : Name)
       let newHyps := (if cleared then #[] else #[hyp]) ++ newHyps
       return (newHyps, goal)
 
-def splitHyp (goal : MVarId) (hyp : FVarId) : MetaM (Array FVarId × MVarId) :=
+def splitHyp (goal : MVarId) (hyp : FVarId) : MetaM (Array FVarId × MVarId) := do
+  checkNotAssigned goal `splitHyp
   withMVarContext goal do
     let decl ← getLocalDecl hyp
     splitHypCore goal decl.userName #[] hyp decl.type
 
 def splitAllHyps (goal : MVarId) : MetaM (Array FVarId × MVarId) := do
+  checkNotAssigned goal `splitAllHyps
   let lctx := (← getMVarDecl goal).lctx
   let mut goal := goal
   let mut newHyps := #[]

@@ -29,9 +29,11 @@ structure RuleTacInput where
 --    another goal), then it must appear in `unificationGoals`. Non-dependent
 --    metavariables are technically allowed to appear in `unificationGoals`, but
 --    are very unlikely to be solved.
+-- - `postState`: the `MetaM` state after the rule was applied.
 structure RuleTacOutput where
   regularGoals : Array MVarId
   unificationGoals : Array MVarId
+  postState : Meta.SavedState
   deriving Inhabited
 
 -- When users want to register a tactic, they may not want to compute all the
@@ -39,8 +41,8 @@ structure RuleTacOutput where
 -- `UserRuleTacOutput`, omitting some data, which Aesop then computes for them
 -- (possibly inefficiently since Aesop does not know what the user tactic did).
 structure UserRuleTacOutput where
-  goals : Array MVarId
-  dependentGoals : Option (Array MVarId) := none
+  regularGoals : Array MVarId
+  unificationGoals : Option (Array MVarId) := none
   deriving Inhabited
 
 @[inline]
@@ -66,10 +68,15 @@ def nondependentAndDependentMVars (ms : Array MVarId) :
 
 def UserRuleTacOutput.toRuleTacOutput (o : UserRuleTacOutput) :
     MetaM RuleTacOutput := do
-  let (regularGoals, unificationGoals) ← nondependentAndDependentMVars o.goals
-  return { regularGoals := regularGoals, unificationGoals := unificationGoals }
+  let postState ← saveState
+  let (regularGoals, unificationGoals) ←
+    nondependentAndDependentMVars o.regularGoals
+  return {
+    regularGoals := regularGoals
+    unificationGoals := unificationGoals
+    postState := postState }
 
-abbrev RuleTac := RuleTacInput → MetaM RuleTacOutput
+abbrev RuleTac := RuleTacInput → MetaM (Array RuleTacOutput)
 
 abbrev UserRuleTac := RuleTacInput → MetaM UserRuleTacOutput
 
@@ -108,8 +115,8 @@ unsafe def ofTacticMUnitConstUnsafe (decl : Name) : MetaM RuleTac := do
       -- directly after `checkDeclType`, but this fails when
       -- `ofTacticMUnitConstUnsafe` is called by the `@[aesop]` attribute.
     let goals ← runTacticMAsMetaM tac input.goal
-    let o : UserRuleTacOutput := { goals := goals.toArray }
-    o.toRuleTacOutput
+    let o : UserRuleTacOutput := { regularGoals := goals.toArray }
+    #[← o.toRuleTacOutput]
 
 @[implementedBy ofTacticMUnitConstUnsafe]
 constant ofTacticMUnitConst : Name → MetaM RuleTac
@@ -129,20 +136,21 @@ unsafe def ofUserRuleTacConstUnsafe (decl : Name) : MetaM RuleTac := do
   return λ input => do
     let tac ← evalConst UserRuleTac decl
       -- See note about `evalConst` in `ofTacticMUnitConstUnsafe`.
-    (← tac input).toRuleTacOutput
+    return #[← (← tac input).toRuleTacOutput]
 
 @[implementedBy ofUserRuleTacConstUnsafe]
 constant ofUserRuleTacConst : Name → MetaM RuleTac
 
 def applyConst (decl : Name) : RuleTac := λ input => do
   let goals ← apply input.goal (← mkConstWithFreshMVarLevels decl)
-  UserRuleTacOutput.toRuleTacOutput { goals := goals.toArray }
+  return #[← UserRuleTacOutput.toRuleTacOutput { regularGoals := goals.toArray }]
   -- TODO optimise dependent goal analysis
 
-def applyFVar (userName : Name) : RuleTac := λ input => do
-  let decl ← getLocalDeclFromUserName userName
-  let goals ← apply input.goal (mkFVar decl.fvarId)
-  UserRuleTacOutput.toRuleTacOutput { goals := goals.toArray }
+def applyFVar (userName : Name) : RuleTac := λ input =>
+  withMVarContext input.goal do
+    let decl ← getLocalDeclFromUserName userName
+    let goals ← apply input.goal (mkFVar decl.fvarId)
+    return #[← UserRuleTacOutput.toRuleTacOutput { regularGoals := goals.toArray }]
   -- TODO ditto
 
 end RuleTac

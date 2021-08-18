@@ -496,6 +496,7 @@ end Lean.Syntax
 
 namespace Lean
 
+open Lean.Elab
 open Lean.Elab.Tactic
 
 def runTacticMAsMetaM (tac : TacticM Unit) (goal : MVarId) :
@@ -512,6 +513,9 @@ def runMetaMAsImportM (x : MetaM α) : ImportM α := do
 
 def runMetaMAsCoreM (x : MetaM α) : CoreM α :=
   Prod.fst <$> x.run {} {}
+
+def runTermElabMAsMetaM (x : TermElabM α) : MetaM α :=
+  x.run'
 
 end Lean
 
