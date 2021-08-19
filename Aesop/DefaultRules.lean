@@ -19,9 +19,6 @@ namespace Aesop.DefaultRules
 def intros : TacticM Unit := do
   evalTactic (← `(tactic|intros))
 
-def splitHyps : UserRuleTac := λ input =>
-  return { regularGoals := #[(← splitAllHyps input.goal).snd] }
-
 end DefaultRules
 
 -- TODO As soon as the Aesop rule supports named rule sets, we can just

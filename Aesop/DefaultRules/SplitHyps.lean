@@ -3,11 +3,11 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-import Lean
+import Aesop.RuleTac
 
 open Lean
 
-namespace Aesop.DefaultRules
+namespace Aesop.DefaultRules.SplitHyps
 
 -- We define the `splitHyp` tactic, which splits hypotheses that are products
 -- or existentials. It recurses into nested products, so `A ∧ B ∧ C` is split
@@ -118,7 +118,10 @@ partial def splitHypCore (goal : MVarId) (originalUserName : Name)
         splitHypCore goal originalUserName binderFVars leftHyp  leftType
       let (rightHyps, goal) ←
         splitHypCore goal originalUserName binderFVars rightHyp rightType
-      let newHyps := (if cleared then #[] else #[hyp]) ++ leftHyps ++ rightHyps
+      let newHyps :=
+        if cleared
+          then leftHyps ++ rightHyps
+          else (leftHyps ++ rightHyps).push hyp
       return (newHyps, goal)
 
     splitExistential (oldGoal : MVarId)
@@ -163,25 +166,34 @@ partial def splitHypCore (goal : MVarId) (originalUserName : Name)
       let (newHyps, goal) ←
         splitHypCore goal originalUserName binderFVars propertyHyp
           propertyHypTypeWithoutBinders
-      let newHyps := (if cleared then #[] else #[hyp]) ++ newHyps
+      let newHyps :=
+        if cleared then newHyps else newHyps.push hyp
       return (newHyps, goal)
 
 def splitHyp (goal : MVarId) (hyp : FVarId) : MetaM (Array FVarId × MVarId) := do
-  checkNotAssigned goal `splitHyp
+  checkNotAssigned goal `Aesop.DefaultRules.SplitHyps.splitHyp
   withMVarContext goal do
     let decl ← getLocalDecl hyp
     splitHypCore goal decl.userName #[] hyp decl.type
 
-def splitAllHyps (goal : MVarId) : MetaM (Array FVarId × MVarId) := do
-  checkNotAssigned goal `splitAllHyps
+def splitHyps (goal : MVarId) : MetaM (Array FVarId × MVarId) := do
+  checkNotAssigned goal `Aesop.DefaultRules.SplitHyps.splitHyps
   let lctx := (← getMVarDecl goal).lctx
   let mut goal := goal
-  let mut newHyps := #[]
-  for hyp in lctx do
-    if hyp.isAuxDecl then continue
-    let (newHyps', goal') ← splitHyp goal hyp.fvarId
-    newHyps := newHyps ++ newHyps'
+  let mut newHypsList := Array.mkEmpty lctx.decls.size
+  let mut numNewHyps := 0
+  for localDecl in lctx do
+    if localDecl.isAuxDecl then continue
+    let (newHyps, goal') ← splitHyp goal localDecl.fvarId
+    newHypsList := newHypsList.push newHyps
+    numNewHyps := numNewHyps + newHyps.size
     goal := goal'
+  let newHyps := newHypsList.foldl (init := Array.mkEmpty numNewHyps) (· ++ ·)
   return (newHyps, goal)
+
+end SplitHyps
+
+def splitHyps : UserRuleTac := λ input =>
+  return { regularGoals := #[(← SplitHyps.splitHyps input.goal).snd] }
 
 end Aesop.DefaultRules

@@ -6,14 +6,14 @@ Authors: Jannis Limperg
 import Lean
 import Aesop
 
-open Aesop.DefaultRules (splitAllHyps)
+open Aesop.DefaultRules.SplitHyps (splitHyps)
 open Lean.Elab.Tactic
 
 syntax (name := splitHyps) "splitHyps" : tactic
 
 @[tactic splitHyps]
 def evalSplitHyps : Tactic := λ _ => liftMetaTactic λ goal =>
-  return [(← splitAllHyps goal).snd]
+  return [(← splitHyps goal).snd]
 
 -- Note: the names of generated hypotheses are more or less arbitrary and should
 -- not be relied upon.
