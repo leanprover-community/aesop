@@ -473,9 +473,13 @@ end ST.Ref
 namespace Lean.Meta
 
 def instantiateMVarsInMVarType (mvarId : MVarId) : MetaM Expr := do
-  let type ← instantiateMVars (← getMVarDecl mvarId).type
-  setMVarType mvarId type
-  return type
+  let type := (← getMVarDecl mvarId).type
+  if type.hasMVar then
+    let type ← instantiateMVars type
+    setMVarType mvarId type
+    return type
+  else
+    return type
 
 def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
     MetaM Expr := do
