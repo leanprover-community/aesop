@@ -76,3 +76,9 @@ example (h : α → α) (h' : Wrap α) : α := by
   exact h'.unwrap
 
 end Loop
+
+
+-- This example tests the builtin rule that applies local hypotheses.
+example (Even : Nat → Prop) (zero : Even 0)
+    (plusTwo : ∀ n, Even n → Even (n + 2)) : Even 20 := by
+  aesop

@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.DefaultRules.Assumption
+import Aesop.DefaultRules.ApplyHyps
 import Aesop.DefaultRules.SplitHyps
 import Aesop.Config
 
@@ -13,17 +15,7 @@ open Lean.Elab.Tactic
 
 namespace Aesop.DefaultRules
 
-def assumption : RuleTac := λ input => do
-  Lean.Meta.assumption input.goal
-  let postState ← saveState
-  let ro := {
-    regularGoals := #[]
-    unificationGoals := #[]
-    postState := postState
-  }
-  return #[ro]
-
--- TODO avoid TacticM
+-- TODO avoid TacticM?
 def intros : TacticM Unit := do
   evalTactic (← `(tactic|intros))
 
@@ -36,9 +28,13 @@ end DefaultRules
 -- tag the above tactics with `@[aesop ... (rule_set default)]` or something.
 def defaultRules : TermElabM (Array RuleSetMember) := do
   mkRules #[
-    (``DefaultRules.assumption, ← `(attr|aesop safe 0)),
+    (``DefaultRules.assumption, ← `(attr|aesop safe -50)),
+      -- The assumption rule is subsumed by applyHyps. But we still want to have
+      -- it separately as a low-penalty safe rule so that very easy goals are
+      -- discharged immediately.
     (``DefaultRules.intros    , ← `(attr|aesop norm -1)),
-    (``DefaultRules.splitHyps , ← `(attr|aesop norm 0)) ]
+    (``DefaultRules.splitHyps , ← `(attr|aesop norm 0)),
+    (``DefaultRules.applyHyps , ← `(attr|aesop 75%))]
   where
     mkRule (decl : Name) (configStx : Syntax) : TermElabM RuleSetMember := do
       let config ← RuleConfig.parse configStx

@@ -477,6 +477,19 @@ def instantiateMVarsInMVarType (mvarId : MVarId) : MetaM Expr := do
   setMVarType mvarId type
   return type
 
+def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
+    MetaM Expr := do
+  let mdecl ← getMVarDecl mvarId
+  let (some ldecl) ← mdecl.lctx.find? fvarId | throwError
+    "unknown local constant {fvarId} (in local context of metavariable ?{mvarId})"
+  let type ← instantiateMVars ldecl.type
+  let mdecl :=
+    { mdecl with
+      lctx := mdecl.lctx.modifyLocalDecl fvarId λ ldecl => ldecl.setType type }
+  modify λ s =>
+    { s with mctx := { s.mctx with decls := s.mctx.decls.insert mvarId mdecl } }
+  return type
+
 end Lean.Meta
 
 
