@@ -104,6 +104,9 @@ abbrev SearchM := ReaderT Context $ StateRefT State MetaM
 
 namespace SearchM
 
+instance : Inhabited (SearchM α) where
+  default := throwError ""
+
 -- Make the compiler generate specialized `pure`/`bind` so we do not have to
 -- optimize through the whole monad stack at every use site.
 instance : Monad SearchM := { inferInstanceAs (Monad SearchM) with }
@@ -528,8 +531,7 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
 
 def runFirstSafeRule (gref : GoalRef) : SearchM RuleResult := do
   let g ← gref.get
-  let (none) ← g.unsafeQueue
-    | return RuleResult.failed
+  let (false) ← g.unsafeRulesSelected | return RuleResult.failed
     -- If the unsafe rules have been selected, we have already tried all the
     -- safe rules.
   let ruleSet ← readThe RuleSet
@@ -550,9 +552,9 @@ def SafeRule.asUnsafeRule (r : SafeRule) : UnsafeRule where
   extra := { successProbability := Percent.ninety }
 
 def selectUnsafeRules (gref : GoalRef) (includeSafeRules : Bool) :
-    SearchM (List (IndexMatchResult UnsafeRule)) := do
+    SearchM UnsafeQueue := do
   let g ← gref.get
-  match g.unsafeQueue with
+  match g.unsafeQueue? with
   | some rules => return rules
   | none => do
     let ruleSet ← readThe RuleSet
@@ -568,34 +570,35 @@ def selectUnsafeRules (gref : GoalRef) (includeSafeRules : Bool) :
           let rules := rules.qsort (· < ·)
             -- TODO stable merge for efficiency
           aesop_trace[steps] "Selected unsafe rules (including safe rules treated as unsafe):{MessageData.node $ rules.map toMessageData}"
-          pure rules.toList
-          -- TODO these toList conversions make me sad. More efficient: treat
-          -- the selected unsafe rules as an array and the unsafe queue as a
-          -- subarray (or just an index).
+          pure rules
       else
         aesop_trace[steps] "Selected unsafe rules:{MessageData.node $ unsafeRules.map toMessageData}"
-        pure unsafeRules.toList
-    gref.set $ g.setUnsafeQueue $ some rules
-    return rules
+        pure unsafeRules
+    let unsafeQueue := UnsafeQueue.initial rules
+    gref.set $ g.setUnsafeRulesSelected true |>.setUnsafeQueue unsafeQueue
+    return unsafeQueue
 
 -- Returns true if the goal should be reinserted into the goal queue.
-def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
+partial def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
     SearchM Bool := do
-  let rules ← selectUnsafeRules gref includeSafeRules
+  let queue ← selectUnsafeRules gref includeSafeRules
   aesop_trace[steps] "Trying unsafe rules"
-  let mut result := RuleResult.failed
-  let mut remainingRules := rules
-  for r in rules do
-    aesop_trace[steps] "Trying {r.rule}"
-    remainingRules := remainingRules.tail!
-    result ← runRegularRule gref (RegularRule'.unsafe r.rule) r.matchLocations
-    if result.isFailed then continue else break
-  gref.modify λ g => g.setUnsafeQueue remainingRules
-  aesop_trace[steps] "Remaining unsafe rules:{MessageData.node $ remainingRules.map toMessageData |>.toArray}"
-  if result.isFailed && remainingRules.isEmpty then
+  let (remainingQueue, result) ← loop queue
+  gref.modify λ g => g.setUnsafeQueue remainingQueue
+  aesop_trace[steps] "Remaining unsafe rules:{MessageData.node $ remainingQueue.toArray.map toMessageData}"
+  if result.isFailed && remainingQueue.isEmpty then
     aesop_trace[steps] "Goal is unprovable"
     gref.setUnprovable (firstGoalUnconditional := true)
-  return ! result.isProven && ! remainingRules.isEmpty
+  return ! result.isProven && ! remainingQueue.isEmpty
+  where
+    loop (queue : UnsafeQueue) : SearchM (UnsafeQueue × RuleResult) := do
+      let (some (r, queue)) ← queue.pop? | return (queue, RuleResult.failed)
+      aesop_trace[steps] "Trying {r.rule}"
+      let result ←
+        runRegularRule gref (RegularRule'.unsafe r.rule) r.matchLocations
+      if ¬ result.isFailed
+        then return (queue, result)
+        else loop queue
 
 -- Returns true if the goal should be reinserted into the goal queue.
 def expandGoal (gref : GoalRef) : SearchM Bool := do

@@ -6,6 +6,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 
 import Aesop.Check
 import Aesop.Tree.MutAltTree
+import Aesop.Tree.UnsafeQueue
 import Aesop.Rule
 import Aesop.Util
 import Aesop.Tracing
@@ -175,8 +176,8 @@ structure GoalData : Type where
   lastExpandedInIteration : Iteration
     -- Iteration 0 means the node has never been expanded.
   failedRapps : List RegularRule
-  unsafeQueue : Option (List (IndexMatchResult UnsafeRule))
-    -- TODO Represent unsafeQueue as an array plus starting index.
+  unsafeRulesSelected : Bool
+  unsafeQueue : UnsafeQueue
   proofStatus : ProofStatus
   isUnprovable : Bool
   isIrrelevant : Bool
@@ -192,9 +193,9 @@ open MessageData in
 protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
     m MessageData := do
   let unsafeQueueLength :=
-    match g.unsafeQueue with
-    | none => f!"<not selected>"
-    | some q => format q.length
+    if ¬ g.unsafeRulesSelected
+      then f!"<not selected>"
+      else format g.unsafeQueue.size
   return m!"Goal {g.id} [{g.successProbability.toHumanString}]" ++ nodeFiltering #[
     m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.length}",
     join
@@ -205,8 +206,8 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
     m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration}",
     if ¬ traceMods.goals then none else
       m!"Goal:{indentD $ ofGoal g.goal}",
-    if ¬ traceMods.unsafeQueues || g.unsafeQueue.isNone then none else
-      m!"Unsafe queue:{indentDUnlines $ g.unsafeQueue.get!.map toMessageData}",
+    if ¬ traceMods.unsafeQueues || ¬ g.unsafeRulesSelected then none else
+      m!"Unsafe queue:{node $ g.unsafeQueue.toArray.map toMessageData}",
     if ¬ traceMods.failedRapps then none else
       m!"Failed rule applications:{indentDUnlines $ g.failedRapps.map toMessageData}" ]
 
@@ -218,11 +219,12 @@ protected def mkInitial (id : GoalId) (goal : MVarId)
   lastExpandedInIteration := Iteration.none
   successProbability := successProbability
   failedRapps := []
-  unsafeQueue := none
+  unsafeQueue := UnsafeQueue.initial #[]
   proofStatus := ProofStatus.unproven
   isUnprovable := false
   isIrrelevant := false
   isNormal := false
+  unsafeRulesSelected := false
 
 end GoalData
 
@@ -454,9 +456,16 @@ def failedRapps (g : Goal) : List RegularRule :=
   g.payload.failedRapps
 
 @[inline]
-def unsafeQueue (g : Goal) :
-    Option (List (IndexMatchResult UnsafeRule)) :=
+def unsafeRulesSelected (g : Goal) : Bool :=
+  g.payload.unsafeRulesSelected
+
+@[inline]
+def unsafeQueue (g : Goal) : UnsafeQueue :=
   g.payload.unsafeQueue
+
+@[inline]
+def unsafeQueue? (g : Goal) : Option UnsafeQueue :=
+  if g.unsafeRulesSelected then some g.unsafeQueue else none
 
 @[inline]
 def proofStatus (g : Goal) : ProofStatus :=
@@ -506,9 +515,11 @@ def setFailedRapps (failedRapps : List RegularRule) (g : Goal) : Goal :=
   g.modifyPayload λ d => { d with failedRapps := failedRapps }
 
 @[inline]
-def setUnsafeQueue
-    (unsafeQueue : Option (List (IndexMatchResult UnsafeRule)))
-    (g : Goal) : Goal :=
+def setUnsafeRulesSelected (unsafeRulesSelected : Bool) (g : Goal) : Goal :=
+  g.modifyPayload λ d => { d with unsafeRulesSelected := unsafeRulesSelected }
+
+@[inline]
+def setUnsafeQueue (unsafeQueue : UnsafeQueue) (g : Goal) : Goal :=
   g.modifyPayload λ d => { d with unsafeQueue := unsafeQueue }
 
 @[inline]
@@ -530,9 +541,9 @@ def setNormal (normal? : Bool) (g : Goal) : Goal :=
 /-! ### Miscellaneous -/
 
 def hasNoUnexpandedUnsafeRule (g : Goal) : Bool :=
-  match g.unsafeQueue with
-  | none => false
-  | some q => q.isEmpty
+  if ¬ g.unsafeRulesSelected
+    then false
+    else g.unsafeQueue.isEmpty
 
 def isActive (g : Goal) : Bool :=
   ! (g.isProven || g.isUnprovable || g.isIrrelevant)

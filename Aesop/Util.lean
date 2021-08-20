@@ -21,6 +21,20 @@ def joinSep (sep : String)  : List String → String
 end String
 
 
+namespace Subarray
+
+instance : Inhabited (Subarray α) where
+  default := {
+    as := #[]
+    start := 0
+    stop := 0
+    h₁ := Nat.le_refl 0
+    h₂ := Nat.le_refl 0
+  }
+
+end Subarray
+
+
 namespace Ord
 
 def lexicographic (o₁ : Ord α) (o₂ : Ord α) : Ord α where
