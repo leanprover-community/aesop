@@ -24,20 +24,32 @@ protected def ofFloat (f : Float) : Option Percent :=
 instance : Mul Percent where
   mul p q := ⟨p.toFloat * q.toFloat⟩
 
-instance : LT Percent where
-  lt p q := p.toFloat < q.toFloat
-
-instance : DecidableRel (α := Percent) (· < ·) :=
-  λ p q => (inferInstance : Decidable (p.toFloat < q.toFloat))
-
-instance : ToString Percent where
-  toString p := toString p.toFloat
-
+@[inline]
 def δ : Percent :=
   ⟨0.00001⟩
 
 instance : BEq Percent where
   beq | ⟨p⟩, ⟨q⟩ => if p > q then p - q < δ.toFloat else q - p < δ.toFloat
+
+instance : Ord Percent where
+  compare p q :=
+    if p == q then Ordering.eq
+    else if p.toFloat < q.toFloat then Ordering.lt
+    else Ordering.gt
+
+-- NOTE: This is not the same as
+--
+--     p < q := p.toFloat < q.toFloat
+--
+-- That definition would not agree with the Ord instance.
+instance : LT Percent :=
+  ltOfOrd
+
+instance : LE Percent :=
+  leOfOrd
+
+instance : ToString Percent where
+  toString p := toString p.toFloat
 
 def ninety : Percent :=
   ⟨0.9⟩

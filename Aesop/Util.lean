@@ -21,6 +21,17 @@ def joinSep (sep : String)  : List String → String
 end String
 
 
+namespace Ord
+
+def lexicographic (o₁ : Ord α) (o₂ : Ord α) : Ord α where
+  compare x y :=
+    match o₁.compare x y with
+    | Ordering.eq => o₂.compare x y
+    | ord => ord
+
+end Ord
+
+
 namespace Std.Format
 
 @[inlineIfReduce]

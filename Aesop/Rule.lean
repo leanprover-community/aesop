@@ -39,12 +39,16 @@ namespace Rule'
 instance : BEq (Rule' α τ) where
   beq r s := r.name == s.name
 
-instance [LT α] : LT (Rule' α τ) where
-  lt r s := r.extra < s.extra
+instance [Ord α] : Ord (Rule' α τ) :=
+  Ord.lexicographic
+    ⟨λ r s => compare r.extra s.extra⟩
+    ⟨λ r s => r.name.quickCmp s.name⟩
 
-instance [LT α] [DecidableRel (α := α) (· < ·)] :
-    DecidableRel (α := Rule' α τ) (· < ·) :=
-  λ r s => inferInstanceAs $ Decidable (r.extra < s.extra)
+instance [Ord α] : LT (Rule' α τ) :=
+  ltOfOrd
+
+instance [Ord α] : LE (Rule' α τ) :=
+  leOfOrd
 
 @[inline]
 def map (f : α → β) (g : τ → ι) (r : Rule' α τ) : Rule' β ι :=
@@ -86,11 +90,14 @@ structure NormRuleInfo where
   penalty : Int
   deriving Inhabited, DecidableEq
 
-instance : LT NormRuleInfo where
-  lt i j := i.penalty < j.penalty
+instance : Ord NormRuleInfo where
+  compare i j := compare i.penalty j.penalty
 
-instance : DecidableRel (α := NormRuleInfo) (· < ·) :=
-  λ i j => inferInstanceAs $ Decidable (i.penalty < j.penalty)
+instance : LT NormRuleInfo :=
+  ltOfOrd
+
+instance : LE NormRuleInfo :=
+  leOfOrd
 
 abbrev NormRule' := Rule' NormRuleInfo
 abbrev NormRule := NormRule' SerializableRuleTac
@@ -122,11 +129,14 @@ structure SafeRuleInfo where
   safety : Safety
   deriving Inhabited, DecidableEq
 
-instance : LT SafeRuleInfo where
-  lt i j := i.penalty < j.penalty
+instance : Ord SafeRuleInfo where
+  compare i j := compare i.penalty j.penalty
 
-instance : DecidableRel (α := SafeRuleInfo) (· < ·) :=
-  λ i j => inferInstanceAs $ Decidable (i.penalty < j.penalty)
+instance : LT SafeRuleInfo :=
+  ltOfOrd
+
+instance : LE SafeRuleInfo :=
+  leOfOrd
 
 abbrev SafeRule' := Rule' SafeRuleInfo
 abbrev SafeRule := SafeRule' SerializableRuleTac
@@ -143,12 +153,16 @@ structure UnsafeRuleInfo where
   successProbability : Percent
   deriving Inhabited
 
-instance : LT UnsafeRuleInfo where
-  lt i j := i.successProbability > j.successProbability
+instance : Ord UnsafeRuleInfo where
+  compare i j := compare j.successProbability i.successProbability
+  -- NOTE: Rule with greater success probabilities are considered smaller.
+  -- This is because we take 'small' to mean 'high priority'.
 
-instance : DecidableRel (α := UnsafeRuleInfo) (· < ·) :=
-  λ i j => inferInstanceAs $
-    Decidable (i.successProbability > j.successProbability)
+instance : LT UnsafeRuleInfo :=
+  ltOfOrd
+
+instance : LE UnsafeRuleInfo :=
+  leOfOrd
 
 abbrev UnsafeRule' := Rule' UnsafeRuleInfo
 abbrev UnsafeRule := UnsafeRule' SerializableRuleTac
