@@ -224,6 +224,34 @@ instance [BEq α] [Hashable α] : ForIn m (PersistentHashMap α β) (α × β) w
 end Std.PersistentHashMap
 
 
+namespace Std.RBMap
+
+-- TODO horribly inefficient
+@[inline]
+def insertWith {cmp} (a : α) (b : β) (f : β → β) (m : RBMap α β cmp) :
+    RBMap α β cmp :=
+  match m.find? a with
+  | none => m.insert a b
+  | some b' => m.insert a (f b')
+
+@[inline]
+def mergeWith {cmp} (m n : RBMap α β cmp) (f : α → β → β → β) : RBMap α β cmp :=
+  n.fold (init := m) λ m a b => m.insertWith a b λ b' => f a b' b
+
+def insertArrayWith {cmp} (xs : Array (α × β)) (f : α → β → β → β)
+    (m : RBMap α β cmp) : RBMap α β cmp :=
+  xs.foldl (init := m) λ m (a, b) => m.insertWith a b λ b' => f a b' b
+
+def insertListWith {cmp} (xs : List (α × β)) (f : α → β → β → β)
+    (m : RBMap α β cmp) : RBMap α β cmp :=
+  xs.foldl (init := m) λ m (a, b) => m.insertWith a b λ b' => f a b' b
+
+def toArray {cmp} (m : RBMap α β cmp) : Array (α × β) :=
+  m.fold (init := #[]) λ xs a b => xs.push (a, b)
+
+end Std.RBMap
+
+
 namespace Prod.Lex
 
 instance [αeq_dec : DecidableEq α] {r : α → α → Prop} [r_dec : DecidableRel r]
