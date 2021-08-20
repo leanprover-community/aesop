@@ -279,7 +279,8 @@ def normalizeGoalMVar (rs : RuleSet) (goal : MVarId) : MetaM (Option MVarId) := 
 -- Returns true if the goal was solved by normalisation.
 def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Bool := do
   let g ← gref.get
-  let (false) ← pure g.isNormal | return false
+  if g.isNormal then
+    return false
   aesop_trace[steps] "Normalising the goal"
   let rs ← readThe RuleSet
   let newGoal? ← gref.runMetaMModifyingParentState do
@@ -531,7 +532,8 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
 
 def runFirstSafeRule (gref : GoalRef) : SearchM RuleResult := do
   let g ← gref.get
-  let (false) ← g.unsafeRulesSelected | return RuleResult.failed
+  if g.unsafeRulesSelected then
+    return RuleResult.failed
     -- If the unsafe rules have been selected, we have already tried all the
     -- safe rules.
   let ruleSet ← readThe RuleSet
@@ -602,7 +604,7 @@ partial def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
 
 -- Returns true if the goal should be reinserted into the goal queue.
 def expandGoal (gref : GoalRef) : SearchM Bool := do
-  let (false) ← normalizeGoalIfNecessary gref |
+  if ← normalizeGoalIfNecessary gref then
     -- Goal was already proven by normalisation.
     return false
   if ← (← gref.get).hasUnificationGoal then
@@ -634,8 +636,8 @@ def expandNextGoal : SearchM Unit := do
     gref.setUnprovableUnconditionallyAndSetDescendantsIrrelevant
     return ()
   let currentIteration ← getThe Iteration
-  gref.modify λ g => g.setLastExpandedInIteration currentIteration
   let hasMoreRules ← expandGoal gref
+  gref.modify λ g => g.setLastExpandedInIteration currentIteration
   if hasMoreRules then
     pushActiveGoal (← ActiveGoal.ofGoalRef gref)
 
@@ -666,8 +668,8 @@ mutual
         withMVarContext goalMVar do
           check proof <|> throwError
             "{Check.proofReconstruction.name}: reconstructed proof of goal {g.id} is type-incorrect"
-          let (true) ← isDefEq (← getMVarType goalMVar) (← inferType proof)
-            | throwError "{Check.proofReconstruction.name}: reconstructed proof of goal {g.id} has the wrong type"
+          unless ← isDefEq (← getMVarType goalMVar) (← inferType proof) do
+            throwError "{Check.proofReconstruction.name}: reconstructed proof of goal {g.id} has the wrong type"
       assignExprMVar goalMVar proof
 
   -- Let r be the rapp in rref. This function assigns the goal metavariables of
@@ -692,8 +694,8 @@ def GoalRef.linkProofs (gref : GoalRef) : MetaM Unit := linkProofsGoal gref
 
 def finishIfProven : SearchM Bool := do
   let root ← readRootGoal
-  let (true) ← pure (← root.get).isProven
-    | return false
+  unless (← root.get).isProven do
+    return false
   aesop_trace[steps] "Root node is proven. Linking proofs."
   root.linkProofs
   aesop_trace[proof] do
@@ -717,9 +719,10 @@ def checkRappLimit : SearchM Unit := do
 partial def searchLoop : SearchM Unit := do
   aesop_trace[steps] "=== Search loop iteration {← getThe Iteration}"
   let root ← readRootGoal
-  let (false) ← pure (← root.get).isUnprovable
-    | throwError "aesop: failed to prove the goal"
-  let (false) ← finishIfProven | pure ()
+  if (← root.get).isUnprovable then
+    throwError "aesop: failed to prove the goal"
+  if ← finishIfProven then
+    return ()
   checkGoalLimit
   checkRappLimit
   expandNextGoal
