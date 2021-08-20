@@ -5,7 +5,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Aesop.Check
-import Aesop.MutAltTree
+import Aesop.Tree.MutAltTree
 import Aesop.Rule
 import Aesop.Util
 import Aesop.Tracing
@@ -175,7 +175,7 @@ structure GoalData : Type where
   lastExpandedInIteration : Iteration
     -- Iteration 0 means the node has never been expanded.
   failedRapps : List RegularRule
-  unsafeQueue : Option (List (UnsafeRule × Array IndexMatchLocation))
+  unsafeQueue : Option (List (IndexMatchResult UnsafeRule))
     -- TODO Represent unsafeQueue as an array plus starting index.
   proofStatus : ProofStatus
   isUnprovable : Bool
@@ -206,7 +206,7 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
     if ¬ traceMods.goals then none else
       m!"Goal:{indentD $ ofGoal g.goal}",
     if ¬ traceMods.unsafeQueues || g.unsafeQueue.isNone then none else
-      m!"Unsafe queue:{indentDUnlines $ g.unsafeQueue.get!.map (toMessageData ·.fst)}",
+      m!"Unsafe queue:{indentDUnlines $ g.unsafeQueue.get!.map toMessageData}",
     if ¬ traceMods.failedRapps then none else
       m!"Failed rule applications:{indentDUnlines $ g.failedRapps.map toMessageData}" ]
 
@@ -455,7 +455,7 @@ def failedRapps (g : Goal) : List RegularRule :=
 
 @[inline]
 def unsafeQueue (g : Goal) :
-    Option (List (UnsafeRule × Array IndexMatchLocation)) :=
+    Option (List (IndexMatchResult UnsafeRule)) :=
   g.payload.unsafeQueue
 
 @[inline]
@@ -507,7 +507,7 @@ def setFailedRapps (failedRapps : List RegularRule) (g : Goal) : Goal :=
 
 @[inline]
 def setUnsafeQueue
-    (unsafeQueue : Option (List (UnsafeRule × Array IndexMatchLocation)))
+    (unsafeQueue : Option (List (IndexMatchResult UnsafeRule)))
     (g : Goal) : Goal :=
   g.modifyPayload λ d => { d with unsafeQueue := unsafeQueue }
 

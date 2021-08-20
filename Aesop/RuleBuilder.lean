@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Rule
-import Aesop.RuleTac
 import Lean
 
 open Lean

@@ -222,8 +222,8 @@ unsafe def forInImpl [BEq α] [Hashable α] {m : Type u → Type v} [Monad m]
 -- Inhabited inference is being stupid here, so we can't use `partial`.
 @[implementedBy forInImpl]
 constant forIn [BEq α] [Hashable α] {m : Type u → Type v} [Monad m]
-  (map : PersistentHashMap α β) (init : σ) (f : α × β → σ → m (ForInStep σ)) :
-  m σ :=
+    (map : PersistentHashMap α β) (init : σ) (f : α × β → σ → m (ForInStep σ)) :
+    m σ :=
   pure init
 
 instance [BEq α] [Hashable α] : ForIn m (PersistentHashMap α β) (α × β) where

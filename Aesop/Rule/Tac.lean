@@ -4,29 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.RuleIndex.Basic
 import Aesop.Util
-import Lean
 
 open Lean
 open Lean.Elab.Tactic
 open Lean.Meta
 
 namespace Aesop
-
-inductive IndexMatchLocation
-  | target
-  | hyp (ldecl : LocalDecl)
-  | none
-
-namespace IndexMatchLocation
-
-instance : ToMessageData IndexMatchLocation where
-  toMessageData
-    | target => "target"
-    | hyp ldecl => m!"hyp {ldecl.userName}"
-    | none => "none"
-
-end IndexMatchLocation
 
 structure RuleTacInput where
   goal : MVarId
