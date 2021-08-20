@@ -135,22 +135,30 @@ def merge [BEq α] [Hashable α] (m n : PersistentHashMap α β) (f : α → β 
 
 mutual
   @[specialize]
-  partial def mapMEntry [Monad m] {β γ : Type u} (f : β → m γ) {α : Type u} :
-      Entry α β (Node α β) → m (Entry α γ (Node α γ))
+  private unsafe def mapMEntryImpl [Monad m] {β γ : Type u} (f : β → m γ)
+      {α : Type u} : Entry α β (Node α β) → m (Entry α γ (Node α γ))
     | Entry.entry key val => Entry.entry key <$> f val
-    | Entry.ref node => Entry.ref <$> mapMNode f node
+    | Entry.ref node => Entry.ref <$> mapMNodeImpl f node
     | Entry.null => pure Entry.null
 
   @[specialize]
-  partial def mapMNode [Monad m] {β γ : Type u} (f : β → m γ) {α : Type u} :
-      Node α β → m (Node α γ)
-    | Node.entries es => Node.entries <$> es.mapM (mapMEntry f)
+  private unsafe def mapMNodeImpl [Monad m] {β γ : Type u} (f : β → m γ)
+      {α : Type u} : Node α β → m (Node α γ)
+    | Node.entries es => Node.entries <$> es.mapM (mapMEntryImpl f)
     | Node.collision ks vs h =>
-      return Node.collision ks (← vs.mapM f) sorry
-      -- The sorry here is conceptually trivial (it says that `vs.mapM f` has
+      return Node.collision ks (← vs.mapM f) lcProof
+      -- The lcProof here is conceptually trivial (it says that `vs.mapM f` has
       -- the same length as `vs`), but it would require a bit of effort because
       -- there seem to be no lemmas about array length in the library yet.
 end
+
+@[implementedBy mapMEntryImpl]
+constant mapMEntry [Monad m] {β γ : Type u} (f : β → m γ) {α : Type u} :
+    Entry α β (Node α β) → m (Entry α γ (Node α γ))
+
+@[implementedBy mapMNodeImpl]
+constant mapMNode [Monad m] {β γ : Type u} (f : β → m γ) {α : Type u} :
+    Node α β → m (Node α γ)
 
 @[inline]
 def Entry.mapM [Monad m] : (β → m γ) → ∀ {α}, Entry α β (Node α β) →
