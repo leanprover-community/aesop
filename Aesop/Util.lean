@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
-import Aesop.Util.SudoSetOption
+import Lean
 import Std.Data.BinomialHeap
 
 namespace String
