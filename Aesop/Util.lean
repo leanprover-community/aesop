@@ -533,6 +533,11 @@ def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
     { s with mctx := { s.mctx with decls := s.mctx.decls.insert mvarId mdecl } }
   return type
 
+def instantiateMVarDeclMVars (mvarId : MVarId) : MetaM Unit := do
+  let mctx := (← get).mctx
+  let mctx ← mctx.instantiateMVarDeclMVars mvarId
+  modify λ s => { s with mctx := mctx }
+
 end Lean.Meta
 
 

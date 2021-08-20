@@ -209,18 +209,21 @@ def addRapp (r : RappData) (parent : GoalRef)
   modify λ s => { s with numRapps := s.numRapps + 1 }
   return rref
 
-def runRuleTac (goal : Goal) (rule : RuleTac) :
+def runRuleTac (goal : Goal) (rule : RuleTac)
+    (indexMatchLocations : Array IndexMatchLocation) :
     MetaM (Option (Array RuleTacOutput)) := do
   try
-    let (result, _) ← goal.runMetaMInParentState $ rule { goal := goal.goal }
+    let (result, _) ← goal.runMetaMInParentState $ rule
+      { goal := goal.goal, indexMatchLocations := indexMatchLocations }
     return some result
   catch _ =>
     return none
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def runNormRuleTac (goal : MVarId) (rule : NormRule) : MetaM (Option MVarId) := do
+def runNormRuleTac (rule : NormRule) (ri : RuleTacInput) :
+    MetaM (Option MVarId) := do
   let result ←
-    try rule.tac.tac { goal := goal }
+    try rule.tac.tac ri
     catch e => throwError
       "aesop: normalisation rule {rule.name} failed with error:{indentD e.toMessageData}\n{errorContext}"
   match result with
@@ -236,17 +239,19 @@ def runNormRuleTac (goal : MVarId) (rule : NormRule) : MetaM (Option MVarId) := 
     "aesop: normalisation rule {rule.name} did not produce exactly one rule application. {errorContext}"
   where
     errorContext :=
-      m!"It was run on this goal:{indentD $ MessageData.ofGoal goal}"
+      m!"It was run on this goal:{indentD $ MessageData.ofGoal ri.goal}"
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def runNormRules (goal : MVarId) (rules : Array NormRule) :
+def runNormRules (goal : MVarId)
+    (rules : Array (NormRule × Array IndexMatchLocation)) :
     MetaM (Option MVarId) := do
   let mut goal := goal
-  for r in rules do
-    aesop_trace[stepsNormalization] "Running {r}"
-    let (some newGoal) ← runNormRuleTac goal r | return none
+  for (rule, indexMatchLocations) in rules do
+    aesop_trace[stepsNormalization] "Running {rule}"
+    let ruleInput := { goal := goal, indexMatchLocations := indexMatchLocations }
+    let (some newGoal) ← runNormRuleTac rule ruleInput | return none
     goal := newGoal
-    aesop_trace[stepsNormalization] "Goal after {r}:{indentD $ MessageData.ofGoal goal}"
+    aesop_trace[stepsNormalization] "Goal after {rule}:{indentD $ MessageData.ofGoal goal}"
   return goal
 
 def runNormalizationSimp (goal : MVarId) (rs : RuleSet) :
@@ -261,7 +266,7 @@ def runNormalizationSimp (goal : MVarId) (rs : RuleSet) :
 def normalizeGoalMVar (rs : RuleSet) (goal : MVarId) : MetaM (Option MVarId) := do
   let rules ← rs.applicableNormalizationRules goal
   let (preSimpRules, postSimpRules) :=
-    rules.partition λ r => r.extra.penalty < (0 : Int)
+    rules.partition λ r => r.fst.extra.penalty < (0 : Int)
   let (some goal) ← runNormRules goal preSimpRules | return none
   aesop_trace[stepsNormalization] "Running normalisation simp"
   let (some goal) ← runNormalizationSimp goal rs | return none
@@ -467,11 +472,12 @@ def isProven : RuleResult → Bool
 
 end RuleResult
 
-def runRegularRule (parentRef : GoalRef) (rule : RegularRule) :
+def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
+    (indexMatchLocations : Array IndexMatchLocation) :
     SearchM RuleResult := do
   let successProbability :=
     (← parentRef.get).successProbability * rule.successProbability
-  let ruleOutput? ← runRuleTac (← parentRef.get) rule.tac.tac
+  let ruleOutput? ← runRuleTac (← parentRef.get) rule.tac.tac indexMatchLocations
   match ruleOutput? with
   | none => onFailure
   | some #[] => onFailure
@@ -528,12 +534,12 @@ def runFirstSafeRule (gref : GoalRef) : SearchM RuleResult := do
     -- safe rules.
   let ruleSet ← readThe RuleSet
   let (rules, _) ← g.runMetaMInParentState $ ruleSet.applicableSafeRules g.goal
-  aesop_trace[steps] "Selected safe rules:{MessageData.node $ rules.map toMessageData}"
+  aesop_trace[steps] "Selected safe rules:{MessageData.node $ rules.map (toMessageData ·.fst)}"
   aesop_trace[steps] "Trying safe rules"
   let mut result := RuleResult.failed
-  for r in rules do
-    aesop_trace[steps] "Trying {r}"
-    result ← runRegularRule gref $ RegularRule'.safe r
+  for (rule, indexMatchLocations) in rules do
+    aesop_trace[steps] "Trying {rule}"
+    result ← runRegularRule gref (RegularRule'.safe rule) indexMatchLocations
     if result.isFailed then continue else break
   return result
 
@@ -544,7 +550,7 @@ def SafeRule.asUnsafeRule (r : SafeRule) : UnsafeRule where
   extra := { successProbability := Percent.ninety }
 
 def selectUnsafeRules (gref : GoalRef) (includeSafeRules : Bool) :
-    SearchM (List UnsafeRule) := do
+    SearchM (List (UnsafeRule × Array IndexMatchLocation)) := do
   let g ← gref.get
   match g.unsafeQueue with
   | some rules => return rules
@@ -556,15 +562,19 @@ def selectUnsafeRules (gref : GoalRef) (includeSafeRules : Bool) :
       if includeSafeRules then
           let (safeRules, _) ← g.runMetaMInParentState $
             ruleSet.applicableSafeRules g.goal
-          let rules := safeRules.map (·.asUnsafeRule) ++ unsafeRules
-          let rules := rules.qsort (· < ·) -- TODO stable merge for efficiency
-          aesop_trace[steps] "Selected unsafe rules (including safe rules treated as unsafe):{MessageData.node $ rules.map toMessageData}"
+          let rules :=
+            safeRules.map (λ (rule, iml) => (rule.asUnsafeRule, iml)) ++
+            unsafeRules
+          let rules :=
+            rules.qsort (λ (rule₁, _) (rule₂, _) => rule₁ < rule₂)
+            -- TODO stable merge for efficiency
+          aesop_trace[steps] "Selected unsafe rules (including safe rules treated as unsafe):{MessageData.node $ rules.map (toMessageData ·.fst)}"
           pure rules.toList
           -- TODO these toList conversions make me sad. More efficient: treat
           -- the selected unsafe rules as an array and the unsafe queue as a
           -- subarray (or just an index).
       else
-        aesop_trace[steps] "Selected unsafe rules:{MessageData.node $ unsafeRules.map toMessageData}"
+        aesop_trace[steps] "Selected unsafe rules:{MessageData.node $ unsafeRules.map (toMessageData ·.fst)}"
         pure unsafeRules.toList
     gref.set $ g.setUnsafeQueue rules
     return rules
@@ -576,13 +586,13 @@ def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
   aesop_trace[steps] "Trying unsafe rules"
   let mut result := RuleResult.failed
   let mut remainingRules := rules
-  for r in rules do
-    aesop_trace[steps] "Trying {r}"
+  for (rule, indexMatchLocations) in rules do
+    aesop_trace[steps] "Trying {rule}"
     remainingRules := remainingRules.tail!
-    result ← runRegularRule gref (RegularRule'.unsafe r)
+    result ← runRegularRule gref (RegularRule'.unsafe rule) indexMatchLocations
     if result.isFailed then continue else break
   gref.modify λ g => g.setUnsafeQueue remainingRules
-  aesop_trace[steps] "Remaining unsafe rules:{MessageData.node $ remainingRules.map toMessageData |>.toArray}"
+  aesop_trace[steps] "Remaining unsafe rules:{MessageData.node $ remainingRules.map (toMessageData ·.fst) |>.toArray}"
   if result.isFailed && remainingRules.isEmpty then
     aesop_trace[steps] "Goal is unprovable"
     gref.setUnprovable (firstGoalUnconditional := true)

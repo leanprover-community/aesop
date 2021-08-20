@@ -175,7 +175,8 @@ structure GoalData : Type where
   lastExpandedInIteration : Iteration
     -- Iteration 0 means the node has never been expanded.
   failedRapps : List RegularRule
-  unsafeQueue : Option (List UnsafeRule)
+  unsafeQueue : Option (List (UnsafeRule × Array IndexMatchLocation))
+    -- TODO Represent unsafeQueue as an array plus starting index.
   proofStatus : ProofStatus
   isUnprovable : Bool
   isIrrelevant : Bool
@@ -205,7 +206,7 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
     if ¬ traceMods.goals then none else
       m!"Goal:{indentD $ ofGoal g.goal}",
     if ¬ traceMods.unsafeQueues || g.unsafeQueue.isNone then none else
-      m!"Unsafe queue:{indentDUnlines $ g.unsafeQueue.get!.map toMessageData}",
+      m!"Unsafe queue:{indentDUnlines $ g.unsafeQueue.get!.map (toMessageData ·.fst)}",
     if ¬ traceMods.failedRapps then none else
       m!"Failed rule applications:{indentDUnlines $ g.failedRapps.map toMessageData}" ]
 
@@ -453,7 +454,8 @@ def failedRapps (g : Goal) : List RegularRule :=
   g.payload.failedRapps
 
 @[inline]
-def unsafeQueue (g : Goal) : Option (List UnsafeRule) :=
+def unsafeQueue (g : Goal) :
+    Option (List (UnsafeRule × Array IndexMatchLocation)) :=
   g.payload.unsafeQueue
 
 @[inline]
@@ -504,7 +506,9 @@ def setFailedRapps (failedRapps : List RegularRule) (g : Goal) : Goal :=
   g.modifyPayload λ d => { d with failedRapps := failedRapps }
 
 @[inline]
-def setUnsafeQueue (unsafeQueue : Option (List UnsafeRule)) (g : Goal) : Goal :=
+def setUnsafeQueue
+    (unsafeQueue : Option (List (UnsafeRule × Array IndexMatchLocation)))
+    (g : Goal) : Goal :=
   g.modifyPayload λ d => { d with unsafeQueue := unsafeQueue }
 
 @[inline]

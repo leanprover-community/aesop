@@ -13,8 +13,24 @@ open Lean.Meta
 
 namespace Aesop
 
+inductive IndexMatchLocation
+  | target
+  | hyp (ldecl : LocalDecl)
+  | none
+
+namespace IndexMatchLocation
+
+instance : ToMessageData IndexMatchLocation where
+  toMessageData
+    | target => "target"
+    | hyp ldecl => m!"hyp {ldecl.userName}"
+    | none => "none"
+
+end IndexMatchLocation
+
 structure RuleTacInput where
   goal : MVarId
+  indexMatchLocations : Array IndexMatchLocation
   deriving Inhabited
 
 -- Rule tactics must accurately report the following information, which is not
@@ -180,9 +196,7 @@ def ofTacticConst (decl : Name) : MetaM SerializableRuleTac :=
   ofTacticMUnit decl <|>
   ofUserRuleTacConst decl <|>
   ofRuleTacConst decl <|>
-  do
-    let type := (← getConstInfo decl).type
-    throwError "aesop: {decl} was expected to be a tactic but it has type{indentExpr type}"
+  do throwError "aesop: {decl} was expected to be a tactic but it has type{indentExpr (← getConstInfo decl).type}"
 
 def applyConst (decl : Name) : MetaM SerializableRuleTac :=
   return {

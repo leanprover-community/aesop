@@ -83,7 +83,7 @@ def applyIndexingMode (type : Expr) : MetaM IndexingMode := do
     DiscrTree.mkPath conclusion
     -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
     -- turn into `Key.star`) but not fvars.
-  return IndexingMode.indexTarget path
+  return IndexingMode.target path
 
 def apply : RuleBuilder RegularRuleBuilderResult := λ ruleIdent => do
   let type := (← ruleIdent.type)

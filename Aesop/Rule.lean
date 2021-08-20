@@ -12,16 +12,16 @@ namespace Aesop
 
 open Lean
 open Lean.Meta
+open Std (RBMap mkRBMap)
 
 
 /-! ## Rule Indexing Modes -/
 
 inductive IndexingMode : Type
   | unindexed
-  | indexTarget (targetKeys : Array DiscrTree.Key)
+  | target (keys : Array DiscrTree.Key)
+  | hyps (keys : Array DiscrTree.Key)
   deriving Inhabited, BEq
-
-export IndexingMode (unindexed indexTarget)
 
 
 /-! ## Rules -/
@@ -217,6 +217,7 @@ end RegularRule'
 
 structure RuleIndex (α : Type) where
   byTarget : DiscrTree α
+  byHyp : DiscrTree α
   unindexed : Array α
   deriving Inhabited
 
@@ -231,29 +232,57 @@ instance [ToMessageData α] : ToMessageData (RuleIndex α) where
 
 def empty : RuleIndex α where
   byTarget := DiscrTree.empty
+  byHyp := DiscrTree.empty
   unindexed := #[] -- TODO keep these sorted?
 
 instance : EmptyCollection (RuleIndex α) :=
   ⟨empty⟩
 
+@[specialize]
 def add [BEq α] (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
     RuleIndex α :=
   match imode with
   | IndexingMode.unindexed => { ri with unindexed := ri.unindexed.push r }
-  | IndexingMode.indexTarget targetKeys =>
-    { ri with byTarget := ri.byTarget.insertCore targetKeys r }
+  | IndexingMode.target keys =>
+    { ri with byTarget := ri.byTarget.insertCore keys r }
+  | IndexingMode.hyps keys =>
+    { ri with byHyp := ri.byHyp.insertCore keys r }
 
+@[specialize]
 def applicableByTargetRules (ri : RuleIndex α) (goal : MVarId) :
-    MetaM (Array α) := do
-  let target ← instantiateMVarsInMVarType goal
-  ri.byTarget.getMatch target
+    MetaM (Array (α × Array IndexMatchLocation)) := do
+  let rs ← ri.byTarget.getMatch (← getMVarType goal)
+  return rs.map λ r => (r, #[IndexMatchLocation.target])
+
+@[specialize]
+def applicableByHypRules (ri : RuleIndex α) (goal : MVarId) :
+    MetaM (Array (Array (α × Array IndexMatchLocation))) :=
+  withMVarContext goal do
+    let mut rulesList := #[]
+    for localDecl in ← getLCtx do
+      if localDecl.isAuxDecl then continue
+      let rules ← ri.byHyp.getMatch localDecl.type
+      let rules := rules.map λ r => (r, #[IndexMatchLocation.hyp localDecl])
+      rulesList := rulesList.push rules
+    return rulesList
 
 -- TODO remove Inhabited as soon as qsort doesn't require it any more.
-def applicableRules [Inhabited α] [LT α] [DecidableRel (α := α) (· < ·)]
-    (ri : RuleIndex α) (goal : MVarId) : MetaM (Array α) := do
-  let rs₁ ← applicableByTargetRules ri goal
-  let rs₂ := ri.unindexed -- TODO does it help if these are already sorted?
-  return (rs₁ ++ rs₂).qsort (· < ·)
+@[specialize]
+def applicableRules [Ord α] (ri : RuleIndex α) (goal : MVarId) :
+    MetaM (Array (α × Array IndexMatchLocation)) := do
+  instantiateMVarDeclMVars goal
+  let byTarget ← applicableByTargetRules ri goal
+  let unindexed := ri.unindexed.map λ r => (r, #[IndexMatchLocation.none])
+  let byHyp ← applicableByHypRules ri goal
+  let result := mkRBMap _ _ compare
+    |>.insertArrayWith byTarget combineLocations
+    |>.insertArrayWith unindexed combineLocations
+  let result := byHyp.foldl (init := result) λ result rs =>
+    result.insertArrayWith rs combineLocations
+  return result.toList.toArray
+  where
+    combineLocations (_ : α) (ls₁ ls₂ : Array IndexMatchLocation) :=
+      ls₁ ++ ls₂
 
 end RuleIndex
 
@@ -340,15 +369,15 @@ def addArray (rs : RuleSet) (ra : Array RuleSetMember) : RuleSet :=
   ra.foldl add rs
 
 def applicableNormalizationRules (rs : RuleSet) (goal : MVarId) :
-  MetaM (Array NormRule) :=
+  MetaM (Array (NormRule × Array IndexMatchLocation)) :=
   rs.normRules.applicableRules goal
 
 def applicableUnsafeRules (rs : RuleSet) (goal : MVarId) :
-  MetaM (Array UnsafeRule) :=
+  MetaM (Array (UnsafeRule × Array IndexMatchLocation)) :=
   rs.unsafeRules.applicableRules goal
 
 def applicableSafeRules (rs : RuleSet) (goal : MVarId) :
-  MetaM (Array SafeRule) :=
+  MetaM (Array (SafeRule × Array IndexMatchLocation)) :=
   rs.safeRules.applicableRules goal
 
 end RuleSet
