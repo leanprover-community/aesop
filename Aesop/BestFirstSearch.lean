@@ -507,7 +507,7 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
   where
     onFailure : SearchM RuleResult := do
       aesop_trace[steps] "Rule failed."
-      parentRef.modify λ g => g.setFailedRapps $ rule :: g.failedRapps
+      parentRef.modify λ g => g.setFailedRapps $ g.failedRapps.push rule
       parentRef.setUnprovable (firstGoalUnconditional := false)
       return RuleResult.failed
 

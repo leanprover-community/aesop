@@ -175,7 +175,7 @@ structure GoalData : Type where
   addedInIteration : Iteration
   lastExpandedInIteration : Iteration
     -- Iteration 0 means the node has never been expanded.
-  failedRapps : List RegularRule
+  failedRapps : Array RegularRule
   unsafeRulesSelected : Bool
   unsafeQueue : UnsafeQueue
   proofStatus : ProofStatus
@@ -197,7 +197,7 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
       then f!"<not selected>"
       else format g.unsafeQueue.size
   return m!"Goal {g.id} [{g.successProbability.toHumanString}]" ++ nodeFiltering #[
-    m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.length}",
+    m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.size}",
     join
       [ m!"normal: {g.isNormal.toYesNo} | ",
         m!"proven: {g.isProven.toYesNo} | ",
@@ -209,7 +209,7 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
     if ¬ traceMods.unsafeQueues || ¬ g.unsafeRulesSelected then none else
       m!"Unsafe queue:{node $ g.unsafeQueue.toArray.map toMessageData}",
     if ¬ traceMods.failedRapps then none else
-      m!"Failed rule applications:{indentDUnlines $ g.failedRapps.map toMessageData}" ]
+      m!"Failed rule applications:{node $ g.failedRapps.map toMessageData}" ]
 
 protected def mkInitial (id : GoalId) (goal : MVarId)
     (successProbability : Percent) (addedInIteration : Iteration) : GoalData where
@@ -218,7 +218,7 @@ protected def mkInitial (id : GoalId) (goal : MVarId)
   addedInIteration := addedInIteration
   lastExpandedInIteration := Iteration.none
   successProbability := successProbability
-  failedRapps := []
+  failedRapps := #[]
   unsafeQueue := UnsafeQueue.initial #[]
   proofStatus := ProofStatus.unproven
   isUnprovable := false
@@ -452,7 +452,7 @@ def lastExpandedInIteration (g : Goal) : Iteration :=
   g.payload.lastExpandedInIteration
 
 @[inline]
-def failedRapps (g : Goal) : List RegularRule :=
+def failedRapps (g : Goal) : Array RegularRule :=
   g.payload.failedRapps
 
 @[inline]
@@ -511,7 +511,7 @@ def setLastExpandedInIteration (lastExpandedInIteration : Iteration) (g : Goal) 
     { d with lastExpandedInIteration := lastExpandedInIteration }
 
 @[inline]
-def setFailedRapps (failedRapps : List RegularRule) (g : Goal) : Goal :=
+def setFailedRapps (failedRapps : Array RegularRule) (g : Goal) : Goal :=
   g.modifyPayload λ d => { d with failedRapps := failedRapps }
 
 @[inline]
