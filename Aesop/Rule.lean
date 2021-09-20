@@ -119,27 +119,40 @@ namespace RegularRule'
 
 instance : ToFormat (RegularRule' τ) where
   format
-    | (safe r) => format r
-    | («unsafe» r) => format r
+    | safe r => format r
+    | «unsafe» r => format r
 
 def successProbability : RegularRule' τ → Percent
-  | (safe r) => Percent.hundred
-  | («unsafe» r) => r.extra.successProbability
+  | safe r => Percent.hundred
+  | «unsafe» r => r.extra.successProbability
 
 def isSafe : RegularRule' τ → Bool
-  | (safe _) => true
-  | («unsafe» _) => false
+  | safe _ => true
+  | «unsafe» _ => false
 
 def isUnsafe : RegularRule' τ → Bool
-  | (safe _) => false
-  | («unsafe» _) => true
+  | safe _ => false
+  | «unsafe» _ => true
 
-def tac : RegularRule' τ → τ
-  | (safe r) => r.tac
-  | («unsafe» r) => r.tac
+@[specialize]
+def withRule (f : ∀ {α}, Rule' α τ → β) : RegularRule' τ → β
+  | safe r => f r
+  | «unsafe» r => f r
 
-def name : RegularRule' τ → Name
-  | (safe r) => r.name
-  | («unsafe» r) => r.name
+@[inline]
+def name (r : RegularRule' τ) : Name :=
+  r.withRule (·.name)
+
+@[inline]
+def indexingMode (r : RegularRule' τ) : IndexingMode :=
+  r.withRule (·.indexingMode)
+
+@[inline]
+def usesBranchState (r : RegularRule' τ) : Bool :=
+  r.withRule (·.usesBranchState)
+
+@[inline]
+def tac (r : RegularRule' τ) : τ :=
+  r.withRule (·.tac)
 
 end RegularRule'

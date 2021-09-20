@@ -11,22 +11,26 @@ namespace Aesop.DefaultRules
 open Lean
 open Lean.Meta
 
-def applyHyp (hyp : FVarId) (input : RuleTacInput) : MetaM RuleTacOutput := do
+def applyHyp (hyp : FVarId) (input : RuleTacInput) : MetaM RuleApplication := do
   let goals ← apply input.goal (mkFVar hyp)
-  UserRuleTacOutput.toRuleTacOutput { regularGoals := goals.toArray }
+  let output : SimpleRuleTacOutput := { regularGoals := goals.toArray }
+  output.toRuleApplication
 
 def applyHyps : RuleTac := λ input =>
   withMVarContext input.goal do
     let lctx ← getLCtx
-    let mut outputs := Array.mkEmpty lctx.decls.size
+    let mut rapps := Array.mkEmpty lctx.decls.size
     for localDecl in lctx do
       if localDecl.isAuxDecl then continue
       let initialState ← saveState
       try
-        let output ← applyHyp localDecl.fvarId input
-        outputs := outputs.push output
+        let rapp ← applyHyp localDecl.fvarId input
+        rapps := rapps.push rapp
       catch _ => continue
       finally restoreState initialState
-    return outputs
+    return {
+      applications := rapps
+      postBranchState? := none
+    }
 
 end Aesop.DefaultRules

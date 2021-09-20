@@ -5,6 +5,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Aesop.Check
+import Aesop.Tree.BranchState
 import Aesop.Tree.MutAltTree
 import Aesop.Tree.UnsafeQueue
 import Aesop.Rule
@@ -182,6 +183,7 @@ structure GoalData : Type where
   isUnprovable : Bool
   isIrrelevant : Bool
   isNormal : Bool
+  branchState : BranchState
   deriving Inhabited
 
 namespace GoalData
@@ -212,7 +214,8 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
       m!"Failed rule applications:{node $ g.failedRapps.map toMessageData}" ]
 
 protected def mkInitial (id : GoalId) (goal : MVarId)
-    (successProbability : Percent) (addedInIteration : Iteration) : GoalData where
+    (successProbability : Percent) (addedInIteration : Iteration)
+    (branchState : BranchState) : GoalData where
   id := id
   goal := goal
   addedInIteration := addedInIteration
@@ -225,6 +228,7 @@ protected def mkInitial (id : GoalId) (goal : MVarId)
   isIrrelevant := false
   isNormal := false
   unsafeRulesSelected := false
+  branchState := branchState
 
 end GoalData
 
@@ -487,6 +491,10 @@ def isIrrelevant (g : Goal) : Bool :=
 def isNormal (g : Goal) : Bool :=
   g.payload.isNormal
 
+@[inline]
+def branchState (g : Goal) : BranchState :=
+  g.payload.branchState
+
 /-! ### Setters -/
 
 @[inline]
@@ -537,6 +545,10 @@ def setIrrelevant (irrelevant? : Bool) (g : Goal) : Goal :=
 @[inline]
 def setNormal (normal? : Bool) (g : Goal) : Goal :=
   g.modifyPayload λ d => { d with isNormal := normal? }
+
+@[inline]
+def setBranchState (branchState : BranchState) (g : Goal) : Goal :=
+  g.modifyPayload λ d => { d with branchState := branchState }
 
 /-! ### Miscellaneous -/
 

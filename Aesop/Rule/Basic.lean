@@ -15,6 +15,7 @@ namespace Aesop
 structure Rule' (α τ : Type) where
   name : Name
   indexingMode : IndexingMode
+  usesBranchState : Bool
   extra : α
   tac : τ
   deriving Inhabited

@@ -219,8 +219,8 @@ protected def addClauses (clauses : Array Clause)
   clauses.foldlM NormRuleConfig.addClause conf
 
 open NormRuleBuilderResult in
-protected def applyToRuleIdent (i : RuleIdent)
-    (conf : NormRuleConfig) : MetaM RuleSetMember := do
+protected def applyToRuleIdent (i : RuleIdent) (conf : NormRuleConfig) :
+    MetaM RuleSetMember := do
   let builderResult ←
     match conf.builder with
     | none => RuleBuilder.normRuleDefault i
@@ -231,6 +231,7 @@ protected def applyToRuleIdent (i : RuleIdent)
     return RuleSetMember'.normRule
       { name := `norm ++ res.builderName ++ i.ruleName
         indexingMode := res.indexingMode
+        usesBranchState := res.mayUseBranchState
         extra := { penalty := penalty }
         tac := res.tac }
   | simpEntries es =>
@@ -268,8 +269,8 @@ protected def addClauses (clauses : Array Clause) (conf : SafeRuleConfig) :
     m SafeRuleConfig :=
   clauses.foldlM SafeRuleConfig.addClause conf
 
-protected def applyToRuleIdent (i : RuleIdent)
-    (conf : SafeRuleConfig) : MetaM RuleSetMember := do
+protected def applyToRuleIdent (i : RuleIdent) (conf : SafeRuleConfig) :
+    MetaM RuleSetMember := do
   let builderResult ←
     match conf.builder with
     | none => RuleBuilder.safeRuleDefault i
@@ -278,6 +279,7 @@ protected def applyToRuleIdent (i : RuleIdent)
   return RuleSetMember'.safeRule
     { name := `safe ++ builderResult.builderName ++ i.ruleName
       indexingMode := builderResult.indexingMode,
+      usesBranchState := builderResult.mayUseBranchState
       extra := { penalty := penalty, safety := Safety.safe }
         -- TODO support almost_safe rules
       tac := builderResult.tac }
@@ -323,6 +325,7 @@ protected def applyToRuleIdent (i : RuleIdent) (conf : UnsafeRuleConfig) :
   return RuleSetMember'.unsafeRule
     { name := `unsafe ++ builderResult.builderName ++ i.ruleName
       indexingMode := builderResult.indexingMode,
+      usesBranchState := builderResult.mayUseBranchState
       extra := { successProbability := conf.successProbability },
       tac := builderResult.tac }
 
@@ -364,7 +367,7 @@ protected def parse : Syntax → m RuleConfig
   | _ => unreachable!
 
 protected def applyToRuleIdent (i : RuleIdent) :
-  RuleConfig → MetaM RuleSetMember
+    RuleConfig → MetaM RuleSetMember
   | norm conf => conf.applyToRuleIdent i
   | safe conf => conf.applyToRuleIdent i
   | «unsafe» conf => conf.applyToRuleIdent i

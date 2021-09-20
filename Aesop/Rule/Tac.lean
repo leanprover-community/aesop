@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleIndex.Basic
+import Aesop.Rule.Core
 import Aesop.Util
 
 open Lean
@@ -16,6 +17,7 @@ namespace Aesop
 structure RuleTacInput where
   goal : MVarId
   indexMatchLocations : Array IndexMatchLocation
+  branchState? : Option RuleBranchState
   deriving Inhabited
 
 -- Rule tactics must accurately report the following information, which is not
@@ -31,17 +33,24 @@ structure RuleTacInput where
 --    metavariables are technically allowed to appear in `unificationGoals`, but
 --    are very unlikely to be solved.
 -- - `postState`: the `MetaM` state after the rule was applied.
-structure RuleTacOutput where
+structure RuleApplication where
   regularGoals : Array MVarId
   unificationGoals : Array MVarId
   postState : Meta.SavedState
   deriving Inhabited
 
+-- The result of a rule tactic is a list of rule applications and optionally an
+-- updated branch state. If the branch state is not `none`, it is copied to all
+-- child goals of the rule applications.
+structure RuleTacOutput where
+  applications : Array RuleApplication
+  postBranchState? : Option RuleBranchState
+
 -- When users want to register a tactic, they may not want to compute all the
 -- information in `RuleTacOutput`. In this case, they can return a
--- `UserRuleTacOutput`, omitting some data, which Aesop then computes for them
+-- `SimpleRuleTacOutput`, omitting some data, which Aesop then computes for them
 -- (possibly inefficiently since Aesop does not know what the user tactic did).
-structure UserRuleTacOutput where
+structure SimpleRuleTacOutput where
   regularGoals : Array MVarId
   unificationGoals : Option (Array MVarId) := none
   deriving Inhabited
@@ -67,19 +76,29 @@ def nondependentAndDependentMVars (ms : Array MVarId) :
   let mvarsAppearingInMs ← ms.concatMapM getGoalMVars
   return ms.partition λ m => ¬ mvarsAppearingInMs.contains m
 
-def UserRuleTacOutput.toRuleTacOutput (o : UserRuleTacOutput) :
-    MetaM RuleTacOutput := do
+def SimpleRuleTacOutput.toRuleApplication (o : SimpleRuleTacOutput) :
+    MetaM RuleApplication := do
   let postState ← saveState
   let (regularGoals, unificationGoals) ←
-    nondependentAndDependentMVars o.regularGoals
+    match o.unificationGoals with
+    | some ugoals => pure (o.regularGoals, ugoals)
+    | none => nondependentAndDependentMVars o.regularGoals
   return {
     regularGoals := regularGoals
     unificationGoals := unificationGoals
-    postState := postState }
+    postState := postState
+  }
 
-abbrev RuleTac := RuleTacInput → MetaM (Array RuleTacOutput)
+abbrev RuleTac := RuleTacInput → MetaM RuleTacOutput
 
-abbrev UserRuleTac := RuleTacInput → MetaM UserRuleTacOutput
+abbrev SimpleRuleTac := RuleTacInput → MetaM SimpleRuleTacOutput
+
+def SimpleRuleTac.toRuleTac (t : SimpleRuleTac) : RuleTac := λ input => do
+  let output ← t input
+  return {
+    applications := #[← output.toRuleApplication]
+    postBranchState? := input.branchState?
+  }
 
 -- A `RuleTacDescr` is a recipe for constructing a `RuleTac`. When we serialise
 -- the rule set to an olean file, we serialise `RuleTacDescr`s because we can't
@@ -88,7 +107,7 @@ inductive RuleTacDescr
   | applyConst (decl : Name)
   | tacticMUnit (decl : Name)
   | ruleTac (decl : Name)
-  | userRuleTac (decl : Name)
+  | simpleRuleTac (decl : Name)
   deriving Inhabited, BEq
 
 -- A `SerializableRuleTac` bundles a `RuleTacDescr` and the `RuleTac` that was
@@ -108,7 +127,7 @@ private def checkDeclType (expectedType : Expr) (decl : Name) : MetaM Unit := do
 
 unsafe def ofTacticMUnitConstUnsafe (decl : Name) : MetaM RuleTac := do
   checkDeclType (← mkAppM ``TacticM #[mkConst ``Unit]) decl
-  return λ input => do
+  return SimpleRuleTac.toRuleTac λ input => do
     let tac ← evalConst (TacticM Unit) decl
       -- Note: it is in principle possible for the environment to change so that
       -- `decl` has a different type at the point where this tactic is called.
@@ -116,8 +135,7 @@ unsafe def ofTacticMUnitConstUnsafe (decl : Name) : MetaM RuleTac := do
       -- directly after `checkDeclType`, but this fails when
       -- `ofTacticMUnitConstUnsafe` is called by the `@[aesop]` attribute.
     let goals ← runTacticMAsMetaM tac input.goal
-    let o : UserRuleTacOutput := { regularGoals := goals.toArray }
-    #[← o.toRuleTacOutput]
+    return { regularGoals := goals.toArray }
 
 @[implementedBy ofTacticMUnitConstUnsafe]
 constant ofTacticMUnitConst : Name → MetaM RuleTac
@@ -131,28 +149,45 @@ unsafe def ofRuleTacConstUnsafe (decl : Name) : MetaM RuleTac := do
 @[implementedBy ofRuleTacConstUnsafe]
 constant ofRuleTacConst : Name → MetaM RuleTac
 
-unsafe def ofUserRuleTacConstUnsafe (decl : Name) : MetaM RuleTac := do
-  let type ← deltaExpand (mkConst ``UserRuleTac) λ n => n == ``UserRuleTac
+unsafe def ofSimpleRuleTacConstUnsafe (decl : Name) : MetaM RuleTac := do
+  let type ← deltaExpand (mkConst ``SimpleRuleTac) λ n => n == ``SimpleRuleTac
   checkDeclType type decl
-  return λ input => do
-    let tac ← evalConst UserRuleTac decl
+  return SimpleRuleTac.toRuleTac λ input => do
+    let tac ← evalConst SimpleRuleTac decl
       -- See note about `evalConst` in `ofTacticMUnitConstUnsafe`.
-    return #[← (← tac input).toRuleTacOutput]
+    tac input
 
-@[implementedBy ofUserRuleTacConstUnsafe]
-constant ofUserRuleTacConst : Name → MetaM RuleTac
+@[implementedBy ofSimpleRuleTacConstUnsafe]
+constant ofSimpleRuleTacConst : Name → MetaM RuleTac
 
-def applyConst (decl : Name) : RuleTac := λ input => do
+def applyConst (decl : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input => do
   let goals ← apply input.goal (← mkConstWithFreshMVarLevels decl)
-  return #[← UserRuleTacOutput.toRuleTacOutput { regularGoals := goals.toArray }]
+  return { regularGoals := goals.toArray }
   -- TODO optimise dependent goal analysis
 
-def applyFVar (userName : Name) : RuleTac := λ input =>
+def applyFVar (userName : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input =>
   withMVarContext input.goal do
     let decl ← getLocalDeclFromUserName userName
     let goals ← apply input.goal (mkFVar decl.fvarId)
-    return #[← UserRuleTacOutput.toRuleTacOutput { regularGoals := goals.toArray }]
-  -- TODO ditto
+    return { regularGoals := goals.toArray }
+  -- TODO optimise dependent goal analysis
+
+@[inline]
+def withBranchState (check : RuleBranchState → MetaM Unit)
+    (modify : RuleBranchState → RuleBranchState) (r : RuleTac) :
+    RuleTac := λ input => do
+  let initialBranchState := input.branchState?.getD RuleBranchState.initial
+  check initialBranchState
+  let output ← r input
+  let newBranchState := modify $ output.postBranchState?.getD initialBranchState
+  return { output with postBranchState? := some newBranchState }
+
+def withApplicationLimit (n : Nat) : RuleTac → RuleTac :=
+  withBranchState
+    (λ bs => do
+      if bs.numApplications >= n then
+        throwError "application limit {n} reached")
+    (λ bs => { bs with numApplications := bs.numApplications + 1 })
 
 end RuleTac
 
@@ -165,10 +200,10 @@ def ofTacticMUnit (decl : Name) : MetaM SerializableRuleTac :=
     descr := RuleTacDescr.tacticMUnit decl
   }
 
-def ofUserRuleTacConst (decl : Name) : MetaM SerializableRuleTac :=
+def ofSimpleRuleTacConst (decl : Name) : MetaM SerializableRuleTac :=
   return {
-    tac := (← RuleTac.ofUserRuleTacConst decl)
-    descr := RuleTacDescr.userRuleTac decl
+    tac := (← RuleTac.ofSimpleRuleTacConst decl)
+    descr := RuleTacDescr.simpleRuleTac decl
   }
 
 def ofRuleTacConst (decl : Name) : MetaM SerializableRuleTac :=
@@ -179,7 +214,7 @@ def ofRuleTacConst (decl : Name) : MetaM SerializableRuleTac :=
 
 def ofTacticConst (decl : Name) : MetaM SerializableRuleTac :=
   ofTacticMUnit decl <|>
-  ofUserRuleTacConst decl <|>
+  ofSimpleRuleTacConst decl <|>
   ofRuleTacConst decl <|>
   do throwError "aesop: {decl} was expected to be a tactic but it has type{indentExpr (← getConstInfo decl).type}"
 
@@ -204,7 +239,7 @@ namespace RuleTacDescr
 def toRuleTac : RuleTacDescr → MetaM SerializableRuleTac
   | applyConst decl => SerializableRuleTac.applyConst decl
   | tacticMUnit decl => SerializableRuleTac.ofTacticMUnit decl
-  | userRuleTac decl => SerializableRuleTac.ofUserRuleTacConst decl
+  | simpleRuleTac decl => SerializableRuleTac.ofSimpleRuleTacConst decl
   | ruleTac decl => SerializableRuleTac.ofRuleTacConst decl
 
 end RuleTacDescr

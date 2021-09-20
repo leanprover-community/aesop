@@ -36,11 +36,14 @@ def assumption : RuleTac := λ { goal, .. } =>
     | some hyp => do
       assignExprMVar goal (mkFVar hyp)
       let postState ← saveState
-      let ro := {
+      let rapp := {
         regularGoals := #[]
         unificationGoals := #[]
         postState := postState
       }
-      return #[ro]
+      return {
+        applications := #[rapp]
+        postBranchState? := none
+      }
 
 end Aesop.DefaultRules

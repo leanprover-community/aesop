@@ -193,7 +193,7 @@ def splitHyps (goal : MVarId) : MetaM (Array FVarId × MVarId) := do
 
 end SplitHyps
 
-def splitHyps : UserRuleTac := λ input =>
+def splitHyps : SimpleRuleTac := λ input =>
   return { regularGoals := #[(← SplitHyps.splitHyps input.goal).snd] }
 
 end Aesop.DefaultRules

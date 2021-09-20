@@ -16,6 +16,7 @@ structure RegularRuleBuilderResult where
   builderName : Name
   tac : SerializableRuleTac
   indexingMode : IndexingMode
+  mayUseBranchState : Bool
   deriving Inhabited
 
 inductive NormRuleBuilderResult
@@ -94,6 +95,7 @@ def apply : RuleBuilder RegularRuleBuilderResult := λ ruleIdent => do
     builderName := `apply
     tac := tac
     indexingMode := (← applyIndexingMode type)
+    mayUseBranchState := false
   }
 
 def tactic : RuleBuilder RegularRuleBuilderResult
@@ -102,6 +104,7 @@ def tactic : RuleBuilder RegularRuleBuilderResult
       builderName := `tactic
       tac := (← SerializableRuleTac.ofTacticConst decl)
       indexingMode := IndexingMode.unindexed
+      mayUseBranchState := true
     }
   | RuleIdent.fvar _ =>
     throwError "aesop: tactic builder does not support local hypotheses."
