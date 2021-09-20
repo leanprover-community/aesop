@@ -33,11 +33,12 @@ def defaultRules : TermElabM (Array RuleSetMember) := do
     (``DefaultRules.splitHyps , ← `(attr|aesop norm 0)),
     (``DefaultRules.applyHyps , ← `(attr|aesop 75%))]
   where
-    mkRule (decl : Name) (configStx : Syntax) : TermElabM RuleSetMember := do
+    mkRule (decl : Name) (configStx : Syntax) :
+        TermElabM (Array RuleSetMember) := do
       let config ← RuleConfig.parse configStx
       config.applyToRuleIdent (RuleIdent.const decl)
 
     mkRules (rs : Array (Name × Syntax)) : TermElabM (Array RuleSetMember) :=
-      rs.mapM (λ (decl, configStx) => mkRule decl configStx)
+      rs.concatMapM (λ (decl, configStx) => mkRule decl configStx)
 
 end Aesop

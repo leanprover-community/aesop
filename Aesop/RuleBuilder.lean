@@ -12,12 +12,14 @@ open Lean.Meta
 
 namespace Aesop
 
-structure RegularRuleBuilderResult where
+structure SingleRegularRuleBuilderResult where
   builderName : Name
   tac : SerializableRuleTac
   indexingMode : IndexingMode
   mayUseBranchState : Bool
   deriving Inhabited
+
+abbrev RegularRuleBuilderResult := Array SingleRegularRuleBuilderResult
 
 inductive NormRuleBuilderResult
   | regular (r : RegularRuleBuilderResult)
@@ -91,21 +93,21 @@ def apply : RuleBuilder RegularRuleBuilderResult := λ ruleIdent => do
     match ruleIdent with
     | RuleIdent.const decl => SerializableRuleTac.applyConst decl
     | RuleIdent.fvar userName => SerializableRuleTac.applyFVar userName
-  return {
+  return #[{
     builderName := `apply
     tac := tac
     indexingMode := (← applyIndexingMode type)
     mayUseBranchState := false
-  }
+  }]
 
 def tactic : RuleBuilder RegularRuleBuilderResult
   | RuleIdent.const decl =>
-    return {
+    return #[{
       builderName := `tactic
       tac := (← SerializableRuleTac.ofTacticConst decl)
       indexingMode := IndexingMode.unindexed
       mayUseBranchState := true
-    }
+    }]
   | RuleIdent.fvar _ =>
     throwError "aesop: tactic builder does not support local hypotheses."
 
