@@ -33,6 +33,7 @@ syntax &"apply" : aesop_builder
 syntax &"simp" : aesop_builder
 syntax &"unfold" : aesop_builder
 syntax &"tactic" : aesop_builder
+syntax &"constructors" : aesop_builder
 
 declare_syntax_cat' aesop_clause
 
@@ -129,6 +130,7 @@ end RuleKind
 inductive RegularBuilderClause
   | apply
   | tactic
+  | constructors
   deriving Inhabited, BEq
 
 namespace RegularBuilderClause
@@ -137,10 +139,12 @@ instance : ToString RegularBuilderClause where
   toString
     | apply => "(builder apply)"
     | tactic => "(builder tactic)"
+    | constructors => "(builder constructors)"
 
 def toRuleBuilder : RegularBuilderClause → RuleBuilder RegularRuleBuilderResult
   | apply => RuleBuilder.apply
   | tactic => RuleBuilder.tactic
+  | constructors => RuleBuilder.constructors
 
 end RegularBuilderClause
 
@@ -163,6 +167,7 @@ open RegularBuilderClause in
 protected def parseBuilder : Syntax → BuilderClause
   | `(aesop_builder|apply) => regular apply
   | `(aesop_builder|tactic) => regular tactic
+  | `(aesop_builder|constructors) => regular constructors
   | `(aesop_builder|simp) => simpLemma
   | `(aesop_builder|unfold) => simpUnfold
   | _ => unreachable!

@@ -111,6 +111,27 @@ def tactic : RuleBuilder RegularRuleBuilderResult
   | RuleIdent.fvar _ =>
     throwError "aesop: tactic builder does not support local hypotheses."
 
+def constructors : RuleBuilder RegularRuleBuilderResult
+  | RuleIdent.const decl => do
+    let (some info) ← getConst? decl
+      | throwError "aesop: constructors builder: unknown constant '{decl}'"
+    let (ConstantInfo.inductInfo info) ← pure info
+      | throwError "aesop: expected '{decl}' to be an inductive type"
+    info.ctors.toArray.mapM processConstructor
+  | RuleIdent.fvar _ =>
+    throwError "aesop: constructors builder does not support local hypotheses."
+  where
+    processConstructor (c : Name) : MetaM SingleRegularRuleBuilderResult := do
+      let (some cinfo) ← getConst? c
+        | throwError "aesop: internal error in constructors builder: nonexistant constructor {c}"
+      let imode ← applyIndexingMode cinfo.type
+      return {
+        builderName := `constructors
+        tac := (← SerializableRuleTac.applyConst c)
+        indexingMode := imode
+        mayUseBranchState := false
+      }
+
 -- TODO In the default builders below, we should distinguish between fatal and
 -- nonfatal errors. E.g. if the `tactic` builder finds a declaration that is not
 -- of tactic type, this is a nonfatal error and we should continue with the next
@@ -120,13 +141,13 @@ def tactic : RuleBuilder RegularRuleBuilderResult
 -- intended to add a simp lemma.
 
 def unsafeRuleDefault : RuleBuilder RegularRuleBuilderResult
-  | i@(RuleIdent.const _) => tactic i <|> apply i <|> err i
+  | i@(RuleIdent.const _) => constructors i <|> tactic i <|> apply i <|> err i
   | i@(RuleIdent.fvar _) => apply i <|> err i
   where
     err i := throwError "aesop: Unable to interpret {i} as an unsafe rule."
 
 def safeRuleDefault : RuleBuilder RegularRuleBuilderResult
-  | i@(RuleIdent.const _) => tactic i <|> apply i <|> err i
+  | i@(RuleIdent.const _) => constructors i <|> tactic i <|> apply i <|> err i
   | i@(RuleIdent.fvar _) => apply i <|> err i
   where
     err i := throwError "aesop: Unable to interpret {i} as a safe rule."
