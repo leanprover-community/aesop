@@ -34,6 +34,9 @@ syntax &"simp" : aesop_builder
 syntax &"unfold" : aesop_builder
 syntax &"tactic" : aesop_builder
 syntax &"constructors" : aesop_builder
+syntax &"safe_default" : aesop_builder
+syntax &"unsafe_default" : aesop_builder
+syntax &"norm_default" : aesop_builder
 
 declare_syntax_cat' aesop_clause
 
@@ -131,20 +134,28 @@ inductive RegularBuilderClause
   | apply
   | tactic
   | constructors
+  | unsafeDefault
+  | safeDefault
   deriving Inhabited, BEq
 
 namespace RegularBuilderClause
 
+def builderName : RegularBuilderClause → String
+  | apply => "apply"
+  | tactic => "tactic"
+  | constructors => "constructors"
+  | unsafeDefault => "unsafe_default"
+  | safeDefault => "safe_default"
+
 instance : ToString RegularBuilderClause where
-  toString
-    | apply => "(builder apply)"
-    | tactic => "(builder tactic)"
-    | constructors => "(builder constructors)"
+  toString c := s!"(builder {c.builderName})"
 
 def toRuleBuilder : RegularBuilderClause → RuleBuilder RegularRuleBuilderResult
   | apply => RuleBuilder.apply
   | tactic => RuleBuilder.tactic
   | constructors => RuleBuilder.constructors
+  | unsafeDefault => RuleBuilder.unsafeRuleDefault
+  | safeDefault => RuleBuilder.safeRuleDefault
 
 end RegularBuilderClause
 
@@ -153,15 +164,19 @@ inductive BuilderClause
   | regular (c : RegularBuilderClause)
   | simpLemma
   | simpUnfold
+  | normDefault
   deriving Inhabited, BEq
 
 namespace BuilderClause
 
+def builderName : BuilderClause → String
+  | regular c => c.builderName
+  | simpLemma => "simp"
+  | simpUnfold => "unfold"
+  | normDefault => "norm_default"
+
 instance : ToString BuilderClause where
-  toString
-    | regular c => toString c
-    | simpLemma => "(builder simp)"
-    | simpUnfold => "(builder unfold)"
+  toString c := s!"(builder {c.builderName})"
 
 open RegularBuilderClause in
 protected def parseBuilder : Syntax → BuilderClause
@@ -170,6 +185,9 @@ protected def parseBuilder : Syntax → BuilderClause
   | `(aesop_builder|constructors) => regular constructors
   | `(aesop_builder|simp) => simpLemma
   | `(aesop_builder|unfold) => simpUnfold
+  | `(aesop_builder|unsafe_default) => regular unsafeDefault
+  | `(aesop_builder|safe_default) => regular safeDefault
+  | `(aesop_builder|norm_default) => normDefault
   | _ => unreachable!
 
 def toRuleBuilder : BuilderClause → RuleBuilder NormRuleBuilderResult
@@ -177,6 +195,7 @@ def toRuleBuilder : BuilderClause → RuleBuilder NormRuleBuilderResult
     NormRuleBuilderResult.regular <$> c.toRuleBuilder goal i
   | simpLemma => RuleBuilder.normSimpLemmas
   | simpUnfold => RuleBuilder.normSimpUnfold
+  | normDefault => RuleBuilder.normRuleDefault
 
 end BuilderClause
 
@@ -199,40 +218,43 @@ protected def parse : Syntax → m Clause
 end Clause
 
 
-structure NormRuleConfig where
-  penalty : Option Int
-  builder : Option BuilderClause
-  deriving Inhabited, BEq
+structure Clauses where
+  builder : Option BuilderClause := none
 
-namespace NormRuleConfig
+namespace Clauses
 
-instance : ToString NormRuleConfig where
-  toString conf :=
-    " ".joinSep
-      [ match conf.penalty with | none => "" | some p => toString p,
-        match conf.builder with | none => "" | some b => toString b ]
+def mergeClauseNoDuplicate (clause_name : String) (current : Option α)
+    (new : α) : m α :=
+  match current with
+  | none => pure new
+  | some old => throwError "aesop: duplicate {clause_name} clause"
 
-protected def addClause (conf : NormRuleConfig) :
-    Clause → m NormRuleConfig
+def add (cs : Clauses) : Clause → m Clauses
   | Clause.builder b =>
-    if conf.builder.isSome
-      then throwError "aesop: duplicate builder clause."
-      else pure { conf with builder := b }
+    return { cs with builder := ← mergeClauseNoDuplicate "builder" cs.builder b }
 
-protected def addClauses (clauses : Array Clause)
-    (conf : NormRuleConfig) : m NormRuleConfig :=
-  clauses.foldlM NormRuleConfig.addClause conf
+def ofClauseArray (cs : Array Clause) : m Clauses :=
+  cs.foldlM add {}
+
+end Clauses
+
+
+structure NormRuleClauses where
+  builder : BuilderClause
+
+namespace NormRuleClauses
+
+def ofClauses (cs : Clauses) : NormRuleClauses where
+  builder := cs.builder.getD BuilderClause.normDefault
+
+end NormRuleClauses
 
 open NormRuleBuilderResult in
-protected def applyToRuleIdent (i : RuleIdent) (conf : NormRuleConfig) :
+def buildNormRule (penalty : Int) (clauses : NormRuleClauses) (i : RuleIdent) :
     MetaM (Array RuleSetMember) := do
-  let results ←
-    match conf.builder with
-    | none => RuleBuilder.normRuleDefault i
-    | some builderClause => builderClause.toRuleBuilder i
+  let results ← clauses.builder.toRuleBuilder i
   match results with
   | regular results =>
-    let penalty := conf.penalty.getD 1
     results.mapM λ res => RuleSetMember'.normRule
       { name := `norm ++ res.builderName ++ i.ruleName
         indexingMode := res.indexingMode
@@ -242,45 +264,30 @@ protected def applyToRuleIdent (i : RuleIdent) (conf : NormRuleConfig) :
   | simpEntries es =>
     return #[RuleSetMember'.normSimpEntries es]
 
-end NormRuleConfig
 
-
-structure SafeRuleConfig where
-  penalty : Option Int
-  builder : Option RegularBuilderClause
+structure SafeRuleClauses where
+  builder : RegularBuilderClause
   deriving Inhabited
 
-namespace SafeRuleConfig
+namespace SafeRuleClauses
 
-instance : ToString SafeRuleConfig where
-  toString conf :=
-    " ".joinSep
-      [ match conf.penalty with | none => "" | some p => toString p,
-        match conf.builder with
-          | none => ""
-          | some b => toString (BuilderClause.regular b) ]
+def ofClauses (cs : Clauses) : m SafeRuleClauses := do
+  let builder ←
+    match cs.builder with
+    | some (BuilderClause.regular b) => pure b
+    | some b => errInvalidBuilder b
+    | none => pure RegularBuilderClause.safeDefault
+  return { builder := builder }
+  where
+    errInvalidBuilder {α} (b : BuilderClause) : m α :=
+      throwError "aesop: {b.builderName} builder cannot be used with safe rules"
 
-protected def addClause (conf : SafeRuleConfig) : Clause → m SafeRuleConfig
-  | Clause.builder BuilderClause.simpLemma =>
-    throwError "aesop: 'simp' builder cannot be used with safe rules."
-  | Clause.builder BuilderClause.simpUnfold =>
-    throwError "aesop: 'unfold' builder cannot be used with safe rules."
-  | Clause.builder (BuilderClause.regular b) =>
-    if conf.builder.isSome
-      then throwError "aesop: duplicate builder clause."
-      else pure { conf with builder := b }
+end SafeRuleClauses
 
-protected def addClauses (clauses : Array Clause) (conf : SafeRuleConfig) :
-    m SafeRuleConfig :=
-  clauses.foldlM SafeRuleConfig.addClause conf
-
-protected def applyToRuleIdent (i : RuleIdent) (conf : SafeRuleConfig) :
-    MetaM (Array RuleSetMember) := do
-  let results ←
-    match conf.builder with
-    | none => RuleBuilder.safeRuleDefault i
-    | some builderClause => builderClause.toRuleBuilder i
-  let penalty := conf.penalty.getD 0
+def buildSafeRule (penalty : Option Int) (clauses : SafeRuleClauses)
+    (i : RuleIdent) : MetaM (Array RuleSetMember) := do
+  let results ← clauses.builder.toRuleBuilder i
+  let penalty := penalty.getD 0
   results.mapM λ res => RuleSetMember'.safeRule
     { name := `safe ++ res.builderName ++ i.ruleName
       indexingMode := res.indexingMode,
@@ -289,80 +296,55 @@ protected def applyToRuleIdent (i : RuleIdent) (conf : SafeRuleConfig) :
         -- TODO support almost_safe rules
       tac := res.tac }
 
-end SafeRuleConfig
 
-
-structure UnsafeRuleConfig where
-  successProbability : Percent
-  builder : Option RegularBuilderClause
+structure UnsafeRuleClauses where
+  builder : RegularBuilderClause
   deriving Inhabited
 
-namespace UnsafeRuleConfig
+namespace UnsafeRuleClauses
 
-instance : ToString UnsafeRuleConfig where
-  toString conf :=
-    " ".joinSep
-      [ conf.successProbability.toHumanString,
-        match conf.builder with
-          | none => ""
-          | some b => toString (BuilderClause.regular b) ]
+def ofClauses (cs : Clauses) : m UnsafeRuleClauses := do
+  let builder ←
+    match cs.builder with
+    | some (BuilderClause.regular b) => pure b
+    | some b => errInvalidBuilder b
+    | none => pure RegularBuilderClause.unsafeDefault
+  return { builder := builder }
+  where
+    errInvalidBuilder {α} (b : BuilderClause) : m α :=
+      throwError "aesop: {b.builderName} builder cannot be used with unsafe rules"
 
-protected def addClause (conf : UnsafeRuleConfig) : Clause → m UnsafeRuleConfig
-  | Clause.builder BuilderClause.simpLemma =>
-    throwError "aesop: 'simp' builder cannot be used with unsafe rules."
-  | Clause.builder BuilderClause.simpUnfold =>
-    throwError "aesop: 'unfold' builder cannot be used with unsafe rules."
-  | Clause.builder (BuilderClause.regular b) =>
-    if conf.builder.isSome
-      then throwError "aesop: duplicate builder clause."
-      else pure { conf with builder := b }
+end UnsafeRuleClauses
 
-protected def addClauses (clauses : Array Clause) (conf : UnsafeRuleConfig) :
-    m UnsafeRuleConfig :=
-  clauses.foldlM UnsafeRuleConfig.addClause conf
-
-protected def applyToRuleIdent (i : RuleIdent) (conf : UnsafeRuleConfig) :
-    MetaM (Array RuleSetMember) := do
-  let results ←
-    match conf.builder with
-    | none => RuleBuilder.unsafeRuleDefault i
-    | some builderClause => builderClause.toRuleBuilder i
+def buildUnsafeRule (successProbability : Percent) (clauses : UnsafeRuleClauses)
+    (i : RuleIdent) : MetaM (Array RuleSetMember) := do
+  let results ← clauses.builder.toRuleBuilder i
   results.mapM λ res => RuleSetMember'.unsafeRule
     { name := `unsafe ++ res.builderName ++ i.ruleName
       indexingMode := res.indexingMode,
       usesBranchState := res.mayUseBranchState
-      extra := { successProbability := conf.successProbability },
+      extra := { successProbability := successProbability },
       tac := res.tac }
-
-end UnsafeRuleConfig
 
 
 inductive RuleConfig
-  | norm (conf : NormRuleConfig)
-  | safe (conf : SafeRuleConfig)
-  | «unsafe» (conf : UnsafeRuleConfig)
+  | norm (penalty : Int) (clauses : NormRuleClauses)
+  | safe (penalty : Int) (clauses : SafeRuleClauses)
+  | «unsafe» (successProbability : Percent) (clauses : UnsafeRuleClauses)
   deriving Inhabited
 
 namespace RuleConfig
 
-instance : ToString RuleConfig where
-  toString c :=
-    "aesop " ++
-    match c with
-      | norm conf => " ".joinSep ["norm", toString conf]
-      | safe conf => " ".joinSep ["safe", toString conf]
-      | «unsafe» conf => " ".joinSep ["unsafe", toString conf]
-
-protected def ofKindAndClauses : RuleKind → Array Clause → m RuleConfig
-  | RuleKind.norm penalty, cs => do
-    let conf : NormRuleConfig := { penalty := penalty, builder := none }
-    norm <$> conf.addClauses cs
-  | RuleKind.safe penalty, cs => do
-    let conf : SafeRuleConfig := { penalty := penalty, builder := none }
-    safe <$> conf.addClauses cs
-  | RuleKind.unsafe prob, cs => do
-    let conf : UnsafeRuleConfig := { successProbability := prob, builder := none }
-    «unsafe» <$> conf.addClauses cs
+protected def ofKindAndClauses (kind : RuleKind) (clauses : Array Clause) :
+    m RuleConfig := do
+  let clauses ← Clauses.ofClauseArray clauses
+  match kind with
+  | RuleKind.norm penalty =>
+    norm penalty <$> NormRuleClauses.ofClauses clauses
+  | RuleKind.safe penalty =>
+    safe penalty <$> SafeRuleClauses.ofClauses clauses
+  | RuleKind.unsafe successProbability =>
+    «unsafe» successProbability <$> UnsafeRuleClauses.ofClauses clauses
 
 protected def parse : Syntax → m RuleConfig
   | `(attr|aesop $kind:aesop_kind $[$clauses:aesop_clause]*) => do
@@ -371,11 +353,12 @@ protected def parse : Syntax → m RuleConfig
     RuleConfig.ofKindAndClauses kind clauses
   | _ => unreachable!
 
-protected def applyToRuleIdent (i : RuleIdent) :
-    RuleConfig → MetaM (Array RuleSetMember)
-  | norm conf => conf.applyToRuleIdent i
-  | safe conf => conf.applyToRuleIdent i
-  | «unsafe» conf => conf.applyToRuleIdent i
+protected def applyToRuleIdent (i : RuleIdent) : RuleConfig →
+    MetaM (Array RuleSetMember)
+  | norm penalty clauses => buildNormRule penalty clauses i
+  | safe penalty clauses => buildSafeRule penalty clauses i
+  | «unsafe» successProbability clauses =>
+    buildUnsafeRule successProbability clauses i
 
 end RuleConfig
 
