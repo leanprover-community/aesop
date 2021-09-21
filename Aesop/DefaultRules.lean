@@ -25,7 +25,7 @@ end DefaultRules
 -- tag the above tactics with `@[aesop ... (rule_set default)]` or something.
 def defaultRules : TermElabM (Array RuleSetMember) := do
   mkRules #[
-    (``DefaultRules.assumption, ← `(attr|aesop safe -50)),
+    (``DefaultRules.safeAssumption, ← `(attr|aesop safe -50)),
       -- The assumption rule is subsumed by applyHyps. But we still want to have
       -- it separately as a low-penalty safe rule so that very easy goals are
       -- discharged immediately.
