@@ -7,6 +7,19 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Lean
 import Std.Data.BinomialHeap
 
+namespace Option
+
+def mergeLeftBiased : Option α → Option α → Option α
+  | some x, y => some x
+  | none, y => y
+
+def mergeRightBiased : Option α → Option α → Option α
+  | x, some y => some y
+  | x, none => x
+
+end Option
+
+
 namespace String
 
 def joinSep (sep : String)  : List String → String

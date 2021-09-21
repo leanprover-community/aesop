@@ -223,18 +223,12 @@ structure Clauses where
 
 namespace Clauses
 
-def mergeClauseNoDuplicate (clause_name : String) (current : Option α)
-    (new : α) : m α :=
-  match current with
-  | none => pure new
-  | some old => throwError "aesop: duplicate {clause_name} clause"
-
-def add (cs : Clauses) : Clause → m Clauses
+def add (cs : Clauses) : Clause → Clauses
   | Clause.builder b =>
-    return { cs with builder := ← mergeClauseNoDuplicate "builder" cs.builder b }
+    { cs with builder := cs.builder.mergeRightBiased (some b) }
 
-def ofClauseArray (cs : Array Clause) : m Clauses :=
-  cs.foldlM add {}
+def ofClauseArray (cs : Array Clause) : Clauses :=
+  cs.foldl add {}
 
 end Clauses
 
@@ -337,7 +331,7 @@ namespace RuleConfig
 
 protected def ofKindAndClauses (kind : RuleKind) (clauses : Array Clause) :
     m RuleConfig := do
-  let clauses ← Clauses.ofClauseArray clauses
+  let clauses := Clauses.ofClauseArray clauses
   match kind with
   | RuleKind.norm penalty =>
     norm penalty <$> NormRuleClauses.ofClauses clauses
