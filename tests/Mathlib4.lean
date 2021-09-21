@@ -21,9 +21,9 @@ def congr_arg := @congrArg
 -- TODO subst builder
 theorem not_of_eq_false {p : Prop} (h : p = False) : ¬p := fun hp => h ▸ hp
 
--- TODO reflexivity default tactic
 -- TODO How to use a lemma like this? Maybe this is a nice example of e-matching.
-theorem cast_proof_irrel (h₁ h₂ : α = β) (a : α) : cast h₁ a = cast h₂ a := rfl
+theorem cast_proof_irrel (h₁ h₂ : α = β) (a : α) : cast h₁ a = cast h₂ a := by
+  aesop
 
 -- TODO make this a norm lemma?
 theorem Ne.def (a b : α) : (a ≠ b) = ¬ (a = b) := rfl
