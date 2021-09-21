@@ -26,7 +26,9 @@ def pop? (queue : UnsafeQueue) :
     then
       let head := queue.as.get ⟨queue.start, Nat.lt_of_lt_of_le h queue.h₂⟩
       let tail :=
-        { queue with start := queue.start + 1, h₁ := Nat.le_of_lt_succ h }
+        { queue with
+          start := queue.start + 1
+          h₁ := Nat.le_of_lt_succ $ Nat.succ_lt_succ h  }
       some (head, tail)
     else
       none

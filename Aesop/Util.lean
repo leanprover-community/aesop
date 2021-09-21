@@ -546,7 +546,7 @@ def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
     MetaM Expr := do
   let mdecl ← getMVarDecl mvarId
   let (some ldecl) ← mdecl.lctx.find? fvarId | throwError
-    "unknown local constant {fvarId} (in local context of metavariable ?{mvarId})"
+    "unknown local constant {fvarId.name} (in local context of metavariable ?{mvarId.name})"
   let type ← instantiateMVars ldecl.type
   let mdecl :=
     { mdecl with

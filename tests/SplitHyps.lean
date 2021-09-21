@@ -33,28 +33,28 @@ example {P Q : α → Prop} (h : ∀ x, P x ∧ Q x) (y) : Q y ∧ P y := by
 -- arbitrary structures).
 example {P : Type 1} {Q : Type 2} (h : P × Q) : PProd Q P := by
   splitHyps
-  constructor; allGoals assumption
+  constructor; all_goals assumption
 
 example {P : Prop} {Q : Type 1} (h : PProd P Q) : PProd Q P := by
   splitHyps
-  constructor; allGoals assumption
+  constructor; all_goals assumption
 
 example {P Q : Type 1} (h : MProd P Q) : Q × P := by
   splitHyps
-  constructor; allGoals assumption
+  constructor; all_goals assumption
 
 -- All sigma-like types from the standard library are supported.
 example {X : Type} {P : X → Type} (h : Σ x, P x) : Σ x, P x := by
   splitHyps
-  constructor; allGoals assumption
+  constructor; all_goals assumption
 
 example {X : Prop} {P : X → Type 2} (h : Σ' x, P x) : Σ' x, P x := by
   splitHyps
-  constructor; allGoals assumption
+  constructor; all_goals assumption
 
 example {X : Type} {P : X → Prop} (h : ∃ x, P x) : ∃ x, P x := by
   splitHyps
-  constructor; allGoals assumption
+  constructor; all_goals assumption
 
 -- Sigma-like types can be split under Π binders as well, except for
 -- Exists. (See note in the splitHyps code for why.) Also, splitting recurses

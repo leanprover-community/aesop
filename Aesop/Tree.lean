@@ -1119,9 +1119,9 @@ mutual
       restoreState r.state
       for (m, _) in r.unificationGoalOrigins do
         let (some _) ← (← getMCtx).findDecl? m | throwError
-          "{Check.tree.name}: in rapp {r.id}: unification goal {m} is not declared in the metavariable context"
+          "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is not declared in the metavariable context"
         if (← isExprMVarAssigned m) then throwError
-          "{Check.tree.name}: in rapp {r.id}: unification goal {m} is assigned"
+          "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is assigned"
     r.subgoals.forM checkUnificationGoalOriginsGoal
 
 end

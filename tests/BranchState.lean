@@ -16,5 +16,5 @@ example : Even 4 := by
   aesop
 
 example : Even 6 := by
-  failIfSuccess aesop
+  fail_if_success aesop
   exact Even.plusTwo $ Even.plusTwo $ Even.plusTwo Even.zero

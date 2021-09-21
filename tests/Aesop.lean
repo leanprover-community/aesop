@@ -57,7 +57,7 @@ axiom R_trans : ∀ x y z, R x y → R y z → R x z
 
 -- TODO This test case currently fails, but should succeed.
 example {a b c d} (hab : R a b) (hbc : R b c) (hcd : R c d) : R a d := by
-  failIfSuccess aesop (options { maxRuleApplicationDepth := 3, maxRuleApplications := 50 })
+  fail_if_success aesop (options { maxRuleApplicationDepth := 3, maxRuleApplications := 50 })
   exact R_trans _ _ _ hab $ R_trans _ _ _ hbc hcd
 
 end Transitivity
@@ -70,9 +70,9 @@ structure Wrap (α) where
   unwrap : α
 
 example (h : α → α) (h' : Wrap α) : α := by
-  failIfSuccess aesop (safe [h]) (options { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0 })
-  failIfSuccess aesop (safe [h]) (options { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0 })
-  failIfSuccess aesop (safe [h]) (options { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0 })
+  fail_if_success aesop (safe [h]) (options { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0 })
+  fail_if_success aesop (safe [h]) (options { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0 })
+  fail_if_success aesop (safe [h]) (options { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0 })
   exact h'.unwrap
 
 end Loop

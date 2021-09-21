@@ -30,14 +30,14 @@ theorem Ne.def (a b : α) : (a ≠ b) = ¬ (a = b) := rfl
 
 -- TODO heq refl default tactic
 theorem heq_of_eq_rec_left {φ : α → Sort v} {a a' : α} {p₁ : φ a} {p₂ : φ a'} :
-  (e : a = a') → (h₂ : Eq.rec (motive := fun a _ => φ a) p₁ e = p₂) → p₁ ≅ p₂
+  (e : a = a') → (h₂ : Eq.rec (motive := fun a _ => φ a) p₁ e = p₂) → HEq p₁ p₂
 | rfl, rfl => HEq.rfl
 
 theorem heq_of_eq_rec_right {φ : α → Sort v} {a a' : α} {p₁ : φ a} {p₂ : φ a'} :
-  (e : a' = a) → (h₂ : p₁ = Eq.rec (motive := fun a _ => φ a) p₂ e) → p₁ ≅ p₂
+  (e : a' = a) → (h₂ : p₁ = Eq.rec (motive := fun a _ => φ a) p₂ e) → HEq p₁ p₂
 | rfl, rfl => HEq.rfl
 
-theorem of_heq_true (h : a ≅ True) : a := of_eq_true (eq_of_heq h)
+theorem of_heq_true (h : HEq a True) : a := of_eq_true (eq_of_heq h)
 
 -- TODO use applicable hyps by default
 def And.elim (f : a → b → α) (h : a ∧ b) : α := by aesop (safe [f])
@@ -46,7 +46,7 @@ theorem And.symm : a ∧ b → b ∧ a := by aesop
 
 -- TODO automatic cases on or in hyp (needs per-hyp rules)
 -- TODO cases builder
-theorem Or.elim {a b c : Prop} (h₁ : a → c) (h₂ : b → c) (h : a ∨ b) : c := by
+theorem Or.myelim {a b c : Prop} (h₁ : a → c) (h₂ : b → c) (h : a ∨ b) : c := by
   cases h <;> aesop
 
 -- TODO make normalisation a fixpoint loop?
@@ -78,8 +78,6 @@ theorem neq_of_not_iff : ¬(a ↔ b) → a ≠ b := mt Eq.to_iff
 theorem of_iff_true (h : a ↔ True) : a := by aesop
 
 theorem not_of_iff_false : (a ↔ False) → ¬a := Iff.mp
-
-theorem not_not_intro : a → ¬¬a := fun a h => h a
 
 theorem iff_true_intro (h : a) : a ↔ True := by aesop
 
@@ -120,7 +118,7 @@ theorem ne_self_iff_false (a : α) : a ≠ a ↔ False := by aesop
 
 theorem eq_self_iff_true (a : α) : a = a ↔ True := by aesop
 
-theorem heq_self_iff_true (a : α) : a ≅ a ↔ True := iff_true_intro HEq.rfl
+theorem heq_self_iff_true (a : α) : HEq a a ↔ True := iff_true_intro HEq.rfl
 
 theorem iff_not_self : ¬(a ↔ ¬a) | H => let f h := H.1 h h; f (H.2 f)
 
@@ -183,7 +181,7 @@ theorem or_left_comm : a ∨ (b ∨ c) ↔ b ∨ (a ∨ c) := by
   rw [← or_assoc, ← or_assoc, @or_comm a b]
   exact Iff.rfl
 
-theorem not_or_intro : (na : ¬a) → (nb : ¬b) → ¬(a ∨ b) := Or.elim
+theorem not_or_intro : (na : ¬a) → (nb : ¬b) → ¬(a ∨ b) := Or.myelim
 
 theorem not_or (p q) : ¬ (p ∨ q) ↔ ¬ p ∧ ¬ q :=
 ⟨fun H => ⟨mt Or.inl H, mt Or.inr H⟩, fun ⟨hp, hq⟩ pq => pq.elim hp hq⟩
