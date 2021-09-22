@@ -11,6 +11,8 @@ import Aesop.Options
 open Lean
 open Lean.Meta
 open Lean.Elab.Term
+open Std (HashSet)
+open Aesop.RuleBuilder (TacticBuilderOptions)
 
 namespace Aesop
 
@@ -38,9 +40,14 @@ syntax &"safe_default" : aesop_builder
 syntax &"unsafe_default" : aesop_builder
 syntax &"norm_default" : aesop_builder
 
+declare_syntax_cat' aesop_builder_clause force_leading_unreserved_tokens
+
+syntax &"uses_branch_state" : aesop_builder_clause
+syntax &"uses_no_branch_state" : aesop_builder_clause
+
 declare_syntax_cat' aesop_clause
 
-syntax "(" &"builder" aesop_builder ")" : aesop_clause
+syntax "(" &"builder" aesop_builder aesop_builder_clause* ")" : aesop_clause
 syntax "(" &"options" term ")" : aesop_clause
 
 syntax (name := aesop) &"aesop" aesop_kind aesop_clause* : attr
@@ -48,13 +55,15 @@ syntax (name := aesop) &"aesop" aesop_kind aesop_clause* : attr
 end Parser.Attribute
 
 
+namespace Config
+
 variable [Monad m] [MonadError m]
 
 
 inductive Prio
   | successProbability (p : Percent)
   | penalty (i : Int)
-  deriving Inhabited, BEq
+  deriving Inhabited
 
 namespace Prio
 
@@ -101,7 +110,7 @@ inductive RuleKind
   | norm (penalty : Int)
   | safe (penalty : Int)
   | «unsafe» (successProbability : Percent)
-  deriving Inhabited, BEq
+  deriving Inhabited
 
 namespace RuleKind
 
@@ -130,96 +139,183 @@ protected def parse : Syntax → m RuleKind
 end RuleKind
 
 
-inductive RegularBuilderClause
+inductive BuilderOption
+  | usesBranchState
+  | usesNoBranchState
+  deriving Inhabited
+
+namespace BuilderOption
+
+instance : ToString BuilderOption where
+  toString
+    | usesBranchState => "uses_branch_state"
+    | usesNoBranchState => "uses_no_branch_state"
+
+protected def parse : Syntax → BuilderOption
+  | `(aesop_builder_clause|uses_branch_state) => usesBranchState
+  | `(aesop_builder_clause|uses_no_branch_state) => usesNoBranchState
+  | _ => unreachable!
+
+protected def parseMany (stxs : Array Syntax) : Array BuilderOption :=
+  stxs.map BuilderOption.parse
+
+end BuilderOption
+
+
+structure BuilderOptions where
+  usesBranchState : Option Bool := none
+  deriving Inhabited
+
+namespace BuilderOptions
+
+protected def add (opts : BuilderOptions) :  BuilderOption → BuilderOptions
+  | BuilderOption.usesBranchState =>
+    { opts with
+      usesBranchState := opts.usesBranchState.mergeRightBiased (some True) }
+  | BuilderOption.usesNoBranchState =>
+    { opts with
+      usesBranchState := opts.usesBranchState.mergeRightBiased (some False) }
+
+def ofBuilderOptionArray (opts : Array BuilderOption) : BuilderOptions :=
+  opts.foldl BuilderOptions.add {}
+
+-- NOTE: Make sure this set contains every field of `BuilderOptions`.
+def definedFields : BuilderOptions → HashSet Name
+  | { usesBranchState } =>
+    HashSet.empty
+    |> go usesBranchState `usesBranchState
+  where
+    go {α} (o : Option α) (n : Name) (ns : HashSet Name) : HashSet Name :=
+      match o with
+      | none => ns
+      | some _ => ns.insert n
+
+def parse (stxs : Array Syntax) : BuilderOptions :=
+  ofBuilderOptionArray $ stxs.map BuilderOption.parse
+
+end BuilderOptions
+
+
+private def checkBuilderOptionsContainOnly (builderName : String)
+    (possibleOptions : Array Name) (opts : BuilderOptions) : m Unit := do
+  let mut defined := opts.definedFields
+  for n in possibleOptions do
+    defined := defined.erase n
+  unless defined.isEmpty do
+    let extraOpts := MessageData.joinSep (defined.toList.map toMessageData) ", "
+    throwError "aesop: builder {builderName} does not support these options: {extraOpts}"
+
+private def checkNoBuilderOptions (builderName : String)
+    (opts : BuilderOptions) : m Unit :=
+  checkBuilderOptionsContainOnly builderName #[] opts
+
+def tacticBuilderOptionsOfBuilderOptions (opts : BuilderOptions) :
+    m TacticBuilderOptions := do
+  checkBuilderOptionsContainOnly "tactic" #[`usesBranchState] opts
+  return { usesBranchState := opts.usesBranchState.getD true }
+
+def tacticBuilderOptionsToBuilderOptions (opts : TacticBuilderOptions) :
+    BuilderOptions :=
+  { usesBranchState := opts.usesBranchState }
+
+inductive RegularBuilder
   | apply
-  | tactic
+  | tactic (opts : TacticBuilderOptions)
   | constructors
   | unsafeDefault
   | safeDefault
-  deriving Inhabited, BEq
+  deriving Inhabited
 
-namespace RegularBuilderClause
+namespace RegularBuilder
 
-def builderName : RegularBuilderClause → String
+protected def name : RegularBuilder → String
   | apply => "apply"
-  | tactic => "tactic"
+  | tactic .. => "tactic"
   | constructors => "constructors"
   | unsafeDefault => "unsafe_default"
   | safeDefault => "safe_default"
 
-instance : ToString RegularBuilderClause where
-  toString c := s!"(builder {c.builderName})"
-
-def toRuleBuilder : RegularBuilderClause → RuleBuilder RegularRuleBuilderResult
+def toRuleBuilder : RegularBuilder → RuleBuilder RegularRuleBuilderResult
   | apply => RuleBuilder.apply
-  | tactic => RuleBuilder.tactic
+  | tactic opts => RuleBuilder.tactic opts
   | constructors => RuleBuilder.constructors
   | unsafeDefault => RuleBuilder.unsafeRuleDefault
   | safeDefault => RuleBuilder.safeRuleDefault
 
-end RegularBuilderClause
+end RegularBuilder
 
 
-inductive BuilderClause
-  | regular (c : RegularBuilderClause)
+inductive Builder
+  | regular (c : RegularBuilder)
   | simpLemma
   | simpUnfold
   | normDefault
-  deriving Inhabited, BEq
+  deriving Inhabited
 
-namespace BuilderClause
+namespace Builder
 
-def builderName : BuilderClause → String
-  | regular c => c.builderName
+protected def name : Builder → String
+  | regular c => c.name
   | simpLemma => "simp"
   | simpUnfold => "unfold"
   | normDefault => "norm_default"
 
-instance : ToString BuilderClause where
-  toString c := s!"(builder {c.builderName})"
-
-open RegularBuilderClause in
-protected def parseBuilder : Syntax → BuilderClause
-  | `(aesop_builder|apply) => regular apply
-  | `(aesop_builder|tactic) => regular tactic
-  | `(aesop_builder|constructors) => regular constructors
-  | `(aesop_builder|simp) => simpLemma
-  | `(aesop_builder|unfold) => simpUnfold
-  | `(aesop_builder|unsafe_default) => regular unsafeDefault
-  | `(aesop_builder|safe_default) => regular safeDefault
-  | `(aesop_builder|norm_default) => normDefault
+open RegularBuilder in
+protected def parse (builder : Syntax) (clauses : Array Syntax) : m Builder := do
+  let opts := BuilderOptions.parse clauses
+  match builder with
+  | `(aesop_builder|apply) => do
+    checkNoBuilderOptions apply.name opts
+    return regular apply
+  | `(aesop_builder|tactic) => do
+    let opts ← tacticBuilderOptionsOfBuilderOptions opts
+    return regular $ tactic opts
+  | `(aesop_builder|constructors) => do
+    checkNoBuilderOptions constructors.name opts
+    return regular constructors
+  | `(aesop_builder|simp) => do
+    checkNoBuilderOptions simpLemma.name opts
+    return simpLemma
+  | `(aesop_builder|unfold) => do
+    checkNoBuilderOptions simpUnfold.name opts
+    return simpUnfold
+  | `(aesop_builder|unsafe_default) => do
+    checkNoBuilderOptions unsafeDefault.name opts
+    return regular unsafeDefault
+  | `(aesop_builder|safe_default) => do
+    checkNoBuilderOptions safeDefault.name opts
+    return regular safeDefault
+  | `(aesop_builder|norm_default) => do
+    checkNoBuilderOptions normDefault.name opts
+    return normDefault
   | _ => unreachable!
 
-def toRuleBuilder : BuilderClause → RuleBuilder NormRuleBuilderResult
+def toRuleBuilder : Builder → RuleBuilder NormRuleBuilderResult
   | regular c => λ goal i =>
     NormRuleBuilderResult.regular <$> c.toRuleBuilder goal i
   | simpLemma => RuleBuilder.normSimpLemmas
   | simpUnfold => RuleBuilder.normSimpUnfold
   | normDefault => RuleBuilder.normRuleDefault
 
-end BuilderClause
+end Builder
 
 
 inductive Clause
-  | builder (c : BuilderClause)
-  deriving Inhabited, BEq
+  | builder (c : Builder)
+  deriving Inhabited
 
 namespace Clause
 
-instance : ToString Clause where
-  toString
-    | builder c => toString c
-
 protected def parse : Syntax → m Clause
-  | `(aesop_clause|(builder $b:aesop_builder)) =>
-    builder <$> BuilderClause.parseBuilder b
+  | `(aesop_clause|(builder $b:aesop_builder $cs:aesop_builder_clause*)) =>
+    builder <$> Builder.parse b cs
   | _ => unreachable!
 
 end Clause
 
 
 structure Clauses where
-  builder : Option BuilderClause := none
+  builder : Option Builder := none
 
 namespace Clauses
 
@@ -234,12 +330,12 @@ end Clauses
 
 
 structure NormRuleClauses where
-  builder : BuilderClause
+  builder : Builder
 
 namespace NormRuleClauses
 
 def ofClauses (cs : Clauses) : NormRuleClauses where
-  builder := cs.builder.getD BuilderClause.normDefault
+  builder := cs.builder.getD Builder.normDefault
 
 end NormRuleClauses
 
@@ -260,7 +356,7 @@ def buildNormRule (penalty : Int) (clauses : NormRuleClauses) (i : RuleIdent) :
 
 
 structure SafeRuleClauses where
-  builder : RegularBuilderClause
+  builder : RegularBuilder
   deriving Inhabited
 
 namespace SafeRuleClauses
@@ -268,13 +364,13 @@ namespace SafeRuleClauses
 def ofClauses (cs : Clauses) : m SafeRuleClauses := do
   let builder ←
     match cs.builder with
-    | some (BuilderClause.regular b) => pure b
+    | some (Builder.regular b) => pure b
     | some b => errInvalidBuilder b
-    | none => pure RegularBuilderClause.safeDefault
+    | none => pure RegularBuilder.safeDefault
   return { builder := builder }
   where
-    errInvalidBuilder {α} (b : BuilderClause) : m α :=
-      throwError "aesop: {b.builderName} builder cannot be used with safe rules"
+    errInvalidBuilder {α} (b : Builder) : m α :=
+      throwError "aesop: {b.name} builder cannot be used with safe rules"
 
 end SafeRuleClauses
 
@@ -292,7 +388,7 @@ def buildSafeRule (penalty : Option Int) (clauses : SafeRuleClauses)
 
 
 structure UnsafeRuleClauses where
-  builder : RegularBuilderClause
+  builder : RegularBuilder
   deriving Inhabited
 
 namespace UnsafeRuleClauses
@@ -300,13 +396,13 @@ namespace UnsafeRuleClauses
 def ofClauses (cs : Clauses) : m UnsafeRuleClauses := do
   let builder ←
     match cs.builder with
-    | some (BuilderClause.regular b) => pure b
+    | some (Builder.regular b) => pure b
     | some b => errInvalidBuilder b
-    | none => pure RegularBuilderClause.unsafeDefault
+    | none => pure RegularBuilder.unsafeDefault
   return { builder := builder }
   where
-    errInvalidBuilder {α} (b : BuilderClause) : m α :=
-      throwError "aesop: {b.builderName} builder cannot be used with unsafe rules"
+    errInvalidBuilder {α} (b : Builder) : m α :=
+      throwError "aesop: {b.name} builder cannot be used with unsafe rules"
 
 end UnsafeRuleClauses
 
@@ -392,6 +488,8 @@ def getRuleSet : MetaM RuleSet := do
   let rs ← getAttrRuleSet
   return { rs with normSimpLemmas := defaultSimpLemmas.merge rs.normSimpLemmas }
 
+end Config
+
 
 namespace Parser.Tactic
 
@@ -411,6 +509,9 @@ syntax "(" &"options" term ")" : aesop_tactic_clause
 syntax (name := aesop) &"aesop " (aesop_tactic_clause)* : tactic
 
 end Parser.Tactic
+
+
+namespace Config
 
 structure AdditionalRule where
   ruleIdent : RuleIdent
@@ -488,4 +589,4 @@ def additionalRuleSetMembers (c : TacticConfig) : MetaM (Array RuleSetMember) :=
 
 end TacticConfig
 
-end Aesop
+end Aesop.Config

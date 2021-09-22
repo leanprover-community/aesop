@@ -100,13 +100,20 @@ def apply : RuleBuilder RegularRuleBuilderResult := λ ruleIdent => do
     mayUseBranchState := false
   }]
 
-def tactic : RuleBuilder RegularRuleBuilderResult
-  | RuleIdent.const decl =>
+structure TacticBuilderOptions where
+  usesBranchState : Bool
+  deriving Inhabited
+
+def TacticBuilderOptions.default : TacticBuilderOptions where
+  usesBranchState := true
+
+def tactic (opts : TacticBuilderOptions) : RuleBuilder RegularRuleBuilderResult
+  | RuleIdent.const decl => do
     return #[{
       builderName := `tactic
       tac := (← SerializableRuleTac.ofTacticConst decl)
       indexingMode := IndexingMode.unindexed
-      mayUseBranchState := true
+      mayUseBranchState := opts.usesBranchState
     }]
   | RuleIdent.fvar _ =>
     throwError "aesop: tactic builder does not support local hypotheses."
@@ -141,20 +148,24 @@ def constructors : RuleBuilder RegularRuleBuilderResult
 -- intended to add a simp lemma.
 
 def unsafeRuleDefault : RuleBuilder RegularRuleBuilderResult
-  | i@(RuleIdent.const _) => constructors i <|> tactic i <|> apply i <|> err i
+  | i@(RuleIdent.const _) =>
+    constructors i <|> tactic TacticBuilderOptions.default i <|> apply i <|>
+    err i
   | i@(RuleIdent.fvar _) => apply i <|> err i
   where
     err i := throwError "aesop: Unable to interpret {i} as an unsafe rule."
 
 def safeRuleDefault : RuleBuilder RegularRuleBuilderResult
-  | i@(RuleIdent.const _) => constructors i <|> tactic i <|> apply i <|> err i
+  | i@(RuleIdent.const _) =>
+    constructors i <|> tactic TacticBuilderOptions.default i <|> apply i <|>
+    err i
   | i@(RuleIdent.fvar _) => apply i <|> err i
   where
     err i := throwError "aesop: Unable to interpret {i} as a safe rule."
 
 def normRuleDefault : RuleBuilder NormRuleBuilderResult
   | i@(RuleIdent.const _) =>
-    (NormRuleBuilderResult.regular <$> tactic i) <|>
+    (NormRuleBuilderResult.regular <$> tactic TacticBuilderOptions.default i) <|>
     normSimpLemmas i <|>
     (NormRuleBuilderResult.regular <$> apply i) <|>
     throwError "aesop: Unable to interpret {i} as a normalization rule."

@@ -16,8 +16,8 @@ namespace Aesop
 @[tactic Parser.Tactic.aesop]
 def evalAesop : Tactic := λ stx =>
   withMainContext do
-    let config ← TacticConfig.parse stx
-    let rs ← getRuleSet
+    let config ← Config.TacticConfig.parse stx
+    let rs ← Config.getRuleSet
     let rs := rs.addArray (← defaultRules)
     let rs := rs.addArray (← config.additionalRuleSetMembers)
     aesop_trace[ruleSet] "{rs}"
