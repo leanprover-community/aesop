@@ -42,21 +42,25 @@ initialize steps : TraceOption ←
   registerTraceOption `steps false
     "(aesop) Print actions taken by Aesop during the proof search. Set the trace.aesop.steps.* options to choose which actions are printed."
 
-initialize Init.stepsRuleSelection : TraceOption ←
-  registerTraceOption `steps.ruleSelection false
-    s!"(aesop) Print the rules selected for each goal. Has no effect unless trace.aesop.steps is true."
+initialize Init.stepsActiveGoalQueue : TraceOption ←
+  registerTraceOption `steps.activeGoalQueue false
+    s!"(aesop) Print the active goal queue after each iteration of the search loop. Has no effect unless trace.aesop.steps is true."
+
+initialize Init.stepsBranchStates : TraceOption ←
+  registerTraceOption `steps.branchStates false
+    s!"(aesop) Print a rule's branch state before and after the rule is applied. Has no effect unless trace.aesop.steps is true."
 
 initialize Init.stepsNormalization : TraceOption ←
   registerTraceOption `steps.normalization false
     s!"(aesop) Print intermediate goals during normalization. Has no effect unless trace.aesop.steps is true."
 
+initialize Init.stepsRuleSelection : TraceOption ←
+  registerTraceOption `steps.ruleSelection false
+    s!"(aesop) Print the rules selected for each goal. Has no effect unless trace.aesop.steps is true."
+
 initialize Init.stepsTree : TraceOption ←
   registerTraceOption `steps.tree false
     s!"(aesop) Print the search tree after each iteration of the search loop. Has no effect unless trace.aesop.steps is true."
-
-initialize Init.stepsActiveGoalQueue : TraceOption ←
-  registerTraceOption `steps.activeGoalQueue false
-    s!"(aesop) Print the active goal queue after each iteration of the search loop. Has no effect unless trace.aesop.steps is true."
 
 end TraceOption
 

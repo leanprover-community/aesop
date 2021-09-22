@@ -43,20 +43,24 @@ macro "aesop_trace[" opt:ident "]"
 -- cannot use `steps.option` in the `Init` module.
 
 @[inline]
-def stepsRuleSelection : TraceOption :=
-  { Init.stepsRuleSelection with parentOption := steps.option }
+def stepsActiveGoalQueue : TraceOption :=
+  { Init.stepsActiveGoalQueue with parentOption := steps.option }
+
+@[inline]
+def stepsBranchStates : TraceOption :=
+  { Init.stepsBranchStates with parentOption := steps.option }
 
 @[inline]
 def stepsNormalization : TraceOption :=
   { Init.stepsNormalization with parentOption := steps.option }
 
 @[inline]
-def stepsTree : TraceOption :=
-  { Init.stepsTree with parentOption := steps.option }
+def stepsRuleSelection : TraceOption :=
+  { Init.stepsRuleSelection with parentOption := steps.option }
 
 @[inline]
-def stepsActiveGoalQueue : TraceOption :=
-  { Init.stepsActiveGoalQueue with parentOption := steps.option }
+def stepsTree : TraceOption :=
+  { Init.stepsTree with parentOption := steps.option }
 
 end TraceOption
 

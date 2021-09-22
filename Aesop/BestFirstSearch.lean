@@ -507,6 +507,7 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
   let parent ← parentRef.get
   let successProbability := parent.successProbability * rule.successProbability
   let initialBranchState := rule.withRule λ r => parent.branchState.find? r
+  aesop_trace[stepsBranchStates] "Initial branch state: {initialBranchState}"
   let ruleOutput? ←
     runRuleTac parent rule.tac.tac indexMatchLocations initialBranchState
   match ruleOutput? with
@@ -515,8 +516,9 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
   | some output =>
     let rapps := output.applications
     aesop_trace[steps] "Rule succeeded, producing {rapps.size} rule applications."
-    let postBranchState := rule.withRule λ r =>
-      parent.branchState.update r output.postBranchState?
+    let postBranchState :=
+      rule.withRule λ r => parent.branchState.update r output.postBranchState?
+    aesop_trace[stepsBranchStates] "Updated branch state: {rule.withRule λ r => postBranchState.find? r}"
     match rapps.find? (·.regularGoals.isEmpty) with
     | none =>
       let mut parentRef := parentRef
