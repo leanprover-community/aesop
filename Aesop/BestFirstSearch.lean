@@ -174,7 +174,7 @@ def pushActiveGoal (ag : ActiveGoal) : SearchM Unit :=
 -- Overwrites the goal ID from `g`.
 def addGoal (g : GoalData) (parent : RappRef) : SearchM GoalRef := do
   let id ← getAndIncrementNextGoalId
-  let g := { g with id := id }
+  let g := g.setId id
   let gref ← ST.mkRef $ Goal.mk (some parent) #[] g
   parent.modify λ r => r.addChild gref
   pushActiveGoal (← ActiveGoal.ofGoalRef gref)

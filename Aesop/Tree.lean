@@ -101,6 +101,7 @@ end RappId
 /-! ## Iterations -/
 
 def Iteration := Nat
+  deriving Inhabited
 
 namespace Iteration
 
@@ -122,9 +123,6 @@ protected def succ (i : Iteration) : Iteration :=
 
 protected def none : Iteration :=
   ofNat 0
-
-instance : Inhabited Iteration :=
-  ⟨ofNat arbitrary⟩
 
 instance : DecidableEq Iteration :=
   inferInstanceAs $ DecidableEq Nat
@@ -169,13 +167,14 @@ end ProofStatus
 -- Invariant: All goal IDs in a tree are distinct.
 -- Invariant: The goal ID of a node is smaller than the goal IDs of its
 --   descendant goals.
-structure GoalData : Type where
+structure GoalData' (GoalData RappData : Type) : Type where
   id : GoalId
   goal : MVarId
   successProbability : Percent
   addedInIteration : Iteration
   lastExpandedInIteration : Iteration
     -- Iteration 0 means the node has never been expanded.
+  deferTo : Option (IO.Ref (MutAltTree IO.RealWorld GoalData RappData))
   failedRapps : Array RegularRule
   unsafeRulesSelected : Bool
   unsafeQueue : UnsafeQueue
@@ -186,8 +185,211 @@ structure GoalData : Type where
   branchState : BranchState
   deriving Inhabited
 
+-- This is necessary to work around a compiler bug. If we inline this
+-- definition, the nested inductive compiler fails on `GoalDataUnsafe`.
+private abbrev UnificationGoalOriginsMap α := PersistentHashMap MVarId α
+
+-- Invariant: All rapp IDs in a tree are distinct.
+-- Invariant: The rapp ID of a node is smaller than the rapp IDs of its
+--   descendant rapps.
+-- Invariant: The mvars in `unificationGoalOrigins` are declared but unassigned
+--   in `state`.
+-- Invariant: The rapps referenced by `unificationGoalOrigins` are ancestors of
+--   this rapp.
+structure RappData' (GoalData RappData : Type) : Type where
+  id : RappId
+  depth : Nat
+  state : Meta.SavedState
+    -- This is the state *after* the rule was successfully applied, so the goal
+    -- mvar is assigned in this state.
+  unificationGoalOrigins :
+    UnificationGoalOriginsMap (IO.Ref (MutAltTree IO.RealWorld RappData GoalData))
+  appliedRule : RegularRule
+  successProbability : Percent
+  isProven : Bool
+  isUnprovable : Bool
+  isIrrelevant : Bool
+  deriving Inhabited
+
+mutual
+  unsafe inductive GoalDataUnsafe
+    | mk : GoalData' GoalDataUnsafe RappDataUnsafe → GoalDataUnsafe
+
+  unsafe inductive RappDataUnsafe
+    | mk : RappData' GoalDataUnsafe RappDataUnsafe → RappDataUnsafe
+end
+
+structure GoalRappDataSpec where
+  GoalData : Type
+  RappData : Type
+  introGoalData : GoalData' GoalData RappData → GoalData
+  elimGoalData : GoalData → GoalData' GoalData RappData
+  introRappData : RappData' GoalData RappData → RappData
+  elimRappData : RappData → RappData' GoalData RappData
+
+unsafe def goalRappDataImplUnsafe : GoalRappDataSpec where
+  RappData := RappDataUnsafe
+  GoalData := GoalDataUnsafe
+  introGoalData := GoalDataUnsafe.mk
+  elimGoalData | GoalDataUnsafe.mk x => x
+  introRappData := RappDataUnsafe.mk
+  elimRappData | RappDataUnsafe.mk x => x
+
+@[implementedBy goalRappDataImplUnsafe]
+constant goalRappDataImpl : GoalRappDataSpec := {
+  GoalData := Unit
+  RappData := Unit
+  introGoalData := λ _ => arbitrary
+  elimGoalData := λ _ => arbitrary
+  introRappData := λ _ => arbitrary
+  elimRappData := λ _ => arbitrary
+}
+
+def GoalData := goalRappDataImpl.GoalData
+def RappData := goalRappDataImpl.RappData
+
+abbrev Goal    := MutAltTree IO.RealWorld GoalData RappData
+abbrev GoalRef := IO.Ref Goal
+
+abbrev Rapp    := MutAltTree IO.RealWorld RappData GoalData
+abbrev RappRef := IO.Ref Rapp
+
+
 namespace GoalData
 
+@[inline]
+def mk : GoalData' GoalData RappData → GoalData :=
+  goalRappDataImpl.introGoalData
+
+@[inline]
+def elim : GoalData → GoalData' GoalData RappData :=
+  goalRappDataImpl.elimGoalData
+
+@[inline]
+def modify (f : GoalData' GoalData RappData → GoalData' GoalData RappData)
+    (g : GoalData) : GoalData :=
+  mk $ f $ elim g
+
+instance : Inhabited GoalData where
+  default := mk arbitrary
+
+@[inline]
+def id (g : GoalData) : GoalId :=
+  g.elim.id
+
+@[inline]
+def goal (g : GoalData) : MVarId :=
+  g.elim.goal
+
+@[inline]
+def successProbability (g : GoalData) : Percent :=
+  g.elim.successProbability
+
+@[inline]
+def addedInIteration (g : GoalData) : Iteration :=
+  g.elim.addedInIteration
+
+@[inline]
+def lastExpandedInIteration (g : GoalData) : Iteration :=
+  g.elim.lastExpandedInIteration
+
+@[inline]
+def deferTo (g : GoalData) : Option GoalRef :=
+  g.elim.deferTo
+
+@[inline]
+def failedRapps (g : GoalData) : Array RegularRule :=
+  g.elim.failedRapps
+
+@[inline]
+def unsafeRulesSelected (g : GoalData) : Bool :=
+  g.elim.unsafeRulesSelected
+
+@[inline]
+def unsafeQueue (g : GoalData) : UnsafeQueue :=
+  g.elim.unsafeQueue
+
+@[inline]
+def proofStatus (g : GoalData) : ProofStatus :=
+  g.elim.proofStatus
+
+@[inline]
+def isUnprovable (g : GoalData) : Bool :=
+  g.elim.isUnprovable
+
+@[inline]
+def isIrrelevant (g : GoalData) : Bool :=
+  g.elim.isIrrelevant
+
+@[inline]
+def isNormal (g : GoalData) : Bool :=
+  g.elim.isNormal
+
+@[inline]
+def branchState (g : GoalData) : BranchState :=
+  g.elim.branchState
+
+@[inline]
+def setId (id : GoalId) (g : GoalData) : GoalData :=
+  g.modify λ g => { g with id := id }
+
+@[inline]
+def setGoal (goal : MVarId) (g : GoalData) : GoalData :=
+  g.modify λ g => { g with goal := goal }
+
+@[inline]
+def setSuccessProbability (successProbability : Percent) (g : GoalData) :
+    GoalData :=
+  g.modify λ g => { g with successProbability := successProbability }
+
+@[inline]
+def setAddedInIteration (addedInIteration : Iteration) (g : GoalData) :
+    GoalData :=
+  g.modify λ g => { g with addedInIteration := addedInIteration }
+
+@[inline]
+def setLastExpandedInIteration (lastExpandedInIteration : Iteration)
+    (g : GoalData) : GoalData :=
+  g.modify λ g => { g with lastExpandedInIteration := lastExpandedInIteration }
+
+@[inline]
+def setDeferTo (deferTo : Option GoalRef) (g : GoalData) : GoalData :=
+  g.modify λ g => { g with deferTo := deferTo }
+
+@[inline]
+def setFailedRapps (failedRapps : Array RegularRule) (g : GoalData) : GoalData :=
+  g.modify λ g => { g with failedRapps := failedRapps }
+
+@[inline]
+def setUnsafeRulesSelected (unsafeRulesSelected : Bool) (g : GoalData) :
+    GoalData :=
+  g.modify λ g => { g with unsafeRulesSelected := unsafeRulesSelected }
+
+@[inline]
+def setUnsafeQueue (unsafeQueue : UnsafeQueue) (g : GoalData) : GoalData :=
+  g.modify λ g => { g with unsafeQueue := unsafeQueue }
+
+@[inline]
+def setProofStatus (proofStatus : ProofStatus) (g : GoalData) : GoalData :=
+  g.modify λ g => { g with proofStatus := proofStatus }
+
+@[inline]
+def setUnprovable (isUnprovable : Bool) (g : GoalData) : GoalData :=
+  g.modify λ g => { g with isUnprovable := isUnprovable }
+
+@[inline]
+def setIrrelevant (isIrrelevant : Bool) (g : GoalData) : GoalData :=
+  g.modify λ g => { g with isIrrelevant := isIrrelevant }
+
+@[inline]
+def setNormal (isNormal : Bool) (g : GoalData) : GoalData :=
+  g.modify λ g => { g with isNormal := isNormal }
+
+@[inline]
+def setBranchState (branchState : BranchState) (g : GoalData) : GoalData :=
+  g.modify λ g => { g with branchState := branchState }
+
+@[inline]
 def isProven (g : GoalData) : Bool :=
   g.proofStatus.isProven
 
@@ -198,6 +400,11 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
     if ¬ g.unsafeRulesSelected
       then f!"<not selected>"
       else format g.unsafeQueue.size
+  let defersTo ←
+    match g.deferTo with
+    | none => pure none
+    | some deferred =>
+      pure m!"deferred in favour of goal {(← deferred.get).payload.id}"
   return m!"Goal {g.id} [{g.successProbability.toHumanString}]" ++ nodeFiltering #[
     m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.size}",
     join
@@ -206,6 +413,7 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
         m!"unprovable: {g.isUnprovable.toYesNo} | ",
         m!"irrelevant: {g.isIrrelevant.toYesNo}" ],
     m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration}",
+    defersTo,
     if ¬ traceMods.goals then none else
       m!"Goal:{indentD $ ofGoal g.goal}",
     if ¬ traceMods.unsafeQueues || ¬ g.unsafeRulesSelected then none else
@@ -215,95 +423,40 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
 
 protected def mkInitial (id : GoalId) (goal : MVarId)
     (successProbability : Percent) (addedInIteration : Iteration)
-    (branchState : BranchState) : GoalData where
-  id := id
-  goal := goal
-  addedInIteration := addedInIteration
-  lastExpandedInIteration := Iteration.none
-  successProbability := successProbability
-  failedRapps := #[]
-  unsafeQueue := UnsafeQueue.initial #[]
-  proofStatus := ProofStatus.unproven
-  isUnprovable := false
-  isIrrelevant := false
-  isNormal := false
-  unsafeRulesSelected := false
-  branchState := branchState
+    (branchState : BranchState) : GoalData :=
+  mk {
+    id := id
+    goal := goal
+    addedInIteration := addedInIteration
+    lastExpandedInIteration := Iteration.none
+    deferTo := none
+    successProbability := successProbability
+    failedRapps := #[]
+    unsafeQueue := UnsafeQueue.initial #[]
+    proofStatus := ProofStatus.unproven
+    isUnprovable := false
+    isIrrelevant := false
+    isNormal := false
+    unsafeRulesSelected := false
+    branchState := branchState
+  }
 
 end GoalData
 
--- This is necessary to work around a compiler bug. If we inline this
--- definition, the nested inductive compiler fails on `RappDataUnsafe`.
-private abbrev UnificationGoalOriginsMap α := PersistentHashMap MVarId α
-
--- Invariant: All rapp IDs in a tree are distinct.
--- Invariant: The rapp ID of a node is smaller than the rapp IDs of its
---   descendant rapps.
--- Invariant: The mvars in `unificationGoalOrigins` are declared but unassigned
---   in `state`.
--- Invariant: The rapps referenced by `unificationGoalOrigins` are ancestors of
---   this rapp.
-structure RappData' (α : Type) : Type where
-  id : RappId
-  depth : Nat
-  state : Meta.SavedState
-    -- This is the state *after* the rule was successfully applied, so the goal
-    -- mvar is assigned in this state.
-  unificationGoalOrigins : UnificationGoalOriginsMap α
-  appliedRule : RegularRule
-  successProbability : Percent
-  isProven : Bool
-  isUnprovable : Bool
-  isIrrelevant : Bool
-  deriving Inhabited
-
-unsafe inductive RappDataUnsafe
-  | mk :
-    RappData' (IO.Ref (MutAltTree IO.RealWorld RappDataUnsafe GoalData)) →
-    RappDataUnsafe
-
-structure RappDataSpec where
-  RappData : Type
-  intro :
-    RappData' (IO.Ref (MutAltTree IO.RealWorld RappData GoalData)) →
-    RappData
-  elim :
-    RappData →
-    RappData' (IO.Ref (MutAltTree IO.RealWorld RappData GoalData))
-
-unsafe def rappDataImplUnsafe : RappDataSpec where
-  RappData := RappDataUnsafe
-  intro := RappDataUnsafe.mk
-  elim | RappDataUnsafe.mk x => x
-
-@[implementedBy rappDataImplUnsafe]
-constant rappDataImpl : RappDataSpec := {
-  RappData := Unit
-  intro := λ _ => arbitrary
-  elim := λ _ => arbitrary
-}
-
-def RappData := rappDataImpl.RappData
-
-abbrev Goal    := MutAltTree IO.RealWorld GoalData RappData
-abbrev GoalRef := IO.Ref Goal
-
-abbrev Rapp    := MutAltTree IO.RealWorld RappData GoalData
-abbrev RappRef := IO.Ref Rapp
 
 namespace RappData
 
 @[inline]
-def mk : RappData' RappRef → RappData :=
-  rappDataImpl.intro
+def mk : RappData' GoalData RappData → RappData :=
+  goalRappDataImpl.introRappData
 
 @[inline]
-def elim : RappData → RappData' RappRef :=
-  rappDataImpl.elim
+def elim : RappData → RappData' GoalData RappData :=
+  goalRappDataImpl.elimRappData
 
 @[inline]
-def modify (f : RappData' RappRef → RappData' RappRef) (r : RappData) :
-    RappData :=
+def modify (f : RappData' GoalData RappData → RappData' GoalData RappData)
+    (r : RappData) : RappData :=
   mk $ f $ elim r
 
 instance : Inhabited RappData where
@@ -456,6 +609,10 @@ def lastExpandedInIteration (g : Goal) : Iteration :=
   g.payload.lastExpandedInIteration
 
 @[inline]
+def deferTo (g : Goal) : Option GoalRef :=
+  g.payload.deferTo
+
+@[inline]
 def failedRapps (g : Goal) : Array RegularRule :=
   g.payload.failedRapps
 
@@ -499,56 +656,60 @@ def branchState (g : Goal) : BranchState :=
 
 @[inline]
 def setId (id : GoalId) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with id := id }
+  g.modifyPayload λ d => d.setId id
 
 @[inline]
 def setGoal (goal : MVarId) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with goal := goal }
+  g.modifyPayload λ d => d.setGoal goal
 
 @[inline]
 def setSuccessProbability (successProbability : Percent) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with successProbability := successProbability }
+  g.modifyPayload λ d => d.setSuccessProbability successProbability
 
 @[inline]
 def setAddedInIteration (addedInIteration : Iteration) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with addedInIteration := addedInIteration }
+  g.modifyPayload λ d => d.setAddedInIteration addedInIteration
 
+@[inline]
 def setLastExpandedInIteration (lastExpandedInIteration : Iteration) (g : Goal) :
     Goal :=
-  g.modifyPayload λ d =>
-    { d with lastExpandedInIteration := lastExpandedInIteration }
+  g.modifyPayload λ d => d.setLastExpandedInIteration lastExpandedInIteration
+
+@[inline]
+def setDeferTo (deferTo : Option GoalRef) (g : Goal) : Goal :=
+  g.modifyPayload λ d => d.setDeferTo deferTo
 
 @[inline]
 def setFailedRapps (failedRapps : Array RegularRule) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with failedRapps := failedRapps }
+  g.modifyPayload λ d => d.setFailedRapps failedRapps
 
 @[inline]
 def setUnsafeRulesSelected (unsafeRulesSelected : Bool) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with unsafeRulesSelected := unsafeRulesSelected }
+  g.modifyPayload λ d => d.setUnsafeRulesSelected unsafeRulesSelected
 
 @[inline]
 def setUnsafeQueue (unsafeQueue : UnsafeQueue) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with unsafeQueue := unsafeQueue }
+  g.modifyPayload λ d => d.setUnsafeQueue unsafeQueue
 
 @[inline]
-def setProofStatus (proven? : ProofStatus) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with proofStatus := proven? }
+def setProofStatus (proofStatus : ProofStatus) (g : Goal) : Goal :=
+  g.modifyPayload λ d => d.setProofStatus proofStatus
 
 @[inline]
-def setUnprovable (unprovable? : Bool) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with isUnprovable := unprovable? }
+def setUnprovable (isUnprovable : Bool) (g : Goal) : Goal :=
+  g.modifyPayload λ d => d.setUnprovable isUnprovable
 
 @[inline]
-def setIrrelevant (irrelevant? : Bool) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with isIrrelevant := irrelevant? }
+def setIrrelevant (isIrrelevant : Bool) (g : Goal) : Goal :=
+  g.modifyPayload λ d => d.setIrrelevant isIrrelevant
 
 @[inline]
-def setNormal (normal? : Bool) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with isNormal := normal? }
+def setNormal (isNormal : Bool) (g : Goal) : Goal :=
+  g.modifyPayload λ d => d.setNormal isNormal
 
 @[inline]
 def setBranchState (branchState : BranchState) (g : Goal) : Goal :=
-  g.modifyPayload λ d => { d with branchState := branchState }
+  g.modifyPayload λ d => d.setBranchState branchState
 
 /-! ### Miscellaneous -/
 
@@ -1002,7 +1163,7 @@ mutual
     let g ← gref.get
     let newGoalId ← getAndIncrementNextGoalId
     let newGoalRef ← ST.mkRef $
-      Goal.mk (some parent) #[] { g.payload with id := newGoalId }
+      Goal.mk (some parent) #[] (g.payload.setId newGoalId)
     modify λ s => { s with goalMap := s.goalMap.insert g.id newGoalRef }
     parent.modify λ r => r.addChild newGoalRef
     (← read).afterAddGoal gref newGoalRef
