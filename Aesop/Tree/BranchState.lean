@@ -26,13 +26,16 @@ def find? (r : Rule' α τ) (bs : BranchState) : Option RuleBranchState :=
 
 def insert (r : Rule' α τ) (rbs : RuleBranchState) (bs : BranchState) :
     BranchState :=
-  PersistentHashMap.insert bs r.name rbs
+  if r.usesBranchState then PersistentHashMap.insert bs r.name rbs else bs
 
 def update (r : Rule' α τ) (rbs : Option RuleBranchState) (bs : BranchState) :
     BranchState :=
-  match rbs with
-  | none => bs
-  | some rbs => bs.insert r rbs
+  if r.usesBranchState then
+    match rbs with
+    | none => bs
+    | some rbs => PersistentHashMap.insert bs r.name rbs
+  else
+    bs
 
 end BranchState
 
