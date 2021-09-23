@@ -162,9 +162,33 @@ def getAndIncrementNextRappId : SearchM RappId := do
   setThe RappId id.succ
   return id
 
-def popActiveGoal : SearchM (Option ActiveGoal) := do
+partial def resolveDeferredGoal (gref : GoalRef) : IO (Option GoalRef) := do
+  match (← gref.get).deferTo with
+  | none => return none
+  | some deferred =>
+    if (← deferred.get).isActive then
+      let deferredRec? ← resolveDeferredGoal deferred
+      return some $ deferredRec?.getD deferred
+    else
+      match ← deferred.findActiveDescendantGoal with
+      | none =>
+        gref.modify λ g => g.setDeferTo none
+        return none
+      | some deferred =>
+        let deferredRec? ← resolveDeferredGoal deferred
+        return some $ deferredRec?.getD deferred
+
+def popActiveGoal : SearchM (Option GoalRef) := do
   let q ← getThe ActiveGoalQueue
   let (some (ag, q)) ← pure q.deleteMin | return none
+  let (ag, q) ←
+    match ← resolveDeferredGoal ag.goal with
+    | none => pure (ag.goal, q)
+    | some deferred =>
+      let i ← getThe Iteration
+      ag.goal.modify λ g => do g.setLastExpandedInIteration i
+      let ag := { ag with lastExpandedInIteration := i }
+      pure (deferred, q.insert ag)
   setThe ActiveGoalQueue q
   return some ag
 
@@ -423,6 +447,7 @@ def copyRappBranch (root : RappRef) : SearchM (RappRef × TreeCopy.State) := do
         newGref.modify λ g =>
           g.setAddedInIteration currentIteration
           |>.setLastExpandedInIteration Iteration.none
+          |>.setDeferTo oldGref
         pushActiveGoal (← ActiveGoal.ofGoalRef newGref)
   let parent := (← root.get).parent!
   runCopyTreeT afterAddGoal (λ _ _ => pure ()) $
@@ -458,7 +483,8 @@ end UGoalAssignmentResult
 -- - Insert the new branch into the active goal queue.
 -- - In the old branch, propagate the unification goal assignment into the
 --   meta state of every rapp.
--- - TODO Mark the new branch as deferred in favour of the old branch.
+-- - Defer every goal in the new branch in favour of its corresponding goal in
+--   the old branch.
 -- - TODO possibly disallow the ugoal assignment in the whole branch.
 --
 -- If the rule did not assign any unification goals, this function does nothing.
@@ -478,7 +504,7 @@ def processUnificationGoalAssignment (parent : GoalRef)
   let oldBranchRoot ← leastCommonUnificationGoalOrigin assignedUGoals
   aesop_trace[steps] "Rule assigned unification goals. Copying the branch of rapp {(← oldBranchRoot.get).id}."
   let (newBranchRoot, { goalMap := goalMap, .. }) ← copyRappBranch oldBranchRoot
-  aesop_trace[steps] "The root of the copied branch has ID {(← newBranchRoot.get).id}."
+  aesop_trace[steps] "The root of the copied branch is rapp {(← newBranchRoot.get).id}."
   assignUnificationGoalsInRappBranch assignedUGoals oldBranchRoot
   let newUGoals ← removeUnificationGoals assignedUGoals parentUGoalOrigins
   return UGoalAssignmentResult.assigned newUGoals
@@ -654,13 +680,12 @@ def expandGoal (gref : GoalRef) : SearchM Bool := do
       else pure false
 
 def expandNextGoal : SearchM Unit := do
-  let some activeGoal ← popActiveGoal
+  let some gref ← popActiveGoal
     | throwError "aesop/expandNextGoal: internal error: no active goals left"
-  let gref := activeGoal.goal
   let g ← gref.get
   aesop_trace[steps] "Expanding {← g.toMessageData (← TraceModifiers.get)}"
-  if g.isProven ∨ g.isUnprovable ∨ g.isIrrelevant then
-    aesop_trace[steps] "Skipping goal since it is already proven, unprovable or irrelevant."
+  if ¬ g.isActive then
+    aesop_trace[steps] "Skipping inactive goal."
     return ()
   let maxRappDepth := (← readThe Aesop.Options).maxRuleApplicationDepth
   if maxRappDepth != 0 && (← (← gref.get).parentDepth) >= maxRappDepth then

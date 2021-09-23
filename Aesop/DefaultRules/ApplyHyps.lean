@@ -15,6 +15,7 @@ def applyHyp (hyp : FVarId) (input : RuleTacInput) : MetaM RuleApplication := do
   let goals ← apply input.goal (mkFVar hyp)
   let output : SimpleRuleTacOutput := { regularGoals := goals.toArray }
   output.toRuleApplication
+  -- TODO optimise ugoal analysis
 
 def applyHyps : RuleTac := λ input =>
   withMVarContext input.goal do

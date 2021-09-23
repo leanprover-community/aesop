@@ -991,6 +991,27 @@ def Rapp.hasUnificationGoal (r : Rapp) : Bool :=
   ! r.unificationGoalOrigins.isEmpty
 
 
+private def findActiveDescendantGoalCore (x : Sum GoalRef RappRef) :
+    m (Option GoalRef) := do
+  let result : IO.Ref (Option GoalRef) ← ST.mkRef none
+  MATRef.visitDown'
+    (λ gref : GoalRef => do
+      if (← gref.get).isActive then
+        result.set gref
+        return false
+      else
+        return true)
+    (λ rref : RappRef => return true)
+    x
+  result.get
+
+def GoalRef.findActiveDescendantGoal : GoalRef → m (Option GoalRef) :=
+  findActiveDescendantGoalCore ∘ Sum.inl
+
+def RappRef.findActiveDescendantGoal : RappRef → m (Option GoalRef) :=
+  findActiveDescendantGoalCore ∘ Sum.inr
+
+
 /-! ## Propagating Provability/Unprovability/Irrelevance -/
 
 @[inline]
