@@ -586,7 +586,7 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
         let rappMsg ← rref.toMessageData traceMods
         let goalsMsg := MessageData.node
           (← newGoals.mapM (·.toMessageData traceMods))
-        m!"New rapp:{indentD rappMsg}\nNew goals:{goalsMsg}"
+        aesop_trace![steps] "New rapp:{indentD rappMsg}\nNew goals:{goalsMsg}"
         -- TODO compress goal display: many of the things we display are
         -- uninteresting for new goals/rapps
       return res.newParentGoal parentRef
@@ -757,8 +757,8 @@ def finishIfProven : SearchM Bool := do
   root.linkProofs
   aesop_trace[proof] do
     let mainGoal ← readMainGoal
-    withMVarContext mainGoal $
-      m!"Final proof:{indentExpr (← instantiateMVars $ mkMVar mainGoal)}"
+    withMVarContext mainGoal do
+      aesop_trace![proof] "Final proof:{indentExpr (← instantiateMVars $ mkMVar mainGoal)}"
   return true
 
 def checkGoalLimit : SearchM Unit := do
@@ -788,7 +788,7 @@ partial def searchLoop : SearchM Unit := do
     let traceMods ← TraceModifiers.get
     let activeGoalMsgs ← (← getThe ActiveGoalQueue).toArray.mapM λ ag =>
       ag.goal.toMessageData traceMods
-    m!"Current active goals:{MessageData.node activeGoalMsgs}"
+    aesop_trace![stepsActiveGoalQueue] "Current active goals:{MessageData.node activeGoalMsgs}"
   (← readRootGoal).checkInvariantsIfEnabled
   modifyThe Iteration λ i => i.succ
   searchLoop

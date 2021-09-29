@@ -22,20 +22,33 @@ def isEnabled' (opt : TraceOption) (opts : Options) : Bool :=
 def isEnabled (opt : TraceOption) : m Bool :=
   return opt.isEnabled' (← getOptions)
 
+macro "aesop_trace![" opt:ident "]"
+    s:(interpolatedStr(term) <|> term) : doElem => do
+  let opt := mkIdentFrom opt $ `Aesop.TraceOption ++ opt.getId
+  let msg ←
+    if s.getKind == interpolatedStrKind then
+      `(m! $s)
+    else
+      `(($s : MessageData))
+  `(doElem| do Lean.addTrace (Aesop.TraceOption.traceName $opt) $msg)
+
 macro "aesop_trace[" opt:ident "]"
     s:(interpolatedStr(term) <|> Parser.Term.do <|> term) : doElem => do
-  let opt := mkIdentFrom opt $ `Aesop.TraceOption ++ opt.getId
+  let optFull := mkIdentFrom opt $ `Aesop.TraceOption ++ opt.getId
   match s with
-  | `(do $msg) =>
+  | `(do $action) =>
     `(doElem| do
-      if ← Aesop.TraceOption.isEnabled $opt then
-        let msg ← do $msg
-        Lean.addTrace (Aesop.TraceOption.traceName $opt) msg)
+      if ← Aesop.TraceOption.isEnabled $optFull then
+        $action)
   | _ =>
-    let msg ← if s.getKind == interpolatedStrKind then `(m! $s) else `(($s : MessageData))
+    let msg ←
+      if s.getKind == interpolatedStrKind then
+        `(m! $s)
+      else
+        `(($s : MessageData))
     `(doElem| do
-      if ← Aesop.TraceOption.isEnabled $opt then
-        Lean.addTrace (Aesop.TraceOption.traceName $opt) $msg)
+      if ← Aesop.TraceOption.isEnabled $optFull then
+        aesop_trace![$opt] $s)
 
 -- The following slightly weird setup with the `Init.*` TraceOptions is
 -- necessary because when we define something via `initialize`, we can't
