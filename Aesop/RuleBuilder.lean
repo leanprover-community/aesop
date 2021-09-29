@@ -156,7 +156,19 @@ end GlobalRuleBuilder
 private def throwDefaultBuilderFailure (ruleType : String) (id : Name) : MetaM α :=
   throwError "aesop: Unable to interpret {id} as {ruleType} rule. Try specifying a builder."
 
+structure ForwardBuilderOptions where
+  immediateHyps : Array Name
+
 namespace GlobalRuleBuilder
+
+def forward (opts : ForwardBuilderOptions) :
+    GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
+  return #[{
+    builderName := `forward
+    tac := ← GlobalRuleTacBuilder.forward decl opts.immediateHyps
+    indexingMode := IndexingMode.unindexed -- TODO
+    mayUseBranchState := false
+  }]
 
 -- TODO In the default builders below, we should distinguish between fatal and
 -- nonfatal errors. E.g. if the `tactic` builder finds a declaration that is not
@@ -191,12 +203,25 @@ namespace LocalRuleBuilder
 
 def apply : LocalRuleBuilder RegularRuleBuilderResult := λ hypUserName goal => do
   let (goal, tac) ← RuleTacBuilder.applyFVar hypUserName goal
-  let type := (← getLocalDeclFromUserName hypUserName).type
+  withMVarContext goal do
+    let type := (← getLocalDeclFromUserName hypUserName).type
+    let result := #[{
+      builderName := `apply
+      tac := tac
+      indexingMode := ← IndexingMode.targetMatchingConclusion type
+      mayUseBranchState := false
+    }]
+    return (goal, result)
+
+def forward (opts : ForwardBuilderOptions) :
+    LocalRuleBuilder RegularRuleBuilderResult := λ hypUserName goal => do
+  let (goal, tac) ←
+    RuleTacBuilder.forwardFVar hypUserName opts.immediateHyps goal
   let result := #[{
-    builderName := `apply
+    builderName := `forward
     tac := tac
-    indexingMode := ← IndexingMode.targetMatchingConclusion type
-    mayUseBranchState := false
+    indexingMode := IndexingMode.unindexed -- TODO
+    mayUseBranchState := true
   }]
   return (goal, result)
 
@@ -239,6 +264,11 @@ def normSimpLemmas : RuleBuilder NormRuleBuilderResult :=
 
 def apply : RuleBuilder RegularRuleBuilderResult :=
   ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.apply LocalRuleBuilder.apply
+
+def forward (opts : ForwardBuilderOptions) :
+    RuleBuilder RegularRuleBuilderResult :=
+  ofGlobalAndLocalRuleBuilder (GlobalRuleBuilder.forward opts)
+    (LocalRuleBuilder.forward opts)
 
 def tactic (opts : TacticBuilderOptions) :
     RuleBuilder RegularRuleBuilderResult :=

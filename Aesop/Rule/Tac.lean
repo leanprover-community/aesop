@@ -123,6 +123,65 @@ def applyFVar (userName : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input =>
     return { regularGoals := goals.toArray }
   -- TODO optimise dependent goal analysis
 
+private partial def makeForwardHyps (e : Expr) (immediate : Array Name) : MetaM (Array Expr) := do
+  let type ← inferType e
+  withNewMCtxDepth do
+    let (argMVars, binderInfos, conclusion) ← forallMetaTelescope type
+
+    let app := mkAppN e argMVars
+    let mut instMVars := Array.mkEmpty argMVars.size
+    let mut immediateMVars := Array.mkEmpty argMVars.size
+    for i in [0:argMVars.size] do
+      let mvar := argMVars[i]
+      let mvarId := mvar.mvarId!
+      let argName := (← getMVarDecl mvarId).userName
+      if immediate.contains argName then
+        immediateMVars := immediateMVars.push mvarId
+      else if binderInfos[i].isInstImplicit then
+        instMVars := instMVars.push mvarId
+
+    loop app instMVars immediateMVars 0 #[]
+  where
+    finalizeApplication (app : Expr) (instMVars : Array MVarId) : MetaM Expr := do
+      for instMVar in instMVars do
+        let mvarId := instMVar
+        let decl ← getMVarDecl mvarId
+        let inst ← synthInstance decl.type
+        assignExprMVar mvarId inst
+
+      return (← abstractMVars app).expr
+
+    loop (app : Expr) (instMVars : Array MVarId) (immediateMVars : Array MVarId) (i : Nat) (acc : Array Expr) : MetaM (Array Expr) := do
+      if i < immediateMVars.size then
+        let mvarId := immediateMVars[i]
+        let argDecl ← getMVarDecl mvarId
+        let lctx ← getLCtx
+
+        lctx.foldlM (init := acc) λ acc ldecl => do
+          if ldecl.isAuxDecl then return acc
+          withoutModifyingState do
+            if ← isDefEq ldecl.type argDecl.type then
+              assignExprMVar mvarId (mkFVar ldecl.fvarId)
+              loop app instMVars immediateMVars (i + 1) acc
+            else
+              pure acc
+      else
+        let app ← finalizeApplication app instMVars
+        return acc.push app
+
+def applyForwardRule (goal : MVarId) (e : Expr) (immediate : Array Name) :
+    MetaM MVarId :=
+  withMVarContext goal do
+    let newHyps ← makeForwardHyps e immediate
+    let userNames ← getUnusedUserNames newHyps.size `fwd
+    let (_, goal) ← assertHypotheses goal $ ← newHyps.mapIdxM λ i val =>
+      return {
+        userName := userNames[i]
+        value := val
+        type := ← inferType val
+      }
+    return goal
+
 @[inline]
 def withBranchState (check : RuleBranchState → MetaM Unit)
     (modify : RuleBranchState → RuleBranchState) (r : RuleTac) :
@@ -140,6 +199,20 @@ def withApplicationLimit (n : Nat) : RuleTac → RuleTac :=
         throwError "application limit {n} reached")
     (λ bs => { bs with numApplications := bs.numApplications + 1 })
 
+@[inline]
+def forwardExpr (e : Expr) (immediate : Array Name) : RuleTac :=
+  SimpleRuleTac.toRuleTac λ input => withMVarContext input.goal do
+    let goal ← applyForwardRule input.goal e immediate
+    return { regularGoals := #[goal] }
+
+def forwardConst (decl : Name) (immediate : Array Name) : RuleTac :=
+  withApplicationLimit 1 $ forwardExpr (mkConst decl) immediate
+
+def forwardFVar (userName : Name) (immediate : Array Name) : RuleTac :=
+  withApplicationLimit 1 λ input => withMVarContext input.goal do
+    let ldecl ← getLocalDeclFromUserName userName
+    forwardExpr (mkFVar ldecl.fvarId) immediate input
+
 end RuleTac
 
 /--
@@ -150,6 +223,7 @@ builders.
 -/
 inductive GlobalRuleTacBuilderDescr
   | apply (decl : Name)
+  | forward (decl : Name) (immediate : Array Name)
   | tacticM (decl : Name)
   | ruleTac (decl : Name)
   | simpleRuleTac (decl : Name)
@@ -245,10 +319,35 @@ def apply (decl : Name) : GlobalRuleTacBuilder :=
 end GlobalRuleTacBuilder
 
 
+private def checkImmediateNames (e : Expr) (immediate : Array Name) :
+    MetaM Unit := do
+  let type ← inferType e
+  forallTelescope type λ args _ => do
+    let argNames ← args.mapM λ fvar =>
+      return (← getFVarLocalDecl fvar).userName
+    for iName in immediate do
+      unless argNames.contains iName do
+        throwError "aesop: while registering '{e}' as a forward rule: function does not have an argument named '{iName}'"
+
+
+namespace GlobalRuleTacBuilder
+
+def forward (decl : Name) (immediate : Array Name) :
+    GlobalRuleTacBuilder := do
+  checkImmediateNames (mkConst decl) immediate
+  return {
+    tac := RuleTac.forwardConst decl immediate
+    descr := GlobalRuleTacBuilderDescr.forward decl immediate
+  }
+
+end GlobalRuleTacBuilder
+
+
 namespace GlobalRuleTacBuilderDescr
 
 def toRuleTacBuilder : GlobalRuleTacBuilderDescr → GlobalRuleTacBuilder
   | apply decl => GlobalRuleTacBuilder.apply decl
+  | forward decl immediate => GlobalRuleTacBuilder.forward decl immediate
   | tacticM decl => GlobalRuleTacBuilder.tacticM decl
   | simpleRuleTac decl => GlobalRuleTacBuilder.simpleRuleTac decl
   | ruleTac decl => GlobalRuleTacBuilder.ruleTac decl
@@ -276,6 +375,16 @@ def applyFVar (userName : Name) : RuleTacBuilder := λ goal => do
   withMVarContext goal do
     let tac :=
       { tac := RuleTac.applyFVar (← getLocalDecl newHyp).userName
+        descr := none }
+    return (goal, tac)
+
+def forwardFVar (userName : Name) (immediate : Array Name) :
+    RuleTacBuilder := λ goal => do
+  let (goal, #[newHyp]) ← copyRuleHypotheses goal #[userName] | unreachable!
+  withMVarContext goal do
+    checkImmediateNames (mkFVar newHyp) immediate
+    let tac :=
+      { tac := RuleTac.forwardFVar (← getLocalDecl newHyp).userName immediate
         descr := none }
     return (goal, tac)
 

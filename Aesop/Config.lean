@@ -35,6 +35,7 @@ syntax &"simp" : aesop_builder
 syntax &"unfold" : aesop_builder
 syntax &"tactic" : aesop_builder
 syntax &"constructors" : aesop_builder
+syntax &"forward" : aesop_builder
 syntax &"safe_default" : aesop_builder
 syntax &"unsafe_default" : aesop_builder
 syntax &"norm_default" : aesop_builder
@@ -43,6 +44,7 @@ declare_syntax_cat' aesop_builder_clause force_leading_unreserved_tokens
 
 syntax &"uses_branch_state" : aesop_builder_clause
 syntax &"uses_no_branch_state" : aesop_builder_clause
+syntax "(" &"immediate" ident+ ")" : aesop_builder_clause
 
 declare_syntax_cat' aesop_clause
 
@@ -140,6 +142,7 @@ end RuleKind
 inductive BuilderOption
   | usesBranchState
   | usesNoBranchState
+  | forwardImmediate (names : Array Name)
   deriving Inhabited
 
 namespace BuilderOption
@@ -148,10 +151,13 @@ instance : ToString BuilderOption where
   toString
     | usesBranchState => "uses_branch_state"
     | usesNoBranchState => "uses_no_branch_state"
+    | forwardImmediate names => s!"(immediate {names})"
 
 protected def parse : Syntax → BuilderOption
   | `(aesop_builder_clause|uses_branch_state) => usesBranchState
   | `(aesop_builder_clause|uses_no_branch_state) => usesNoBranchState
+  | `(aesop_builder_clause|(immediate $ids:ident*)) => forwardImmediate $
+    ids.map (·.getId)
   | _ => unreachable!
 
 protected def parseMany (stxs : Array Syntax) : Array BuilderOption :=
@@ -162,9 +168,14 @@ end BuilderOption
 
 structure BuilderOptions where
   usesBranchState : Option Bool := none
+  forwardImmediate : Option (Array Name) := none
   deriving Inhabited
 
 namespace BuilderOptions
+
+private def mergeArrays : Option (Array α) → Array α → Option (Array α)
+  | none, ys => some ys
+  | some xs, ys => some $ xs ++ ys
 
 protected def add (opts : BuilderOptions) :  BuilderOption → BuilderOptions
   | BuilderOption.usesBranchState =>
@@ -173,15 +184,19 @@ protected def add (opts : BuilderOptions) :  BuilderOption → BuilderOptions
   | BuilderOption.usesNoBranchState =>
     { opts with
       usesBranchState := opts.usesBranchState.mergeRightBiased (some False) }
+  | BuilderOption.forwardImmediate names =>
+    { opts with
+      forwardImmediate := mergeArrays opts.forwardImmediate names }
 
 def ofBuilderOptionArray (opts : Array BuilderOption) : BuilderOptions :=
   opts.foldl BuilderOptions.add {}
 
 -- NOTE: Make sure this set contains every field of `BuilderOptions`.
 def definedFields : BuilderOptions → HashSet Name
-  | { usesBranchState } =>
+  | { usesBranchState, forwardImmediate } =>
     HashSet.empty
     |> go usesBranchState `usesBranchState
+    |> go forwardImmediate `forwardImmediate
   where
     go {α} (o : Option α) (n : Name) (ns : HashSet Name) : HashSet Name :=
       match o with
@@ -214,12 +229,22 @@ def tacticBuilderOptionsOfBuilderOptions (opts : BuilderOptions) :
 
 def tacticBuilderOptionsToBuilderOptions (opts : TacticBuilderOptions) :
     BuilderOptions :=
-  { usesBranchState := opts.usesBranchState }
+  { usesBranchState := some opts.usesBranchState }
+
+def forwardBuilderOptionsOfBuilderOptions (opts : BuilderOptions) :
+    m ForwardBuilderOptions := do
+  checkBuilderOptionsContainOnly "forward" #[`forwardImmediate] opts
+  return { immediateHyps := opts.forwardImmediate.getD #[] }
+
+def forwardBuilderOptionsToBuilderOptions (opts : ForwardBuilderOptions) :
+    BuilderOptions :=
+  { forwardImmediate := some opts.immediateHyps }
 
 inductive RegularBuilder
   | apply
   | tactic (opts : TacticBuilderOptions)
   | constructors
+  | forward (opts : ForwardBuilderOptions)
   | unsafeDefault
   | safeDefault
   deriving Inhabited
@@ -230,11 +255,13 @@ protected def name : RegularBuilder → String
   | apply => "apply"
   | tactic .. => "tactic"
   | constructors => "constructors"
+  | forward .. => "forward"
   | unsafeDefault => "unsafe_default"
   | safeDefault => "safe_default"
 
 def toGlobalRuleBuilder : RegularBuilder → GlobalRuleBuilder RegularRuleBuilderResult
   | apply => GlobalRuleBuilder.apply
+  | forward opts => GlobalRuleBuilder.forward opts
   | tactic opts => GlobalRuleBuilder.tactic opts
   | constructors => GlobalRuleBuilder.constructors
   | unsafeDefault => GlobalRuleBuilder.unsafeRuleDefault
@@ -244,6 +271,7 @@ def toRuleBuilder : RegularBuilder → RuleBuilder RegularRuleBuilderResult
   | apply => RuleBuilder.apply
   | tactic opts => RuleBuilder.tactic opts
   | constructors => RuleBuilder.constructors
+  | forward opts => RuleBuilder.forward opts
   | unsafeDefault => RuleBuilder.unsafeRuleDefault
   | safeDefault => RuleBuilder.safeRuleDefault
 
@@ -278,6 +306,9 @@ protected def parse (builder : Syntax) (clauses : Array Syntax) : m Builder := d
   | `(aesop_builder|constructors) => do
     checkNoBuilderOptions constructors.name opts
     return regular constructors
+  | `(aesop_builder|forward) => do
+    let opts ← forwardBuilderOptionsOfBuilderOptions opts
+    return regular $ forward opts
   | `(aesop_builder|simp) => do
     checkNoBuilderOptions simpLemma.name opts
     return simpLemma

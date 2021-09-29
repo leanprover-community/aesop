@@ -198,7 +198,7 @@ private abbrev UnificationGoalOriginsMap α := PersistentHashMap MVarId α
 --   this rapp.
 structure RappData' (GoalData RappData : Type) : Type where
   id : RappId
-  depth : Nat
+  depth : Nat -- TODO unused?
   state : Meta.SavedState
     -- This is the state *after* the rule was successfully applied, so the goal
     -- mvar is assigned in this state.
