@@ -68,6 +68,10 @@ def stepsNormalization : TraceOption :=
   { Init.stepsNormalization with parentOption := steps.option }
 
 @[inline]
+def stepsRuleFailures : TraceOption :=
+  { Init.stepsRuleFailures with parentOption := steps.option }
+
+@[inline]
 def stepsRuleSelection : TraceOption :=
   { Init.stepsRuleSelection with parentOption := steps.option }
 

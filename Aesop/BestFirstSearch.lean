@@ -241,15 +241,15 @@ def addRapp (r : RappData) (parent : GoalRef)
 def runRuleTac (goal : Goal) (rule : RuleTac)
     (indexMatchLocations : Array IndexMatchLocation)
     (branchState : Option RuleBranchState) :
-    MetaM (Option RuleTacOutput) := do
+    MetaM (Sum Exception RuleTacOutput) := do
   try
     let (result, _) ← goal.runMetaMInParentState $ rule
       { goal := goal.goal
         indexMatchLocations := indexMatchLocations
         branchState? := branchState }
-    return some result
-  catch _ =>
-    return none
+    return Sum.inr result
+  catch e =>
+    return Sum.inl e
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def runNormRuleTac (bs : BranchState) (rule : NormRule) (ri : RuleTacInput) :
@@ -537,9 +537,10 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
   let ruleOutput? ←
     runRuleTac parent rule.tac.tac indexMatchLocations initialBranchState
   match ruleOutput? with
-  | none => onFailure
-  | some { applications := #[], .. } => onFailure
-  | some output =>
+  | Sum.inl exc => onFailure exc
+  | Sum.inr { applications := #[], .. } => do
+    onFailure $ Exception.error (← getRef) "Rule returned no rule applications."
+  | Sum.inr output =>
     let rapps := output.applications
     aesop_trace[steps] "Rule succeeded, producing {rapps.size} rule applications."
     let postBranchState :=
@@ -565,8 +566,8 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
         "New rapp:{indentD (← rref.toMessageData (← TraceModifiers.get))}"
       return RuleResult.proven
   where
-    onFailure : SearchM RuleResult := do
-      aesop_trace[steps] "Rule failed."
+    onFailure (exc : Exception) : SearchM RuleResult := do
+      aesop_trace[stepsRuleFailures] "Rule failed with message:{indentD exc.toMessageData}"
       parentRef.modify λ g => g.setFailedRapps $ g.failedRapps.push rule
       parentRef.setUnprovable (firstGoalUnconditional := false)
       return RuleResult.failed

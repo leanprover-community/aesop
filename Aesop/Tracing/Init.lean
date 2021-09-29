@@ -54,6 +54,10 @@ initialize Init.stepsNormalization : TraceOption ←
   registerTraceOption `steps.normalization false
     s!"(aesop) Print intermediate goals during normalization. Has no effect unless trace.aesop.steps is true."
 
+initialize Init.stepsRuleFailures : TraceOption ←
+  registerTraceOption `steps.ruleFailures false
+    s!"(aesop) When a rule fails, print the error message. Has no effect unless trace.aesop.steps is true."
+
 initialize Init.stepsRuleSelection : TraceOption ←
   registerTraceOption `steps.ruleSelection false
     s!"(aesop) Print the rules selected for each goal. Has no effect unless trace.aesop.steps is true."
