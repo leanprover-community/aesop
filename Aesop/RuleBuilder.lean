@@ -88,7 +88,7 @@ def applyIndexingMode (type : Expr) : MetaM IndexingMode := do
   return IndexingMode.target path
 
 def apply : RuleBuilder RegularRuleBuilderResult := λ ruleIdent => do
-  let type := (← ruleIdent.type)
+  let type ← ruleIdent.type
   let tac ←
     match ruleIdent with
     | RuleIdent.const decl => SerializableRuleTac.applyConst decl
@@ -96,7 +96,7 @@ def apply : RuleBuilder RegularRuleBuilderResult := λ ruleIdent => do
   return #[{
     builderName := `apply
     tac := tac
-    indexingMode := (← applyIndexingMode type)
+    indexingMode := ← applyIndexingMode type
     mayUseBranchState := false
   }]
 
@@ -134,7 +134,7 @@ def constructors : RuleBuilder RegularRuleBuilderResult
       let imode ← applyIndexingMode cinfo.type
       return {
         builderName := `constructors
-        tac := (← SerializableRuleTac.applyConst c)
+        tac := ← SerializableRuleTac.applyConst c
         indexingMode := imode
         mayUseBranchState := false
       }

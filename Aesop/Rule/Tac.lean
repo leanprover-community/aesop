@@ -196,19 +196,19 @@ namespace SerializableRuleTac
 
 def ofTacticMUnit (decl : Name) : MetaM SerializableRuleTac :=
   return {
-    tac := (← RuleTac.ofTacticMUnitConst decl),
+    tac := ← RuleTac.ofTacticMUnitConst decl
     descr := RuleTacDescr.tacticMUnit decl
   }
 
 def ofSimpleRuleTacConst (decl : Name) : MetaM SerializableRuleTac :=
   return {
-    tac := (← RuleTac.ofSimpleRuleTacConst decl)
+    tac := ← RuleTac.ofSimpleRuleTacConst decl
     descr := RuleTacDescr.simpleRuleTac decl
   }
 
 def ofRuleTacConst (decl : Name) : MetaM SerializableRuleTac :=
   return {
-    tac := (← RuleTac.ofRuleTacConst decl)
+    tac := ← RuleTac.ofRuleTacConst decl
     descr := RuleTacDescr.ruleTac decl
   }
 
