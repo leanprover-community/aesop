@@ -60,12 +60,15 @@ def mapExtraM [Monad m] (f : α → m β) (r : Rule' α τ) : m (Rule' β τ) :=
 def mapTacM [Monad m] (f : τ → m ι) (r : Rule' α τ) : m (Rule' α ι) :=
   mapM pure f r
 
-def tacToDescr (r : Rule' α SerializableRuleTac) :
-    Rule' α (Option RuleTacDescr) :=
+@[inline]
+def tacToDescr (r : Rule' α RuleTacWithBuilderDescr) :
+    Rule' α (Option GlobalRuleTacBuilderDescr) :=
   r.mapTac (·.descr)
 
-def descrToTac (r : Rule' α RuleTacDescr) : MetaM (Rule' α SerializableRuleTac) :=
-  return { r with tac := (← r.tac.toRuleTac) }
+@[inline]
+def descrToTac (goal : MVarId) (r : Rule' α GlobalRuleTacBuilderDescr) :
+    MetaM (Rule' α RuleTacWithBuilderDescr) :=
+  r.mapTacM (·.toRuleTacBuilder)
 
 end Rule'
 

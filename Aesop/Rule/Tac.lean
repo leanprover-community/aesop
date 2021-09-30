@@ -20,36 +20,42 @@ structure RuleTacInput where
   branchState? : Option RuleBranchState
   deriving Inhabited
 
--- Rule tactics must accurately report the following information, which is not
--- checked:
---
--- - `regularGoals`: a collection of unassigned metavariables. These are goals
---    produced by the tactic which should be solved by recursive search.
--- - `unificationGoals`: a collection of unassigned metavariables. These are
---    goals produced by the tactic which should be solved by unification.
---    `regularGoals` and `unificationGoals` must be disjoint. If a metavariable
---    is dependent (i.e. it appears in the target or the local context of
---    another goal), then it must appear in `unificationGoals`. Non-dependent
---    metavariables are technically allowed to appear in `unificationGoals`, but
---    are very unlikely to be solved.
--- - `postState`: the `MetaM` state after the rule was applied.
+/--
+Rule tactics must accurately report the following information, which is not
+checked:
+
+- `regularGoals`: a collection of unassigned metavariables. These are goals
+  produced by the tactic which should be solved by recursive search.
+- `unificationGoals`: a collection of unassigned metavariables. These are
+  goals produced by the tactic which should be solved by unification.
+  `regularGoals` and `unificationGoals` must be disjoint. If a metavariable
+  is dependent (i.e. it appears in the target or the local context of
+  another goal), then it must appear in `unificationGoals`. Non-dependent
+  metavariables are technically allowed to appear in `unificationGoals`, but
+  are very unlikely to be solved.
+- `postState`: the `MetaM` state after the rule was applied.
+-/
 structure RuleApplication where
   regularGoals : Array MVarId
   unificationGoals : Array MVarId
   postState : Meta.SavedState
   deriving Inhabited
 
--- The result of a rule tactic is a list of rule applications and optionally an
--- updated branch state. If the branch state is not `none`, it is copied to all
--- child goals of the rule applications.
+/--
+The result of a rule tactic is a list of rule applications and optionally an
+updated branch state. If the branch state is not `none`, it is copied to all
+child goals of the rule applications.
+-/
 structure RuleTacOutput where
   applications : Array RuleApplication
   postBranchState? : Option RuleBranchState
 
--- When users want to register a tactic, they may not want to compute all the
--- information in `RuleTacOutput`. In this case, they can return a
--- `SimpleRuleTacOutput`, omitting some data, which Aesop then computes for them
--- (possibly inefficiently since Aesop does not know what the user tactic did).
+/--
+When users want to register a tactic, they may not want to compute all the
+information in `RuleTacOutput`. In this case, they can return a
+`SimpleRuleTacOutput`, omitting some data, which Aesop then computes for them
+(possibly inefficiently since Aesop does not know what the user tactic did).
+-/
 structure SimpleRuleTacOutput where
   regularGoals : Array MVarId
   unificationGoals : Option (Array MVarId) := none
@@ -89,6 +95,9 @@ def SimpleRuleTacOutput.toRuleApplication (o : SimpleRuleTacOutput) :
     postState := postState
   }
 
+/--
+A `RuleTac` is the tactic that is run when a rule is applied to a goal.
+-/
 abbrev RuleTac := RuleTacInput → MetaM RuleTacOutput
 
 abbrev SimpleRuleTac := RuleTacInput → MetaM SimpleRuleTacOutput
@@ -100,65 +109,7 @@ def SimpleRuleTac.toRuleTac (t : SimpleRuleTac) : RuleTac := λ input => do
     postBranchState? := input.branchState?
   }
 
--- A `RuleTacDescr` is a recipe for constructing a `RuleTac`. When we serialise
--- the rule set to an olean file, we serialise `RuleTacDescr`s because we can't
--- (currently?) serialise the actual tactics.
-inductive RuleTacDescr
-  | applyConst (decl : Name)
-  | tacticMUnit (decl : Name)
-  | ruleTac (decl : Name)
-  | simpleRuleTac (decl : Name)
-  deriving Inhabited, BEq
-
--- A `SerializableRuleTac` bundles a `RuleTacDescr` and the `RuleTac` that was
--- computed from the description. Local rules do not have descriptions since we
--- never serialise them.
-structure SerializableRuleTac where
-  tac : RuleTac
-  descr : Option RuleTacDescr
-  deriving Inhabited
-
 namespace RuleTac
-
-private def checkDeclType (expectedType : Expr) (decl : Name) : MetaM Unit := do
-  let actualType ← (← getConstInfo decl).type
-  unless (← isDefEq expectedType actualType) do
-    throwError "aesop: {decl} was expected to have type{indentExpr expectedType}\nbut has type{indentExpr actualType}"
-
-unsafe def ofTacticMUnitConstUnsafe (decl : Name) : MetaM RuleTac := do
-  checkDeclType (← mkAppM ``TacticM #[mkConst ``Unit]) decl
-  return SimpleRuleTac.toRuleTac λ input => do
-    let tac ← evalConst (TacticM Unit) decl
-      -- Note: it is in principle possible for the environment to change so that
-      -- `decl` has a different type at the point where this tactic is called.
-      -- We assume that this doesn't happen. Ideally, we would evaluate `tac`
-      -- directly after `checkDeclType`, but this fails when
-      -- `ofTacticMUnitConstUnsafe` is called by the `@[aesop]` attribute.
-    let goals ← runTacticMAsMetaM tac input.goal
-    return { regularGoals := goals.toArray }
-
-@[implementedBy ofTacticMUnitConstUnsafe]
-constant ofTacticMUnitConst : Name → MetaM RuleTac
-
-unsafe def ofRuleTacConstUnsafe (decl : Name) : MetaM RuleTac := do
-  let type ← deltaExpand (mkConst ``RuleTac) λ n => n == ``RuleTac
-  checkDeclType type decl
-  return λ input => do (← evalConst RuleTac decl) input
-    -- See note about `evalConst` in `ofTacticMUnitConstUnsafe`.
-
-@[implementedBy ofRuleTacConstUnsafe]
-constant ofRuleTacConst : Name → MetaM RuleTac
-
-unsafe def ofSimpleRuleTacConstUnsafe (decl : Name) : MetaM RuleTac := do
-  let type ← deltaExpand (mkConst ``SimpleRuleTac) λ n => n == ``SimpleRuleTac
-  checkDeclType type decl
-  return SimpleRuleTac.toRuleTac λ input => do
-    let tac ← evalConst SimpleRuleTac decl
-      -- See note about `evalConst` in `ofTacticMUnitConstUnsafe`.
-    tac input
-
-@[implementedBy ofSimpleRuleTacConstUnsafe]
-constant ofSimpleRuleTacConst : Name → MetaM RuleTac
 
 def applyConst (decl : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input => do
   let goals ← apply input.goal (← mkConstWithFreshMVarLevels decl)
@@ -191,57 +142,131 @@ def withApplicationLimit (n : Nat) : RuleTac → RuleTac :=
 
 end RuleTac
 
+/--
+A `GlobalRuleTacBuilderDescr` represents a `GlobalRuleTacBuilder`. When we
+serialise the rule set to an olean file, we serialise
+`GlobalRuleTacBuilderDescr`s because we can't (currently?) serialise the actual
+builders.
+-/
+inductive GlobalRuleTacBuilderDescr
+  | apply (decl : Name)
+  | tacticM (decl : Name)
+  | ruleTac (decl : Name)
+  | simpleRuleTac (decl : Name)
+  deriving Inhabited, BEq
 
-namespace SerializableRuleTac
+/--
+A `RuleTacWithBuilderDescr` bundles a `RuleTac` and optionally the
+goal-independent builder which computed the `RuleTac`. Global rules (i.e. those
+stored by the `@[aesop]` attribute) always have a builder description, which is
+interpreted to deserialise the rule when we deserialise the rule set from an
+olean file. Local rules do not have a builder description since they are never
+serialised.
+-/
+structure RuleTacWithBuilderDescr where
+  tac : RuleTac
+  descr : Option GlobalRuleTacBuilderDescr
+  deriving Inhabited
 
-def ofTacticMUnit (decl : Name) : MetaM SerializableRuleTac :=
-  return {
-    tac := ← RuleTac.ofTacticMUnitConst decl
-    descr := RuleTacDescr.tacticMUnit decl
-  }
 
-def ofSimpleRuleTacConst (decl : Name) : MetaM SerializableRuleTac :=
-  return {
-    tac := ← RuleTac.ofSimpleRuleTacConst decl
-    descr := RuleTacDescr.simpleRuleTac decl
-  }
+/--
+A `GlobalRuleTacBuilder` constructs a global rule, which is independent of
+the goal we are trying to solve.
+-/
+abbrev GlobalRuleTacBuilder := MetaM RuleTacWithBuilderDescr
 
-def ofRuleTacConst (decl : Name) : MetaM SerializableRuleTac :=
-  return {
-    tac := ← RuleTac.ofRuleTacConst decl
-    descr := RuleTacDescr.ruleTac decl
-  }
+/--
+A `RuleTacBuilder` constructs a global or local rule. Builders for local rules
+may depend on and modify the goal we are trying to solve.
+-/
+abbrev RuleTacBuilder := MVarId → MetaM (MVarId × RuleTacWithBuilderDescr)
 
-def ofTacticConst (decl : Name) : MetaM SerializableRuleTac :=
-  ofTacticMUnit decl <|>
-  ofSimpleRuleTacConst decl <|>
-  ofRuleTacConst decl <|>
+
+namespace GlobalRuleTacBuilder
+
+def toRuleTacBuilder (b : GlobalRuleTacBuilder) : RuleTacBuilder := λ goal =>
+  return (goal, ← b)
+
+private def checkDeclType (expectedType : Expr) (decl : Name) : MetaM Unit := do
+  let actualType ← (← getConstInfo decl).type
+  unless (← isDefEq expectedType actualType) do
+    throwError "aesop: {decl} was expected to have type{indentExpr expectedType}\nbut has type{indentExpr actualType}"
+
+unsafe def tacticMUnsafe (decl : Name) : GlobalRuleTacBuilder := do
+  checkDeclType (← mkAppM ``TacticM #[mkConst ``Unit]) decl
+  let tac := SimpleRuleTac.toRuleTac λ input => do
+    let tac ← evalConst (TacticM Unit) decl
+      -- It is in principle possible for the environment to change so that
+      -- `decl` has a different type at the point where this tactic is called.
+      -- We assume that this doesn't happen. Ideally, we would evaluate `tac`
+      -- directly after `checkDeclType`, but this fails when
+      -- `ofTacticMUnitConstUnsafe` is called by the `@[aesop]` attribute.
+    let goals ← runTacticMAsMetaM tac input.goal
+    return { regularGoals := goals.toArray }
+  return { tac := tac, descr := GlobalRuleTacBuilderDescr.tacticM decl }
+
+@[implementedBy tacticMUnsafe]
+constant tacticM : Name → GlobalRuleTacBuilder
+
+unsafe def ruleTacUnsafe (decl : Name) : GlobalRuleTacBuilder := do
+  let type ← deltaExpand (mkConst ``RuleTac) λ n => n == ``RuleTac
+  checkDeclType type decl
+  let tac := λ input => do (← evalConst RuleTac decl) input
+    -- See note about `evalConst` in `ofTacticMUnitConstUnsafe`.
+  return { tac := tac, descr := GlobalRuleTacBuilderDescr.ruleTac decl }
+
+@[implementedBy ruleTacUnsafe]
+constant ruleTac : Name → GlobalRuleTacBuilder
+
+unsafe def simpleRuleTacUnsafe (decl : Name) : GlobalRuleTacBuilder := do
+  let type ← deltaExpand (mkConst ``SimpleRuleTac) λ n => n == ``SimpleRuleTac
+  checkDeclType type decl
+  let tac := SimpleRuleTac.toRuleTac λ input => do
+    let tac ← evalConst SimpleRuleTac decl
+      -- See note about `evalConst` in `ofTacticMUnitConstUnsafe`.
+    tac input
+  return { tac := tac, descr := GlobalRuleTacBuilderDescr.simpleRuleTac decl }
+
+@[implementedBy simpleRuleTacUnsafe]
+constant simpleRuleTac : Name → GlobalRuleTacBuilder
+
+def tactic (decl : Name) : GlobalRuleTacBuilder := do
+  tacticM decl <|>
+  simpleRuleTac decl <|>
+  ruleTac decl <|>
   do throwError "aesop: {decl} was expected to be a tactic but it has type{indentExpr (← getConstInfo decl).type}"
 
-def applyConst (decl : Name) : MetaM SerializableRuleTac :=
+def apply (decl : Name) : GlobalRuleTacBuilder :=
   return {
     tac := RuleTac.applyConst decl
-    descr := RuleTacDescr.applyConst decl
+    descr := GlobalRuleTacBuilderDescr.apply decl
   }
 
-def applyFVar (userName : Name) : MetaM SerializableRuleTac := do
-  let _ ← getLocalDeclFromUserName userName
-    -- This is just to check that the hypothesis exists.
-  return {
-    tac := RuleTac.applyFVar userName
-    descr := none
-  }
+end GlobalRuleTacBuilder
 
-end SerializableRuleTac
 
-namespace RuleTacDescr
+namespace GlobalRuleTacBuilderDescr
 
-def toRuleTac : RuleTacDescr → MetaM SerializableRuleTac
-  | applyConst decl => SerializableRuleTac.applyConst decl
-  | tacticMUnit decl => SerializableRuleTac.ofTacticMUnit decl
-  | simpleRuleTac decl => SerializableRuleTac.ofSimpleRuleTacConst decl
-  | ruleTac decl => SerializableRuleTac.ofRuleTacConst decl
+def toRuleTacBuilder : GlobalRuleTacBuilderDescr → GlobalRuleTacBuilder
+  | apply decl => GlobalRuleTacBuilder.apply decl
+  | tacticM decl => GlobalRuleTacBuilder.tacticM decl
+  | simpleRuleTac decl => GlobalRuleTacBuilder.simpleRuleTac decl
+  | ruleTac decl => GlobalRuleTacBuilder.ruleTac decl
 
-end RuleTacDescr
+end GlobalRuleTacBuilderDescr
+
+
+namespace RuleTacBuilder
+
+def applyFVar (userName : Name) : RuleTacBuilder := λ goal =>
+  withMVarContext goal do
+    let _ ← getLocalDeclFromUserName userName
+      -- Just to check whether the hypothesis exists.
+    let tac :=
+      { tac := RuleTac.applyFVar userName
+        descr := none }
+    return (goal, tac)
+
+end RuleTacBuilder
 
 end Aesop

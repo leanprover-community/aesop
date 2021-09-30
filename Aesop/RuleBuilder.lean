@@ -14,7 +14,7 @@ namespace Aesop
 
 structure SingleRegularRuleBuilderResult where
   builderName : Name
-  tac : SerializableRuleTac
+  tac : RuleTacWithBuilderDescr
   indexingMode : IndexingMode
   mayUseBranchState : Bool
   deriving Inhabited
@@ -26,6 +26,7 @@ inductive NormRuleBuilderResult
   | simpEntries (es : Array SimpEntry)
   deriving Inhabited
 
+
 inductive RuleIdent
   | const (decl : Name)
   | fvar (userName : Name)
@@ -33,20 +34,20 @@ inductive RuleIdent
 
 namespace RuleIdent
 
-instance : ToFormat RuleIdent where
-  format
-    | const decl => format decl
-    | fvar userName => format userName
+instance : ToString RuleIdent where
+  toString
+    | const decl => toString decl
+    | fvar userName => toString userName
 
-protected def type : RuleIdent → MetaM Expr
+def type : RuleIdent → MetaM Expr
   | const c => return (← getConstInfo c).type
   | fvar userName => return (← getLocalDeclFromUserName userName).type
 
-protected def ruleName : RuleIdent → Name
+def ruleName : RuleIdent → Name
   | const c => `global ++ c
   | fvar userName => `local ++ userName
 
-protected def ofName (n : Name) : MetaM RuleIdent := do
+def ofName (n : Name) : MetaM RuleIdent := do
   try
     let _ ← getLocalDeclFromUserName n
     pure $ fvar n
@@ -55,31 +56,10 @@ protected def ofName (n : Name) : MetaM RuleIdent := do
 
 end RuleIdent
 
-abbrev RuleBuilder α := RuleIdent → MetaM α
 
-namespace RuleBuilder
+namespace IndexingMode
 
-def normSimpUnfold : RuleBuilder NormRuleBuilderResult
-  | RuleIdent.const decl => do
-    let info ← getConstInfo decl
-    unless info.hasValue do
-      throwError "aesop: expected {decl} to be a definition to unfold"
-    return NormRuleBuilderResult.simpEntries #[SimpEntry.toUnfold decl]
-  | RuleIdent.fvar _ =>
-    throwError "aesop: local hypotheses cannot be added as simp lemmas"
-
-def normSimpLemmas : RuleBuilder NormRuleBuilderResult
-  | RuleIdent.const decl => do
-    let info ← getConstInfo decl
-    unless (← isProp info.type) do
-      throwError "aesop: tried to add {decl} as a simp lemma, but it is not a proposition"
-    let simpLemmas ← mkSimpLemmasFromConst decl (post := true) (prio := 0)
-      -- TODO I don't really know what the `post` and `prio` above mean.
-    return NormRuleBuilderResult.simpEntries $ simpLemmas.map SimpEntry.lemma
-  | RuleIdent.fvar _ => do
-    throwError "aesop: local hypotheses cannot be added as simp lemmas"
-
-def applyIndexingMode (type : Expr) : MetaM IndexingMode := do
+def targetMatchingConclusion (type : Expr) : MetaM IndexingMode := do
   let path ← withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
     DiscrTree.mkPath conclusion
@@ -87,18 +67,52 @@ def applyIndexingMode (type : Expr) : MetaM IndexingMode := do
     -- turn into `Key.star`) but not fvars.
   return IndexingMode.target path
 
-def apply : RuleBuilder RegularRuleBuilderResult := λ ruleIdent => do
-  let type ← ruleIdent.type
-  let tac ←
-    match ruleIdent with
-    | RuleIdent.const decl => SerializableRuleTac.applyConst decl
-    | RuleIdent.fvar userName => SerializableRuleTac.applyFVar userName
+end IndexingMode
+
+
+/--
+A `GlobalRuleBuilder` takes the name of a global constant and produces a
+`RegularRuleBuilderResult` or `NormRuleBuilderResult`.
+-/
+abbrev GlobalRuleBuilder α := Name → MetaM α
+
+/--
+A `GlobalRuleBuilder` takes the `userName` of a hypothesis and produces a
+`RegularRuleBuilderResult` or `NormRuleBuilderResult`. It operates on the given
+goal and may change it.
+-/
+abbrev LocalRuleBuilder α := Name → MVarId → MetaM (MVarId × α)
+
+abbrev RuleBuilder α := RuleIdent → MVarId → MetaM (MVarId × α)
+
+
+namespace GlobalRuleBuilder
+
+def normSimpUnfold : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
+  let info ← getConstInfo decl
+  unless info.hasValue do
+    throwError "aesop: unfold builder: expected {decl} to be a definition to unfold"
+  return NormRuleBuilderResult.simpEntries #[SimpEntry.toUnfold decl]
+
+def normSimpLemmas : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
+  try {
+    let simpLemmas ← mkSimpLemmasFromConst decl (post := true) (prio := 0)
+    return NormRuleBuilderResult.simpEntries $ simpLemmas.map SimpEntry.lemma
+  } catch e => {
+    throwError "aesop: simp builder: exception while trying to add {decl} as a simp lemma:{indentD e.toMessageData}"
+  }
+
+def apply : GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
   return #[{
     builderName := `apply
-    tac := tac
-    indexingMode := ← applyIndexingMode type
+    tac := ← GlobalRuleTacBuilder.apply decl
+    indexingMode := ←
+      IndexingMode.targetMatchingConclusion (← getConstInfo decl).type
     mayUseBranchState := false
   }]
+
+end GlobalRuleBuilder
+
 
 structure TacticBuilderOptions where
   usesBranchState : Bool
@@ -107,37 +121,42 @@ structure TacticBuilderOptions where
 def TacticBuilderOptions.default : TacticBuilderOptions where
   usesBranchState := true
 
-def tactic (opts : TacticBuilderOptions) : RuleBuilder RegularRuleBuilderResult
-  | RuleIdent.const decl => do
-    return #[{
-      builderName := `tactic
-      tac := (← SerializableRuleTac.ofTacticConst decl)
-      indexingMode := IndexingMode.unindexed
-      mayUseBranchState := opts.usesBranchState
-    }]
-  | RuleIdent.fvar _ =>
-    throwError "aesop: tactic builder does not support local hypotheses."
 
-def constructors : RuleBuilder RegularRuleBuilderResult
-  | RuleIdent.const decl => do
-    let (some info) ← getConst? decl
-      | throwError "aesop: constructors builder: unknown constant '{decl}'"
-    let (ConstantInfo.inductInfo info) ← pure info
-      | throwError "aesop: expected '{decl}' to be an inductive type"
-    info.ctors.toArray.mapM processConstructor
-  | RuleIdent.fvar _ =>
-    throwError "aesop: constructors builder does not support local hypotheses."
+namespace GlobalRuleBuilder
+
+def tactic (opts : TacticBuilderOptions) :
+    GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
+  return #[{
+    builderName := `tactic
+    tac := ← GlobalRuleTacBuilder.tactic decl
+    indexingMode := IndexingMode.unindexed
+    mayUseBranchState := opts.usesBranchState
+  }]
+
+def constructors : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
+  let (some info) ← getConst? decl
+    | throwError "aesop: constructors builder: unknown constant '{decl}'"
+  let (ConstantInfo.inductInfo info) ← pure info
+    | throwError "aesop: constructors builder: expected '{decl}' to be an inductive type"
+  info.ctors.toArray.mapM processConstructor
   where
     processConstructor (c : Name) : MetaM SingleRegularRuleBuilderResult := do
-      let (some cinfo) ← getConst? c
-        | throwError "aesop: internal error in constructors builder: nonexistant constructor {c}"
-      let imode ← applyIndexingMode cinfo.type
+      let cinfo ← getConstInfo c <|>
+        throwError "aesop: internal error in constructors builder: nonexistant constructor {c}"
+      let imode ← IndexingMode.targetMatchingConclusion cinfo.type
       return {
         builderName := `constructors
-        tac := ← SerializableRuleTac.applyConst c
+        tac := ← GlobalRuleTacBuilder.apply c
         indexingMode := imode
         mayUseBranchState := false
       }
+
+end GlobalRuleBuilder
+
+private def throwDefaultBuilderFailure (ruleType : String) (id : Name) : MetaM α :=
+  throwError "aesop: Unable to interpret {id} as {ruleType} rule. Try specifying a builder."
+
+namespace GlobalRuleBuilder
 
 -- TODO In the default builders below, we should distinguish between fatal and
 -- nonfatal errors. E.g. if the `tactic` builder finds a declaration that is not
@@ -147,29 +166,97 @@ def constructors : RuleBuilder RegularRuleBuilderResult
 -- next builder is more confusing than anything because the user probably
 -- intended to add a simp lemma.
 
-def unsafeRuleDefault : RuleBuilder RegularRuleBuilderResult
-  | i@(RuleIdent.const _) =>
-    constructors i <|> tactic TacticBuilderOptions.default i <|> apply i <|>
-    err i
-  | i@(RuleIdent.fvar _) => apply i <|> err i
-  where
-    err i := throwError "aesop: Unable to interpret {i} as an unsafe rule."
+def unsafeRuleDefault : GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
+  constructors decl <|>
+  tactic TacticBuilderOptions.default decl <|>
+  apply decl <|>
+  throwDefaultBuilderFailure "an unsafe" decl
 
-def safeRuleDefault : RuleBuilder RegularRuleBuilderResult
-  | i@(RuleIdent.const _) =>
-    constructors i <|> tactic TacticBuilderOptions.default i <|> apply i <|>
-    err i
-  | i@(RuleIdent.fvar _) => apply i <|> err i
-  where
-    err i := throwError "aesop: Unable to interpret {i} as a safe rule."
+def safeRuleDefault : GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
+  constructors decl <|>
+  tactic TacticBuilderOptions.default decl <|>
+  apply decl <|>
+  throwDefaultBuilderFailure "a safe" decl
 
-def normRuleDefault : RuleBuilder NormRuleBuilderResult
-  | i@(RuleIdent.const _) =>
-    (NormRuleBuilderResult.regular <$> tactic TacticBuilderOptions.default i) <|>
-    normSimpLemmas i <|>
-    (NormRuleBuilderResult.regular <$> apply i) <|>
-    throwError "aesop: Unable to interpret {i} as a normalization rule."
-  | i@(RuleIdent.fvar _) =>
-    throwError "aesop: Please specify a builder for norm rule {i}."
+def normRuleDefault : GlobalRuleBuilder NormRuleBuilderResult := λ decl =>
+  NormRuleBuilderResult.regular <$> tactic TacticBuilderOptions.default decl <|>
+  normSimpLemmas decl <|>
+  NormRuleBuilderResult.regular <$> apply decl <|>
+  throwDefaultBuilderFailure "a norm" decl
+
+end GlobalRuleBuilder
+
+
+namespace LocalRuleBuilder
+
+def apply : LocalRuleBuilder RegularRuleBuilderResult := λ hypUserName goal => do
+  let (goal, tac) ← RuleTacBuilder.applyFVar hypUserName goal
+  let type := (← getLocalDeclFromUserName hypUserName).type
+  let result := #[{
+    builderName := `apply
+    tac := tac
+    indexingMode := ← IndexingMode.targetMatchingConclusion type
+    mayUseBranchState := false
+  }]
+  return (goal, result)
+
+def unsafeRuleDefault : LocalRuleBuilder RegularRuleBuilderResult :=
+  λ hypUserName goal =>
+    apply hypUserName goal <|>
+    throwDefaultBuilderFailure "an unsafe" hypUserName
+
+def safeRuleDefault : LocalRuleBuilder RegularRuleBuilderResult :=
+  λ hypUserName goal =>
+    apply hypUserName goal <|>
+    throwDefaultBuilderFailure "a safe" hypUserName
+
+def normRuleDefault : LocalRuleBuilder NormRuleBuilderResult :=
+  λ hypUserName goal =>
+    throwError "aesop: Please specify a builder for norm rule {hypUserName}."
+
+end LocalRuleBuilder
+
+
+namespace RuleBuilder
+
+def ofGlobalAndLocalRuleBuilder (global : GlobalRuleBuilder α)
+    («local» : LocalRuleBuilder α) : RuleBuilder α := λ id goal => do
+  match id with
+  | RuleIdent.const const => return (goal, ← global const)
+  | RuleIdent.fvar hyp => «local» hyp goal
+
+def ofGlobalRuleBuilder (builderName : String) (global : GlobalRuleBuilder α) :
+    RuleBuilder α :=
+  ofGlobalAndLocalRuleBuilder global
+    (λ _ _ => throwError
+      "aesop: {builderName} builder: this builder does not support local hypotheses")
+
+def normSimpUnfold : RuleBuilder NormRuleBuilderResult :=
+  ofGlobalRuleBuilder "unfold" GlobalRuleBuilder.normSimpUnfold
+
+def normSimpLemmas : RuleBuilder NormRuleBuilderResult :=
+  ofGlobalRuleBuilder "simp" GlobalRuleBuilder.normSimpLemmas
+
+def apply : RuleBuilder RegularRuleBuilderResult :=
+  ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.apply LocalRuleBuilder.apply
+
+def tactic (opts : TacticBuilderOptions) :
+    RuleBuilder RegularRuleBuilderResult :=
+  ofGlobalRuleBuilder "tactic" $ GlobalRuleBuilder.tactic opts
+
+def constructors : RuleBuilder RegularRuleBuilderResult :=
+  ofGlobalRuleBuilder "constructors" $ GlobalRuleBuilder.constructors
+
+def unsafeRuleDefault : RuleBuilder RegularRuleBuilderResult :=
+  ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.unsafeRuleDefault
+    LocalRuleBuilder.unsafeRuleDefault
+
+def safeRuleDefault : RuleBuilder RegularRuleBuilderResult :=
+  ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.safeRuleDefault
+    LocalRuleBuilder.safeRuleDefault
+
+def normRuleDefault : RuleBuilder NormRuleBuilderResult :=
+  ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.normRuleDefault
+    LocalRuleBuilder.normRuleDefault
 
 end Aesop.RuleBuilder

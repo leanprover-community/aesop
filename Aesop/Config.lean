@@ -12,7 +12,6 @@ open Lean
 open Lean.Meta
 open Lean.Elab.Term
 open Std (HashSet)
-open Aesop.RuleBuilder (TacticBuilderOptions)
 
 namespace Aesop
 
@@ -106,6 +105,7 @@ def parsePrioForNormRule : Option Syntax → Except String Int
       "norm rule must be given an integer penalty, not a success probability"
     return p
 
+
 inductive RuleKind
   | norm (penalty : Int)
   | safe (penalty : Int)
@@ -132,9 +132,7 @@ protected def parse : Syntax → m RuleKind
   | _ => unreachable!
   where
     go {α} (prio : Except String α) (cont : α → RuleKind) : m RuleKind :=
-      match prio with
-      | Except.ok prio => return cont prio
-      | Except.error e => throwError "aesop: {e}"
+      ofExcept $ prio.map cont |>.mapError λ e => "aesop : {e}"
 
 end RuleKind
 
@@ -235,6 +233,13 @@ protected def name : RegularBuilder → String
   | unsafeDefault => "unsafe_default"
   | safeDefault => "safe_default"
 
+def toGlobalRuleBuilder : RegularBuilder → GlobalRuleBuilder RegularRuleBuilderResult
+  | apply => GlobalRuleBuilder.apply
+  | tactic opts => GlobalRuleBuilder.tactic opts
+  | constructors => GlobalRuleBuilder.constructors
+  | unsafeDefault => GlobalRuleBuilder.unsafeRuleDefault
+  | safeDefault => GlobalRuleBuilder.safeRuleDefault
+
 def toRuleBuilder : RegularBuilder → RuleBuilder RegularRuleBuilderResult
   | apply => RuleBuilder.apply
   | tactic opts => RuleBuilder.tactic opts
@@ -291,11 +296,19 @@ protected def parse (builder : Syntax) (clauses : Array Syntax) : m Builder := d
   | _ => unreachable!
 
 def toRuleBuilder : Builder → RuleBuilder NormRuleBuilderResult
-  | regular c => λ goal i =>
-    NormRuleBuilderResult.regular <$> c.toRuleBuilder goal i
+  | regular c => λ id goal => do
+    let (goal, result) ← c.toRuleBuilder id goal
+    return (goal, NormRuleBuilderResult.regular result)
   | simpLemma => RuleBuilder.normSimpLemmas
   | simpUnfold => RuleBuilder.normSimpUnfold
   | normDefault => RuleBuilder.normRuleDefault
+
+def toGlobalRuleBuilder : Builder → GlobalRuleBuilder NormRuleBuilderResult
+  | regular c => λ decl =>
+    NormRuleBuilderResult.regular <$> c.toGlobalRuleBuilder decl
+  | simpLemma => GlobalRuleBuilder.normSimpLemmas
+  | simpUnfold => GlobalRuleBuilder.normSimpUnfold
+  | normDefault => GlobalRuleBuilder.normRuleDefault
 
 end Builder
 
@@ -339,20 +352,29 @@ def ofClauses (cs : Clauses) : NormRuleClauses where
 
 end NormRuleClauses
 
-open NormRuleBuilderResult in
-def buildNormRule (penalty : Int) (clauses : NormRuleClauses) (i : RuleIdent) :
-    MetaM (Array RuleSetMember) := do
-  let results ← clauses.builder.toRuleBuilder i
-  match results with
-  | regular results =>
-    results.mapM λ res => RuleSetMember'.normRule
-      { name := `norm ++ res.builderName ++ i.ruleName
-        indexingMode := res.indexingMode
-        usesBranchState := res.mayUseBranchState
-        extra := { penalty := penalty }
-        tac := res.tac }
-  | simpEntries es =>
-    return #[RuleSetMember'.normSimpEntries es]
+private def normRuleBuilderResultToRuleSetMembers (penalty : Int)
+    (id : RuleIdent) : NormRuleBuilderResult → Array RuleSetMember
+  | NormRuleBuilderResult.regular results =>
+    results.map λ res => RuleSetMember'.normRule {
+      name := `norm ++ res.builderName ++ id.ruleName
+      indexingMode := res.indexingMode
+      usesBranchState := res.mayUseBranchState
+      extra := { penalty := penalty }
+      tac := res.tac
+    }
+  | NormRuleBuilderResult.simpEntries entries =>
+    #[RuleSetMember'.normSimpEntries entries]
+
+def buildGlobalNormRule (penalty : Int) (clauses : NormRuleClauses)
+    (decl : Name) : MetaM (Array RuleSetMember) :=
+  normRuleBuilderResultToRuleSetMembers penalty (RuleIdent.const decl) <$>
+    clauses.builder.toGlobalRuleBuilder decl
+
+def buildLocalNormRule (goal : MVarId) (penalty : Int)
+    (clauses : NormRuleClauses) (id : RuleIdent) :
+    MetaM (MVarId × Array RuleSetMember) := do
+  let (goal, res) ← clauses.builder.toRuleBuilder id goal
+  return (goal, normRuleBuilderResultToRuleSetMembers penalty id res)
 
 
 structure SafeRuleClauses where
@@ -374,17 +396,28 @@ def ofClauses (cs : Clauses) : m SafeRuleClauses := do
 
 end SafeRuleClauses
 
-def buildSafeRule (penalty : Option Int) (clauses : SafeRuleClauses)
-    (i : RuleIdent) : MetaM (Array RuleSetMember) := do
-  let results ← clauses.builder.toRuleBuilder i
-  let penalty := penalty.getD 0
-  results.mapM λ res => RuleSetMember'.safeRule
-    { name := `safe ++ res.builderName ++ i.ruleName
-      indexingMode := res.indexingMode,
-      usesBranchState := res.mayUseBranchState
-      extra := { penalty := penalty, safety := Safety.safe }
-        -- TODO support almost_safe rules
-      tac := res.tac }
+private def safeRuleBuilderResultToRuleSetMembers (id : RuleIdent)
+    (penalty : Option Int) (r : RegularRuleBuilderResult) :
+    Array RuleSetMember :=
+  r.map λ res => RuleSetMember'.safeRule {
+    name := `safe ++ res.builderName ++ id.ruleName
+    indexingMode := res.indexingMode,
+    usesBranchState := res.mayUseBranchState
+    extra := { penalty := penalty.getD 0, safety := Safety.safe }
+      -- TODO support almost_safe rules
+    tac := res.tac
+  }
+
+def buildGlobalSafeRule (penalty : Option Int) (clauses : SafeRuleClauses)
+    (id : Name) : MetaM (Array RuleSetMember) :=
+  safeRuleBuilderResultToRuleSetMembers (RuleIdent.const id) penalty <$>
+    clauses.builder.toGlobalRuleBuilder id
+
+def buildLocalSafeRule (goal : MVarId) (penalty : Option Int)
+    (clauses : SafeRuleClauses) (id : RuleIdent) :
+    MetaM (MVarId × Array RuleSetMember) := do
+  let (goal, res) ← clauses.builder.toRuleBuilder id goal
+  return (goal, safeRuleBuilderResultToRuleSetMembers id penalty res)
 
 
 structure UnsafeRuleClauses where
@@ -406,16 +439,32 @@ def ofClauses (cs : Clauses) : m UnsafeRuleClauses := do
 
 end UnsafeRuleClauses
 
-def buildUnsafeRule (successProbability : Percent) (clauses : UnsafeRuleClauses)
-    (i : RuleIdent) : MetaM (Array RuleSetMember) := do
-  let results ← clauses.builder.toRuleBuilder i
-  results.mapM λ res => RuleSetMember'.unsafeRule
-    { name := `unsafe ++ res.builderName ++ i.ruleName
-      indexingMode := res.indexingMode,
-      usesBranchState := res.mayUseBranchState
-      extra := { successProbability := successProbability },
-      tac := res.tac }
+private def unsafeRuleBuilderResultToRuleSetMembers
+    (successProbability : Percent) (id : RuleIdent)
+    (r : RegularRuleBuilderResult) :
+    Array RuleSetMember :=
+  r.map λ res => RuleSetMember'.unsafeRule {
+    name := `unsafe ++ res.builderName ++ id.ruleName
+    indexingMode := res.indexingMode,
+    usesBranchState := res.mayUseBranchState
+    extra := { successProbability := successProbability },
+    tac := res.tac
+  }
 
+def buildGlobalUnsafeRule (successProbability : Percent)
+    (clauses : UnsafeRuleClauses) (id : Name) :
+    MetaM (Array RuleSetMember) := do
+  let res ← clauses.builder.toGlobalRuleBuilder id
+  unsafeRuleBuilderResultToRuleSetMembers successProbability
+    (RuleIdent.const id) res
+
+def buildLocalUnsafeRule (goal : MVarId) (successProbability : Percent)
+    (clauses : UnsafeRuleClauses) (id : RuleIdent) :
+    MetaM (MVarId × Array RuleSetMember) := do
+  let (goal, results) ← clauses.builder.toRuleBuilder id goal
+  let results :=
+    unsafeRuleBuilderResultToRuleSetMembers successProbability id results
+  return (goal, results)
 
 inductive RuleConfig
   | norm (penalty : Int) (clauses : NormRuleClauses)
@@ -443,17 +492,24 @@ protected def parse : Syntax → m RuleConfig
     RuleConfig.ofKindAndClauses kind clauses
   | _ => unreachable!
 
-protected def applyToRuleIdent (i : RuleIdent) : RuleConfig →
+protected def buildGlobalRule (id : Name) : RuleConfig →
     MetaM (Array RuleSetMember)
-  | norm penalty clauses => buildNormRule penalty clauses i
-  | safe penalty clauses => buildSafeRule penalty clauses i
+  | norm penalty clauses => buildGlobalNormRule penalty clauses id
+  | safe penalty clauses => buildGlobalSafeRule penalty clauses id
   | «unsafe» successProbability clauses =>
-    buildUnsafeRule successProbability clauses i
+    buildGlobalUnsafeRule successProbability clauses id
+
+protected def buildLocalRule (goal : MVarId) (id : RuleIdent) :
+    RuleConfig → MetaM (MVarId × Array RuleSetMember)
+  | norm penalty clauses => buildLocalNormRule goal penalty clauses id
+  | safe penalty clauses => buildLocalSafeRule goal penalty clauses id
+  | «unsafe» successProbability clauses =>
+    buildLocalUnsafeRule goal successProbability clauses id
 
 end RuleConfig
 
 structure AesopAttr where
-  ext : ScopedEnvExtension (RuleSetMember' RuleTacDescr) RuleSetMember RuleSet
+  ext : ScopedEnvExtension RuleSetMemberDescr RuleSetMember RuleSet
   impl : AttributeImpl
   deriving Inhabited
 
@@ -471,7 +527,7 @@ initialize attr : AesopAttr ← do
     descr := "Register a declaration as an Aesop rule."
     add := λ decl stx attrKind => do
       let config ← RuleConfig.parse stx
-      let rules ← runMetaMAsCoreM $ config.applyToRuleIdent (RuleIdent.const decl)
+      let rules ← runMetaMAsCoreM $ config.buildGlobalRule decl
       rules.forM λ rule => ext.add rule attrKind
     erase := λ _ =>
       throwError "aesop attribute currently cannot be removed"
@@ -532,9 +588,9 @@ protected def parse (prioParser : Option Syntax → Except String α)
     return { ruleIdent := (← RuleIdent.ofName i.getId), config := config }
   | _ => unreachable!
 
-protected def toRuleSetMember (r : AdditionalRule) :
-    MetaM (Array RuleSetMember) :=
-  r.config.applyToRuleIdent r.ruleIdent
+protected def build (goal : MVarId) (r : AdditionalRule) :
+    MetaM (MVarId × Array RuleSetMember) :=
+  r.config.buildLocalRule goal r.ruleIdent
 
 end AdditionalRule
 
@@ -584,8 +640,15 @@ protected def parse : Syntax → TermElabM TacticConfig
     return ofTacticClauses (← clauses.mapM TacticClause.parse)
   | _ => unreachable!
 
-def additionalRuleSetMembers (c : TacticConfig) : MetaM (Array RuleSetMember) :=
-  c.additionalRules.concatMapM (·.toRuleSetMember)
+def buildAdditionalRules (goal : MVarId) (c : TacticConfig) :
+    MetaM (MVarId × Array RuleSetMember) := do
+  let mut goal := goal
+  let mut rules := #[]
+  for r in c.additionalRules do
+    let (goal', rules') ← r.build goal
+    goal := goal'
+    rules := rules ++ rules'
+  return (goal, rules)
 
 end TacticConfig
 

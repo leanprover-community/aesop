@@ -32,7 +32,7 @@ instance : LE NormRuleInfo :=
   leOfOrd
 
 abbrev NormRule' := Rule' NormRuleInfo
-abbrev NormRule := NormRule' SerializableRuleTac
+abbrev NormRule := NormRule' RuleTacWithBuilderDescr
 
 instance : ToFormat (NormRule' τ) where
   format r := f!"[{r.extra.penalty}] {r.name}"
@@ -71,7 +71,7 @@ instance : LE SafeRuleInfo :=
   leOfOrd
 
 abbrev SafeRule' := Rule' SafeRuleInfo
-abbrev SafeRule := SafeRule' SerializableRuleTac
+abbrev SafeRule := SafeRule' RuleTacWithBuilderDescr
 
 instance : ToFormat (SafeRule' τ) where
   format r := f!"[{r.extra.penalty}/{r.extra.safety}] {r.name}"
@@ -97,7 +97,7 @@ instance : LE UnsafeRuleInfo :=
   leOfOrd
 
 abbrev UnsafeRule' := Rule' UnsafeRuleInfo
-abbrev UnsafeRule := UnsafeRule' SerializableRuleTac
+abbrev UnsafeRule := UnsafeRule' RuleTacWithBuilderDescr
 
 instance : ToFormat (UnsafeRule' τ) where
   format r := f!"[{r.extra.successProbability.toHumanString}] {r.name}"
@@ -110,7 +110,7 @@ inductive RegularRule' τ
   | «unsafe» (r : UnsafeRule' τ)
   deriving BEq
 
-abbrev RegularRule := RegularRule' SerializableRuleTac
+abbrev RegularRule := RegularRule' RuleTacWithBuilderDescr
 
 instance [Inhabited τ] : Inhabited (RegularRule' τ) where
   default := RegularRule'.«safe» arbitrary

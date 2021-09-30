@@ -14,25 +14,19 @@ namespace Aesop
 
 inductive RuleSetMember' τ
   | normRule (r : NormRule' τ)
-  | normSimpEntries (es : Array SimpEntry)
+  | normSimpEntries (es : Array SimpEntry) -- TODO make this a single SimpEntry
   | unsafeRule (r : UnsafeRule' τ)
   | safeRule (r : SafeRule' τ)
   deriving Inhabited
 
-abbrev RuleSetMember := RuleSetMember' SerializableRuleTac
-abbrev RuleSetMemberDescr := RuleSetMember' RuleTacDescr
+abbrev RuleSetMember := RuleSetMember' RuleTacWithBuilderDescr
+abbrev RuleSetMemberDescr := RuleSetMember' GlobalRuleTacBuilderDescr
 
 namespace RuleSetMember'
 
-def map (f : τ → ι) : RuleSetMember' τ → RuleSetMember' ι
-  | normRule r => normRule (r.mapTac f)
-  | normSimpEntries e => normSimpEntries e
-  | unsafeRule r => unsafeRule (r.mapTac f)
-  | safeRule r => safeRule (r.mapTac f)
-
 def mapM [Monad m] (f : τ → m ι) : RuleSetMember' τ → m (RuleSetMember' ι)
   | normRule r => return normRule (← r.mapTacM f)
-  | normSimpEntries e => normSimpEntries e
+  | normSimpEntries e => return normSimpEntries e
   | unsafeRule r => return unsafeRule (← r.mapTacM f)
   | safeRule r => return safeRule (← r.mapTacM f)
 
@@ -40,7 +34,7 @@ def toDescr (r : RuleSetMember) : Option RuleSetMemberDescr :=
   OptionM.run $ r.mapM (·.descr)
 
 def ofDescr (r : RuleSetMemberDescr) : MetaM RuleSetMember :=
-  r.mapM (·.toRuleTac)
+  r.mapM (·.toRuleTacBuilder)
 
 end RuleSetMember'
 

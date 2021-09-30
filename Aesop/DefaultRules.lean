@@ -38,7 +38,7 @@ def defaultRules : TermElabM (Array RuleSetMember) := do
     mkRule (decl : Name) (configStx : Syntax) :
         TermElabM (Array RuleSetMember) := do
       let config ← Config.RuleConfig.parse configStx
-      config.applyToRuleIdent (RuleIdent.const decl)
+      config.buildGlobalRule decl
 
     mkRules (rs : Array (Name × Syntax)) : TermElabM (Array RuleSetMember) :=
       rs.concatMapM (λ (decl, configStx) => mkRule decl configStx)
