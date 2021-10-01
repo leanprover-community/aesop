@@ -573,6 +573,42 @@ def instantiateMVarDeclMVars (mvarId : MVarId) : MetaM Unit := do
   let mctx ← mctx.instantiateMVarDeclMVars mvarId
   modify λ s => { s with mctx := mctx }
 
+def setMVarLCtx (mvarId : MVarId) (lctx : LocalContext) : MetaM Unit := do
+  let newDecl := { ← getMVarDecl mvarId with lctx := lctx }
+  let mctx ← getMCtx
+  setMCtx { mctx with decls := mctx.decls.insert mvarId newDecl }
+
+def setFVarBinderInfos (mvarId : MVarId) (fvars : Array FVarId)
+    (bi : BinderInfo) : MetaM Unit := do
+  let decl ← getMVarDecl mvarId
+  let mut lctx := (← getMVarDecl mvarId).lctx
+  for fvar in fvars do
+    lctx := lctx.setBinderInfo fvar bi
+  let mctx ← getMCtx
+  let newDecl := { decl with lctx := lctx }
+  setMCtx { mctx with decls := mctx.decls.insert mvarId newDecl }
+
+structure HypothesisWithBinderInfo where
+  userName : Name
+  type : Expr
+  value : Expr
+  binderInfo : BinderInfo
+
+def assertHypothesesWithBinderInfos (mvarId : MVarId)
+    (hs : Array HypothesisWithBinderInfo) : MetaM (Array FVarId × MVarId) := do
+  if hs.isEmpty then
+    return (#[], mvarId)
+  else withMVarContext mvarId do
+    checkNotAssigned mvarId `assertHypotheses
+    let tag    ← getMVarTag mvarId
+    let target ← getMVarType mvarId
+    let targetNew := hs.foldr (init := target) fun h targetNew =>
+      mkForall h.userName h.binderInfo h.type targetNew
+    let mvarNew ← mkFreshExprSyntheticOpaqueMVar targetNew tag
+    let val := hs.foldl (init := mvarNew) fun val h => mkApp val h.value
+    assignExprMVar mvarId val
+    introNP mvarNew.mvarId! hs.size
+
 end Lean.Meta
 
 

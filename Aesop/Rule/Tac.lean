@@ -258,12 +258,24 @@ end GlobalRuleTacBuilderDescr
 
 namespace RuleTacBuilder
 
-def applyFVar (userName : Name) : RuleTacBuilder := λ goal =>
+private def copyRuleHypotheses (goal : MVarId) (userNames : Array Name) :
+    MetaM (MVarId × Array FVarId) := do
+  let newHyps ← userNames.mapM λ n => do
+    let decl ← getLocalDeclFromUserName n
+    pure {
+      userName := `_local ++ n -- TODO potential for name clashes
+      value := mkFVar decl.fvarId
+      type := decl.type
+      binderInfo := BinderInfo.auxDecl
+    }
+  let (newHyps, goal) ← assertHypothesesWithBinderInfos goal newHyps
+  return (goal, newHyps)
+
+def applyFVar (userName : Name) : RuleTacBuilder := λ goal => do
+  let (goal, #[newHyp]) ← copyRuleHypotheses goal #[userName] | unreachable!
   withMVarContext goal do
-    let _ ← getLocalDeclFromUserName userName
-      -- Just to check whether the hypothesis exists.
     let tac :=
-      { tac := RuleTac.applyFVar userName
+      { tac := RuleTac.applyFVar (← getLocalDecl newHyp).userName
         descr := none }
     return (goal, tac)
 
