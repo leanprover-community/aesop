@@ -147,20 +147,75 @@ end Iteration
 
 /-! ## Goal Nodes and Rule Applications -/
 
-inductive ProofStatus
-  | unproven
+/--
+At each point during the search, a goal is in one of these states:
+
+- `active`: the goal is not proven, but not all rules that can be applied to
+  it have been applied yet.
+- `inactive`: all rules that can be applied to the goal have been applied, but
+  some of its rule applications may be provable.
+- `provenByRuleApplication`: the goal has a child rapp that is proven.
+- `provenByNormalization`: the goal was proven during normalization.
+- `unprovable`: all rules that can be applied to the goal have been applied, but
+  all resulting rapps are unprovable.
+- `irrelevant`: the goal goal's parent rapp is already unprovable (or itself
+  irrelevant).
+
+A goal starts as active. It may then become inactive if we exhaust all its rules
+without determining whether it is provable or unprovable. Eventually it becomes
+either proven, unprovable or irrelevant, after which its state does not
+change any more.
+-/
+inductive GoalState
+  | active
+  | inactive
   | provenByRuleApplication
   | provenByNormalization
+  | unprovable
+  | irrelevant
   deriving Inhabited, BEq
 
-namespace ProofStatus
+namespace GoalState
 
-def isProven : ProofStatus → Bool
-  | unproven => false
+instance : ToString GoalState where
+  toString
+    | active => "active"
+    | inactive => "inactive"
+    | provenByRuleApplication => "provenByRuleApplication"
+    | provenByNormalization =>  "provenByNormalization"
+    | unprovable => "unprovable"
+    | irrelevant => "irrelevant"
+
+def isProvenByRuleApplication : GoalState → Bool
+  | provenByRuleApplication => true
+  | _ => false
+
+def isProvenByNormalization : GoalState → Bool
+  | provenByNormalization => true
+  | _ => false
+
+def isUnprovable : GoalState → Bool
+  | unprovable => true
+  | _ => false
+
+def isIrrelevant : GoalState → Bool
+  | irrelevant => true
+  | _ => false
+
+def isActive : GoalState → Bool
+  | active => true
+  | _ => false
+
+def isInactive : GoalState → Bool
+  | inactive => true
+  | _ => false
+
+def isProven : GoalState → Bool
   | provenByRuleApplication => true
   | provenByNormalization => true
+  | _ => false
 
-end ProofStatus
+end GoalState
 
 
 -- Invariant: if proofStatus = provenByNormalization then isNormal = true
@@ -174,19 +229,64 @@ structure GoalData' (GoalData RappData : Type) : Type where
   addedInIteration : Iteration
   lastExpandedInIteration : Iteration
     -- Iteration 0 means the node has never been expanded.
-  deferTo : Option (IO.Ref (MutAltTree IO.RealWorld GoalData RappData))
-  failedRapps : Array RegularRule
+  state : GoalState
+  isNormal : Bool
   unsafeRulesSelected : Bool
   unsafeQueue : UnsafeQueue
-  proofStatus : ProofStatus
-  isUnprovable : Bool
-  isIrrelevant : Bool
-  isNormal : Bool
   branchState : BranchState
+  failedRapps : Array RegularRule
+  deferTo : Option (IO.Ref (MutAltTree IO.RealWorld GoalData RappData))
   deriving Inhabited
 
--- This is necessary to work around a compiler bug. If we inline this
--- definition, the nested inductive compiler fails on `GoalDataUnsafe`.
+
+/--
+At each point during the search, a rapp is in one of these states:
+
+- `active`: none of the below conditions apply.
+- `proven`: all the rapp's child goals have been proven.
+- `unprovable`: one of the rapp's child goals is unprovable.
+- `irrelevant`: the rapp's parent goal is already proven (or itself irrelevant).
+
+A rapp starts in the active state. It eventually becomes either proven,
+unprovable or irrelevant, after which its state does not change any more.
+-/
+inductive RappState
+  | active
+  | proven
+  | unprovable
+  | irrelevant
+  deriving Inhabited, BEq
+
+namespace RappState
+
+instance : ToString RappState where
+  toString
+    | active => "active"
+    | proven => "proven"
+    | unprovable => "unprovable"
+    | irrelevant => "irrelevant"
+
+def isProven : RappState → Bool
+  | proven => true
+  | _ => false
+
+def isUnprovable : RappState → Bool
+  | unprovable => true
+  | _ => false
+
+def isIrrelevant : RappState → Bool
+  | irrelevant => true
+  | _ => false
+
+def isActive : RappState → Bool
+  | active => true
+  | _ => false
+
+end RappState
+
+
+-- Workaround for a compiler bug. If we inline this definition, the nested
+-- inductive compiler fails on `GoalDataUnsafe`.
 private abbrev UnificationGoalOriginsMap α := PersistentHashMap MVarId α
 
 -- Invariant: All rapp IDs in a tree are distinct.
@@ -199,16 +299,14 @@ private abbrev UnificationGoalOriginsMap α := PersistentHashMap MVarId α
 structure RappData' (GoalData RappData : Type) : Type where
   id : RappId
   depth : Nat -- TODO unused?
-  state : Meta.SavedState
+  state : RappState
+  metaState : Meta.SavedState
     -- This is the state *after* the rule was successfully applied, so the goal
     -- mvar is assigned in this state.
   unificationGoalOrigins :
     UnificationGoalOriginsMap (IO.Ref (MutAltTree IO.RealWorld RappData GoalData))
   appliedRule : RegularRule
   successProbability : Percent
-  isProven : Bool
-  isUnprovable : Bool
-  isIrrelevant : Bool
   deriving Inhabited
 
 mutual
@@ -310,16 +408,8 @@ def unsafeQueue (g : GoalData) : UnsafeQueue :=
   g.elim.unsafeQueue
 
 @[inline]
-def proofStatus (g : GoalData) : ProofStatus :=
-  g.elim.proofStatus
-
-@[inline]
-def isUnprovable (g : GoalData) : Bool :=
-  g.elim.isUnprovable
-
-@[inline]
-def isIrrelevant (g : GoalData) : Bool :=
-  g.elim.isIrrelevant
+def state (g : GoalData) : GoalState :=
+  g.elim.state
 
 @[inline]
 def isNormal (g : GoalData) : Bool :=
@@ -370,16 +460,8 @@ def setUnsafeQueue (unsafeQueue : UnsafeQueue) (g : GoalData) : GoalData :=
   g.modify λ g => { g with unsafeQueue := unsafeQueue }
 
 @[inline]
-def setProofStatus (proofStatus : ProofStatus) (g : GoalData) : GoalData :=
-  g.modify λ g => { g with proofStatus := proofStatus }
-
-@[inline]
-def setUnprovable (isUnprovable : Bool) (g : GoalData) : GoalData :=
-  g.modify λ g => { g with isUnprovable := isUnprovable }
-
-@[inline]
-def setIrrelevant (isIrrelevant : Bool) (g : GoalData) : GoalData :=
-  g.modify λ g => { g with isIrrelevant := isIrrelevant }
+def setState (state : GoalState) (g : GoalData) : GoalData :=
+  g.modify λ g => { g with state := state }
 
 @[inline]
 def setNormal (isNormal : Bool) (g : GoalData) : GoalData :=
@@ -388,10 +470,6 @@ def setNormal (isNormal : Bool) (g : GoalData) : GoalData :=
 @[inline]
 def setBranchState (branchState : BranchState) (g : GoalData) : GoalData :=
   g.modify λ g => { g with branchState := branchState }
-
-@[inline]
-def isProven (g : GoalData) : Bool :=
-  g.proofStatus.isProven
 
 open MessageData in
 protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
@@ -407,11 +485,7 @@ protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
       pure m!"deferred in favour of goal {(← deferred.get).payload.id}"
   return m!"Goal {g.id} [{g.successProbability.toHumanString}]" ++ nodeFiltering #[
     m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.size}",
-    join
-      [ m!"normal: {g.isNormal.toYesNo} | ",
-        m!"proven: {g.isProven.toYesNo} | ",
-        m!"unprovable: {g.isUnprovable.toYesNo} | ",
-        m!"irrelevant: {g.isIrrelevant.toYesNo}" ],
+    m!"state: {g.state} | normal: {g.isNormal.toYesNo}",
     m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration}",
     defersTo,
     if ¬ traceMods.goals then none else
@@ -433,9 +507,7 @@ protected def mkInitial (id : GoalId) (goal : MVarId)
     successProbability := successProbability
     failedRapps := #[]
     unsafeQueue := UnsafeQueue.initial #[]
-    proofStatus := ProofStatus.unproven
-    isUnprovable := false
-    isIrrelevant := false
+    state := GoalState.active
     isNormal := false
     unsafeRulesSelected := false
     branchState := branchState
@@ -470,8 +542,8 @@ def depth (r : RappData) : Nat :=
   r.elim.depth
 
 @[inline]
-def state (r : RappData) : Meta.SavedState :=
-  r.elim.state
+def metaState (r : RappData) : Meta.SavedState :=
+  r.elim.metaState
 
 @[inline]
 def unificationGoalOrigins (r : RappData) : PersistentHashMap MVarId RappRef :=
@@ -486,16 +558,8 @@ def successProbability (r : RappData) : Percent :=
   r.elim.successProbability
 
 @[inline]
-def isProven (r : RappData) : Bool :=
-  r.elim.isProven
-
-@[inline]
-def isUnprovable (r : RappData) : Bool :=
-  r.elim.isUnprovable
-
-@[inline]
-def isIrrelevant (r : RappData) : Bool :=
-  r.elim.isIrrelevant
+def state (r : RappData) : RappState :=
+  r.elim.state
 
 @[inline]
 def setId (id : RappId) (r : RappData) : RappData :=
@@ -506,8 +570,8 @@ def setDepth (depth : Nat) (r : RappData) : RappData :=
   r.modify λ r => { r with depth := depth }
 
 @[inline]
-def setState (state : Meta.SavedState) (r : RappData) : RappData :=
-  r.modify λ r => { r with state := state }
+def setMetaState (metaState : Meta.SavedState) (r : RappData) : RappData :=
+  r.modify λ r => { r with metaState := metaState }
 
 @[inline]
 def setUnificationGoalOrigins
@@ -525,16 +589,8 @@ def setSuccessProbability (successProbability : Percent) (r : RappData) :
   r.modify λ r => { r with successProbability := successProbability }
 
 @[inline]
-def setProven (isProven : Bool) (r : RappData) : RappData :=
-  r.modify λ r => { r with isProven := isProven }
-
-@[inline]
-def setUnprovable (isUnprovable : Bool) (r : RappData) : RappData :=
-  r.modify λ r => { r with isUnprovable := isUnprovable }
-
-@[inline]
-def setIrrelevant (isIrrelevant : Bool) (r : RappData) : RappData :=
-  r.modify λ r => { r with isIrrelevant := isIrrelevant }
+def setState (state : RappState) (r : RappData) : RappData :=
+  r.modify λ r => { r with state := state }
 
 open MessageData in
 protected def toMessageData (traceMods : TraceModifiers) (r : RappData) :
@@ -549,24 +605,19 @@ protected def toMessageData (traceMods : TraceModifiers) (r : RappData) :
   return m!"Rapp {r.id} [{r.successProbability.toHumanString}]" ++
     nodeFiltering #[
       toMessageData r.appliedRule,
-      join
-        [ m!"proven: {r.isProven.toYesNo} | ",
-          m!"unprovable: {r.isUnprovable.toYesNo} | ",
-          m!"irrelevant: {r.isIrrelevant.toYesNo}" ],
+      m!"state: {r.state}",
       unificationGoalOrigins ]
 
-protected def mkInitial (id : RappId) (depth : Nat) (state : Meta.SavedState)
+protected def mkInitial (id : RappId) (depth : Nat) (metaState : Meta.SavedState)
     (unificationGoalOrigins : PersistentHashMap MVarId RappRef)
     (appliedRule : RegularRule) (successProbability : Percent) : RappData := mk
   { id := id
     depth := depth
-    state := state
+    metaState := metaState
     unificationGoalOrigins := unificationGoalOrigins
     appliedRule := appliedRule
     successProbability := successProbability
-    isProven := false
-    isUnprovable := false
-    isIrrelevant := false }
+    state := RappState.active }
 
 end RappData
 
@@ -629,20 +680,8 @@ def unsafeQueue? (g : Goal) : Option UnsafeQueue :=
   if g.unsafeRulesSelected then some g.unsafeQueue else none
 
 @[inline]
-def proofStatus (g : Goal) : ProofStatus :=
-  g.payload.proofStatus
-
-@[inline]
-def isProven (g : Goal) : Bool :=
-  g.payload.isProven
-
-@[inline]
-def isUnprovable (g : Goal) : Bool :=
-  g.payload.isUnprovable
-
-@[inline]
-def isIrrelevant (g : Goal) : Bool :=
-  g.payload.isIrrelevant
+def state (g : Goal) : GoalState :=
+  g.payload.state
 
 @[inline]
 def isNormal (g : Goal) : Bool :=
@@ -692,16 +731,8 @@ def setUnsafeQueue (unsafeQueue : UnsafeQueue) (g : Goal) : Goal :=
   g.modifyPayload λ d => d.setUnsafeQueue unsafeQueue
 
 @[inline]
-def setProofStatus (proofStatus : ProofStatus) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setProofStatus proofStatus
-
-@[inline]
-def setUnprovable (isUnprovable : Bool) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setUnprovable isUnprovable
-
-@[inline]
-def setIrrelevant (isIrrelevant : Bool) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setIrrelevant isIrrelevant
+def setState (state : GoalState) (g : Goal) : Goal :=
+  g.modifyPayload λ d => d.setState state
 
 @[inline]
 def setNormal (isNormal : Bool) (g : Goal) : Goal :=
@@ -717,9 +748,6 @@ def hasNoUnexpandedUnsafeRule (g : Goal) : Bool :=
   if ¬ g.unsafeRulesSelected
     then false
     else g.unsafeQueue.isEmpty
-
-def isActive (g : Goal) : Bool :=
-  ! (g.isProven || g.isUnprovable || g.isIrrelevant)
 
 end Goal
 
@@ -756,8 +784,8 @@ def depth (r : Rapp) : Nat :=
   r.payload.depth
 
 @[inline]
-def state (r : Rapp) : Meta.SavedState :=
-  r.payload.state
+def metaState (r : Rapp) : Meta.SavedState :=
+  r.payload.metaState
 
 @[inline]
 def unificationGoalOrigins (r : Rapp) : PersistentHashMap MVarId RappRef :=
@@ -772,16 +800,8 @@ def successProbability (r : Rapp) : Percent :=
   r.payload.successProbability
 
 @[inline]
-def isProven (r : Rapp) : Bool :=
-  r.payload.isProven
-
-@[inline]
-def isUnprovable (r : Rapp) : Bool :=
-  r.payload.isUnprovable
-
-@[inline]
-def isIrrelevant (r : Rapp) : Bool :=
-  r.payload.isIrrelevant
+def state (r : Rapp) : RappState :=
+  r.payload.state
 
 -- Setters
 
@@ -790,8 +810,8 @@ def setId (id : RappId) (r : Rapp) : Rapp :=
   r.modifyPayload λ r => r.setId id
 
 @[inline]
-def setState (state : Meta.SavedState) (r : Rapp) : Rapp :=
-  r.modifyPayload λ r => r.setState state
+def setMetaState (metaState : Meta.SavedState) (r : Rapp) : Rapp :=
+  r.modifyPayload λ r => r.setMetaState metaState
 
 @[inline]
 def setDepth (depth : Nat) (r : Rapp) : Rapp :=
@@ -812,21 +832,8 @@ def setSuccessProbability (successProbability : Percent) (r : Rapp) : Rapp :=
   r.modifyPayload λ r => r.setSuccessProbability successProbability
 
 @[inline]
-def setProven (isProven : Bool) (r : Rapp) : Rapp :=
-  r.modifyPayload λ r => r.setProven isProven
-
-@[inline]
-def setUnprovable (isUnprovable : Bool) (r : Rapp) : Rapp :=
-  r.modifyPayload λ r => r.setUnprovable isUnprovable
-
-@[inline]
-def setIrrelevant (isIrrelevant : Bool) (r : Rapp) : Rapp :=
-  r.modifyPayload λ r => r.setIrrelevant isIrrelevant
-
-/-! ### Miscellaneous -/
-
-def allSubgoalsProven (r : Rapp) : m Bool :=
-  r.subgoals.allM λ subgoal => return (← subgoal.get).isProven
+def setState (state : RappState) (r : Rapp) : Rapp :=
+  r.modifyPayload λ r => r.setState state
 
 end Rapp
 
@@ -852,12 +859,12 @@ end Rapp
 
 @[inline]
 def Rapp.runMetaM (x : MetaM α) (r : Rapp) : MetaM (α × Meta.SavedState) :=
-  runMetaMInSavedState r.state x
+  runMetaMInSavedState r.metaState x
 
 @[inline]
 def Rapp.runMetaMModifying (x : MetaM α) (r : Rapp) : MetaM (α × Rapp) := do
   let (result, finalState) ← r.runMetaM x
-  return (result, r |>.setState finalState)
+  return (result, r |>.setMetaState finalState)
 
 @[inline]
 def RappRef.runMetaM (x : MetaM α) (rref : RappRef) :
@@ -963,11 +970,14 @@ def mayHaveUnexpandedRapp (g : Goal) : m Bool := do pure $
   ¬ (← g.rapps.anyM λ r => return (← r.get : Rapp).appliedRule.isSafe)
 
 def hasProvableRapp (g : Goal) : m Bool :=
-  g.rapps.anyM λ r => return ¬ (← r.get).isUnprovable
+  g.rapps.anyM λ r => return ¬ (← r.get).state.isUnprovable
+
+def isUnprovableNoCache (g : Goal) : m Bool :=
+  notM (g.mayHaveUnexpandedRapp <||> g.hasProvableRapp)
 
 def firstProvenRapp? (g : Goal) : m (Option RappRef) :=
   g.rapps.findSomeM? λ rref =>
-    return if (← rref.get).isProven then some rref else none
+    return if (← rref.get).state.isProven then some rref else none
 
 def unificationGoalOrigins (g : Goal) : m (PersistentHashMap MVarId RappRef) :=
   match g.parent with
@@ -987,8 +997,18 @@ def parentDepth (g : Goal) : m Nat :=
 end Goal
 
 
-def Rapp.hasUnificationGoal (r : Rapp) : Bool :=
+namespace Rapp
+
+def hasUnificationGoal (r : Rapp) : Bool :=
   ! r.unificationGoalOrigins.isEmpty
+
+def isUnprovableNoCache (r : Rapp) : m Bool :=
+  r.subgoals.anyM λ subgoal => return (← subgoal.get).state.isUnprovable
+
+def isProvenNoCache (r : Rapp) : m Bool :=
+  r.subgoals.allM λ subgoal => return (← subgoal.get).state.isProven
+
+end Rapp
 
 
 private def findActiveDescendantGoalCore (x : Sum GoalRef RappRef) :
@@ -996,7 +1016,7 @@ private def findActiveDescendantGoalCore (x : Sum GoalRef RappRef) :
   let result : IO.Ref (Option GoalRef) ← ST.mkRef none
   MATRef.visitDown'
     (λ gref : GoalRef => do
-      if (← gref.get).isActive then
+      if (← gref.get).state.isActive then
         result.set gref
         return false
       else
@@ -1018,16 +1038,16 @@ def RappRef.findActiveDescendantGoal : RappRef → m (Option GoalRef) :=
 def setIrrelevantCore : Sum GoalRef RappRef → m Unit :=
   MATRef.visitDown'
     (λ gref : GoalRef => do
-      if (← gref.get).isIrrelevant
+      if (← gref.get).state.isIrrelevant
         then return false -- Subtree should already be marked as irrelevant.
         else do
-          gref.modify λ g => g.setIrrelevant true
+          gref.modify λ g => g.setState GoalState.irrelevant
           return true)
     (λ rref : RappRef => do
-      if (← rref.get).isIrrelevant
+      if (← rref.get).state.isIrrelevant
         then return false
         else do
-          rref.modify λ r => r.setIrrelevant true
+          rref.modify λ r => r.setState RappState.irrelevant
           return true)
 
 def GoalRef.setIrrelevant : GoalRef → m Unit :=
@@ -1037,7 +1057,7 @@ def RappRef.setIrrelevant : RappRef → m Unit :=
   setIrrelevantCore ∘ Sum.inr
 
 private def setRappProvenAndSiblingsIrrelevant (rref : RappRef) : m Unit := do
-  rref.modify λ r => r.setProven true
+  rref.modify λ r => r.setState RappState.proven
   (← MATRef.siblings rref).forM RappRef.setIrrelevant
 
 @[inline]
@@ -1045,23 +1065,29 @@ def setProvenCore : Sum GoalRef RappRef → m Unit :=
   MATRef.visitUp'
     -- Goals are unconditionally marked as proven.
     (λ gref : GoalRef => do
-      gref.modify λ g => g.setProofStatus ProofStatus.provenByRuleApplication
+      gref.modify λ g => g.setState GoalState.provenByRuleApplication
       return true)
     -- Rapps are marked as proven only if they are in fact proven, i.e. if all
     -- their subgoals are (marked as) proven. In this case, we also need to
     -- mark siblings of the rapp (and their descendants) as irrelevant.
     (λ rref : RappRef => do
-      if ¬ (← (← rref.get).allSubgoalsProven)
+      if ← notM (← rref.get).isProvenNoCache
         then pure false
         else setRappProvenAndSiblingsIrrelevant rref *> pure true)
 
-def GoalRef.setProven (firstGoalProofStatus : ProofStatus) (gref : GoalRef) :
+private def GoalRef.setProven (firstGoalState : GoalState) (gref : GoalRef) :
     m Unit := do
   let g ← gref.get
-  gref.set $ g.setProofStatus firstGoalProofStatus
+  gref.set $ g.setState firstGoalState
   match g.parent with
   | none => return ()
   | some parent => setProvenCore $ Sum.inr parent
+
+def GoalRef.setProvenByRuleApplication (gref : GoalRef) : m Unit :=
+  gref.setProven (firstGoalState := GoalState.provenByRuleApplication)
+
+def GoalRef.setProvenByNormalization (gref : GoalRef) : m Unit :=
+  gref.setProven (firstGoalState := GoalState.provenByNormalization)
 
 def RappRef.setProven (firstRappUnconditional : Bool) (rref : RappRef) :
     m Unit := do
@@ -1073,7 +1099,7 @@ def RappRef.setProven (firstRappUnconditional : Bool) (rref : RappRef) :
 
 private def setGoalUnprovableAndSiblingsIrrelevant (gref : GoalRef) :
     m Unit := do
-  gref.modify λ g => g.setUnprovable true
+  gref.modify λ g => g.setState GoalState.unprovable
   (← MATRef.siblings gref).forM GoalRef.setIrrelevant
 
 @[inline]
@@ -1085,12 +1111,12 @@ def setUnprovableCore : Sum GoalRef RappRef → m Unit :=
     -- siblings of the goal (and their descendants) as irrelevant.
     (λ gref : GoalRef => do
       let g ← gref.get
-      if (← g.mayHaveUnexpandedRapp <||> g.hasProvableRapp)
-        then pure false
-        else setGoalUnprovableAndSiblingsIrrelevant gref *> pure true)
+      if ← g.isUnprovableNoCache
+        then setGoalUnprovableAndSiblingsIrrelevant gref *> return true
+        else return false)
     -- Rapps are unconditionally marked as unprovable.
     (λ rref : RappRef => do
-      rref.modify λ r => r.setUnprovable true
+      rref.modify λ r => r.setState RappState.unprovable
       return true)
 
 def GoalRef.setUnprovable (firstGoalUnconditional : Bool) (gref : GoalRef) :
@@ -1298,7 +1324,7 @@ mutual
       MetaM Unit := do
     let r ← rref.get
     withoutModifyingState do
-      restoreState r.state
+      restoreState r.metaState
       for (m, _) in r.unificationGoalOrigins do
         let (some _) ← (← getMCtx).findDecl? m | throwError
           "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is not declared in the metavariable context"

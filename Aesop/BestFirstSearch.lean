@@ -166,7 +166,7 @@ partial def resolveDeferredGoal (gref : GoalRef) : IO (Option GoalRef) := do
   match (← gref.get).deferTo with
   | none => return none
   | some deferred =>
-    if (← deferred.get).isActive then
+    if (← deferred.get).state.isActive then
       let deferredRec? ← resolveDeferredGoal deferred
       return some $ deferredRec?.getD deferred
     else
@@ -351,7 +351,7 @@ def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Bool := do
     return false
   | none =>
     gref.modify λ g => g.setNormal true
-    gref.setProven (firstGoalProofStatus := ProofStatus.provenByNormalization)
+    gref.setProvenByNormalization
     return true
   -- FIXME check whether normalisation assigned any unification goals
 
@@ -542,7 +542,7 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
     onFailure $ Exception.error (← getRef) "Rule returned no rule applications."
   | Sum.inr output =>
     let rapps := output.applications
-    aesop_trace[steps] "Rule succeeded, producing {rapps.size} rule applications."
+    aesop_trace[steps] "Rule succeeded, producing {rapps.size} rule application(s)."
     let postBranchState :=
       rule.withRule λ r => parent.branchState.update r output.postBranchState?
     aesop_trace[stepsBranchStates] "Updated branch state: {rule.withRule λ r => postBranchState.find? r}"
@@ -569,7 +569,6 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
     onFailure (exc : Exception) : SearchM RuleResult := do
       aesop_trace[stepsRuleFailures] "Rule failed with message:{indentD exc.toMessageData}"
       parentRef.modify λ g => g.setFailedRapps $ g.failedRapps.push rule
-      parentRef.setUnprovable (firstGoalUnconditional := false)
       return RuleResult.failed
 
     processRuleApplicationWithSubgoals (parentRef : GoalRef) (rule : RegularRule)
@@ -639,21 +638,24 @@ def selectUnsafeRules (gref : GoalRef) (includeSafeRules : Bool) :
     gref.set $ g.setUnsafeRulesSelected true |>.setUnsafeQueue unsafeQueue
     return unsafeQueue
 
--- Returns true if the goal should be reinserted into the goal queue.
 partial def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
-    SearchM Bool := do
+    SearchM Unit := do
   let queue ← selectUnsafeRules gref includeSafeRules
   aesop_trace[steps] "Trying unsafe rules"
   let (remainingQueue, result) ← loop queue
   gref.modify λ g => g.setUnsafeQueue remainingQueue
   aesop_trace[steps] "Remaining unsafe rules:{MessageData.node $ remainingQueue.toArray.map toMessageData}"
-  if result.isFailed && remainingQueue.isEmpty then
-    aesop_trace[steps] "Goal is unprovable"
-    gref.setUnprovable (firstGoalUnconditional := true)
-  return ! result.isProven && ! remainingQueue.isEmpty
+  if remainingQueue.isEmpty then
+    if ← (← gref.get).isUnprovableNoCache then
+      aesop_trace[steps] "Goal is unprovable."
+      gref.setUnprovable (firstGoalUnconditional := true)
+    else
+      aesop_trace[steps] "All rules applied, goal becomes inactive."
+      gref.modify λ g => g.setState GoalState.inactive
   where
     loop (queue : UnsafeQueue) : SearchM (UnsafeQueue × RuleResult) := do
-      let (some (r, queue)) ← queue.pop? | return (queue, RuleResult.failed)
+      let (some (r, queue)) ← queue.pop? |
+        return (queue, RuleResult.failed)
       aesop_trace[steps] "Trying {r.rule}"
       let result ←
         runRegularRule gref (RegularRule'.unsafe r.rule) r.matchLocations
@@ -661,11 +663,10 @@ partial def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
         then return (queue, result)
         else loop queue
 
--- Returns true if the goal should be reinserted into the goal queue.
-def expandGoal (gref : GoalRef) : SearchM Bool := do
+def expandGoal (gref : GoalRef) : SearchM Unit := do
   if ← normalizeGoalIfNecessary gref then
     -- Goal was already proven by normalisation.
-    return false
+    return
   if ← (← gref.get).hasUnificationGoal then
     aesop_trace[steps] "Goal contains unification goals. Treating safe rules as unsafe."
     -- TODO This is a bit of a lie. Currently we only check whether the goal's
@@ -676,16 +677,14 @@ def expandGoal (gref : GoalRef) : SearchM Bool := do
     runFirstUnsafeRule gref (includeSafeRules := true)
   else
     let safeResult ← runFirstSafeRule gref
-    if safeResult.isFailed
-      then runFirstUnsafeRule gref (includeSafeRules := false)
-      else pure false
+    if safeResult.isFailed then
+      runFirstUnsafeRule gref (includeSafeRules := false)
 
 def expandNextGoal : SearchM Unit := do
   let some gref ← popActiveGoal
     | throwError "aesop/expandNextGoal: internal error: no active goals left"
-  let g ← gref.get
-  aesop_trace[steps] "Expanding {← g.toMessageData (← TraceModifiers.get)}"
-  if ¬ g.isActive then
+  aesop_trace[steps] "Expanding {← (← gref.get).toMessageData (← TraceModifiers.get)}"
+  if ¬ (← gref.get).state.isActive then
     aesop_trace[steps] "Skipping inactive goal."
     return ()
   let maxRappDepth := (← readThe Aesop.Options).maxRuleApplicationDepth
@@ -694,9 +693,9 @@ def expandNextGoal : SearchM Unit := do
     gref.setUnprovableUnconditionallyAndSetDescendantsIrrelevant
     return ()
   let currentIteration ← getThe Iteration
-  let hasMoreRules ← expandGoal gref
+  expandGoal gref
   gref.modify λ g => g.setLastExpandedInIteration currentIteration
-  if hasMoreRules then
+  if (← gref.get).state.isActive then
     pushActiveGoal (← ActiveGoal.ofGoalRef gref)
 
 mutual
@@ -710,12 +709,10 @@ mutual
   -- parent.)
   private partial def linkProofsGoal (gref : GoalRef) : MetaM Unit := do
     let g ← gref.get
-    match g.proofStatus with
-    | ProofStatus.unproven => throwError
-      "aesop/linkProofs: internal error: goal {g.id} marked as unproven"
-    | ProofStatus.provenByNormalization =>
+    match g.state with
+    | GoalState.provenByNormalization =>
       return ()
-    | ProofStatus.provenByRuleApplication => do
+    | GoalState.provenByRuleApplication => do
       let (some provenRapp) ← g.firstProvenRapp? | throwError
         "aesop/linkProofs: internal error: goal {g.id} marked as proven but does not have a proven rule application"
       let proof ← linkProofsRapp provenRapp
@@ -729,6 +726,8 @@ mutual
           unless ← isDefEq (← getMVarType goalMVar) (← inferType proof) do
             throwError "{Check.proofReconstruction.name}: reconstructed proof of goal {g.id} has the wrong type"
       assignExprMVar goalMVar proof
+    | _ => throwError
+      "aesop/linkProofs: internal error: goal {g.id} marked as unproven"
 
   -- Let r be the rapp in rref. This function assigns the goal metavariables of
   -- the subgoals of r (in the meta context of r). Then it returns r's parent
@@ -752,7 +751,7 @@ def GoalRef.linkProofs (gref : GoalRef) : MetaM Unit := linkProofsGoal gref
 
 def finishIfProven : SearchM Bool := do
   let root ← readRootGoal
-  unless (← root.get).isProven do
+  unless (← root.get).state.isProven do
     return false
   aesop_trace[steps] "Root node is proven. Linking proofs."
   root.linkProofs
@@ -777,7 +776,7 @@ def checkRappLimit : SearchM Unit := do
 partial def searchLoop : SearchM Unit := do
   aesop_trace[steps] "=== Search loop iteration {← getThe Iteration}"
   let root ← readRootGoal
-  if (← root.get).isUnprovable then
+  if (← root.get).state.isUnprovable then
     throwError "aesop: failed to prove the goal"
   if ← finishIfProven then
     return ()
