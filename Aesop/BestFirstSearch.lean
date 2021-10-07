@@ -83,9 +83,8 @@ structure State where
 
 def mkInitialContextAndState (rs : RuleSet) (options : Aesop.Options)
     (mainGoal : MVarId) : MetaM (Context × State) := do
-  let rootGoal := Goal.mk none #[] $
-    GoalData.mkInitial GoalId.zero mainGoal Percent.hundred Iteration.none
-      BranchState.empty
+  let rootGoal := Goal.mkInitial GoalId.zero none mainGoal Percent.hundred
+      Iteration.none BranchState.empty
   let rootGoalRef ← ST.mkRef rootGoal
   let ctx := {
     ruleSet := rs
@@ -196,45 +195,42 @@ def pushActiveGoal (ag : ActiveGoal) : SearchM Unit :=
   modifyThe ActiveGoalQueue (·.insert ag)
 
 -- Overwrites the goal ID from `g`.
-def addGoal (g : GoalData) (parent : RappRef) : SearchM GoalRef := do
+def addGoal (g : Goal) : SearchM GoalRef := do
   let id ← getAndIncrementNextGoalId
   let g := g.setId id
-  let gref ← ST.mkRef $ Goal.mk (some parent) #[] g
-  parent.modify λ r => r.addChild gref
+  let gref ← ST.mkRef g
+  match g.parent? with
+  | none => throwError "aesop: internal error: addGoal expected the goal to have a parent"
+  | some parent => parent.modify λ r => r.addChild gref
   pushActiveGoal (← ActiveGoal.ofGoalRef gref)
   modify λ s => { s with numGoals := s.numGoals + 1 }
   return gref
 
-def addGoals (goals : Array GoalData) (parent : RappRef) :
-    SearchM (Array GoalRef) := do
-  let mut grefs := #[]
-  for goal in goals do
-    let gref ← addGoal goal parent
-    grefs := grefs.push gref
-  return grefs
+def addGoals (goals : Array Goal) (parent : RappRef) :
+    SearchM (Array GoalRef) :=
+  goals.mapM addGoal
 
 def addGoals' (goals : Array MVarId) (successProbability : Percent)
     (parent : RappRef) (branchState : BranchState) :
     SearchM (Array GoalRef) := do
   let i ← getThe Iteration
-  let goals ← goals.mapM λ g =>
-    GoalData.mkInitial GoalId.dummy g successProbability i branchState
-  addGoals goals parent
+  goals.mapM λ g => addGoal $
+    Goal.mkInitial GoalId.dummy (some parent) g successProbability i branchState
 
 -- Overwrites the rapp ID and depth of `r`. Adds the `newUnificationGoals` as
 -- unification goals whose origin is the returned rapp.
-def addRapp (r : RappData) (parent : GoalRef)
-    (newUnificationGoals : Array MVarId) : SearchM RappRef := do
+def addRapp (r : Rapp) (newUnificationGoals : Array MVarId) :
+    SearchM RappRef := do
   let id ← getAndIncrementNextRappId
   let r := r.setId id
-  let depth := (← (← parent.get).parentDepth) + 1
+  let depth := (← (← r.parent.get).parentDepth) + 1
   let r := r.setDepth depth
-  let rref ← ST.mkRef $ Rapp.mk (some parent) #[] r
+  let rref ← ST.mkRef r
   let mut unificationGoalOrigins := r.unificationGoalOrigins
   for goal in newUnificationGoals do
     unificationGoalOrigins := unificationGoalOrigins.insert goal rref
   rref.modify λ r => r.setUnificationGoalOrigins unificationGoalOrigins
-  parent.modify λ g => g.addChild rref
+  r.parent.modify λ g => g.addChild rref
   modify λ s => { s with numRapps := s.numRapps + 1 }
   return rref
 
@@ -422,12 +418,12 @@ mutual
   partial def assignUnificationGoalsInRappBranch
       (unificationGoals : UnificationGoals) (root : RappRef) : SearchM Unit := do
     assignUnificationGoalsInRappState unificationGoals root
-    (← root.get).subgoals.forM
+    (← root.get).children.forM
       (assignUnificationGoalsInGoalBranch unificationGoals)
 
   partial def assignUnificationGoalsInGoalBranch
       (unificationGoals : UnificationGoals) (root : GoalRef) : SearchM Unit := do
-    (← root.get).rapps.forM
+    (← root.get).children.forM
       (assignUnificationGoalsInRappBranch unificationGoals)
 end
 
@@ -449,7 +445,7 @@ def copyRappBranch (root : RappRef) : SearchM (RappRef × TreeCopy.State) := do
           |>.setLastExpandedInIteration Iteration.none
           |>.setDeferTo oldGref
         pushActiveGoal (← ActiveGoal.ofGoalRef newGref)
-  let parent := (← root.get).parent!
+  let parent := (← root.get).parent
   runCopyTreeT afterAddGoal (λ _ _ => pure ()) $
     TreeCopy.copyRappTree parent root
 
@@ -558,9 +554,10 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
       aesop_trace[steps] "One of the rule applications has no subgoals. Goal is proven."
       let res ← processUnificationGoalAssignment parentRef proof.postState
       let uGoals ← res.newUnificationGoalOrigins parentRef
-      let r := RappData.mkInitial RappId.dummy 0 proof.postState uGoals rule
-        successProbability
-      let rref ← addRapp r parentRef #[]
+      let r :=
+        Rapp.mkInitial RappId.dummy parentRef 0 proof.postState uGoals
+          rule successProbability
+      let rref ← addRapp r #[]
       rref.setProven (firstRappUnconditional := true)
       aesop_trace[steps]
         "New rapp:{indentD (← rref.toMessageData (← TraceModifiers.get))}"
@@ -576,9 +573,9 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
         (postBranchState : BranchState) : SearchM GoalRef := do
       let res ← processUnificationGoalAssignment parentRef rapp.postState
       let r :=
-        RappData.mkInitial RappId.dummy 0 rapp.postState
+        Rapp.mkInitial RappId.dummy parentRef 0 rapp.postState
           (← res.newUnificationGoalOrigins parentRef) rule successProbability
-      let rref ← addRapp r parentRef rapp.unificationGoals
+      let rref ← addRapp r rapp.unificationGoals
       let newGoals ←
         addGoals' rapp.regularGoals successProbability rref postBranchState
       aesop_trace[steps] do
@@ -736,8 +733,8 @@ mutual
   private partial def linkProofsRapp (rref : RappRef) : MetaM Expr :=
     rref.runMetaMModifying do
       let r ← rref.get
-      r.subgoals.forM linkProofsGoal
-      let proof ← instantiateMVars $ mkMVar (← r.parent!.get).goal
+      r.children.forM linkProofsGoal
+      let proof ← instantiateMVars $ mkMVar (← r.parent.get).goal
       if proof.hasMVar then throwError
         "aesop/linkProofs: internal error: proof extracted from rapp {r.id} contains unassigned metavariables"
       return proof

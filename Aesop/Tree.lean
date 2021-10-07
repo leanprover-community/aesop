@@ -6,7 +6,6 @@ Authors: Jannis Limperg, Asta Halkjær From
 
 import Aesop.Check
 import Aesop.Tree.BranchState
-import Aesop.Tree.MutAltTree
 import Aesop.Tree.UnsafeQueue
 import Aesop.Rule
 import Aesop.Util
@@ -19,7 +18,6 @@ open Std
 
 variable [Monad m] [MonadLiftT (ST IO.RealWorld) m] [MonadError m]
 
-@[inlineIfReduce]
 private def Bool.toYesNo : Bool → Format
   | true => "yes"
   | false => "no "
@@ -28,8 +26,7 @@ namespace Aesop
 
 /-! ## Node IDs -/
 
--- TODO This could be a performance issue. If so, change `Nat` to `USize` and
--- maybe remove the `structure` wrapper to ensure unboxing.
+-- TODO Change to USize?
 structure GoalId where
   toNat : Nat
   deriving Inhabited, DecidableEq
@@ -145,7 +142,7 @@ instance : DecidableRel (α := Iteration) (· ≤ ·) :=
 end Iteration
 
 
-/-! ## Goal Nodes and Rule Applications -/
+/-! ## The Tree -/
 
 /--
 At each point during the search, a goal is in one of these states:
@@ -158,7 +155,7 @@ At each point during the search, a goal is in one of these states:
 - `provenByNormalization`: the goal was proven during normalization.
 - `unprovable`: all rules that can be applied to the goal have been applied, but
   all resulting rapps are unprovable.
-- `irrelevant`: the goal goal's parent rapp is already unprovable (or itself
+- `irrelevant`: the goal's parent rapp is already unprovable (or itself
   irrelevant).
 
 A goal starts as active. It may then become inactive if we exhaust all its rules
@@ -222,8 +219,10 @@ end GoalState
 -- Invariant: All goal IDs in a tree are distinct.
 -- Invariant: The goal ID of a node is smaller than the goal IDs of its
 --   descendant goals.
-structure GoalData' (GoalData RappData : Type) : Type where
+structure GoalData (Goal Rapp : Type) : Type where
   id : GoalId
+  parent? : Option (IO.Ref Rapp)
+  children : Array (IO.Ref Rapp)
   goal : MVarId
   successProbability : Percent
   addedInIteration : Iteration
@@ -235,7 +234,7 @@ structure GoalData' (GoalData RappData : Type) : Type where
   unsafeQueue : UnsafeQueue
   branchState : BranchState
   failedRapps : Array RegularRule
-  deferTo : Option (IO.Ref (MutAltTree IO.RealWorld GoalData RappData))
+  deferTo : Option (IO.Ref Goal)
   deriving Inhabited
 
 
@@ -296,210 +295,206 @@ private abbrev UnificationGoalOriginsMap α := PersistentHashMap MVarId α
 --   in `state`.
 -- Invariant: The rapps referenced by `unificationGoalOrigins` are ancestors of
 --   this rapp.
-structure RappData' (GoalData RappData : Type) : Type where
+structure RappData (Goal Rapp : Type) : Type where
   id : RappId
+  parent : IO.Ref Goal
+  children : Array (IO.Ref Goal)
   depth : Nat -- TODO unused?
   state : RappState
   metaState : Meta.SavedState
     -- This is the state *after* the rule was successfully applied, so the goal
     -- mvar is assigned in this state.
-  unificationGoalOrigins :
-    UnificationGoalOriginsMap (IO.Ref (MutAltTree IO.RealWorld RappData GoalData))
+  unificationGoalOrigins : UnificationGoalOriginsMap (IO.Ref Rapp)
   appliedRule : RegularRule
   successProbability : Percent
   deriving Inhabited
 
 mutual
-  unsafe inductive GoalDataUnsafe
-    | mk : GoalData' GoalDataUnsafe RappDataUnsafe → GoalDataUnsafe
+  unsafe inductive GoalUnsafe
+    | mk : GoalData GoalUnsafe RappUnsafe → GoalUnsafe
 
-  unsafe inductive RappDataUnsafe
-    | mk : RappData' GoalDataUnsafe RappDataUnsafe → RappDataUnsafe
+  unsafe inductive RappUnsafe
+    | mk : RappData GoalUnsafe RappUnsafe → RappUnsafe
 end
 
-structure GoalRappDataSpec where
-  GoalData : Type
-  RappData : Type
-  introGoalData : GoalData' GoalData RappData → GoalData
-  elimGoalData : GoalData → GoalData' GoalData RappData
-  introRappData : RappData' GoalData RappData → RappData
-  elimRappData : RappData → RappData' GoalData RappData
+structure GoalRappSpec where
+  Goal : Type
+  Rapp : Type
+  introGoal : GoalData Goal Rapp → Goal
+  elimGoal : Goal → GoalData Goal Rapp
+  introRapp : RappData Goal Rapp → Rapp
+  elimRapp : Rapp → RappData Goal Rapp
 
-unsafe def goalRappDataImplUnsafe : GoalRappDataSpec where
-  RappData := RappDataUnsafe
-  GoalData := GoalDataUnsafe
-  introGoalData := GoalDataUnsafe.mk
-  elimGoalData | GoalDataUnsafe.mk x => x
-  introRappData := RappDataUnsafe.mk
-  elimRappData | RappDataUnsafe.mk x => x
+unsafe def goalRappImplUnsafe : GoalRappSpec where
+  Goal := GoalUnsafe
+  Rapp := RappUnsafe
+  introGoal := GoalUnsafe.mk
+  elimGoal | GoalUnsafe.mk x => x
+  introRapp := RappUnsafe.mk
+  elimRapp | RappUnsafe.mk x => x
 
-@[implementedBy goalRappDataImplUnsafe]
-constant goalRappDataImpl : GoalRappDataSpec := {
-  GoalData := Unit
-  RappData := Unit
-  introGoalData := λ _ => arbitrary
-  elimGoalData := λ _ => arbitrary
-  introRappData := λ _ => arbitrary
-  elimRappData := λ _ => arbitrary
+@[implementedBy goalRappImplUnsafe]
+constant goalRappImpl : GoalRappSpec := {
+  Goal := Unit
+  Rapp := Unit
+  introGoal := λ _ => arbitrary
+  elimGoal := λ _ => arbitrary
+  introRapp := λ _ => arbitrary
+  elimRapp := λ _ => arbitrary
 }
 
-def GoalData := goalRappDataImpl.GoalData
-def RappData := goalRappDataImpl.RappData
+def Goal := goalRappImpl.Goal
+def Rapp := goalRappImpl.Rapp
 
-abbrev Goal    := MutAltTree IO.RealWorld GoalData RappData
 abbrev GoalRef := IO.Ref Goal
-
-abbrev Rapp    := MutAltTree IO.RealWorld RappData GoalData
 abbrev RappRef := IO.Ref Rapp
 
 
-namespace GoalData
+namespace Goal
 
 @[inline]
-def mk : GoalData' GoalData RappData → GoalData :=
-  goalRappDataImpl.introGoalData
+def mk : GoalData Goal Rapp → Goal :=
+  goalRappImpl.introGoal
 
 @[inline]
-def elim : GoalData → GoalData' GoalData RappData :=
-  goalRappDataImpl.elimGoalData
+def elim : Goal → GoalData Goal Rapp :=
+  goalRappImpl.elimGoal
 
 @[inline]
-def modify (f : GoalData' GoalData RappData → GoalData' GoalData RappData)
-    (g : GoalData) : GoalData :=
+def modify (f : GoalData Goal Rapp → GoalData Goal Rapp) (g : Goal) : Goal :=
   mk $ f $ elim g
 
-instance : Inhabited GoalData where
+instance : Inhabited Goal where
   default := mk arbitrary
 
 @[inline]
-def id (g : GoalData) : GoalId :=
+def id (g : Goal) : GoalId :=
   g.elim.id
 
 @[inline]
-def goal (g : GoalData) : MVarId :=
+def parent? (g : Goal) : Option RappRef :=
+  g.elim.parent?
+
+@[inline]
+def children (g : Goal) : Array RappRef :=
+  g.elim.children
+
+@[inline]
+def goal (g : Goal) : MVarId :=
   g.elim.goal
 
 @[inline]
-def successProbability (g : GoalData) : Percent :=
+def successProbability (g : Goal) : Percent :=
   g.elim.successProbability
 
 @[inline]
-def addedInIteration (g : GoalData) : Iteration :=
+def addedInIteration (g : Goal) : Iteration :=
   g.elim.addedInIteration
 
 @[inline]
-def lastExpandedInIteration (g : GoalData) : Iteration :=
+def lastExpandedInIteration (g : Goal) : Iteration :=
   g.elim.lastExpandedInIteration
 
 @[inline]
-def deferTo (g : GoalData) : Option GoalRef :=
+def deferTo (g : Goal) : Option GoalRef :=
   g.elim.deferTo
 
 @[inline]
-def failedRapps (g : GoalData) : Array RegularRule :=
+def failedRapps (g : Goal) : Array RegularRule :=
   g.elim.failedRapps
 
 @[inline]
-def unsafeRulesSelected (g : GoalData) : Bool :=
+def unsafeRulesSelected (g : Goal) : Bool :=
   g.elim.unsafeRulesSelected
 
 @[inline]
-def unsafeQueue (g : GoalData) : UnsafeQueue :=
+def unsafeQueue (g : Goal) : UnsafeQueue :=
   g.elim.unsafeQueue
 
 @[inline]
-def state (g : GoalData) : GoalState :=
+def unsafeQueue? (g : Goal) : Option UnsafeQueue :=
+  if g.unsafeRulesSelected then some g.unsafeQueue else none
+
+@[inline]
+def state (g : Goal) : GoalState :=
   g.elim.state
 
 @[inline]
-def isNormal (g : GoalData) : Bool :=
+def isNormal (g : Goal) : Bool :=
   g.elim.isNormal
 
 @[inline]
-def branchState (g : GoalData) : BranchState :=
+def branchState (g : Goal) : BranchState :=
   g.elim.branchState
 
 @[inline]
-def setId (id : GoalId) (g : GoalData) : GoalData :=
+def setId (id : GoalId) (g : Goal) : Goal :=
   g.modify λ g => { g with id := id }
 
 @[inline]
-def setGoal (goal : MVarId) (g : GoalData) : GoalData :=
+def setParent (parent? : Option RappRef) (g : Goal) : Goal :=
+  g.modify λ g => { g with parent? := parent? }
+
+@[inline]
+def setChildren (children : Array RappRef) (g : Goal) : Goal :=
+  g.modify λ g => { g with children := children }
+
+@[inline]
+def setGoal (goal : MVarId) (g : Goal) : Goal :=
   g.modify λ g => { g with goal := goal }
 
 @[inline]
-def setSuccessProbability (successProbability : Percent) (g : GoalData) :
-    GoalData :=
+def setSuccessProbability (successProbability : Percent) (g : Goal) : Goal :=
   g.modify λ g => { g with successProbability := successProbability }
 
 @[inline]
-def setAddedInIteration (addedInIteration : Iteration) (g : GoalData) :
-    GoalData :=
+def setAddedInIteration (addedInIteration : Iteration) (g : Goal) : Goal :=
   g.modify λ g => { g with addedInIteration := addedInIteration }
 
 @[inline]
-def setLastExpandedInIteration (lastExpandedInIteration : Iteration)
-    (g : GoalData) : GoalData :=
+def setLastExpandedInIteration (lastExpandedInIteration : Iteration) (g : Goal) :
+    Goal :=
   g.modify λ g => { g with lastExpandedInIteration := lastExpandedInIteration }
 
 @[inline]
-def setDeferTo (deferTo : Option GoalRef) (g : GoalData) : GoalData :=
+def setDeferTo (deferTo : Option GoalRef) (g : Goal) : Goal :=
   g.modify λ g => { g with deferTo := deferTo }
 
 @[inline]
-def setFailedRapps (failedRapps : Array RegularRule) (g : GoalData) : GoalData :=
+def setFailedRapps (failedRapps : Array RegularRule) (g : Goal) : Goal :=
   g.modify λ g => { g with failedRapps := failedRapps }
 
 @[inline]
-def setUnsafeRulesSelected (unsafeRulesSelected : Bool) (g : GoalData) :
-    GoalData :=
+def setUnsafeRulesSelected (unsafeRulesSelected : Bool) (g : Goal) : Goal :=
   g.modify λ g => { g with unsafeRulesSelected := unsafeRulesSelected }
 
 @[inline]
-def setUnsafeQueue (unsafeQueue : UnsafeQueue) (g : GoalData) : GoalData :=
+def setUnsafeQueue (unsafeQueue : UnsafeQueue) (g : Goal) : Goal :=
   g.modify λ g => { g with unsafeQueue := unsafeQueue }
 
 @[inline]
-def setState (state : GoalState) (g : GoalData) : GoalData :=
+def setState (state : GoalState) (g : Goal) : Goal :=
   g.modify λ g => { g with state := state }
 
 @[inline]
-def setNormal (isNormal : Bool) (g : GoalData) : GoalData :=
+def setNormal (isNormal : Bool) (g : Goal) : Goal :=
   g.modify λ g => { g with isNormal := isNormal }
 
 @[inline]
-def setBranchState (branchState : BranchState) (g : GoalData) : GoalData :=
+def setBranchState (branchState : BranchState) (g : Goal) : Goal :=
   g.modify λ g => { g with branchState := branchState }
 
-open MessageData in
-protected def toMessageData (traceMods : TraceModifiers) (g : GoalData) :
-    m MessageData := do
-  let unsafeQueueLength :=
-    if ¬ g.unsafeRulesSelected
-      then f!"<not selected>"
-      else format g.unsafeQueue.size
-  let defersTo ←
-    match g.deferTo with
-    | none => pure none
-    | some deferred =>
-      pure m!"deferred in favour of goal {(← deferred.get).payload.id}"
-  return m!"Goal {g.id} [{g.successProbability.toHumanString}]" ++ nodeFiltering #[
-    m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.size}",
-    m!"state: {g.state} | normal: {g.isNormal.toYesNo}",
-    m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration}",
-    defersTo,
-    if ¬ traceMods.goals then none else
-      m!"Goal:{indentD $ ofGoal g.goal}",
-    if ¬ traceMods.unsafeQueues || ¬ g.unsafeRulesSelected then none else
-      m!"Unsafe queue:{node $ g.unsafeQueue.toArray.map toMessageData}",
-    if ¬ traceMods.failedRapps then none else
-      m!"Failed rule applications:{node $ g.failedRapps.map toMessageData}" ]
+@[inline]
+def addChild (child : RappRef) (g : Goal) : Goal :=
+  g.modify λ g => { g with children := g.children.push child }
 
-protected def mkInitial (id : GoalId) (goal : MVarId)
-    (successProbability : Percent) (addedInIteration : Iteration)
-    (branchState : BranchState) : GoalData :=
+protected def mkInitial (id : GoalId) (parent? : Option (IO.Ref Rapp))
+    (goal : MVarId) (successProbability : Percent)
+    (addedInIteration : Iteration) (branchState : BranchState) : Goal :=
   mk {
     id := id
+    parent? := parent?
+    children := #[]
     goal := goal
     addedInIteration := addedInIteration
     lastExpandedInIteration := Iteration.none
@@ -513,237 +508,6 @@ protected def mkInitial (id : GoalId) (goal : MVarId)
     branchState := branchState
   }
 
-end GoalData
-
-
-namespace RappData
-
-@[inline]
-def mk : RappData' GoalData RappData → RappData :=
-  goalRappDataImpl.introRappData
-
-@[inline]
-def elim : RappData → RappData' GoalData RappData :=
-  goalRappDataImpl.elimRappData
-
-@[inline]
-def modify (f : RappData' GoalData RappData → RappData' GoalData RappData)
-    (r : RappData) : RappData :=
-  mk $ f $ elim r
-
-instance : Inhabited RappData where
-  default := mk arbitrary
-
-@[inline]
-def id (r : RappData) : RappId :=
-  r.elim.id
-
-def depth (r : RappData) : Nat :=
-  r.elim.depth
-
-@[inline]
-def metaState (r : RappData) : Meta.SavedState :=
-  r.elim.metaState
-
-@[inline]
-def unificationGoalOrigins (r : RappData) : PersistentHashMap MVarId RappRef :=
-  r.elim.unificationGoalOrigins
-
-@[inline]
-def appliedRule (r : RappData) : RegularRule :=
-  r.elim.appliedRule
-
-@[inline]
-def successProbability (r : RappData) : Percent :=
-  r.elim.successProbability
-
-@[inline]
-def state (r : RappData) : RappState :=
-  r.elim.state
-
-@[inline]
-def setId (id : RappId) (r : RappData) : RappData :=
-  r.modify λ r => { r with id := id }
-
-@[inline]
-def setDepth (depth : Nat) (r : RappData) : RappData :=
-  r.modify λ r => { r with depth := depth }
-
-@[inline]
-def setMetaState (metaState : Meta.SavedState) (r : RappData) : RappData :=
-  r.modify λ r => { r with metaState := metaState }
-
-@[inline]
-def setUnificationGoalOrigins
-    (unificationGoalOrigins : PersistentHashMap MVarId RappRef) (r : RappData) :
-    RappData :=
-  r.modify λ r => { r with unificationGoalOrigins := unificationGoalOrigins }
-
-@[inline]
-def setAppliedRule (appliedRule : RegularRule) (r : RappData) : RappData :=
-  r.modify λ r => { r with appliedRule := appliedRule }
-
-@[inline]
-def setSuccessProbability (successProbability : Percent) (r : RappData) :
-    RappData :=
-  r.modify λ r => { r with successProbability := successProbability }
-
-@[inline]
-def setState (state : RappState) (r : RappData) : RappData :=
-  r.modify λ r => { r with state := state }
-
-open MessageData in
-protected def toMessageData (traceMods : TraceModifiers) (r : RappData) :
-    m MessageData := do
-  let unificationGoalOrigins : Option MessageData ←
-    if ¬ traceMods.unificationGoals || r.unificationGoalOrigins.isEmpty
-      then pure none
-      else do
-        let origins ← r.unificationGoalOrigins.toList.mapM $ λ (mvarId, rref) =>
-          return (mkMVar mvarId, (← rref.get).payload.id)
-        pure $ some $ m!"unification goals:" ++ node #[toMessageData origins]
-  return m!"Rapp {r.id} [{r.successProbability.toHumanString}]" ++
-    nodeFiltering #[
-      toMessageData r.appliedRule,
-      m!"state: {r.state}",
-      unificationGoalOrigins ]
-
-protected def mkInitial (id : RappId) (depth : Nat) (metaState : Meta.SavedState)
-    (unificationGoalOrigins : PersistentHashMap MVarId RappRef)
-    (appliedRule : RegularRule) (successProbability : Percent) : RappData := mk
-  { id := id
-    depth := depth
-    metaState := metaState
-    unificationGoalOrigins := unificationGoalOrigins
-    appliedRule := appliedRule
-    successProbability := successProbability
-    state := RappState.active }
-
-end RappData
-
-
-/-! ## Functions on Goals -/
-
-namespace Goal
-
-/-! ### Constructors -/
-
-@[inline]
-protected def mk (parent : Option RappRef) (rapps : Array RappRef)
-    (data : GoalData) : Goal :=
-  MutAltTree.mk data parent rapps
-
-/-! ### Getters -/
-
-@[inline]
-def rapps (g : Goal) : Array RappRef :=
-  g.children
-
-@[inline]
-def id (g : Goal) : GoalId :=
-  g.payload.id
-
-@[inline]
-def goal (g : Goal) : MVarId :=
-  g.payload.goal
-
-@[inline]
-def successProbability (g : Goal) : Percent :=
-  g.payload.successProbability
-
-@[inline]
-def addedInIteration (g : Goal) : Iteration :=
-  g.payload.addedInIteration
-
-@[inline]
-def lastExpandedInIteration (g : Goal) : Iteration :=
-  g.payload.lastExpandedInIteration
-
-@[inline]
-def deferTo (g : Goal) : Option GoalRef :=
-  g.payload.deferTo
-
-@[inline]
-def failedRapps (g : Goal) : Array RegularRule :=
-  g.payload.failedRapps
-
-@[inline]
-def unsafeRulesSelected (g : Goal) : Bool :=
-  g.payload.unsafeRulesSelected
-
-@[inline]
-def unsafeQueue (g : Goal) : UnsafeQueue :=
-  g.payload.unsafeQueue
-
-@[inline]
-def unsafeQueue? (g : Goal) : Option UnsafeQueue :=
-  if g.unsafeRulesSelected then some g.unsafeQueue else none
-
-@[inline]
-def state (g : Goal) : GoalState :=
-  g.payload.state
-
-@[inline]
-def isNormal (g : Goal) : Bool :=
-  g.payload.isNormal
-
-@[inline]
-def branchState (g : Goal) : BranchState :=
-  g.payload.branchState
-
-/-! ### Setters -/
-
-@[inline]
-def setId (id : GoalId) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setId id
-
-@[inline]
-def setGoal (goal : MVarId) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setGoal goal
-
-@[inline]
-def setSuccessProbability (successProbability : Percent) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setSuccessProbability successProbability
-
-@[inline]
-def setAddedInIteration (addedInIteration : Iteration) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setAddedInIteration addedInIteration
-
-@[inline]
-def setLastExpandedInIteration (lastExpandedInIteration : Iteration) (g : Goal) :
-    Goal :=
-  g.modifyPayload λ d => d.setLastExpandedInIteration lastExpandedInIteration
-
-@[inline]
-def setDeferTo (deferTo : Option GoalRef) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setDeferTo deferTo
-
-@[inline]
-def setFailedRapps (failedRapps : Array RegularRule) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setFailedRapps failedRapps
-
-@[inline]
-def setUnsafeRulesSelected (unsafeRulesSelected : Bool) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setUnsafeRulesSelected unsafeRulesSelected
-
-@[inline]
-def setUnsafeQueue (unsafeQueue : UnsafeQueue) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setUnsafeQueue unsafeQueue
-
-@[inline]
-def setState (state : GoalState) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setState state
-
-@[inline]
-def setNormal (isNormal : Bool) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setNormal isNormal
-
-@[inline]
-def setBranchState (branchState : BranchState) (g : Goal) : Goal :=
-  g.modifyPayload λ d => d.setBranchState branchState
-
-/-! ### Miscellaneous -/
-
 def hasNoUnexpandedUnsafeRule (g : Goal) : Bool :=
   if ¬ g.unsafeRulesSelected
     then false
@@ -752,88 +516,113 @@ def hasNoUnexpandedUnsafeRule (g : Goal) : Bool :=
 end Goal
 
 
-/-! ## Functions on Rule Applications -/
-
 namespace Rapp
 
-/-! ### Constructors -/
+@[inline]
+def mk : RappData Goal Rapp → Rapp :=
+  goalRappImpl.introRapp
 
 @[inline]
-protected def mk (parent : Option GoalRef) (subgoals : Array GoalRef)
-    (data : RappData) : Rapp :=
-  MutAltTree.mk data parent subgoals
-
-/-! ### Getters -/
+def elim : Rapp → RappData Goal Rapp :=
+  goalRappImpl.elimRapp
 
 @[inline]
-def parent! (r : Rapp) : GoalRef :=
-  match r.parent with
-  | some p => p
-  | none => panic! s!"aesop/Rapp.parent!: rapp {r.payload.id} "
+def modify (f : RappData Goal Rapp → RappData Goal Rapp) (r : Rapp) : Rapp :=
+  mk $ f $ elim r
 
-@[inline]
-def subgoals (r : Rapp) : Array GoalRef :=
-  r.children
+instance : Inhabited Rapp where
+  default := mk arbitrary
 
 @[inline]
 def id (r : Rapp) : RappId :=
-  r.payload.id
+  r.elim.id
 
 @[inline]
+def parent (r : Rapp) : GoalRef :=
+  r.elim.parent
+
+@[inline]
+def children (r : Rapp) : Array GoalRef :=
+  r.elim.children
+
 def depth (r : Rapp) : Nat :=
-  r.payload.depth
+  r.elim.depth
 
 @[inline]
 def metaState (r : Rapp) : Meta.SavedState :=
-  r.payload.metaState
+  r.elim.metaState
 
 @[inline]
 def unificationGoalOrigins (r : Rapp) : PersistentHashMap MVarId RappRef :=
-  r.payload.unificationGoalOrigins
+  r.elim.unificationGoalOrigins
 
 @[inline]
 def appliedRule (r : Rapp) : RegularRule :=
-  r.payload.appliedRule
+  r.elim.appliedRule
 
 @[inline]
 def successProbability (r : Rapp) : Percent :=
-  r.payload.successProbability
+  r.elim.successProbability
 
 @[inline]
 def state (r : Rapp) : RappState :=
-  r.payload.state
-
--- Setters
+  r.elim.state
 
 @[inline]
 def setId (id : RappId) (r : Rapp) : Rapp :=
-  r.modifyPayload λ r => r.setId id
+  r.modify λ r => { r with id := id }
 
 @[inline]
-def setMetaState (metaState : Meta.SavedState) (r : Rapp) : Rapp :=
-  r.modifyPayload λ r => r.setMetaState metaState
+def setParent (parent : GoalRef) (r : Rapp) : Rapp :=
+  r.modify λ r => { r with parent := parent }
+
+@[inline]
+def setChildren (children : Array GoalRef) (r : Rapp) : Rapp :=
+  r.modify λ r => { r with children := children }
 
 @[inline]
 def setDepth (depth : Nat) (r : Rapp) : Rapp :=
-  r.modifyPayload λ r => r.setDepth depth
+  r.modify λ r => { r with depth := depth }
+
+@[inline]
+def setMetaState (metaState : Meta.SavedState) (r : Rapp) : Rapp :=
+  r.modify λ r => { r with metaState := metaState }
 
 @[inline]
 def setUnificationGoalOrigins
     (unificationGoalOrigins : PersistentHashMap MVarId RappRef) (r : Rapp) :
     Rapp :=
-  r.modifyPayload λ r => r.setUnificationGoalOrigins unificationGoalOrigins
+  r.modify λ r => { r with unificationGoalOrigins := unificationGoalOrigins }
 
 @[inline]
 def setAppliedRule (appliedRule : RegularRule) (r : Rapp) : Rapp :=
-  r.modifyPayload λ r => r.setAppliedRule appliedRule
+  r.modify λ r => { r with appliedRule := appliedRule }
 
 @[inline]
 def setSuccessProbability (successProbability : Percent) (r : Rapp) : Rapp :=
-  r.modifyPayload λ r => r.setSuccessProbability successProbability
+  r.modify λ r => { r with successProbability := successProbability }
 
 @[inline]
 def setState (state : RappState) (r : Rapp) : Rapp :=
-  r.modifyPayload λ r => r.setState state
+  r.modify λ r => { r with state := state }
+
+@[inline]
+def addChild (child : GoalRef) (r : Rapp) : Rapp :=
+  r.modify λ r => { r with children := r.children.push child }
+
+protected def mkInitial (id : RappId) (parent : IO.Ref Goal) (depth : Nat)
+    (metaState : Meta.SavedState)
+    (unificationGoalOrigins : PersistentHashMap MVarId RappRef)
+    (appliedRule : RegularRule) (successProbability : Percent) : Rapp := mk
+  { id := id
+    parent := parent
+    children := #[]
+    depth := depth
+    metaState := metaState
+    unificationGoalOrigins := unificationGoalOrigins
+    appliedRule := appliedRule
+    successProbability := successProbability
+    state := RappState.active }
 
 end Rapp
 
@@ -879,13 +668,13 @@ def RappRef.runMetaMModifying (x : MetaM α) (rref : RappRef) : MetaM α := do
 
 def Goal.runMetaMInParentState (x : MetaM α) (g : Goal) :
     MetaM (α × Meta.SavedState) :=
-  match g.parent with
+  match g.parent? with
   | none => runMetaMObservingFinalState x
   | some rref => RappRef.runMetaM x rref
 
 def Goal.runMetaMModifyingParentState (x : MetaM α) (g : Goal) :
     MetaM α :=
-  match g.parent with
+  match g.parent? with
   | none => x
   | some rref => RappRef.runMetaMModifying x rref
 
@@ -902,27 +691,64 @@ def GoalRef.runMetaMModifyingParentState (x : MetaM α) (gref : GoalRef) :
 
 /-! ## Formatting -/
 
-def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
-    MetaM MessageData :=
-  match g.parent with
-  | none => g.payload.toMessageData traceMods
-  | some (rref : RappRef) => do
-    let (res, _) ← rref.runMetaM do
-      addMessageContext (← g.payload.toMessageData traceMods)
-    return res
+section ToMessageData
 
-def GoalRef.toMessageData (traceMods : TraceModifiers) (gref : GoalRef) :
-    MetaM MessageData := do
+open MessageData
+
+open MessageData in
+protected def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
+    MetaM MessageData :=
+  match g.parent? with
+  | none => go
+  | some (rref : RappRef) => do
+    Prod.fst <$> rref.runMetaM (addMessageContext (← go))
+  where
+    go : MetaM MessageData := do
+      let unsafeQueueLength :=
+        if ¬ g.unsafeRulesSelected
+          then f!"<not selected>"
+          else format g.unsafeQueue.size
+      let defersTo ←
+        match g.deferTo with
+        | none => pure none
+        | some deferred =>
+          pure m!"deferred in favour of goal {(← deferred.get).id}"
+      return m!"Goal {g.id} [{g.successProbability.toHumanString}]" ++ nodeFiltering #[
+        m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.size}",
+        m!"state: {g.state} | normal: {g.isNormal.toYesNo}",
+        m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration}",
+        defersTo,
+        if ¬ traceMods.goals then none else
+          m!"Goal:{indentD $ ofGoal g.goal}",
+        if ¬ traceMods.unsafeQueues || ¬ g.unsafeRulesSelected then none else
+          m!"Unsafe queue:{node $ g.unsafeQueue.toArray.map toMessageData}",
+        if ¬ traceMods.failedRapps then none else
+          m!"Failed rule applications:{node $ g.failedRapps.map toMessageData}" ]
+
+protected def GoalRef.toMessageData (traceMods : TraceModifiers)
+    (gref : GoalRef) : MetaM MessageData := do
   (← gref.get).toMessageData traceMods
 
-def Rapp.toMessageData (traceMods : TraceModifiers) (r : Rapp) :
+protected def Rapp.toMessageData (traceMods : TraceModifiers) (r : Rapp) :
     MetaM MessageData := do
-  let (res, _) ← r.runMetaM do
-    addMessageContext (← r.payload.toMessageData traceMods)
-  return res
+  Prod.fst <$> r.runMetaM (addMessageContext (← go))
+  where
+    go : MetaM MessageData := do
+      let unificationGoalOrigins : Option MessageData ←
+        if ¬ traceMods.unificationGoals || r.unificationGoalOrigins.isEmpty
+          then pure none
+          else do
+            let origins ← r.unificationGoalOrigins.toList.mapM $ λ (mvarId, rref) =>
+              return (mkMVar mvarId, (← rref.get).id)
+            pure $ some $ m!"unification goals:" ++ node #[toMessageData origins]
+      return m!"Rapp {r.id} [{r.successProbability.toHumanString}]" ++
+        nodeFiltering #[
+          toMessageData r.appliedRule,
+          m!"state: {r.state}",
+          unificationGoalOrigins ]
 
-def RappRef.toMessageData (traceMods : TraceModifiers) (rref : RappRef) :
-    MetaM MessageData := do
+protected def RappRef.toMessageData (traceMods : TraceModifiers)
+    (rref : RappRef) : MetaM MessageData := do
   (← rref.get).toMessageData traceMods
 
 def nodeMessageSeparator : MessageData :=
@@ -932,14 +758,14 @@ mutual
   private partial def goalTreeToMessageData (traceMods : TraceModifiers)
       (goal : Goal) : MetaM MessageData := do
     let goalMsg ← goal.toMessageData traceMods
-    let childrenMsgs ← goal.rapps.mapM λ c => do
+    let childrenMsgs ← goal.children.mapM λ c => do
       rappTreeToMessageData traceMods (← c.get)
     return nodeMessageSeparator ++ goalMsg ++ MessageData.node childrenMsgs
 
   private partial def rappTreeToMessageData (traceMods : TraceModifiers)
       (rapp : Rapp) : MetaM MessageData := do
     let rappMsg ← rapp.toMessageData traceMods
-    let childrenMsgs ← rapp.subgoals.mapM λ c => do
+    let childrenMsgs ← rapp.children.mapM λ c => do
       goalTreeToMessageData traceMods (← c.get)
     return nodeMessageSeparator ++ rappMsg ++ MessageData.node childrenMsgs
 end
@@ -960,27 +786,29 @@ def RappRef.treeToMessageData (traceMods : TraceModifiers) (rref : RappRef) :
     MetaM MessageData := do
   (← rref.get).treeToMessageData traceMods
 
+end ToMessageData
 
-/-! ## Miscellaneous Functions -/
+
+/-! ## Miscellaneous Queries -/
 
 namespace Goal
 
 def mayHaveUnexpandedRapp (g : Goal) : m Bool := do pure $
   ¬ g.hasNoUnexpandedUnsafeRule ∧
-  ¬ (← g.rapps.anyM λ r => return (← r.get : Rapp).appliedRule.isSafe)
+  ¬ (← g.children.anyM λ r => return (← r.get : Rapp).appliedRule.isSafe)
 
 def hasProvableRapp (g : Goal) : m Bool :=
-  g.rapps.anyM λ r => return ¬ (← r.get).state.isUnprovable
+  g.children.anyM λ r => return ¬ (← r.get).state.isUnprovable
 
 def isUnprovableNoCache (g : Goal) : m Bool :=
   notM (g.mayHaveUnexpandedRapp <||> g.hasProvableRapp)
 
 def firstProvenRapp? (g : Goal) : m (Option RappRef) :=
-  g.rapps.findSomeM? λ rref =>
+  g.children.findSomeM? λ rref =>
     return if (← rref.get).state.isProven then some rref else none
 
 def unificationGoalOrigins (g : Goal) : m (PersistentHashMap MVarId RappRef) :=
-  match g.parent with
+  match g.parent? with
   | some rref => return Rapp.unificationGoalOrigins (← rref.get)
   | none => return PersistentHashMap.empty
 
@@ -990,7 +818,7 @@ def hasUnificationGoal (g : Goal) : m Bool :=
   return ! (← g.unificationGoalOrigins).isEmpty
 
 def parentDepth (g : Goal) : m Nat :=
-  match g.parent with
+  match g.parent? with
   | none => pure 0
   | some rref => return Rapp.depth (← rref.get)
 
@@ -1003,74 +831,116 @@ def hasUnificationGoal (r : Rapp) : Bool :=
   ! r.unificationGoalOrigins.isEmpty
 
 def isUnprovableNoCache (r : Rapp) : m Bool :=
-  r.subgoals.anyM λ subgoal => return (← subgoal.get).state.isUnprovable
+  r.children.anyM λ subgoal => return (← subgoal.get).state.isUnprovable
 
 def isProvenNoCache (r : Rapp) : m Bool :=
-  r.subgoals.allM λ subgoal => return (← subgoal.get).state.isProven
+  r.children.allM λ subgoal => return (← subgoal.get).state.isProven
 
 end Rapp
 
 
+/-! ## Finding Siblings -/
+
+def GoalRef.siblings (gref : GoalRef) : m (Array GoalRef) := do
+  let g ← gref.get
+  match g.parent? with
+  | none => return #[]
+  | some parent =>
+    (← parent.get).children.filterM λ cref => notM $ cref.ptrEq gref
+
+def RappRef.siblings (rref : RappRef) : m (Array RappRef) := do
+  let r ← rref.get
+  (← r.parent.get).children.filterM λ cref => notM $ cref.ptrEq rref
+
+
+/-! ## Generic Traversals -/
+
+partial def traverseDown (visitGoal : GoalRef → m Bool)
+    (visitRapp : RappRef → m Bool) : Sum GoalRef RappRef → m Unit
+  | Sum.inl gref => do
+    let continue? ← visitGoal gref
+    if continue? then
+      (← gref.get).children.forM $ traverseDown visitGoal visitRapp ∘ Sum.inr
+  | Sum.inr rref => do
+    let continue? ← visitRapp rref
+    if continue? then
+      (← rref.get).children.forM $ traverseDown visitGoal visitRapp ∘ Sum.inl
+
+partial def traverseUp (visitGoal : GoalRef → m Bool)
+    (visitRapp : RappRef → m Bool) : Sum GoalRef RappRef → m Unit
+  | Sum.inl gref => do
+    let continue? ← visitGoal gref
+    if continue? then
+      match (← gref.get).parent? with
+      | none => return
+      | some parent => traverseUp visitGoal visitRapp $ Sum.inr parent
+  | Sum.inr rref => do
+    let continue? ← visitRapp rref
+    if continue? then
+      traverseUp visitGoal visitRapp $ Sum.inl (← rref.get).parent
+
 private def findActiveDescendantGoalCore (x : Sum GoalRef RappRef) :
     m (Option GoalRef) := do
   let result : IO.Ref (Option GoalRef) ← ST.mkRef none
-  MATRef.visitDown'
-    (λ gref : GoalRef => do
+  traverseDown
+    (λ gref => do
       if (← gref.get).state.isActive then
         result.set gref
         return false
       else
         return true)
-    (λ rref : RappRef => return true)
+    (λ rref => return true)
     x
   result.get
 
+@[inline]
 def GoalRef.findActiveDescendantGoal : GoalRef → m (Option GoalRef) :=
   findActiveDescendantGoalCore ∘ Sum.inl
 
+@[inline]
 def RappRef.findActiveDescendantGoal : RappRef → m (Option GoalRef) :=
   findActiveDescendantGoalCore ∘ Sum.inr
 
 
 /-! ## Propagating Provability/Unprovability/Irrelevance -/
 
-@[inline]
-def setIrrelevantCore : Sum GoalRef RappRef → m Unit :=
-  MATRef.visitDown'
-    (λ gref : GoalRef => do
+private def setIrrelevantCore : Sum GoalRef RappRef → m Unit :=
+  traverseDown
+    (λ gref => do
       if (← gref.get).state.isIrrelevant
         then return false -- Subtree should already be marked as irrelevant.
         else do
           gref.modify λ g => g.setState GoalState.irrelevant
           return true)
-    (λ rref : RappRef => do
+    (λ rref => do
       if (← rref.get).state.isIrrelevant
         then return false
         else do
           rref.modify λ r => r.setState RappState.irrelevant
           return true)
 
+@[inline]
 def GoalRef.setIrrelevant : GoalRef → m Unit :=
   setIrrelevantCore ∘ Sum.inl
 
+@[inline]
 def RappRef.setIrrelevant : RappRef → m Unit :=
   setIrrelevantCore ∘ Sum.inr
 
 private def setRappProvenAndSiblingsIrrelevant (rref : RappRef) : m Unit := do
   rref.modify λ r => r.setState RappState.proven
-  (← MATRef.siblings rref).forM RappRef.setIrrelevant
+  (← rref.siblings).forM RappRef.setIrrelevant
 
-@[inline]
-def setProvenCore : Sum GoalRef RappRef → m Unit :=
-  MATRef.visitUp'
+private def setProvenCore : Sum GoalRef RappRef → m Unit :=
+  traverseUp
     -- Goals are unconditionally marked as proven.
-    (λ gref : GoalRef => do
+    (λ gref => do
       gref.modify λ g => g.setState GoalState.provenByRuleApplication
       return true)
     -- Rapps are marked as proven only if they are in fact proven, i.e. if all
     -- their subgoals are (marked as) proven. In this case, we also need to
     -- mark siblings of the rapp (and their descendants) as irrelevant.
-    (λ rref : RappRef => do
+    (λ rref => do
       if ← notM (← rref.get).isProvenNoCache
         then pure false
         else setRappProvenAndSiblingsIrrelevant rref *> pure true)
@@ -1079,7 +949,7 @@ private def GoalRef.setProven (firstGoalState : GoalState) (gref : GoalRef) :
     m Unit := do
   let g ← gref.get
   gref.set $ g.setState firstGoalState
-  match g.parent with
+  match g.parent? with
   | none => return ()
   | some parent => setProvenCore $ Sum.inr parent
 
@@ -1093,29 +963,28 @@ def RappRef.setProven (firstRappUnconditional : Bool) (rref : RappRef) :
     m Unit := do
   if firstRappUnconditional then do
     setRappProvenAndSiblingsIrrelevant rref
-    setProvenCore $ Sum.inl (← rref.get).parent!
+    setProvenCore $ Sum.inl (← rref.get).parent
   else
     setProvenCore $ Sum.inr rref
 
 private def setGoalUnprovableAndSiblingsIrrelevant (gref : GoalRef) :
     m Unit := do
   gref.modify λ g => g.setState GoalState.unprovable
-  (← MATRef.siblings gref).forM GoalRef.setIrrelevant
+  (← gref.siblings).forM GoalRef.setIrrelevant
 
-@[inline]
 def setUnprovableCore : Sum GoalRef RappRef → m Unit :=
-  MATRef.visitUp'
+  traverseUp
     -- Goals are marked as unprovable only if they are in fact unprovable, i.e.
     -- if all their rule applications are unprovable and they do not have
     -- unexpanded rule applications. In this case, we also need to mark
     -- siblings of the goal (and their descendants) as irrelevant.
-    (λ gref : GoalRef => do
+    (λ gref => do
       let g ← gref.get
       if ← g.isUnprovableNoCache
         then setGoalUnprovableAndSiblingsIrrelevant gref *> return true
         else return false)
     -- Rapps are unconditionally marked as unprovable.
-    (λ rref : RappRef => do
+    (λ rref => do
       rref.modify λ r => r.setState RappState.unprovable
       return true)
 
@@ -1123,7 +992,7 @@ def GoalRef.setUnprovable (firstGoalUnconditional : Bool) (gref : GoalRef) :
     m Unit :=
   if firstGoalUnconditional then do
     setGoalUnprovableAndSiblingsIrrelevant gref
-    match (← gref.get).parent with
+    match (← gref.get).parent? with
     | none => return ()
     | some parent => setUnprovableCore $ Sum.inr parent
   else
@@ -1210,28 +1079,32 @@ mutual
     let g ← gref.get
     let newGoalId ← getAndIncrementNextGoalId
     let newGoalRef ← ST.mkRef $
-      Goal.mk (some parent) #[] (g.payload.setId newGoalId)
+      g.setParent (some parent)
+      |>.setChildren #[]
+      |>.setId newGoalId
     modify λ s => { s with goalMap := s.goalMap.insert g.id newGoalRef }
     parent.modify λ r => r.addChild newGoalRef
     (← read).afterAddGoal gref newGoalRef
-    g.rapps.forM λ rref => discard $ copyRappTree newGoalRef rref
+    g.children.forM λ rref => discard $ copyRappTree newGoalRef rref
     return newGoalRef
 
   -- Copies `rref` and all its descendants. The copy of `rref` becomes a child
   -- of `parent`. Returns the copy of `rref`.
   partial def copyRappTree (parent : GoalRef) (rref : RappRef) :
       TreeCopyT m RappRef := do
-    let r ← rref.get
     let newRappId ← getAndIncrementNextRappId
+    let r ← rref.get
     let newRappRef ← ST.mkRef $
-      Rapp.mk (some parent) #[] $ r.payload.setId newRappId
+      r.setParent parent
+      |>.setChildren #[]
+      |>.setId newRappId
     modify λ s => { s with rappMap := s.rappMap.insert r.id newRappRef }
     newRappRef.modifyM λ r =>
       return r.setUnificationGoalOrigins
         (← adjustUnificationGoalOrigins r.unificationGoalOrigins)
     parent.modify λ g => g.addChild newRappRef
     (← read).afterAddRapp rref newRappRef
-    r.subgoals.forM λ gref => discard $ copyGoalTree newRappRef gref
+    r.children.forM λ gref => discard $ copyGoalTree newRappRef gref
     return newRappRef
 end
 
@@ -1283,7 +1156,7 @@ instance [AddErrorMessageContext m] :
 -- Using a `mutual` block here produces a very weird error when this function
 -- is used (transitively) in `BestFirstSearch.lean`. So for now we manually
 -- desugar the `mutual` block.
-partial def checkIds : Sum GoalRef RappRef → CheckIdInvariantT m Unit
+private partial def checkIds : Sum GoalRef RappRef → CheckIdInvariantT m Unit
   | Sum.inl gref => do
     let g ← gref.get
     let id := g.id
@@ -1294,7 +1167,7 @@ partial def checkIds : Sum GoalRef RappRef → CheckIdInvariantT m Unit
     if id < ctx.maxAncestorGoalId then throwError
       "{Check.tree.name}: goal ID {id} is smaller than ancestor goal ID {ctx.maxAncestorGoalId}"
     withReader (λ ctx => { ctx with maxAncestorGoalId := id }) $
-      g.rapps.forM (checkIds ∘ Sum.inr)
+      g.children.forM (checkIds ∘ Sum.inr)
   | Sum.inr rref => do
     let r ← rref.get
     let id := r.id
@@ -1305,7 +1178,7 @@ partial def checkIds : Sum GoalRef RappRef → CheckIdInvariantT m Unit
     if id < ctx.maxAncestorRappId then throwError
       "{Check.tree.name}: rapp ID {id} is smaller than ancestor rapp ID {ctx.maxAncestorRappId}"
     withReader (λ ctx => { ctx with maxAncestorRappId := id }) $
-      r.subgoals.forM (checkIds ∘ Sum.inl)
+      r.children.forM (checkIds ∘ Sum.inl)
 
 end CheckIdInvariant
 
@@ -1318,7 +1191,7 @@ def RappRef.checkIds (rref : RappRef) : m Unit :=
 mutual
   private partial def checkUnificationGoalOriginsGoal (gref : GoalRef) :
       MetaM Unit := do
-    (← gref.get).rapps.forM checkUnificationGoalOriginsRapp
+    (← gref.get).children.forM checkUnificationGoalOriginsRapp
 
   private partial def checkUnificationGoalOriginsRapp (rref : RappRef) :
       MetaM Unit := do
@@ -1330,9 +1203,23 @@ mutual
           "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is not declared in the metavariable context"
         if (← isExprMVarAssigned m) then throwError
           "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is assigned"
-    r.subgoals.forM checkUnificationGoalOriginsGoal
+    r.children.forM checkUnificationGoalOriginsGoal
 
 end
+
+private def checkUnificationGoalOrigins : Sum GoalRef RappRef → MetaM Unit :=
+  traverseDown
+    (λ gref => return true)
+    (λ rref => do
+      let r ← rref.get
+      withoutModifyingState do
+        restoreState r.metaState
+        for (m, _) in r.unificationGoalOrigins do
+          let (some _) ← (← getMCtx).findDecl? m | throwError
+            "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is not declared in the metavariable context"
+          if (← isExprMVarAssigned m) then throwError
+            "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is assigned"
+        return true)
 
 def GoalRef.checkUnificationGoalOrigins : GoalRef → MetaM Unit :=
   checkUnificationGoalOriginsGoal
@@ -1340,12 +1227,60 @@ def GoalRef.checkUnificationGoalOrigins : GoalRef → MetaM Unit :=
 def RappRef.checkUnificationGoalOrigins : RappRef → MetaM Unit :=
   checkUnificationGoalOriginsRapp
 
+private def checkAcyclicCore (x : Sum GoalRef RappRef) : m Unit := do
+  -- We use arrays to store the visited nodes (rather than some data structure
+  -- with asymptotically faster lookup) because STRefs only have pointer
+  -- equality, not pointer comparison. Besides, this is probably faster anyway
+  -- for small to medium trees.
+  let visitedGoalRefs : IO.Ref (Array GoalRef) ← ST.mkRef #[]
+  let visitedRappRefs : IO.Ref (Array RappRef) ← ST.mkRef #[]
+  traverseDown
+    (λ gref => do
+      if ← (← visitedGoalRefs.get).anyM λ gref' => gref.ptrEq gref' then
+        throwError "{Check.tree.name}: search tree contains a cycle."
+      visitedGoalRefs.modify λ v => v.push gref
+      return true)
+    (λ rref => do
+      if ← (← visitedRappRefs.get).anyM λ rref' => rref.ptrEq rref' then
+        throwError "{Check.tree.name}: search tree contains a cycle."
+      visitedRappRefs.modify λ v => v.push rref
+      return true)
+    x
+
+def GoalRef.checkAcyclic : GoalRef → m Unit :=
+  checkAcyclicCore ∘ Sum.inl
+
+def RappRef.checkAcyclic : RappRef → m Unit :=
+  checkAcyclicCore ∘ Sum.inr
+
+private def checkConsistentParentChildLinksCore : Sum GoalRef RappRef →
+    m Unit :=
+  traverseDown
+    (λ gref => do
+      for c in (← gref.get).children do
+        if ← notM $ (← c.get).parent.ptrEq gref then err
+      return true)
+    (λ rref => do
+      for c in (← rref.get).children do
+        match (← c.get).parent? with
+        | some parent =>
+          if ← notM $ parent.ptrEq rref then err
+        | none =>
+          err
+      return true)
+  where
+    err := throwError "{Check.tree.name}: search tree is not properly linked"
+
+def GoalRef.checkConsistentParentChildLinks : GoalRef → m Unit :=
+  checkConsistentParentChildLinksCore ∘ Sum.inl
+
+def RappRef.checkConsistentParentChildLinks : RappRef → m Unit :=
+  checkConsistentParentChildLinksCore ∘ Sum.inr
+
 def GoalRef.checkInvariantsIfEnabled (root : GoalRef) : MetaM Unit := do
   let (true) ← Check.tree.isEnabled | return ()
-  unless (← MATRef.hasConsistentParentChildLinks root) do
-    throwError "{Check.tree.name}: search tree is not properly linked"
-  unless (← MATRef.isAcyclic root) do
-    throwError "{Check.tree.name}: search tree contains a cycle"
+  root.checkConsistentParentChildLinks
+  root.checkAcyclic
   root.checkIds
   root.checkUnificationGoalOrigins
 
