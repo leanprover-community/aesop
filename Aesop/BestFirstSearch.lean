@@ -229,6 +229,21 @@ def runRuleTac (goal : Goal) (rule : RuleTac)
   catch e =>
     return Sum.inl e
 
+-- NOTE: Must be run in the MetaM context after the rule has been run.
+def checkProducedUGoals (rule : Rule' α τ)
+    (goals : Array (MVarId × HashSet MVarId)) : MetaM Unit := do
+  for (goal, reportedUGoals) in goals do
+    let actualUGoals ← getGoalMVarsNoDelayed goal
+    if actualUGoals != reportedUGoals then throwError
+      "{Check.rules.name}: rule {rule.name} reported wrong unification goals"
+    if reportedUGoals.contains goal then throwError
+      "{Check.rules.name}: rule {rule.name} reported goal {goal.name} as both a regular and unification goal"
+
+def checkRuleApplication (rule : Rule' α τ) (rapp : RuleApplication) :
+    MetaM Unit :=
+  discard $ runMetaMInSavedState rapp.postState $
+    checkProducedUGoals rule rapp.goals
+
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def runNormRuleTac (bs : BranchState)
     (ugoalOrigins : PersistentHashMap MVarId RappRef) (rule : NormRule)
@@ -237,22 +252,28 @@ def runNormRuleTac (bs : BranchState)
   let result ←
     try rule.tac.tac ri
     catch e => throwError
-      "aesop: normalisation rule {rule.name} failed with error:{indentD e.toMessageData}\n{errorContext}"
+      "aesop: normalisation rule {rule.name} failed with error:{indentD e.toMessageData}\n{errorContext.get}"
   let postBranchState := bs.update rule result.postBranchState?
   match result.applications with
   | #[ruleOutput] =>
     match ruleOutput.goals with
     | #[] => return none
     | #[(g, ugoals)] =>
-      unless ugoals.isEmpty do throwError
-        "aesop: normalisation rule {rule.name} produced a metavariable. {errorContext}"
+      if ← Check.rules.isEnabled then
+        checkProducedUGoals rule ruleOutput.goals
+        for ugoal in ugoals do
+          unless ugoalOrigins.contains ugoal do throwError
+            "{Check.rules.name}: normalisation rule {rule.name} introduced a new unification goal. {errorContext.get}"
+        for (ugoal, _) in ugoalOrigins do
+          if ← isExprMVarAssigned ugoal then throwError
+            "{Check.rules.name}: normalisation rule {rule.name} assigned a unification goal. {errorContext.get}"
       return some (g, postBranchState)
     | _ => throwError
-      "aesop: normalisation rule {rule.name} produced more than one subgoal. {errorContext}"
+      "aesop: normalisation rule {rule.name} produced more than one subgoal. {errorContext.get}"
   | _ => throwError
-    "aesop: normalisation rule {rule.name} did not produce exactly one rule application. {errorContext}"
+    "aesop: normalisation rule {rule.name} did not produce exactly one rule application. {errorContext.get}"
   where
-    errorContext :=
+    errorContext : Thunk MessageData :=
       m!"It was run on this goal:{indentD $ MessageData.ofGoal ri.goal}"
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
@@ -538,6 +559,8 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
   | Sum.inr output =>
     let rapps := output.applications
     aesop_trace[steps] "Rule succeeded, producing {rapps.size} rule application(s)."
+    if ← Check.rules.isEnabled then
+      rule.withRule λ r => rapps.forM $ λ rapp => checkRuleApplication r rapp
     let postBranchState :=
       rule.withRule λ r => parent.branchState.update r output.postBranchState?
     aesop_trace[stepsBranchStates] "Updated branch state: {rule.withRule λ r => postBranchState.find? r}"

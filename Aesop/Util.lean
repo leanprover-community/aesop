@@ -150,6 +150,16 @@ instance [BEq α] [Hashable α] : ForIn m (HashSet α) α where
           s := s'
     return s
 
+instance [BEq α] [Hashable α] : BEq (HashSet α) where
+  beq s t := do
+    for x in s do
+      unless t.contains x do
+        return false
+    for x in t do
+      unless s.contains x do
+        return false
+    return true
+
 end Std.HashSet
 
 
@@ -510,6 +520,9 @@ def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
 
 def instantiateMVarsInGoal (mvarId : MVarId) : MetaM Unit := do
   let mctx := (← get).mctx
+  discard $ getMVarDecl mvarId
+    -- The line above throws an error if the `mvarId` is not declared. The line
+    -- below panics.
   let mctx ← mctx.instantiateMVarDeclMVars mvarId
   modify λ s => { s with mctx := mctx }
 
