@@ -58,7 +58,12 @@ def hundred : Percent :=
   ⟨1⟩
 
 def toHumanString (p : Percent) : String :=
-  (toString (p.toFloat * 100) |>.takeWhile (· ≠ '.')) ++ "%"
+  let str := toString (p.toFloat * 100)
+  match str.split λ c => c == '.' with
+  | [beforePoint] => beforePoint ++ "%"
+  | [beforePoint, afterPoint] =>
+    beforePoint ++ "." ++ afterPoint.take 4 ++ "%"
+  | _ => "ERROR%"
 
 protected def ofNat (n : Nat) : Option Percent :=
   Percent.ofFloat $ n.toFloat / 100
