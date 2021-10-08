@@ -1172,26 +1172,7 @@ def GoalRef.checkIds (gref : GoalRef) : m Unit :=
 def RappRef.checkIds (rref : RappRef) : m Unit :=
   CheckIdInvariant.checkIds (Sum.inr rref) |>.run
 
-mutual
-  private partial def checkUnificationGoalOriginsGoal (gref : GoalRef) :
-      MetaM Unit := do
-    (← gref.get).children.forM checkUnificationGoalOriginsRapp
-
-  private partial def checkUnificationGoalOriginsRapp (rref : RappRef) :
-      MetaM Unit := do
-    let r ← rref.get
-    withoutModifyingState do
-      restoreState r.metaState
-      for (m, _) in r.unificationGoalOrigins do
-        let (some _) ← (← getMCtx).findDecl? m | throwError
-          "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is not declared in the metavariable context"
-        if (← isExprMVarAssigned m) then throwError
-          "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is assigned"
-    r.children.forM checkUnificationGoalOriginsGoal
-
-end
-
-private def checkUnificationGoalOrigins : Sum GoalRef RappRef → MetaM Unit :=
+private def checkUnificationGoalOriginsCore : Sum GoalRef RappRef → MetaM Unit :=
   traverseDown
     (λ gref => return true)
     (λ rref => do
@@ -1206,10 +1187,10 @@ private def checkUnificationGoalOrigins : Sum GoalRef RappRef → MetaM Unit :=
         return true)
 
 def GoalRef.checkUnificationGoalOrigins : GoalRef → MetaM Unit :=
-  checkUnificationGoalOriginsGoal
+  checkUnificationGoalOriginsCore ∘ Sum.inl
 
 def RappRef.checkUnificationGoalOrigins : RappRef → MetaM Unit :=
-  checkUnificationGoalOriginsRapp
+  checkUnificationGoalOriginsCore ∘ Sum.inr
 
 private def checkAcyclicCore (x : Sum GoalRef RappRef) : m Unit := do
   -- We use arrays to store the visited nodes (rather than some data structure
