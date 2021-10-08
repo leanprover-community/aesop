@@ -702,51 +702,6 @@ def runTermElabMAsMetaM (x : TermElabM α) : MetaM α :=
 end Lean
 
 
-namespace Lean.Elab.Command
-
-syntax (name := syntaxCatWithUnreservedTokens)
-  "declare_syntax_cat' " ident
-    (&"allow_leading_unreserved_tokens" <|> &"force_leading_unreserved_tokens")? : command
-
--- Copied from Lean/Elab/Syntax.lean
-private def declareSyntaxCatQuotParser (catName : Name) : CommandElabM Unit := do
-  if let Name.str _ suffix _ := catName then
-    let quotSymbol := "`(" ++ suffix ++ "|"
-    let name := catName ++ `quot
-    -- TODO(Sebastian): this might confuse the pretty printer, but it lets us reuse the elaborator
-    let kind := ``Lean.Parser.Term.quot
-    let cmd ← `(
-      @[termParser] def $(mkIdent name) : Lean.ParserDescr :=
-        Lean.ParserDescr.node $(quote kind) $(quote Lean.Parser.maxPrec)
-          (Lean.ParserDescr.binary `andthen (Lean.ParserDescr.symbol $(quote quotSymbol))
-            (Lean.ParserDescr.binary `andthen
-              (Lean.ParserDescr.unary `incQuotDepth (Lean.ParserDescr.cat $(quote catName) 0))
-              (Lean.ParserDescr.symbol ")"))))
-    elabCommand cmd
-
-open Lean.Parser (LeadingIdentBehavior) in
-@[commandElab syntaxCatWithUnreservedTokens]
-def elabDeclareSyntaxCatWithUnreservedTokens : CommandElab := fun stx => do
-  let catName  := stx[1].getId
-  let leadingIdentBehavior :=
-    match stx[2].getOptional? with
-    | none => LeadingIdentBehavior.default
-    | some b =>
-      match b.getAtomVal! with
-      | "allow_leading_unreserved_tokens" => LeadingIdentBehavior.both
-      | "force_leading_unreserved_tokens" => LeadingIdentBehavior.symbol
-      | _ => unreachable!
-  let attrName := catName.appendAfter "Parser"
-  let env ← getEnv
-  let env ←
-    liftIO $ Parser.registerParserCategory env attrName catName
-      leadingIdentBehavior
-  setEnv env
-  declareSyntaxCatQuotParser catName
-
-end Lean.Elab.Command
-
-
 namespace Lean.Elab.Tactic
 
 open Lean.Elab.Term

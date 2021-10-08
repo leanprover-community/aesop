@@ -21,14 +21,14 @@ declare_syntax_cat aesop_prio
 
 syntax "-"? num "%"? : aesop_prio
 
-declare_syntax_cat' aesop_kind force_leading_unreserved_tokens
+declare_syntax_cat aesop_kind (behavior := symbol)
 
 syntax (aesop_prio)? : aesop_kind
 syntax &"safe" (aesop_prio)? : aesop_kind
 syntax &"unsafe" (aesop_prio)? : aesop_kind
 syntax &"norm" (aesop_prio)? : aesop_kind
 
-declare_syntax_cat' aesop_builder force_leading_unreserved_tokens
+declare_syntax_cat aesop_builder (behavior := symbol)
 
 syntax &"apply" : aesop_builder
 syntax &"simp" : aesop_builder
@@ -40,13 +40,13 @@ syntax &"safe_default" : aesop_builder
 syntax &"unsafe_default" : aesop_builder
 syntax &"norm_default" : aesop_builder
 
-declare_syntax_cat' aesop_builder_clause force_leading_unreserved_tokens
+declare_syntax_cat aesop_builder_clause (behavior := symbol)
 
 syntax &"uses_branch_state" : aesop_builder_clause
 syntax &"uses_no_branch_state" : aesop_builder_clause
 syntax "(" &"immediate" ident+ ")" : aesop_builder_clause
 
-declare_syntax_cat' aesop_clause
+declare_syntax_cat aesop_clause
 
 syntax "(" &"builder" aesop_builder aesop_builder_clause* ")" : aesop_clause
 syntax "(" &"options" term ")" : aesop_clause
