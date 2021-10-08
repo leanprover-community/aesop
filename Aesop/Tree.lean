@@ -234,7 +234,6 @@ structure GoalData (Goal Rapp : Type) : Type where
   unsafeQueue : UnsafeQueue
   branchState : BranchState
   failedRapps : Array RegularRule
-  deferTo : Option (IO.Ref Goal)
   deriving Inhabited
 
 
@@ -396,10 +395,6 @@ def lastExpandedInIteration (g : Goal) : Iteration :=
   g.elim.lastExpandedInIteration
 
 @[inline]
-def deferTo (g : Goal) : Option GoalRef :=
-  g.elim.deferTo
-
-@[inline]
 def failedRapps (g : Goal) : Array RegularRule :=
   g.elim.failedRapps
 
@@ -457,10 +452,6 @@ def setLastExpandedInIteration (lastExpandedInIteration : Iteration) (g : Goal) 
   g.modify λ g => { g with lastExpandedInIteration := lastExpandedInIteration }
 
 @[inline]
-def setDeferTo (deferTo : Option GoalRef) (g : Goal) : Goal :=
-  g.modify λ g => { g with deferTo := deferTo }
-
-@[inline]
 def setFailedRapps (failedRapps : Array RegularRule) (g : Goal) : Goal :=
   g.modify λ g => { g with failedRapps := failedRapps }
 
@@ -498,7 +489,6 @@ protected def mkInitial (id : GoalId) (parent? : Option (IO.Ref Rapp))
     goal := goal
     addedInIteration := addedInIteration
     lastExpandedInIteration := Iteration.none
-    deferTo := none
     successProbability := successProbability
     failedRapps := #[]
     unsafeQueue := UnsafeQueue.initial #[]
@@ -708,16 +698,10 @@ protected def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
         if ¬ g.unsafeRulesSelected
           then f!"<not selected>"
           else format g.unsafeQueue.size
-      let defersTo ←
-        match g.deferTo with
-        | none => pure none
-        | some deferred =>
-          pure m!"deferred in favour of goal {(← deferred.get).id}"
       return m!"Goal {g.id} [{g.successProbability.toHumanString}]" ++ nodeFiltering #[
         m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.size}",
         m!"state: {g.state} | normal: {g.isNormal.toYesNo}",
         m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration}",
-        defersTo,
         if ¬ traceMods.goals then none else
           m!"Goal:{indentD $ ofGoal g.goal}",
         if ¬ traceMods.unsafeQueues || ¬ g.unsafeRulesSelected then none else

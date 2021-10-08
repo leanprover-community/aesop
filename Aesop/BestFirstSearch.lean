@@ -161,35 +161,11 @@ def getAndIncrementNextRappId : SearchM RappId := do
   setThe RappId id.succ
   return id
 
-partial def resolveDeferredGoal (gref : GoalRef) : IO (Option GoalRef) := do
-  match (← gref.get).deferTo with
-  | none => return none
-  | some deferred =>
-    if (← deferred.get).state.isActive then
-      let deferredRec? ← resolveDeferredGoal deferred
-      return some $ deferredRec?.getD deferred
-    else
-      match ← deferred.findActiveDescendantGoal with
-      | none =>
-        gref.modify λ g => g.setDeferTo none
-        return none
-      | some deferred =>
-        let deferredRec? ← resolveDeferredGoal deferred
-        return some $ deferredRec?.getD deferred
-
 def popActiveGoal : SearchM (Option GoalRef) := do
   let q ← getThe ActiveGoalQueue
   let (some (ag, q)) ← pure q.deleteMin | return none
-  let (ag, q) ←
-    match ← resolveDeferredGoal ag.goal with
-    | none => pure (ag.goal, q)
-    | some deferred =>
-      let i ← getThe Iteration
-      ag.goal.modify λ g => do g.setLastExpandedInIteration i
-      let ag := { ag with lastExpandedInIteration := i }
-      pure (deferred, q.insert ag)
   setThe ActiveGoalQueue q
-  return some ag
+  return some ag.goal
 
 def pushActiveGoal (ag : ActiveGoal) : SearchM Unit :=
   modifyThe ActiveGoalQueue (·.insert ag)
@@ -443,7 +419,6 @@ def copyRappBranch (root : RappRef) : SearchM (RappRef × TreeCopy.State) := do
         newGref.modify λ g =>
           g.setAddedInIteration currentIteration
           |>.setLastExpandedInIteration Iteration.none
-          |>.setDeferTo oldGref
         pushActiveGoal (← ActiveGoal.ofGoalRef newGref)
   let parent := (← root.get).parent
   runCopyTreeT afterAddGoal (λ _ _ => pure ()) $
@@ -479,8 +454,6 @@ end UGoalAssignmentResult
 -- - Insert the new branch into the active goal queue.
 -- - In the old branch, propagate the unification goal assignment into the
 --   meta state of every rapp.
--- - Defer every goal in the new branch in favour of its corresponding goal in
---   the old branch.
 -- - TODO possibly disallow the ugoal assignment in the whole branch.
 --
 -- If the rule did not assign any unification goals, this function does nothing.
