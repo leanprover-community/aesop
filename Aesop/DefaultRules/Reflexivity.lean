@@ -23,8 +23,7 @@ def safeReflexivity : RuleTac := λ { goal, .. } => do
     let postState ← saveState
     return {
       applications := #[{
-        regularGoals := #[]
-        unificationGoals := #[]
+        goals := #[]
         postState := postState
       }]
       postBranchState? := none

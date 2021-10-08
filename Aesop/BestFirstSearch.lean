@@ -83,7 +83,12 @@ structure State where
 
 def mkInitialContextAndState (rs : RuleSet) (options : Aesop.Options)
     (mainGoal : MVarId) : MetaM (Context × State) := do
-  let rootGoal := Goal.mkInitial GoalId.zero none mainGoal Percent.hundred
+  let ugoals ← getGoalMVarsNoDelayed mainGoal
+  unless ugoals.isEmpty do
+    throwError "aesop: the goal contains metavariables, which is not currently supported."
+    -- TODO support metavariables in the initial goal
+  let rootGoal :=
+    Goal.mkInitial GoalId.zero none mainGoal HashSet.empty Percent.hundred
       Iteration.none BranchState.empty
   let rootGoalRef ← ST.mkRef rootGoal
   let ctx := {
@@ -186,16 +191,17 @@ def addGoals (goals : Array Goal) (parent : RappRef) :
     SearchM (Array GoalRef) :=
   goals.mapM addGoal
 
-def addGoals' (goals : Array MVarId) (successProbability : Percent)
-    (parent : RappRef) (branchState : BranchState) :
-    SearchM (Array GoalRef) := do
+def addGoals' (goals : Array (MVarId × HashSet MVarId))
+    (successProbability : Percent) (parent : RappRef)
+    (branchState : BranchState) : SearchM (Array GoalRef) := do
   let i ← getThe Iteration
-  goals.mapM λ g => addGoal $
-    Goal.mkInitial GoalId.dummy (some parent) g successProbability i branchState
+  goals.mapM λ (g, ugoals) => addGoal $
+    Goal.mkInitial GoalId.dummy (some parent) g ugoals successProbability i
+      branchState
 
 -- Overwrites the rapp ID and depth of `r`. Adds the `newUnificationGoals` as
 -- unification goals whose origin is the returned rapp.
-def addRapp (r : Rapp) (newUnificationGoals : Array MVarId) :
+def addRapp (r : Rapp) (newUnificationGoals : HashSet MVarId) :
     SearchM RappRef := do
   let id ← getAndIncrementNextRappId
   let r := r.setId id
@@ -224,7 +230,9 @@ def runRuleTac (goal : Goal) (rule : RuleTac)
     return Sum.inl e
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def runNormRuleTac (bs : BranchState) (rule : NormRule) (ri : RuleTacInput) :
+def runNormRuleTac (bs : BranchState)
+    (ugoalOrigins : PersistentHashMap MVarId RappRef) (rule : NormRule)
+    (ri : RuleTacInput) :
     MetaM (Option (MVarId × BranchState)) := do
   let result ←
     try rule.tac.tac ri
@@ -233,11 +241,12 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (ri : RuleTacInput) :
   let postBranchState := bs.update rule result.postBranchState?
   match result.applications with
   | #[ruleOutput] =>
-    unless ruleOutput.unificationGoals.isEmpty do throwError
-      "aesop: normalisation rule {rule.name} produced a metavariable. {errorContext}"
-    match ruleOutput.regularGoals with
+    match ruleOutput.goals with
     | #[] => return none
-    | #[g] => return some (g, postBranchState)
+    | #[(g, ugoals)] =>
+      unless ugoals.isEmpty do throwError
+        "aesop: normalisation rule {rule.name} produced a metavariable. {errorContext}"
+      return some (g, postBranchState)
     | _ => throwError
       "aesop: normalisation rule {rule.name} produced more than one subgoal. {errorContext}"
   | _ => throwError
@@ -248,6 +257,7 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (ri : RuleTacInput) :
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def runNormRule (goal : MVarId) (branchState : BranchState)
+    (ugoalOrigins : PersistentHashMap MVarId RappRef)
     (rule : IndexMatchResult NormRule) :
     MetaM (Option (MVarId × BranchState)) := do
   aesop_trace[stepsNormalization] "Running {rule.rule}"
@@ -256,7 +266,7 @@ def runNormRule (goal : MVarId) (branchState : BranchState)
     indexMatchLocations := rule.matchLocations
     branchState? := branchState.find? rule.rule
   }
-  let result ← runNormRuleTac branchState rule.rule ruleInput
+  let result ← runNormRuleTac branchState ugoalOrigins rule.rule ruleInput
   match result with
   | none => return none
   | some result@(newGoal, _) =>
@@ -265,12 +275,13 @@ def runNormRule (goal : MVarId) (branchState : BranchState)
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def runNormRules (goal : MVarId) (branchState : BranchState)
+    (ugoalOrigins : PersistentHashMap MVarId RappRef)
     (rules : Array (IndexMatchResult NormRule)) :
     MetaM (Option (MVarId × BranchState)) := do
   let mut goal := goal
   let mut branchState := branchState
   for rule in rules do
-    let (some (g, bs)) ← runNormRule goal branchState rule
+    let (some (g, bs)) ← runNormRule goal branchState ugoalOrigins rule
       | return none
     goal := g
     branchState := branchState
@@ -286,15 +297,19 @@ def runNormalizationSimp (goal : MVarId) (rs : RuleSet) :
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def normalizeGoalMVar (rs : RuleSet) (goal : MVarId)
-    (branchState : BranchState) : MetaM (Option (MVarId × BranchState)) := do
+    (branchState : BranchState)
+    (ugoalOrigins : PersistentHashMap MVarId RappRef) :
+    MetaM (Option (MVarId × BranchState)) := do
   let rules ← rs.applicableNormalizationRules goal
   let (preSimpRules, postSimpRules) :=
     rules.partition λ r => r.rule.extra.penalty < (0 : Int)
-  let (some (goal, branchState)) ← runNormRules goal branchState preSimpRules | return none
+  let (some (goal, branchState)) ←
+    runNormRules goal branchState ugoalOrigins preSimpRules
+    | return none
   aesop_trace[stepsNormalization] "Running normalisation simp"
   let (some goal) ← runNormalizationSimp goal rs | return none
   aesop_trace[stepsNormalization] "Goal after normalisation simp:{indentD $ MessageData.ofGoal goal}"
-  runNormRules goal branchState postSimpRules
+  runNormRules goal branchState ugoalOrigins postSimpRules
 
 -- Returns true if the goal was solved by normalisation.
 def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Bool := do
@@ -305,7 +320,8 @@ def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Bool := do
   let rs ← readThe RuleSet
   let newGoal? ← gref.runMetaMModifyingParentState do
     aesop_trace[steps] "Goal before normalisation:{indentD $ MessageData.ofGoal g.goal}"
-    let newGoal? ← normalizeGoalMVar rs g.goal g.branchState
+    let newGoal? ←
+      normalizeGoalMVar rs g.goal g.branchState (← g.unificationGoalOrigins)
     match newGoal? with
     | some (newGoal, _) =>
       aesop_trace[steps] "Goal after normalisation:{indentD $ MessageData.ofGoal newGoal}"
@@ -342,14 +358,14 @@ def assignedUnificationGoals (parent : GoalRef)
   return result
 
 -- This function is called when a rapp R assigns one or more unification goals.
--- We are given the origins of these unification goals, i.e. the rapps which
--- introduced them, as `unificationGoalOrigins`. These origin rapps must all be
--- ancestors of R, so we can find the one highest up in the tree -- the 'least
--- common ancestor' -- by simply picking the origin with the least ID. This
--- relies on the invariant that the ID of a node is always strictly smaller than
--- the ID of its children.
+-- We are given these unification goals, along with their assignments and the
+-- rapps that introduced them, as `unificationGoals`. The origin rapps must all
+-- be ancestors of R, so we can find the one highest up in the tree -- the
+-- 'least common ancestor' -- by simply picking the origin with the least ID.
+-- This relies on the invariant that the ID of a node is always strictly smaller
+-- than the ID of its children.
 --
--- `unificationGoalOrigins` must be nonempty
+-- `unificationGoals` must be nonempty
 def leastCommonUnificationGoalOrigin (unificationGoals : UnificationGoals) :
     SearchM RappRef := do
   if unificationGoals.isEmpty then
@@ -382,11 +398,20 @@ def assignUnificationGoalsInRappState (unificationGoals : UnificationGoals)
       if ! (← isDeclaredMVar m) then
         continue
       if (← Check.unificationGoalAssignments.isEnabled) then do
-        if (← isExprMVarAssigned m) then throwError
-          "aesop/runRegularRule: internal error: unification goal is already assigned"
+        if (← isExprMVarAssigned m) then do throwError
+          "aesop/runRegularRule: internal error: while assigning unification goal {m.name} in rapp {(← rref.get).id}: unification goal is already assigned"
         unless (← isValidMVarAssignment m e) do throwError
-          "aesop/runRegularRule: internal error: assignment of unification goal is type-incorrect"
+          "aesop/runRegularRule: internal error: while assigning unification goal {m.name} in rapp {(← rref.get).id}: assignment is type-incorrect"
       assignExprMVar m e
+
+def removeUnificationGoalsFromGoal (unificationGoals : UnificationGoals)
+    (gref : GoalRef) : SearchM Unit := do
+  let g ← gref.get
+  gref.modify λ g => g.setUnificationGoals arbitrary
+  let mut ugoals := g.unificationGoals
+  for (ugoal, _, _) in unificationGoals do
+    ugoals := ugoals.erase ugoal
+  gref.modify λ g => g.setUnificationGoals ugoals
 
 mutual
   -- Runs `assignMetasInRappState unificationGoals` on `root` and all
@@ -399,6 +424,7 @@ mutual
 
   partial def assignUnificationGoalsInGoalBranch
       (unificationGoals : UnificationGoals) (root : GoalRef) : SearchM Unit := do
+    removeUnificationGoalsFromGoal unificationGoals root
     (← root.get).children.forM
       (assignUnificationGoalsInRappBranch unificationGoals)
 end
@@ -515,7 +541,7 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
     let postBranchState :=
       rule.withRule λ r => parent.branchState.update r output.postBranchState?
     aesop_trace[stepsBranchStates] "Updated branch state: {rule.withRule λ r => postBranchState.find? r}"
-    match rapps.find? (·.regularGoals.isEmpty) with
+    match rapps.find? (·.goals.isEmpty) with
     | none =>
       let mut parentRef := parentRef
       for rapp in rapps do
@@ -526,11 +552,11 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
     | some proof =>
       aesop_trace[steps] "One of the rule applications has no subgoals. Goal is proven."
       let res ← processUnificationGoalAssignment parentRef proof.postState
-      let uGoals ← res.newUnificationGoalOrigins parentRef
+      let ugoals ← res.newUnificationGoalOrigins parentRef
       let r :=
-        Rapp.mkInitial RappId.dummy parentRef 0 proof.postState uGoals
+        Rapp.mkInitial RappId.dummy parentRef 0 proof.postState ugoals
           rule successProbability
-      let rref ← addRapp r #[]
+      let rref ← addRapp r HashSet.empty
       rref.setProven (firstRappUnconditional := true)
       aesop_trace[steps]
         "New rapp:{indentD (← rref.toMessageData (← TraceModifiers.get))}"
@@ -541,6 +567,16 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
       parentRef.modify λ g => g.setFailedRapps $ g.failedRapps.push rule
       return RuleResult.failed
 
+    newUnificationGoals (parentRef : GoalRef)
+        (newGoals : Array (MVarId × HashSet MVarId)) : MetaM (HashSet MVarId) := do
+      let oldUGoals ← (← parentRef.get).unificationGoalOrigins
+      let mut newUGoals := HashSet.empty
+      for (_, ugoals) in newGoals do
+        for ugoal in ugoals do
+          unless oldUGoals.contains ugoal do
+            newUGoals := newUGoals.insert ugoal
+      return newUGoals
+
     processRuleApplicationWithSubgoals (parentRef : GoalRef) (rule : RegularRule)
         (successProbability : Percent) (rapp : RuleApplication)
         (postBranchState : BranchState) : SearchM GoalRef := do
@@ -548,9 +584,10 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
       let r :=
         Rapp.mkInitial RappId.dummy parentRef 0 rapp.postState
           (← res.newUnificationGoalOrigins parentRef) rule successProbability
-      let rref ← addRapp r rapp.unificationGoals
+      let newUGoals ← newUnificationGoals parentRef rapp.goals
+      let rref ← addRapp r newUGoals
       let newGoals ←
-        addGoals' rapp.regularGoals successProbability rref postBranchState
+        addGoals' rapp.goals successProbability rref postBranchState
       aesop_trace[steps] do
         let traceMods ← TraceModifiers.get
         let rappMsg ← rref.toMessageData traceMods
@@ -637,13 +674,8 @@ def expandGoal (gref : GoalRef) : SearchM Unit := do
   if ← normalizeGoalIfNecessary gref then
     -- Goal was already proven by normalisation.
     return
-  if ← (← gref.get).hasUnificationGoal then
+  if (← gref.get).hasUnificationGoal then
     aesop_trace[steps] "Goal contains unification goals. Treating safe rules as unsafe."
-    -- TODO This is a bit of a lie. Currently we only check whether the goal's
-    -- parent rapp has unification goals. That doesn't mean any appear in this
-    -- specific goal. It would be better to track this more precisely so that
-    -- we can treat ugoal-free goals as ugoal-free (which is much more
-    -- efficient).
     runFirstUnsafeRule gref (includeSafeRules := true)
   else
     let safeResult ← runFirstSafeRule gref

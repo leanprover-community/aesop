@@ -11,6 +11,7 @@ import Aesop.Util
 open Lean
 open Lean.Elab.Tactic
 open Lean.Meta
+open Std (HashSet)
 
 namespace Aesop
 
@@ -24,20 +25,14 @@ structure RuleTacInput where
 Rule tactics must accurately report the following information, which is not
 checked:
 
-- `regularGoals`: a collection of unassigned metavariables. These are goals
-  produced by the tactic which should be solved by recursive search.
-- `unificationGoals`: a collection of unassigned metavariables. These are
-  goals produced by the tactic which should be solved by unification.
-  `regularGoals` and `unificationGoals` must be disjoint. If a metavariable
-  is dependent (i.e. it appears in the target or the local context of
-  another goal), then it must appear in `unificationGoals`. Non-dependent
-  metavariables are technically allowed to appear in `unificationGoals`, but
-  are very unlikely to be solved.
+- `goals`: the goals produced by the tactic. The first component of each pair
+  in this array is the goal's mvar. The second component is the set of
+  metavariables that occur in the goal (i.e. in the target or in any of the
+  hypotheses).
 - `postState`: the `MetaM` state after the rule was applied.
 -/
 structure RuleApplication where
-  regularGoals : Array MVarId
-  unificationGoals : Array MVarId
+  goals : Array (MVarId × HashSet MVarId)
   postState : Meta.SavedState
   deriving Inhabited
 
@@ -57,41 +52,26 @@ information in `RuleTacOutput`. In this case, they can return a
 (possibly inefficiently since Aesop does not know what the user tactic did).
 -/
 structure SimpleRuleTacOutput where
-  regularGoals : Array MVarId
-  unificationGoals : Option (Array MVarId) := none
+  goals : Array (MVarId × Option (HashSet MVarId))
   deriving Inhabited
-
-@[inline]
-def getHypMVars (goal : MVarId) : MetaM (Array MVarId) :=
-  withMVarContext goal do
-    let mut mvars := #[]
-    for hyp in (← getLCtx) do
-      mvars := mvars ++ (← getMVarsNoDelayed (mkFVar hyp.fvarId))
-    return mvars
-
-@[inline]
-def getTargetMVars (goal : MVarId) : MetaM (Array MVarId) := do
-  getMVarsNoDelayed (← getMVarType goal)
-
-@[inline]
-def getGoalMVars (goal : MVarId) : MetaM (Array MVarId) :=
-  return (← getTargetMVars goal) ++ (← getHypMVars goal)
-
-def nondependentAndDependentMVars (ms : Array MVarId) :
-    MetaM (Array MVarId × Array MVarId) := do
-  let mvarsAppearingInMs ← ms.concatMapM getGoalMVars
-  return ms.partition λ m => ¬ mvarsAppearingInMs.contains m
 
 def SimpleRuleTacOutput.toRuleApplication (o : SimpleRuleTacOutput) :
     MetaM RuleApplication := do
   let postState ← saveState
-  let (regularGoals, unificationGoals) ←
-    match o.unificationGoals with
-    | some ugoals => pure (o.regularGoals, ugoals)
-    | none => nondependentAndDependentMVars o.regularGoals
+  let mut goals := Array.mkEmpty o.goals.size
+  let mut allUGoals := HashSet.empty
+  for (g, ugoals) in o.goals do
+    match ugoals with
+    | some ugoals =>
+      goals := goals.push (g, ugoals)
+      allUGoals := allUGoals.insertMany ugoals
+    | none => do
+      let ugoals' ← getGoalMVarsNoDelayed g
+      goals := goals.push (g, ugoals')
+      allUGoals := allUGoals.insertMany ugoals'
+  goals := goals.filter λ (g, _) => ! allUGoals.contains g
   return {
-    regularGoals := regularGoals
-    unificationGoals := unificationGoals
+    goals := goals
     postState := postState
   }
 
@@ -113,14 +93,14 @@ namespace RuleTac
 
 def applyConst (decl : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input => do
   let goals ← apply input.goal (← mkConstWithFreshMVarLevels decl)
-  return { regularGoals := goals.toArray }
+  return { goals := goals.toArray.map λ g => (g, none) }
   -- TODO optimise dependent goal analysis
 
 def applyFVar (userName : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input =>
   withMVarContext input.goal do
     let decl ← getLocalDeclFromUserName userName
     let goals ← apply input.goal (mkFVar decl.fvarId)
-    return { regularGoals := goals.toArray }
+    return { goals := goals.toArray.map λ g => (g, none) }
   -- TODO optimise dependent goal analysis
 
 private partial def makeForwardHyps (e : Expr) (immediate : Array Name) : MetaM (Array Expr) := do
@@ -203,7 +183,7 @@ def withApplicationLimit (n : Nat) : RuleTac → RuleTac :=
 def forwardExpr (e : Expr) (immediate : Array Name) : RuleTac :=
   SimpleRuleTac.toRuleTac λ input => withMVarContext input.goal do
     let goal ← applyForwardRule input.goal e immediate
-    return { regularGoals := #[goal] }
+    return { goals := #[(goal, none)] }
 
 def forwardConst (decl : Name) (immediate : Array Name) : RuleTac :=
   withApplicationLimit 1 $ forwardExpr (mkConst decl) immediate
@@ -276,7 +256,7 @@ unsafe def tacticMUnsafe (decl : Name) : GlobalRuleTacBuilder := do
       -- directly after `checkDeclType`, but this fails when
       -- `ofTacticMUnitConstUnsafe` is called by the `@[aesop]` attribute.
     let goals ← runTacticMAsMetaM tac input.goal
-    return { regularGoals := goals.toArray }
+    return { goals := goals.toArray.map λ g => (g, none) }
   return { tac := tac, descr := GlobalRuleTacBuilderDescr.tacticM decl }
 
 @[implementedBy tacticMUnsafe]

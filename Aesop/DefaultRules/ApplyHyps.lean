@@ -13,7 +13,7 @@ open Lean.Meta
 
 def applyHyp (hyp : FVarId) (input : RuleTacInput) : MetaM RuleApplication := do
   let goals ← apply input.goal (mkFVar hyp)
-  let output : SimpleRuleTacOutput := { regularGoals := goals.toArray }
+  let output : SimpleRuleTacOutput := { goals := goals.toArray.map λ g => (g, none) }
   output.toRuleApplication
   -- TODO optimise ugoal analysis
 

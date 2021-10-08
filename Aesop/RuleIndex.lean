@@ -66,11 +66,10 @@ def applicableByHypRules (ri : RuleIndex α) (goal : MVarId) :
       rulesList := rulesList.push rules
     return rulesList
 
--- TODO remove Inhabited as soon as qsort doesn't require it any more.
 @[specialize]
 def applicableRules [Ord α] (ri : RuleIndex α) (goal : MVarId) :
     MetaM (Array (IndexMatchResult α)) := do
-  instantiateMVarDeclMVars goal
+  instantiateMVarsInGoal goal
   let byTarget ← applicableByTargetRules ri goal
   let unindexed : Array (IndexMatchResult α) := ri.unindexed.map λ r =>
     { rule := r, matchLocations := #[IndexMatchLocation.none] }

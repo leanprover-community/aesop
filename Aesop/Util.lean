@@ -5,7 +5,9 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Lean
-import Std.Data.BinomialHeap
+import Std
+
+open Std (HashSet)
 
 namespace Option
 
@@ -124,6 +126,31 @@ def nodeFiltering (fs : Array (Option MessageData)) : MessageData :=
   node $ fs.filterMap id
 
 end Lean.MessageData
+
+
+namespace Std.HashSet
+
+def insertMany [ForIn Id ρ α] [BEq α] [Hashable α] (s : HashSet α) (as : ρ) :
+    HashSet α := do
+  let mut s := s
+  for a in as do
+    s := s.insert a
+  return s
+
+instance [BEq α] [Hashable α] : ForIn m (HashSet α) α where
+  forIn map init step := do
+    let mut s := init
+    for bucket in map.val.buckets.val do
+      for x in bucket do
+        match ← step x s with
+        | ForInStep.done s' =>
+          s := s'
+          break
+        | ForInStep.yield s' =>
+          s := s'
+    return s
+
+end Std.HashSet
 
 
 namespace Std.PersistentHashSet
@@ -459,6 +486,69 @@ def mkSimpLemmasFromConst (declName : Name) (post : Bool) (prio : Nat) : MetaM (
     else
       #[← mkSimpLemmaCore (mkConst declName (cinfo.levelParams.map mkLevelParam)) #[] (mkConst declName) post prio declName]
 
+def instantiateMVarsInMVarType (mvarId : MVarId) : MetaM Expr := do
+  let type := (← getMVarDecl mvarId).type
+  if type.hasMVar then
+    let type ← instantiateMVars type
+    setMVarType mvarId type
+    return type
+  else
+    return type
+
+def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
+    MetaM Expr := do
+  let mdecl ← getMVarDecl mvarId
+  let (some ldecl) ← mdecl.lctx.find? fvarId | throwError
+    "unknown local constant {fvarId.name} (in local context of metavariable ?{mvarId.name})"
+  let type ← instantiateMVars ldecl.type
+  let mdecl :=
+    { mdecl with
+      lctx := mdecl.lctx.modifyLocalDecl fvarId λ ldecl => ldecl.setType type }
+  modify λ s =>
+    { s with mctx := { s.mctx with decls := s.mctx.decls.insert mvarId mdecl } }
+  return type
+
+def instantiateMVarsInGoal (mvarId : MVarId) : MetaM Unit := do
+  let mctx := (← get).mctx
+  let mctx ← mctx.instantiateMVarDeclMVars mvarId
+  modify λ s => { s with mctx := mctx }
+
+def setMVarLCtx (mvarId : MVarId) (lctx : LocalContext) : MetaM Unit := do
+  let newDecl := { ← getMVarDecl mvarId with lctx := lctx }
+  let mctx ← getMCtx
+  setMCtx { mctx with decls := mctx.decls.insert mvarId newDecl }
+
+def setFVarBinderInfos (mvarId : MVarId) (fvars : Array FVarId)
+    (bi : BinderInfo) : MetaM Unit := do
+  let decl ← getMVarDecl mvarId
+  let mut lctx := (← getMVarDecl mvarId).lctx
+  for fvar in fvars do
+    lctx := lctx.setBinderInfo fvar bi
+  let mctx ← getMCtx
+  let newDecl := { decl with lctx := lctx }
+  setMCtx { mctx with decls := mctx.decls.insert mvarId newDecl }
+
+structure HypothesisWithBinderInfo where
+  userName : Name
+  type : Expr
+  value : Expr
+  binderInfo : BinderInfo
+
+def assertHypothesesWithBinderInfos (mvarId : MVarId)
+    (hs : Array HypothesisWithBinderInfo) : MetaM (Array FVarId × MVarId) := do
+  if hs.isEmpty then
+    return (#[], mvarId)
+  else withMVarContext mvarId do
+    checkNotAssigned mvarId `assertHypotheses
+    let tag    ← getMVarTag mvarId
+    let target ← getMVarType mvarId
+    let targetNew := hs.foldr (init := target) fun h targetNew =>
+      mkForall h.userName h.binderInfo h.type targetNew
+    let mvarNew ← mkFreshExprSyntheticOpaqueMVar targetNew tag
+    let val := hs.foldl (init := mvarNew) fun val h => mkApp val h.value
+    assignExprMVar mvarId val
+    introNP mvarNew.mvarId! hs.size
+
 -- TODO unused?
 def copyMVar (mvarId : MVarId) : MetaM MVarId := do
   let decl ← getMVarDecl mvarId
@@ -491,6 +581,21 @@ def isDeclaredMVar (mvarId : MVarId) : MetaM Bool := do
   match (← getMCtx).findDecl? mvarId with
   | some _ => true
   | none => false
+
+def getHypMVarsNoDelayed (goal : MVarId) : MetaM (HashSet MVarId) := do
+  instantiateMVarsInGoal goal
+  withMVarContext goal do
+    let mut mvars := HashSet.empty
+    for hyp in (← getLCtx) do
+      mvars := mvars.insertMany (← getMVarsNoDelayed (mkFVar hyp.fvarId))
+    return mvars
+
+def getTargetMVarsNoDelayed (goal : MVarId) : MetaM (Array MVarId) := do
+  getMVarsNoDelayed (← instantiateMVarsInMVarType goal)
+
+def getGoalMVarsNoDelayed (goal : MVarId) : MetaM (HashSet MVarId) := do
+  let hypMVars ← getHypMVarsNoDelayed goal
+  return hypMVars.insertMany (← getTargetMVarsNoDelayed goal)
 
 end Lean.Meta
 
@@ -542,74 +647,6 @@ def modifyGetM (r : Ref σ α) (f : α → m (β × α)) : m β := do
   return b
 
 end ST.Ref
-
-
-namespace Lean.Meta
-
-def instantiateMVarsInMVarType (mvarId : MVarId) : MetaM Expr := do
-  let type := (← getMVarDecl mvarId).type
-  if type.hasMVar then
-    let type ← instantiateMVars type
-    setMVarType mvarId type
-    return type
-  else
-    return type
-
-def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
-    MetaM Expr := do
-  let mdecl ← getMVarDecl mvarId
-  let (some ldecl) ← mdecl.lctx.find? fvarId | throwError
-    "unknown local constant {fvarId.name} (in local context of metavariable ?{mvarId.name})"
-  let type ← instantiateMVars ldecl.type
-  let mdecl :=
-    { mdecl with
-      lctx := mdecl.lctx.modifyLocalDecl fvarId λ ldecl => ldecl.setType type }
-  modify λ s =>
-    { s with mctx := { s.mctx with decls := s.mctx.decls.insert mvarId mdecl } }
-  return type
-
-def instantiateMVarDeclMVars (mvarId : MVarId) : MetaM Unit := do
-  let mctx := (← get).mctx
-  let mctx ← mctx.instantiateMVarDeclMVars mvarId
-  modify λ s => { s with mctx := mctx }
-
-def setMVarLCtx (mvarId : MVarId) (lctx : LocalContext) : MetaM Unit := do
-  let newDecl := { ← getMVarDecl mvarId with lctx := lctx }
-  let mctx ← getMCtx
-  setMCtx { mctx with decls := mctx.decls.insert mvarId newDecl }
-
-def setFVarBinderInfos (mvarId : MVarId) (fvars : Array FVarId)
-    (bi : BinderInfo) : MetaM Unit := do
-  let decl ← getMVarDecl mvarId
-  let mut lctx := (← getMVarDecl mvarId).lctx
-  for fvar in fvars do
-    lctx := lctx.setBinderInfo fvar bi
-  let mctx ← getMCtx
-  let newDecl := { decl with lctx := lctx }
-  setMCtx { mctx with decls := mctx.decls.insert mvarId newDecl }
-
-structure HypothesisWithBinderInfo where
-  userName : Name
-  type : Expr
-  value : Expr
-  binderInfo : BinderInfo
-
-def assertHypothesesWithBinderInfos (mvarId : MVarId)
-    (hs : Array HypothesisWithBinderInfo) : MetaM (Array FVarId × MVarId) := do
-  if hs.isEmpty then
-    return (#[], mvarId)
-  else withMVarContext mvarId do
-    checkNotAssigned mvarId `assertHypotheses
-    let tag    ← getMVarTag mvarId
-    let target ← getMVarType mvarId
-    let targetNew := hs.foldr (init := target) fun h targetNew =>
-      mkForall h.userName h.binderInfo h.type targetNew
-    let mvarNew ← mkFreshExprSyntheticOpaqueMVar targetNew tag
-    let val := hs.foldl (init := mvarNew) fun val h => mkApp val h.value
-    assignExprMVar mvarId val
-    introNP mvarNew.mvarId! hs.size
-
-end Lean.Meta
 
 
 namespace Lean.Syntax

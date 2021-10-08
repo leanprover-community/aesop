@@ -37,8 +37,7 @@ def safeAssumption : RuleTac := λ { goal, .. } =>
       assignExprMVar goal (mkFVar hyp)
       let postState ← saveState
       let rapp := {
-        regularGoals := #[]
-        unificationGoals := #[]
+        goals := #[]
         postState := postState
       }
       return {

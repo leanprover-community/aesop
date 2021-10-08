@@ -224,6 +224,7 @@ structure GoalData (Goal Rapp : Type) : Type where
   parent? : Option (IO.Ref Rapp)
   children : Array (IO.Ref Rapp)
   goal : MVarId
+  unificationGoals : HashSet MVarId
   successProbability : Percent
   addedInIteration : Iteration
   lastExpandedInIteration : Iteration
@@ -383,6 +384,10 @@ def goal (g : Goal) : MVarId :=
   g.elim.goal
 
 @[inline]
+def unificationGoals (g : Goal) : HashSet MVarId :=
+  g.elim.unificationGoals
+
+@[inline]
 def successProbability (g : Goal) : Percent :=
   g.elim.successProbability
 
@@ -439,6 +444,10 @@ def setGoal (goal : MVarId) (g : Goal) : Goal :=
   g.modify λ g => { g with goal := goal }
 
 @[inline]
+def setUnificationGoals (unificationGoals : HashSet MVarId) (g : Goal) : Goal :=
+  g.modify λ g => { g with unificationGoals := unificationGoals }
+
+@[inline]
 def setSuccessProbability (successProbability : Percent) (g : Goal) : Goal :=
   g.modify λ g => { g with successProbability := successProbability }
 
@@ -480,13 +489,15 @@ def addChild (child : RappRef) (g : Goal) : Goal :=
   g.modify λ g => { g with children := g.children.push child }
 
 protected def mkInitial (id : GoalId) (parent? : Option (IO.Ref Rapp))
-    (goal : MVarId) (successProbability : Percent)
-    (addedInIteration : Iteration) (branchState : BranchState) : Goal :=
+    (goal : MVarId) (unificationGoals : HashSet MVarId)
+    (successProbability : Percent) (addedInIteration : Iteration)
+    (branchState : BranchState) : Goal :=
   mk {
     id := id
     parent? := parent?
     children := #[]
     goal := goal
+    unificationGoals := unificationGoals
     addedInIteration := addedInIteration
     lastExpandedInIteration := Iteration.none
     successProbability := successProbability
@@ -702,11 +713,13 @@ protected def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
         m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.size}",
         m!"state: {g.state} | normal: {g.isNormal.toYesNo}",
         m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration}",
-        if ¬ traceMods.goals then none else
+        if ! traceMods.goals then none else
           m!"Goal:{indentD $ ofGoal g.goal}",
-        if ¬ traceMods.unsafeQueues || ¬ g.unsafeRulesSelected then none else
+        if ! traceMods.unificationGoals then none else
+          m!"Unification goals: {g.unificationGoals.toArray.map (·.name)}",
+        if ! traceMods.unsafeQueues || ! g.unsafeRulesSelected then none else
           m!"Unsafe queue:{node $ g.unsafeQueue.toArray.map toMessageData}",
-        if ¬ traceMods.failedRapps then none else
+        if ! traceMods.failedRapps then none else
           m!"Failed rule applications:{node $ g.failedRapps.map toMessageData}" ]
 
 protected def GoalRef.toMessageData (traceMods : TraceModifiers)
@@ -796,10 +809,8 @@ def unificationGoalOrigins (g : Goal) : m (PersistentHashMap MVarId RappRef) :=
   | some rref => return Rapp.unificationGoalOrigins (← rref.get)
   | none => return PersistentHashMap.empty
 
--- TODO This is overly coarse. Even if the parent rapp has unification goals,
--- they need not appear in this goal.
-def hasUnificationGoal (g : Goal) : m Bool :=
-  return ! (← g.unificationGoalOrigins).isEmpty
+def hasUnificationGoal (g : Goal) : Bool :=
+  return ! g.unificationGoals.isEmpty
 
 def parentDepth (g : Goal) : m Nat :=
   match g.parent? with
@@ -1172,9 +1183,22 @@ def GoalRef.checkIds (gref : GoalRef) : m Unit :=
 def RappRef.checkIds (rref : RappRef) : m Unit :=
   CheckIdInvariant.checkIds (Sum.inr rref) |>.run
 
-private def checkUnificationGoalOriginsCore : Sum GoalRef RappRef → MetaM Unit :=
+private def checkUnificationGoalsCore : Sum GoalRef RappRef → MetaM Unit :=
   traverseDown
-    (λ gref => return true)
+    (λ gref => do
+      let g ← gref.get
+      match g.parent? with
+      | none => return true
+      | some parent => do
+        let ugoalOrigins := (← parent.get).unificationGoalOrigins
+        for ugoal in g.unificationGoals do
+          unless ugoalOrigins.contains ugoal do
+            throwError "{Check.tree.name}: in goal {g.id}: unification goal {ugoal.name} is not registered in parent rapp"
+        discard $ gref.runMetaMInParentState do
+          for ugoal in g.unificationGoals do
+            if ← isExprMVarAssigned ugoal then throwError
+              "{Check.tree.name}: in goal {g.id}: unification goal {ugoal.name} is already assigned"
+        return true)
     (λ rref => do
       let r ← rref.get
       withoutModifyingState do
@@ -1186,11 +1210,11 @@ private def checkUnificationGoalOriginsCore : Sum GoalRef RappRef → MetaM Unit
             "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is assigned"
         return true)
 
-def GoalRef.checkUnificationGoalOrigins : GoalRef → MetaM Unit :=
-  checkUnificationGoalOriginsCore ∘ Sum.inl
+def GoalRef.checkUnificationGoals : GoalRef → MetaM Unit :=
+  checkUnificationGoalsCore ∘ Sum.inl
 
-def RappRef.checkUnificationGoalOrigins : RappRef → MetaM Unit :=
-  checkUnificationGoalOriginsCore ∘ Sum.inr
+def RappRef.checkUnificationGoals : RappRef → MetaM Unit :=
+  checkUnificationGoalsCore ∘ Sum.inr
 
 private def checkAcyclicCore (x : Sum GoalRef RappRef) : m Unit := do
   -- We use arrays to store the visited nodes (rather than some data structure
@@ -1247,6 +1271,6 @@ def GoalRef.checkInvariantsIfEnabled (root : GoalRef) : MetaM Unit := do
   root.checkConsistentParentChildLinks
   root.checkAcyclic
   root.checkIds
-  root.checkUnificationGoalOrigins
+  root.checkUnificationGoals
 
 end Aesop
