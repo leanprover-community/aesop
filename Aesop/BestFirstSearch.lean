@@ -22,7 +22,7 @@ namespace Aesop
 
 structure ActiveGoal where
   goal : GoalRef
-  successProbability : Percent
+  priority : Percent
   lastExpandedInIteration : Iteration
     -- Iteration of the search loop when this goal was last expanded (counting
     -- from 1), or 0 if the goal was never expanded.
@@ -34,7 +34,7 @@ namespace ActiveGoal
 
 -- We prioritise active goals lexicographically by the following criteria:
 --
---  1. Goals with higher success probability have priority.
+--  1. Goals with higher priority have priority.
 --  2. Goals which were last expanded in an earlier iteration have priority.
 --  3. Goals which were added in an earlier iteration have priority.
 --
@@ -44,8 +44,8 @@ namespace ActiveGoal
 --
 -- Note that since we use a min-queue, `le x y` means `x` has priority over `y`.
 protected def le (g h : ActiveGoal) : Bool :=
-  g.successProbability > h.successProbability ||
-    (g.successProbability == h.successProbability &&
+  g.priority > h.priority ||
+    (g.priority == h.priority &&
       (g.lastExpandedInIteration <= h.lastExpandedInIteration ||
         (g.lastExpandedInIteration == h.lastExpandedInIteration &&
           g.addedInIteration <= h.addedInIteration)))
@@ -55,7 +55,7 @@ protected def ofGoalRef [Monad m] [MonadLiftT (ST IO.RealWorld) m]
   let g ← gref.get
   return {
     goal := gref
-    successProbability := g.successProbability
+    priority := g.priority
     lastExpandedInIteration := g.lastExpandedInIteration
     addedInIteration := g.addedInIteration
   }
@@ -249,10 +249,17 @@ def runNormRuleTac (bs : BranchState)
     (ugoalOrigins : PersistentHashMap MVarId RappRef) (rule : NormRule)
     (ri : RuleTacInput) :
     MetaM (Option (MVarId × BranchState)) := do
+  let mut previouslyAssignedUgoals := HashSet.empty
+  if ← Check.rules.isEnabled then
+    for (ugoal, _) in ugoalOrigins do
+      if ← isExprMVarAssigned ugoal then
+        previouslyAssignedUgoals := previouslyAssignedUgoals.insert ugoal
+
   let result ←
     try rule.tac.tac ri
     catch e => throwError
       "aesop: normalisation rule {rule.name} failed with error:{indentD e.toMessageData}\n{errorContext.get}"
+
   let postBranchState := bs.update rule result.postBranchState?
   match result.applications with
   | #[ruleOutput] =>
@@ -265,7 +272,7 @@ def runNormRuleTac (bs : BranchState)
           unless ugoalOrigins.contains ugoal do throwError
             "{Check.rules.name}: normalisation rule {rule.name} introduced a new unification goal. {errorContext.get}"
         for (ugoal, _) in ugoalOrigins do
-          if ← isExprMVarAssigned ugoal then throwError
+          if ← ! previouslyAssignedUgoals.contains ugoal <&&> isExprMVarAssigned ugoal then throwError
             "{Check.rules.name}: normalisation rule {rule.name} assigned a unification goal. {errorContext.get}"
       return some (g, postBranchState)
     | _ => throwError
@@ -396,7 +403,7 @@ def leastCommonUnificationGoalOrigin (unificationGoals : UnificationGoals) :
     return min
   let mut minId ← (← min.get).id
   for (_, _, rref) in unificationGoals do
-    let id ← (← rref.get).id
+    let id := (← rref.get).id
     if id < minId then
       minId := id
       min := rref
@@ -428,6 +435,8 @@ def assignUnificationGoalsInRappState (unificationGoals : UnificationGoals)
 def removeUnificationGoalsFromGoal (unificationGoals : UnificationGoals)
     (gref : GoalRef) : SearchM Unit := do
   let g ← gref.get
+  -- Drop the reference from `g` to make sure that `g.unificationGoals` is not
+  -- shared.
   gref.modify λ g => g.setUnificationGoals arbitrary
   let mut ugoals := g.unificationGoals
   for (ugoal, _, _) in unificationGoals do
@@ -436,7 +445,8 @@ def removeUnificationGoalsFromGoal (unificationGoals : UnificationGoals)
 
 mutual
   -- Runs `assignMetasInRappState unificationGoals` on `root` and all
-  -- descendants of `root`.
+  -- descendant rapps of `root`, and `removeUnificationGoalsFromGoal` on the
+  -- descendant goals of `root`.
   partial def assignUnificationGoalsInRappBranch
       (unificationGoals : UnificationGoals) (root : RappRef) : SearchM Unit := do
     assignUnificationGoalsInRappState unificationGoals root

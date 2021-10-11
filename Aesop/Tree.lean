@@ -5,6 +5,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Aesop.Check
+import Aesop.Constants
 import Aesop.Tree.BranchState
 import Aesop.Tree.UnsafeQueue
 import Aesop.Rule
@@ -690,13 +691,63 @@ def GoalRef.runMetaMModifyingParentState (x : MetaM α) (gref : GoalRef) :
   (← gref.get).runMetaMModifyingParentState x
 
 
+/-! ## Miscellaneous Queries -/
+
+namespace Goal
+
+def mayHaveUnexpandedRapp (g : Goal) : m Bool := do pure $
+  ¬ g.hasNoUnexpandedUnsafeRule ∧
+  ¬ (← g.children.anyM λ r => return (← r.get : Rapp).appliedRule.isSafe)
+
+def hasProvableRapp (g : Goal) : m Bool :=
+  g.children.anyM λ r => return ¬ (← r.get).state.isUnprovable
+
+def isUnprovableNoCache (g : Goal) : m Bool :=
+  notM (g.mayHaveUnexpandedRapp <||> g.hasProvableRapp)
+
+def firstProvenRapp? (g : Goal) : m (Option RappRef) :=
+  g.children.findSomeM? λ rref =>
+    return if (← rref.get).state.isProven then some rref else none
+
+def unificationGoalOrigins (g : Goal) : m (PersistentHashMap MVarId RappRef) :=
+  match g.parent? with
+  | some rref => return Rapp.unificationGoalOrigins (← rref.get)
+  | none => return PersistentHashMap.empty
+
+def hasUnificationGoal (g : Goal) : Bool :=
+  return ! g.unificationGoals.isEmpty
+
+def parentDepth (g : Goal) : m Nat :=
+  match g.parent? with
+  | none => pure 0
+  | some rref => return Rapp.depth (← rref.get)
+
+def priority (g : Goal) : Percent :=
+  g.successProbability * unificationGoalPenalty ^ g.unificationGoals.size
+
+end Goal
+
+
+namespace Rapp
+
+def hasUnificationGoal (r : Rapp) : Bool :=
+  ! r.unificationGoalOrigins.isEmpty
+
+def isUnprovableNoCache (r : Rapp) : m Bool :=
+  r.children.anyM λ subgoal => return (← subgoal.get).state.isUnprovable
+
+def isProvenNoCache (r : Rapp) : m Bool :=
+  r.children.allM λ subgoal => return (← subgoal.get).state.isProven
+
+end Rapp
+
+
 /-! ## Formatting -/
 
 section ToMessageData
 
 open MessageData
 
-open MessageData in
 protected def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
     MetaM MessageData :=
   match g.parent? with
@@ -709,7 +760,7 @@ protected def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
         if ¬ g.unsafeRulesSelected
           then f!"<not selected>"
           else format g.unsafeQueue.size
-      return m!"Goal {g.id} [{g.successProbability.toHumanString}]" ++ nodeFiltering #[
+      return m!"Goal {g.id} [{g.priority.toHumanString} / {g.successProbability.toHumanString}]" ++ nodeFiltering #[
         m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.size}",
         m!"state: {g.state} | normal: {g.isNormal.toYesNo}",
         m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration}",
@@ -784,54 +835,6 @@ def RappRef.treeToMessageData (traceMods : TraceModifiers) (rref : RappRef) :
   (← rref.get).treeToMessageData traceMods
 
 end ToMessageData
-
-
-/-! ## Miscellaneous Queries -/
-
-namespace Goal
-
-def mayHaveUnexpandedRapp (g : Goal) : m Bool := do pure $
-  ¬ g.hasNoUnexpandedUnsafeRule ∧
-  ¬ (← g.children.anyM λ r => return (← r.get : Rapp).appliedRule.isSafe)
-
-def hasProvableRapp (g : Goal) : m Bool :=
-  g.children.anyM λ r => return ¬ (← r.get).state.isUnprovable
-
-def isUnprovableNoCache (g : Goal) : m Bool :=
-  notM (g.mayHaveUnexpandedRapp <||> g.hasProvableRapp)
-
-def firstProvenRapp? (g : Goal) : m (Option RappRef) :=
-  g.children.findSomeM? λ rref =>
-    return if (← rref.get).state.isProven then some rref else none
-
-def unificationGoalOrigins (g : Goal) : m (PersistentHashMap MVarId RappRef) :=
-  match g.parent? with
-  | some rref => return Rapp.unificationGoalOrigins (← rref.get)
-  | none => return PersistentHashMap.empty
-
-def hasUnificationGoal (g : Goal) : Bool :=
-  return ! g.unificationGoals.isEmpty
-
-def parentDepth (g : Goal) : m Nat :=
-  match g.parent? with
-  | none => pure 0
-  | some rref => return Rapp.depth (← rref.get)
-
-end Goal
-
-
-namespace Rapp
-
-def hasUnificationGoal (r : Rapp) : Bool :=
-  ! r.unificationGoalOrigins.isEmpty
-
-def isUnprovableNoCache (r : Rapp) : m Bool :=
-  r.children.anyM λ subgoal => return (← subgoal.get).state.isUnprovable
-
-def isProvenNoCache (r : Rapp) : m Bool :=
-  r.children.allM λ subgoal => return (← subgoal.get).state.isProven
-
-end Rapp
 
 
 /-! ## Finding Siblings -/
