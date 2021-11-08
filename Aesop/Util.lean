@@ -662,20 +662,6 @@ def modifyGetM (r : Ref σ α) (f : α → m (β × α)) : m β := do
 end ST.Ref
 
 
-namespace Lean.Syntax
-
--- TODO for debugging, maybe remove
-partial def formatRaw : Syntax → String
-  | missing => "missing"
-  | node kind args =>
-    let args := ", ".joinSep $ args.map formatRaw |>.toList
-    s!"(node {kind} [{args}])"
-  | atom _ val => s!"(atom {val})"
-  | ident _ _ val _ => s!"(ident {val})"
-
-end Lean.Syntax
-
-
 namespace Lean
 
 open Lean.Elab
