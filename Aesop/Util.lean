@@ -617,7 +617,7 @@ namespace Lean.Syntax
 -- TODO for debugging, maybe remove
 partial def formatRaw : Syntax → String
   | missing => "missing"
-  | node kind args =>
+  | node info kind args =>
     let args := ", ".joinSep $ args.map formatRaw |>.toList
     s!"(node {kind} [{args}])"
   | atom _ val => s!"(atom {val})"
