@@ -1,0 +1,22 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install Elan
+      run: curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh
+    - name: Build
+      run: leanpkg build
+    - name: Run tests
+      run: ./test
