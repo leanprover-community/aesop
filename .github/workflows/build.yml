@@ -15,7 +15,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install Elan
-      run: curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh
+      run: curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+    - name: Configure
+      run: leanpkg configure
     - name: Build
       run: leanpkg build
     - name: Run tests
