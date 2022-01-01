@@ -715,7 +715,7 @@ def unificationGoalOrigins (g : Goal) : m (PersistentHashMap MVarId RappRef) :=
   | none => return PersistentHashMap.empty
 
 def hasUnificationGoal (g : Goal) : Bool :=
-  return ! g.unificationGoals.isEmpty
+  ! g.unificationGoals.isEmpty
 
 def parentDepth (g : Goal) : m Nat :=
   match g.parent? with

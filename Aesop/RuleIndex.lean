@@ -85,7 +85,7 @@ def applicableRules [Ord α] (ri : RuleIndex α) (goal : MVarId) :
     @[inline]
     insertIndexMatchResults (m : RBMap α (Array IndexMatchLocation) compare)
         (rs : Array (IndexMatchResult α)) :
-        RBMap α (Array IndexMatchLocation) compare := do
+        RBMap α (Array IndexMatchLocation) compare := Id.run do
       let mut result := m
       for r in rs do
         result := result.insertWith r.rule r.matchLocations

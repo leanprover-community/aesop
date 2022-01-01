@@ -10,7 +10,7 @@
 GREEN="\e[0;92m"
 RESET="\e[0m"
 
-leanpkg build
+lake build
 [ "$?" -eq 0 ] || exit 1
 
 if [ -z "$1" ]; then
@@ -23,7 +23,7 @@ failed=0
 
 for file in ${files[@]}; do
   echo -e "$GREEN$file$RESET"
-  env LEAN_PATH="build:tests" lean $file
+  lake env lean $file
   [ "$?" -eq 0 ] || failed=1
 done
 
