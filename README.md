@@ -4,21 +4,23 @@ This is a work-in-progress proof search tactic for Lean 4.
 
 ## Building
 
-With [elan](https://github.com/leanprover/elan) installed, `leanpkg build`
+With [elan](https://github.com/leanprover/elan) installed, `lake build`
 should suffice.
 
 ## Adding Aesop to Your Project
 
 To use Aesop in a Lean 4 project, first add this package as a dependency. In
-your `leanpkg.toml`, add
+your `lakefile.lean`, add
 
-```toml
-[dependencies]
-aesop = { git = "https://github.com/JLimperg/aesop", rev = "<current HEAD commit of this repo>" }
+```lean
+dependencies := #[
+  { name := `aesop
+    src := Source.git "https://github.com/JLimperg/aesop" "<current HEAD commit of this repo>" }
+]
 ```
 
-Now run `leanpkg configure`. Unless you use the exact same Lean 4 nightly as
-this project (see our `leanpkg.toml`), you'll get a warning. If you use a later
+Now run `lake configure`. Unless you use the exact same Lean 4 nightly as
+this project (see our `lean-toolchain`), you'll get a warning. If you use a later
 nightly, you'll probably be fine and Aesop will compile anyway. If not, please
 open an issue and we'll update the tactic.
 
@@ -259,17 +261,16 @@ Clauses may be added to configure the tactic. Currently implemented are:
 To see step-by-step what Aesop is doing, use
 
 ``` lean
-sudo set_option trace.Aesop.Steps true
+set_option trace.aesop.steps true
 ```
 
-The `sudo` is needed because we currently can't register trace options from
-library code. There are also various `trace.Aesop.Steps.*` options which you can
+There are also various `trace.aesop.steps.*` options which you can
 set to `false` to disable certain parts of the output. See `Aesop/Tracing.lean`.
 
 To see the rule set used by a particular tactic invocation, use
 
 ``` lean
-sudo set_option trace.Aesop.RuleSet true
+set_option trace.aesop.ruleSet true
 ```
 
 ## Implementation
