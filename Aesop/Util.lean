@@ -131,7 +131,7 @@ end Lean.MessageData
 namespace Std.HashSet
 
 def insertMany [ForIn Id ρ α] [BEq α] [Hashable α] (s : HashSet α) (as : ρ) :
-    HashSet α := do
+    HashSet α := Id.run do
   let mut s := s
   for a in as do
     s := s.insert a
@@ -151,7 +151,7 @@ instance [BEq α] [Hashable α] : ForIn m (HashSet α) α where
     return s
 
 instance [BEq α] [Hashable α] : BEq (HashSet α) where
-  beq s t := do
+  beq s t := Id.run do
     for x in s do
       unless t.contains x do
         return false
@@ -785,7 +785,7 @@ private def matchUpToIndexSuffix (n : Name) (query : Name) :
       MatchUpToIndexSuffix.noMatch
 
 private def getUnusedUserNameIndex (lctx : LocalContext) (suggestion : Name) :
-    Option Nat := do
+    Option Nat := Id.run do
   let mut minSuffix := none
   for ldecl in lctx do
     match matchUpToIndexSuffix ldecl.userName.eraseMacroScopes suggestion with
