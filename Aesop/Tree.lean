@@ -308,7 +308,18 @@ structure RappData (Goal Rapp : Type) : Type where
   unificationGoalOrigins : UnificationGoalOriginsMap (IO.Ref Rapp)
   appliedRule : RegularRule
   successProbability : Percent
-  deriving Inhabited
+
+instance {Goal Rapp} [Nonempty Goal] :
+    Nonempty (RappData Goal Rapp) :=
+  ⟨{ id := default
+     parent := Classical.ofNonempty
+     children := default
+     depth := default
+     state := default
+     metaState := default
+     unificationGoalOrigins := default
+     appliedRule := default
+     successProbability := default }⟩
 
 mutual
   unsafe inductive GoalUnsafe
@@ -338,10 +349,10 @@ unsafe def goalRappImplUnsafe : GoalRappSpec where
 constant goalRappImpl : GoalRappSpec := {
   Goal := Unit
   Rapp := Unit
-  introGoal := λ _ => arbitrary
-  elimGoal := λ _ => arbitrary
-  introRapp := λ _ => arbitrary
-  elimRapp := λ _ => arbitrary
+  introGoal := λ _ => default
+  elimGoal := λ _ => default
+  introRapp := λ _ => default
+  elimRapp := λ _ => Classical.ofNonempty
 }
 
 def Goal := goalRappImpl.Goal
@@ -366,7 +377,7 @@ def modify (f : GoalData Goal Rapp → GoalData Goal Rapp) (g : Goal) : Goal :=
   mk $ f $ elim g
 
 instance : Inhabited Goal where
-  default := mk arbitrary
+  default := mk default
 
 @[inline]
 def id (g : Goal) : GoalId :=
@@ -532,8 +543,22 @@ def elim : Rapp → RappData Goal Rapp :=
 def modify (f : RappData Goal Rapp → RappData Goal Rapp) (r : Rapp) : Rapp :=
   mk $ f $ elim r
 
-instance : Inhabited Rapp where
-  default := mk arbitrary
+instance : Nonempty Rapp :=
+  ⟨mk Classical.ofNonempty⟩
+
+def default : IO Rapp := do
+  let parent ← IO.mkRef Inhabited.default
+  return mk {
+    id := Inhabited.default
+    parent := parent
+    children := Inhabited.default
+    depth := Inhabited.default
+    state := Inhabited.default
+    metaState := Inhabited.default
+    unificationGoalOrigins := Inhabited.default
+    appliedRule := Inhabited.default
+    successProbability := Inhabited.default
+  }
 
 @[inline]
 def id (r : Rapp) : RappId :=
@@ -740,6 +765,13 @@ def isProvenNoCache (r : Rapp) : m Bool :=
   r.children.allM λ subgoal => return (← subgoal.get).state.isProven
 
 end Rapp
+
+
+def GoalRef.default : IO GoalRef :=
+  IO.mkRef Inhabited.default
+
+def RappRef.default : IO RappRef := do
+  IO.mkRef (← Rapp.default)
 
 
 /-! ## Formatting -/

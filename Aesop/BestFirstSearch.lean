@@ -258,7 +258,7 @@ def runNormRuleTac (bs : BranchState)
   let result ←
     try rule.tac.tac ri
     catch e => throwError
-      "aesop: normalisation rule {rule.name} failed with error:{indentD e.toMessageData}\n{errorContext.get}"
+      "aesop: normalisation rule {rule.name} failed with error:{indentD e.toMessageData}\n{Thunk.get errorContext}"
 
   let postBranchState := bs.update rule result.postBranchState?
   match result.applications with
@@ -270,15 +270,15 @@ def runNormRuleTac (bs : BranchState)
         checkProducedUGoals rule ruleOutput.goals
         for ugoal in ugoals do
           unless ugoalOrigins.contains ugoal do throwError
-            "{Check.rules.name}: normalisation rule {rule.name} introduced a new unification goal. {errorContext.get}"
+            "{Check.rules.name}: normalisation rule {rule.name} introduced a new unification goal. {Thunk.get errorContext}"
         for (ugoal, _) in ugoalOrigins do
           if ← ! previouslyAssignedUgoals.contains ugoal <&&> isExprMVarAssigned ugoal then throwError
-            "{Check.rules.name}: normalisation rule {rule.name} assigned a unification goal. {errorContext.get}"
+            "{Check.rules.name}: normalisation rule {rule.name} assigned a unification goal. {Thunk.get errorContext}"
       return some (g, postBranchState)
     | _ => throwError
-      "aesop: normalisation rule {rule.name} produced more than one subgoal. {errorContext.get}"
+      "aesop: normalisation rule {rule.name} produced more than one subgoal. {Thunk.get errorContext}"
   | _ => throwError
-    "aesop: normalisation rule {rule.name} did not produce exactly one rule application. {errorContext.get}"
+    "aesop: normalisation rule {rule.name} did not produce exactly one rule application. {Thunk.get errorContext}"
   where
     errorContext : Thunk MessageData :=
       m!"It was run on this goal:{indentD $ MessageData.ofGoal ri.goal}"
@@ -396,9 +396,9 @@ def assignedUnificationGoals (parent : GoalRef)
 -- `unificationGoals` must be nonempty
 def leastCommonUnificationGoalOrigin (unificationGoals : UnificationGoals) :
     SearchM RappRef := do
-  if unificationGoals.isEmpty then
-    throwError "aesop/leastCommonUnificationGoalOrigin: internal error: empty unificationGoalOrigins"
-  let mut min := unificationGoals.get! 0 |>.snd.snd
+  let (some firstUnificationGoalOrigin) ← unificationGoals.get? 0
+    | throwError "aesop/leastCommonUnificationGoalOrigin: internal error: empty unificationGoalOrigins"
+  let mut min := firstUnificationGoalOrigin.snd.snd
   if unificationGoals.size = 1 then
     return min
   let mut minId ← (← min.get).id
@@ -437,7 +437,7 @@ def removeUnificationGoalsFromGoal (unificationGoals : UnificationGoals)
   let g ← gref.get
   -- Drop the reference from `g` to make sure that `g.unificationGoals` is not
   -- shared.
-  gref.modify λ g => g.setUnificationGoals arbitrary
+  gref.modify λ g => g.setUnificationGoals default
   let mut ugoals := g.unificationGoals
   for (ugoal, _, _) in unificationGoals do
     ugoals := ugoals.erase ugoal
@@ -534,7 +534,7 @@ def processUnificationGoalAssignment (parent : GoalRef)
   assignUnificationGoalsInRappBranch assignedUGoals oldBranchRoot
   let newUGoals ← removeUnificationGoals assignedUGoals parentUGoalOrigins
   return UGoalAssignmentResult.assigned newUGoals
-    (goalMap.find! (← parent.get).id)
+    (← goalMap.findDM (← parent.get).id GoalRef.default)
 
 inductive RuleResult
 | proven

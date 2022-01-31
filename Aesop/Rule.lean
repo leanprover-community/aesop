@@ -113,7 +113,7 @@ inductive RegularRule' τ
 abbrev RegularRule := RegularRule' RuleTacWithBuilderDescr
 
 instance [Inhabited τ] : Inhabited (RegularRule' τ) where
-  default := RegularRule'.«safe» arbitrary
+  default := RegularRule'.«safe» default
 
 namespace RegularRule'
 
