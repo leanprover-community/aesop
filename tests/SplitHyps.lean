@@ -56,6 +56,12 @@ example {X : Type} {P : X → Prop} (h : ∃ x, P x) : ∃ x, P x := by
   splitHyps
   constructor; all_goals assumption
 
+example {X Y : Type} {P : X → Y → Prop} (h : ∃ x, ∃ y, P x y) :
+    ∃ x, ∃ y, P x y := by
+  splitHyps
+  splitHyps -- TODO splitHyps currently does not split the second ∃
+  constructor; constructor; all_goals assumption
+
 -- Sigma-like types can be split under Π binders as well, except for
 -- Exists. (See note in the splitHyps code for why.) Also, splitting recurses
 -- into nested products/existentials.

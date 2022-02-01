@@ -12,13 +12,32 @@ namespace Aesop.DefaultRules.SplitHyps
 -- We define the `splitHyp` tactic, which splits hypotheses that are products
 -- or existentials. It recurses into nested products, so `A ∧ B ∧ C` is split
 -- into three hypotheses with types `A`, `B` and `C`. It also works under
--- binders, so `h : ∀ x, P x ∧ Q x` is split into `h₁ : ∀ x, P x` and
+-- ∀-binders, so `h : ∀ x, P x ∧ Q x` is split into `h₁ : ∀ x, P x` and
 -- `h₂ : ∀ x, Q x`.
 --
--- Exception: `Exists`, unlike `Sigma` and `PSigma`, cannot be split under
+-- Exception: Unlike `Sigma` and `PSigma`, `Exists` cannot be split under
 -- binders. This is unavoidable: `∀ (x : X), ∃ (y : Y), P y` does not imply
 -- `∃ (f : X → Y), ∀ x, P (f x)` in Lean's logic.
 
+-- TODO The splitHyps tactic currently does not handle dependencies correctly.
+-- E.g. for the goal
+--
+--   h : X × Y
+--   p : P h₁
+--
+-- it produces
+--
+--   h : X × Y
+--   x : X
+--   y : Y
+--   p : P h
+--
+-- instead of
+--
+--   x : X
+--   y : Y
+--   p : P (x, y)
+--
 -- TODO The splitHyps tactic currently does not handle existentials with
 -- products nested in the witness. E.g. the hypothesis
 --
@@ -31,27 +50,60 @@ namespace Aesop.DefaultRules.SplitHyps
 --
 -- when it should really be
 --
---   h₁ : X
---   h₂ : Y
---   h₃ : P (h₁, h₂)
+--   x : X
+--   y : Y
+--   h₂ : P (x, y)
 --
--- To fix this, we should canonicalise such hypotheses before splitting them.
--- The canonicalisation would make sure the witness is not a product by
--- rewriting, e.g.,
+-- To fix this, we should recurse into the witness hypothesis `h₁` (and `h₂`
+-- anyway to support nested existentials). However, due to the previous TODO,
+-- this recursion would currently still not generate the correct goal.
+
+-- Here's a sketch of how the above design could be realised and generalised to
+-- arbitrary structure-like types (while ensuring that the tactic still works
+-- under ∀-binders).
 --
---   ∃ (p : X × Y), P p           ↝ ∃ (x : X) (y : Y), P (x, y)
---   ∃ (p : ∃ (x : X), P x), Q p  ↝ ∃ (x : X) (y : P x), Q (Exists.intro x y)
+-- 1. Start with a goal of the form
 --
--- @[simp]
--- theorem exists_prod {X Y} (P : X × Y → Prop) :
---     (∃ (p : X × Y), P p) ↔ ∃ (x : X) (y : Y), P (x, y) :=
---   Iff.intro
---     (λ ⟨⟨x, y⟩, Pp⟩ => ⟨x, y, Pp⟩)
---     (λ ⟨x, y, Pxy⟩ => ⟨⟨x, y⟩, Pxy⟩)
+--   Γ
+--   h : (a : A) → S (p a)
+--   d : D h
+--   Δ
+--   ⊢ T Γ Δ h d
 --
--- We could also use this implementation strategy for splitting under binders:
--- rewrite `∀ x, P x ∧ Q x` into `(∀ x, P x) ∧ (∀ x, Q x)`. This would reduce
--- the implementation complexity a lot, though at some performance cost.
+-- where `h` is the hypothesis to be split; `S` is an arbitrary structure with a
+-- parameter of type `P`; `p a : P`; `d` is a dependency of `h`; and `Γ` and `Δ`
+-- are arbitrary telescopes of hypotheses (such that `Δ` does not depend on
+-- `h`). The binder `a : A`, the parameter `P` (and `p a : P`) and the
+-- hypothesis `d` stand for telescopes, so there can be multiple (dependent)
+-- binders/terms/hypotheses in their place.
+--
+-- 2. Revert `h` and its dependencies:
+--
+--   Γ
+--   Δ
+--   ⊢ (h : ∀ a : A, S (p a)) → (d : D h) → T Γ Δ h d
+--
+-- Call this goal `G₁`.
+--
+-- 3. Construct the replacement goal
+--
+--   Γ
+--   Δ
+--   ⊢ (f₁ : ∀ a, F₁ (p a)) →
+--     (f₂ : ∀ a, F₂ (p a) f₁) →
+--     ... →
+--     (d : D (λ a : A => { f₁ := f₁ a, f₂ := f₂ a f₁, ... })) →
+--     T (λ a : A => { f₁ := f₁ a, f₂ := f₂ a f₁, ... }) d
+--
+-- where the `fᵢ` are the fields of the structure `S`. Note that the types of
+-- later fields can depend on the values of earlies fields. Call this goal `G₂`.
+--
+-- 4. Prove `G₁` from `G₂` using the following expression:
+--
+--   λ (h : ∀ a, S (p a)) (d : D h) → G₂ (λ a, (h a).f₁) (λ a, (h a).f₂) ... d
+--
+-- 5. Set `G₂` as the current goal, then introduce the new hypotheses.
+
 
 open Expr
 open Lean.Meta
@@ -75,11 +127,11 @@ partial def splitHypCore (goal : MVarId) (originalUserName : Name)
   | app (app (const ``MProd lvls _) leftType _) rightType _ =>
     splitProduct goal (mkConst ``MProd.fst lvls) (mkConst ``MProd.snd lvls)
       leftType rightType
-  | app (app (const ``Sigma lvls _) witnessType _) propertyType _ => do
-    splitExistential goal (mkConst ``Sigma.fst lvls) (mkConst ``Sigma.snd lvls)
+  | app (app (const ``Sigma lvls _) witnessType _) propertyType _ =>
+    splitSigma goal (mkConst ``Sigma.fst lvls) (mkConst ``Sigma.snd lvls)
       witnessType propertyType
-  | app (app (const ``PSigma lvls _) witnessType _) propertyType _ => do
-    splitExistential goal (mkConst ``PSigma.fst lvls) (mkConst ``PSigma.snd lvls)
+  | app (app (const ``PSigma lvls _) witnessType _) propertyType _ =>
+    splitSigma goal (mkConst ``PSigma.fst lvls) (mkConst ``PSigma.snd lvls)
       witnessType propertyType
   | app (app (const ``Exists lvls _) witnessType _) propertyType _ => do
     -- We can't eliminate Exists under binders.
@@ -88,6 +140,7 @@ partial def splitHypCore (goal : MVarId) (originalUserName : Name)
     let #[casesGoal] ← cases goal hyp
       | unreachable!
     pure (casesGoal.fields.map (·.fvarId!), casesGoal.mvarId)
+    -- TODO recurse here
   | _ => pure (#[], goal)
   where
     hypWithBinderFVars : Expr :=
@@ -124,7 +177,7 @@ partial def splitHypCore (goal : MVarId) (originalUserName : Name)
           else (leftHyps ++ rightHyps).push hyp
       return (newHyps, goal)
 
-    splitExistential (oldGoal : MVarId)
+    splitSigma (oldGoal : MVarId)
         (witnessProjection propertyProjection witnessType propertyType : Expr) :
         MetaM (Array FVarId × MVarId) := do
 
@@ -161,8 +214,8 @@ partial def splitHypCore (goal : MVarId) (originalUserName : Name)
         match (← observing? $ clear goal hyp) with
         | none => (goal, false)
         | some goal => (goal, true)
-      let propertyHypTypeWithoutBinders ←
-        headBeta (mkApp propertyType $ mkAppN (mkFVar witnessHyp) binderFVars)
+      let propertyHypTypeWithoutBinders ← headBeta $
+        mkApp propertyType $ mkAppN (mkFVar witnessHyp) binderFVars
       let (newHyps, goal) ←
         splitHypCore goal originalUserName binderFVars propertyHyp
           propertyHypTypeWithoutBinders
