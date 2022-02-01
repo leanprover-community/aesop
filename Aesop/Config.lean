@@ -134,7 +134,7 @@ protected def parse : Syntax → m RuleKind
   | _ => unreachable!
   where
     go {α} (prio : Except String α) (cont : α → RuleKind) : m RuleKind :=
-      ofExcept $ prio.map cont |>.mapError λ e => "aesop : {e}"
+      ofExcept $ prio.map cont |>.mapError λ e => s!"aesop : {e}"
 
 end RuleKind
 
