@@ -831,9 +831,13 @@ partial def searchLoop : SearchM Unit := do
 def search (rs : RuleSet) (options : Aesop.Options) (mainGoal : MVarId) :
     MetaM Unit := do
   let (ctx, state) ← mkInitialContextAndState rs options mainGoal
-  searchLoop.run' ctx state
+  try {
+    searchLoop.run' ctx state
+  } finally {
+    ctx.rootGoal.free
+  }
 
-def searchTactic (rs : RuleSet) (options : Aesop.Options) : TacticM Unit :=
+def searchTactic (rs : RuleSet) (options : Options) : TacticM Unit :=
   liftMetaTactic λ goal => search rs options goal *> pure []
 
 end Aesop

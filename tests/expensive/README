@@ -1,0 +1,5 @@
+Tests in this directory are not run by default (or by CI) because they take a
+long time. You can run them manually by executing the following command in
+the top-level project directory:
+
+    ./test tests/expensive/<file>.lean

@@ -693,6 +693,29 @@ instance : Inhabited RappRef where
   default := RappRef.default
 
 
+/-! ### Freeing Trees -/
+
+-- In Lean 4, cylic structures -- such as our trees with their parent pointers
+-- -- are not freed automatically. This is because the runtime uses reference
+-- counting and a parent node and its child will always have a reference count
+-- of at least 1 since they hold references to each other. So in order to
+-- free a tree, we must break all the cycles.
+
+mutual
+  private partial def freeGoalRef (gref : GoalRef) : IO Unit := do
+    gref.modify λ g => g.setParent none
+    (← gref.get).children.forM freeRappRef
+
+  private partial def freeRappRef (rref : RappRef) : IO Unit := do
+    rref.modify λ r => r.setParent default
+    (← rref.get).children.forM freeGoalRef
+end
+
+def GoalRef.free := freeGoalRef
+
+def RappRef.free := freeRappRef
+
+
 /-! ### Running MetaM Actions in Rapp States -/
 
 -- The following functions let us run MetaM actions in the context of a rapp or
