@@ -163,17 +163,6 @@ instance [BEq α] [Hashable α] : BEq (HashSet α) where
 end Std.HashSet
 
 
-namespace Std.HashMap
-
-def findDM [BEq α] [Hashable α] [Monad m] (map : HashMap α β) (a : α)
-    (mb : m β) : m β := do
-  match map.find? a with
-  | some b => pure b
-  | none => mb
-
-end Std.HashMap
-
-
 namespace Std.PersistentHashSet
 
 @[inline]

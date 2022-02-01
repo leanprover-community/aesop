@@ -238,7 +238,6 @@ structure GoalData (Goal Rapp : Type) : Type where
   failedRapps : Array RegularRule
   deriving Inhabited
 
-
 /--
 At each point during the search, a rapp is in one of these states:
 
@@ -367,6 +366,9 @@ namespace Goal
 @[inline]
 def mk : GoalData Goal Rapp → Goal :=
   goalRappImpl.introGoal
+
+instance : Inhabited Goal where
+  default := Goal.mk default
 
 @[inline]
 def elim : Goal → GoalData Goal Rapp :=
@@ -654,6 +656,43 @@ protected def mkInitial (id : RappId) (parent : IO.Ref Goal) (depth : Nat)
 end Rapp
 
 
+/-! ### Inhabitation -/
+
+-- References such as `GoalRef` and `RappRef` are not `Inhabited` by default.
+-- Indeed the following is a bit iffy because we create global ref cells just to
+-- prove inhabitation. But as long as we only ever use them as a 'proposition'
+-- that will never actually be used, it should be fine. See discussion at
+-- https://github.com/leanprover/lean4/issues/984
+
+initialize GoalRef.default : GoalRef ←
+  IO.mkRef default
+
+instance : Inhabited GoalRef where
+  default := GoalRef.default
+
+instance : Inhabited (RappData Goal Rapp) where
+  default := {
+    id := default
+    parent := default
+    children := default
+    depth := default
+    state := default
+    metaState := default
+    unificationGoalOrigins := default
+    appliedRule := default
+    successProbability := default
+  }
+
+instance : Inhabited Rapp where
+  default := Rapp.mk default
+
+initialize RappRef.default : RappRef ←
+  IO.mkRef default
+
+instance : Inhabited RappRef where
+  default := RappRef.default
+
+
 /-! ### Running MetaM Actions in Rapp States -/
 
 -- The following functions let us run MetaM actions in the context of a rapp or
@@ -765,13 +804,6 @@ def isProvenNoCache (r : Rapp) : m Bool :=
   r.children.allM λ subgoal => return (← subgoal.get).state.isProven
 
 end Rapp
-
-
-def GoalRef.default : IO GoalRef :=
-  IO.mkRef Inhabited.default
-
-def RappRef.default : IO RappRef := do
-  IO.mkRef (← Rapp.default)
 
 
 /-! ## Formatting -/

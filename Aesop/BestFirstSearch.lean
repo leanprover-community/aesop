@@ -396,9 +396,9 @@ def assignedUnificationGoals (parent : GoalRef)
 -- `unificationGoals` must be nonempty
 def leastCommonUnificationGoalOrigin (unificationGoals : UnificationGoals) :
     SearchM RappRef := do
-  let (some firstUnificationGoalOrigin) ← unificationGoals.get? 0
-    | throwError "aesop/leastCommonUnificationGoalOrigin: internal error: empty unificationGoalOrigins"
-  let mut min := firstUnificationGoalOrigin.snd.snd
+  if unificationGoals.isEmpty then
+    throwError "aesop/leastCommonUnificationGoalOrigin: internal error: empty unificationGoalOrigins"
+  let mut min := unificationGoals[0].snd.snd
   if unificationGoals.size = 1 then
     return min
   let mut minId ← (← min.get).id
@@ -534,7 +534,7 @@ def processUnificationGoalAssignment (parent : GoalRef)
   assignUnificationGoalsInRappBranch assignedUGoals oldBranchRoot
   let newUGoals ← removeUnificationGoals assignedUGoals parentUGoalOrigins
   return UGoalAssignmentResult.assigned newUGoals
-    (← goalMap.findDM (← parent.get).id GoalRef.default)
+    (← goalMap.find! (← parent.get).id)
 
 inductive RuleResult
 | proven
