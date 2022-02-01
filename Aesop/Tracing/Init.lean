@@ -44,30 +44,29 @@ initialize steps : TraceOption ←
 
 initialize Init.stepsActiveGoalQueue : TraceOption ←
   registerTraceOption `steps.activeGoalQueue false
-    s!"(aesop) Print the active goal queue after each iteration of the search loop. Has no effect unless trace.aesop.steps is true."
+    "(aesop) Print the active goal queue after each iteration of the search loop. Has no effect unless trace.aesop.steps is true."
 
 initialize Init.stepsBranchStates : TraceOption ←
   registerTraceOption `steps.branchStates false
-    s!"(aesop) Print a rule's branch state before and after the rule is applied. Has no effect unless trace.aesop.steps is true."
+    "(aesop) Print a rule's branch state before and after the rule is applied. Has no effect unless trace.aesop.steps is true."
 
 initialize Init.stepsNormalization : TraceOption ←
   registerTraceOption `steps.normalization false
-    s!"(aesop) Print intermediate goals during normalization. Has no effect unless trace.aesop.steps is true."
+    "(aesop) Print intermediate goals during normalization. Has no effect unless trace.aesop.steps is true."
 
 initialize Init.stepsRuleFailures : TraceOption ←
   registerTraceOption `steps.ruleFailures false
-    s!"(aesop) When a rule fails, print the error message. Has no effect unless trace.aesop.steps is true."
+    "(aesop) When a rule fails, print the error message. Has no effect unless trace.aesop.steps is true."
 
 initialize Init.stepsRuleSelection : TraceOption ←
   registerTraceOption `steps.ruleSelection false
-    s!"(aesop) Print the rules selected for each goal. Has no effect unless trace.aesop.steps is true."
+    "(aesop) Print the rules selected for each goal. Has no effect unless trace.aesop.steps is true."
 
 initialize Init.stepsTree : TraceOption ←
   registerTraceOption `steps.tree false
-    s!"(aesop) Print the search tree after each iteration of the search loop. Has no effect unless trace.aesop.steps is true."
+    "(aesop) Print the search tree after each iteration of the search loop. Has no effect unless trace.aesop.steps is true."
 
 end TraceOption
-
 
 
 -- A TraceModifier determines *how* a certain piece of information is printed.
