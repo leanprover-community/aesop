@@ -39,6 +39,7 @@ syntax &"forward" : aesop_builder
 syntax &"safe_default" : aesop_builder
 syntax &"unsafe_default" : aesop_builder
 syntax &"norm_default" : aesop_builder
+syntax &"cases" : aesop_builder
 
 declare_syntax_cat aesop_builder_clause (behavior := symbol)
 
@@ -244,6 +245,7 @@ inductive RegularBuilder
   | apply
   | tactic (opts : TacticBuilderOptions)
   | constructors
+  | cases
   | forward (opts : ForwardBuilderOptions)
   | unsafeDefault
   | safeDefault
@@ -255,6 +257,7 @@ protected def name : RegularBuilder → String
   | apply => "apply"
   | tactic .. => "tactic"
   | constructors => "constructors"
+  | cases => "cases"
   | forward .. => "forward"
   | unsafeDefault => "unsafe_default"
   | safeDefault => "safe_default"
@@ -264,6 +267,7 @@ def toGlobalRuleBuilder : RegularBuilder → GlobalRuleBuilder RegularRuleBuilde
   | forward opts => GlobalRuleBuilder.forward opts
   | tactic opts => GlobalRuleBuilder.tactic opts
   | constructors => GlobalRuleBuilder.constructors
+  | cases => GlobalRuleBuilder.cases
   | unsafeDefault => GlobalRuleBuilder.unsafeRuleDefault
   | safeDefault => GlobalRuleBuilder.safeRuleDefault
 
@@ -271,6 +275,7 @@ def toRuleBuilder : RegularBuilder → RuleBuilder RegularRuleBuilderResult
   | apply => RuleBuilder.apply
   | tactic opts => RuleBuilder.tactic opts
   | constructors => RuleBuilder.constructors
+  | cases => RuleBuilder.cases
   | forward opts => RuleBuilder.forward opts
   | unsafeDefault => RuleBuilder.unsafeRuleDefault
   | safeDefault => RuleBuilder.safeRuleDefault
@@ -306,6 +311,9 @@ protected def parse (builder : Syntax) (clauses : Array Syntax) : m Builder := d
   | `(aesop_builder|constructors) => do
     checkNoBuilderOptions constructors.name opts
     return regular constructors
+  | `(aesop_builder|cases) => do
+    checkNoBuilderOptions cases.name opts
+    return regular cases
   | `(aesop_builder|forward) => do
     let opts ← forwardBuilderOptionsOfBuilderOptions opts
     return regular $ forward opts

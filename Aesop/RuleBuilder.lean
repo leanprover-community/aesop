@@ -77,13 +77,24 @@ A `GlobalRuleBuilder` takes the name of a global constant and produces a
 abbrev GlobalRuleBuilder α := Name → MetaM α
 
 /--
-A `GlobalRuleBuilder` takes the `userName` of a hypothesis and produces a
+A `LocalRuleBuilder` takes the `userName` of a hypothesis and produces a
 `RegularRuleBuilderResult` or `NormRuleBuilderResult`. It operates on the given
 goal and may change it.
 -/
 abbrev LocalRuleBuilder α := Name → MVarId → MetaM (MVarId × α)
 
+/--
+A `RuleBuilder` is either a `GobalRuleBuilder` or a `LocalRuleBuilder`
+-/
 abbrev RuleBuilder α := RuleIdent → MVarId → MetaM (MVarId × α)
+
+
+structure TacticBuilderOptions where
+  usesBranchState : Bool
+  deriving Inhabited
+
+def TacticBuilderOptions.default : TacticBuilderOptions where
+  usesBranchState := true
 
 
 namespace GlobalRuleBuilder
@@ -111,19 +122,6 @@ def apply : GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
     mayUseBranchState := false
   }]
 
-end GlobalRuleBuilder
-
-
-structure TacticBuilderOptions where
-  usesBranchState : Bool
-  deriving Inhabited
-
-def TacticBuilderOptions.default : TacticBuilderOptions where
-  usesBranchState := true
-
-
-namespace GlobalRuleBuilder
-
 def tactic (opts : TacticBuilderOptions) :
     GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
   return #[{
@@ -133,23 +131,41 @@ def tactic (opts : TacticBuilderOptions) :
     mayUseBranchState := opts.usesBranchState
   }]
 
-def constructors : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
+private def checkConstIsInductive (builderName : Name) (decl : Name) :
+    MetaM InductiveVal := do
   let (some info) ← getConst? decl
-    | throwError "aesop: constructors builder: unknown constant '{decl}'"
+    | throwError "aesop: {builderName} builder: unknown constant '{decl}'"
   let (ConstantInfo.inductInfo info) ← pure info
-    | throwError "aesop: constructors builder: expected '{decl}' to be an inductive type"
+    | throwError "aesop: {builderName} builder: expected '{decl}' to be an inductive type"
+  return info
+
+def constructors : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
+  let info ← checkConstIsInductive builderName decl
   info.ctors.toArray.mapM processConstructor
   where
+    builderName : Name :=
+      `constructors
+
     processConstructor (c : Name) : MetaM SingleRegularRuleBuilderResult := do
       let cinfo ← getConstInfo c <|>
         throwError "aesop: internal error in constructors builder: nonexistant constructor {c}"
       let imode ← IndexingMode.targetMatchingConclusion cinfo.type
       return {
-        builderName := `constructors
+        builderName := builderName
         tac := ← GlobalRuleTacBuilder.apply c
         indexingMode := imode
         mayUseBranchState := false
       }
+
+def cases : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
+  let builderName := `cases
+  let _ ← checkConstIsInductive builderName decl
+  return #[{
+    builderName := builderName
+    tac := ← GlobalRuleTacBuilder.cases decl
+    indexingMode := IndexingMode.unindexed
+    mayUseBranchState := false
+  }]
 
 end GlobalRuleBuilder
 
@@ -276,6 +292,9 @@ def tactic (opts : TacticBuilderOptions) :
 
 def constructors : RuleBuilder RegularRuleBuilderResult :=
   ofGlobalRuleBuilder "constructors" $ GlobalRuleBuilder.constructors
+
+def cases : RuleBuilder RegularRuleBuilderResult :=
+  ofGlobalRuleBuilder "cases" $ GlobalRuleBuilder.cases
 
 def unsafeRuleDefault : RuleBuilder RegularRuleBuilderResult :=
   ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.unsafeRuleDefault

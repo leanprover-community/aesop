@@ -419,6 +419,37 @@ protected def toMessageData (s : SimpLemmas) : MessageData :=
 
 end SimpLemmas
 
+-- Runs `tac` on `goal`, then on the subgoals created by `tac`, etc. Returns the
+-- goals to which `tac` does not apply any more. If `tac` applies infinitely
+-- often, `saturate'` diverges. If `tac` does not apply to `goal`, a singleton
+-- arry containing `goal` is returned.
+partial def saturate' (goal : MVarId)
+    (tac : MVarId → MetaM (Option (Array MVarId))) :
+    MetaM (Array MVarId) :=
+  return (← go goal |>.run #[]).snd
+  where
+    go (goal : MVarId) : StateRefT (Array MVarId) MetaM Unit :=
+      withIncRecDepth do
+        match ← tac goal with
+        | none => modify λ s => s.push goal
+        | some mvarIds => mvarIds.forM go
+
+-- Runs `tac` on `goal`, then on the subgoals created by `tac`, etc. Returns the
+-- goals to which `tac` does not apply any more. If `tac` applies infinitely
+-- often, `saturate1` diverges. If `tac` does not apply to `goal`, `none` is
+-- returned.
+partial def saturate1 (goal : MVarId)
+    (tac : MVarId → MetaM (Option (Array MVarId))) :
+    MetaM (Option (Array MVarId)) := do
+  match ← tac goal with
+  | none => return none
+  | some goals => return some (← goals.forM go |>.run #[]).snd
+  where
+    go (goal : MVarId) : StateRefT (Array MVarId) MetaM Unit := do
+      match ← tac goal with
+      | none => modify λ s => s.push goal
+      | some goals => goals.forM go
+
 -- TODO The following defs are copied from Lean.Meta.Tactic.Simp.SimpLemmas
 
 private partial def shouldPreprocess (type : Expr) : MetaM Bool :=

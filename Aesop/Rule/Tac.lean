@@ -38,8 +38,8 @@ structure RuleApplication where
 
 /--
 The result of a rule tactic is a list of rule applications and optionally an
-updated branch state. If the branch state is not `none`, it is copied to all
-child goals of the rule applications.
+updated branch state. If the branch state is not `none`, the input branch state
+is copied to all child goals of the rule applications.
 -/
 structure RuleTacOutput where
   applications : Array RuleApplication
@@ -102,6 +102,24 @@ def applyFVar (userName : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input =>
     let goals ← apply input.goal (mkFVar decl.fvarId)
     return { goals := goals.toArray.map λ g => (g, none) }
   -- TODO optimise dependent goal analysis
+
+def cases (decl : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input => do
+  let goals? ← saturate1 input.goal λ goal => do
+    let (some hyp) ← findFirstApplicableHyp goal
+      | return none
+    let newGoals ← Meta.cases goal hyp
+    return newGoals.map (·.mvarId)
+  match goals? with
+  | none => throwError "No hypothesis of type {decl} found"
+  | some goals => return { goals := goals.map λ g => (g, none) }
+  where
+    findFirstApplicableHyp (goal : MVarId) : MetaM (Option FVarId) :=
+      withMVarContext goal do
+        let ctx ← getLCtx
+        return ctx.findDecl? λ ldecl =>
+          if ldecl.type.isAppOf decl then some ldecl.fvarId else none
+          -- Note: We currently check for occurrences of `decl` structurally,
+          -- not up to WHNF.
 
 private partial def makeForwardHyps (e : Expr) (immediate : Array Name) : MetaM (Array Expr) := do
   let type ← inferType e
@@ -204,6 +222,7 @@ builders.
 inductive GlobalRuleTacBuilderDescr
   | apply (decl : Name)
   | forward (decl : Name) (immediate : Array Name)
+  | cases (decl : Name)
   | tacticM (decl : Name)
   | ruleTac (decl : Name)
   | simpleRuleTac (decl : Name)
@@ -234,6 +253,18 @@ A `RuleTacBuilder` constructs a global or local rule. Builders for local rules
 may depend on and modify the goal we are trying to solve.
 -/
 abbrev RuleTacBuilder := MVarId → MetaM (MVarId × RuleTacWithBuilderDescr)
+
+
+-- TODO doc
+private def checkImmediateNames (e : Expr) (immediate : Array Name) :
+    MetaM Unit := do
+  let type ← inferType e
+  forallTelescope type λ args _ => do
+    let argNames ← args.mapM λ fvar =>
+      return (← getFVarLocalDecl fvar).userName
+    for iName in immediate do
+      unless argNames.contains iName do
+        throwError "aesop: while registering '{e}' as a forward rule: function does not have an argument named '{iName}'"
 
 
 namespace GlobalRuleTacBuilder
@@ -296,21 +327,11 @@ def apply (decl : Name) : GlobalRuleTacBuilder :=
     descr := GlobalRuleTacBuilderDescr.apply decl
   }
 
-end GlobalRuleTacBuilder
-
-
-private def checkImmediateNames (e : Expr) (immediate : Array Name) :
-    MetaM Unit := do
-  let type ← inferType e
-  forallTelescope type λ args _ => do
-    let argNames ← args.mapM λ fvar =>
-      return (← getFVarLocalDecl fvar).userName
-    for iName in immediate do
-      unless argNames.contains iName do
-        throwError "aesop: while registering '{e}' as a forward rule: function does not have an argument named '{iName}'"
-
-
-namespace GlobalRuleTacBuilder
+def cases (decl : Name) : GlobalRuleTacBuilder :=
+  return {
+    tac := RuleTac.cases decl
+    descr := GlobalRuleTacBuilderDescr.cases decl
+  }
 
 def forward (decl : Name) (immediate : Array Name) :
     GlobalRuleTacBuilder := do
@@ -328,6 +349,7 @@ namespace GlobalRuleTacBuilderDescr
 def toRuleTacBuilder : GlobalRuleTacBuilderDescr → GlobalRuleTacBuilder
   | apply decl => GlobalRuleTacBuilder.apply decl
   | forward decl immediate => GlobalRuleTacBuilder.forward decl immediate
+  | cases decl => GlobalRuleTacBuilder.cases decl
   | tacticM decl => GlobalRuleTacBuilder.tacticM decl
   | simpleRuleTac decl => GlobalRuleTacBuilder.simpleRuleTac decl
   | ruleTac decl => GlobalRuleTacBuilder.ruleTac decl
