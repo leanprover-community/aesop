@@ -85,14 +85,14 @@ def addArray (rs : RuleSet) (ra : Array RuleSetMember) : RuleSet :=
 
 def applicableNormalizationRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult NormRule)) :=
-  rs.normRules.applicableRules goal
+  rs.normRules.applicableRules Rule'.compareByPriorityThenName goal
 
 def applicableUnsafeRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult UnsafeRule)) :=
-  rs.unsafeRules.applicableRules goal
+  rs.unsafeRules.applicableRules Rule'.compareByPriorityThenName goal
 
 def applicableSafeRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult SafeRule)) :=
-  rs.safeRules.applicableRules goal
+  rs.safeRules.applicableRules Rule'.compareByPriorityThenName goal
 
 end Aesop.RuleSet

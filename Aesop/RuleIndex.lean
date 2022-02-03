@@ -66,15 +66,17 @@ def applicableByHypRules (ri : RuleIndex α) (goal : MVarId) :
       rulesList := rulesList.push rules
     return rulesList
 
+-- Returns the rules in the order given by `cmp` (which can be different from
+-- the order given by `Ord α`).
 @[specialize]
-def applicableRules [Ord α] (ri : RuleIndex α) (goal : MVarId) :
+def applicableRules (cmp : α → α → Ordering) (ri : RuleIndex α) (goal : MVarId) :
     MetaM (Array (IndexMatchResult α)) := do
   instantiateMVarsInGoal goal
   let byTarget ← applicableByTargetRules ri goal
   let unindexed : Array (IndexMatchResult α) := ri.unindexed.map λ r =>
     { rule := r, matchLocations := #[IndexMatchLocation.none] }
   let byHyp ← applicableByHypRules ri goal
-  let mut result := mkRBMap α (Array IndexMatchLocation) compare
+  let mut result := mkRBMap α (Array IndexMatchLocation) cmp
   result := insertIndexMatchResults result byTarget
   result := insertIndexMatchResults result unindexed
   for rs in byHyp do
@@ -83,9 +85,9 @@ def applicableRules [Ord α] (ri : RuleIndex α) (goal : MVarId) :
     { rule := rule, matchLocations := locs }
   where
     @[inline]
-    insertIndexMatchResults (m : RBMap α (Array IndexMatchLocation) compare)
+    insertIndexMatchResults (m : RBMap α (Array IndexMatchLocation) cmp)
         (rs : Array (IndexMatchResult α)) :
-        RBMap α (Array IndexMatchLocation) compare := Id.run do
+        RBMap α (Array IndexMatchLocation) cmp := Id.run do
       let mut result := m
       for r in rs do
         result := result.insertWith r.rule r.matchLocations

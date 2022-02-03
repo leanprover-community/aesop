@@ -22,19 +22,28 @@ structure Rule' (α τ : Type) where
 
 namespace Rule'
 
+-- Rules are uniquely identified by their name throughout Aesop. The following
+-- instances reflect this.
+
 instance : BEq (Rule' α τ) where
   beq r s := r.name == s.name
 
-instance [Ord α] : Ord (Rule' α τ) :=
-  Ord.lexicographic
-    ⟨λ r s => compare r.extra s.extra⟩
-    ⟨λ r s => r.name.quickCmp s.name⟩
+instance : Ord (Rule' α τ) where
+  compare r s := r.name.quickCmp s.name
 
-instance [Ord α] : LT (Rule' α τ) :=
-  ltOfOrd
+instance : Hashable (Rule' α τ) where
+  hash r := hash r.name
 
-instance [Ord α] : LE (Rule' α τ) :=
-  leOfOrd
+def compareByPriority [Ord α] (r s : Rule' α τ) : Ordering :=
+  compare r.extra s.extra
+
+def compareByName (r s : Rule' α τ) : Ordering :=
+  r.name.cmp s.name
+
+def compareByPriorityThenName [Ord α] (r s : Rule' α τ) : Ordering :=
+  match compareByPriority r s with
+  | Ordering.eq => compareByName r s
+  | ord => ord
 
 @[inline]
 def map (f : α → β) (g : τ → ι) (r : Rule' α τ) : Rule' β ι :=
