@@ -9,6 +9,17 @@ import Std
 
 open Std (HashSet)
 
+
+def BEq.ofOrd (ord : Ord α) : BEq α where
+  beq x y :=
+    match compare x y with
+    | Ordering.eq => true
+    | _ => false
+
+instance (priority := low) [ord : Ord α] : BEq α :=
+  BEq.ofOrd ord
+
+
 namespace Option
 
 def mergeLeftBiased : Option α → Option α → Option α
