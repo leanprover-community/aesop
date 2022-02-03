@@ -547,12 +547,7 @@ protected def buildLocalRule (goal : MVarId) (id : RuleIdent) :
 
 end RuleConfig
 
-structure AesopAttr where
-  ext : ScopedEnvExtension RuleSetMemberDescr RuleSetMember RuleSet
-  impl : AttributeImpl
-  deriving Inhabited
-
-initialize attr : AesopAttr ← do
+initialize extension : ScopedEnvExtension RuleSetMemberDescr RuleSetMember RuleSet ← do
   let ext ← registerScopedEnvExtension {
     name := `aesop
     mkInitial := return {}
@@ -573,10 +568,10 @@ initialize attr : AesopAttr ← do
   }
   -- Despite the name, this also works for non-builtin attributes.
   registerBuiltinAttribute impl
-  pure { ext := ext, impl := impl }
+  return ext
 
 def getAttrRuleSet : CoreM RuleSet := do
-  attr.ext.getState (← getEnv)
+  extension.getState (← getEnv)
 
 def getRuleSet : MetaM RuleSet := do
   let defaultSimpLemmas ← getSimpLemmas
