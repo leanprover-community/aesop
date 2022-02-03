@@ -58,14 +58,22 @@ instance : ToMessageData RuleSet where
       "Normalisation simp lemmas:" ++ rs.normSimpLemmas.toMessageData
     ]
 
-def empty : RuleSet where
-  normRules := RuleIndex.empty
-  normSimpLemmas := {}
-  unsafeRules := RuleIndex.empty
-  safeRules := RuleIndex.empty
+instance : EmptyCollection RuleSet where
+  emptyCollection := {
+    normRules := {}
+    normSimpLemmas := {}
+    unsafeRules := {}
+    safeRules := {}
+  }
 
-instance : EmptyCollection RuleSet :=
-  ⟨empty⟩
+def merge (rs₁ rs₂ : RuleSet) : RuleSet where
+  normRules := rs₁.normRules ++ rs₂.normRules
+  normSimpLemmas := rs₁.normSimpLemmas.merge rs₂.normSimpLemmas
+  unsafeRules := rs₁.unsafeRules ++ rs₂.unsafeRules
+  safeRules := rs₁.safeRules ++ rs₂.safeRules
+
+instance : Append RuleSet :=
+  ⟨merge⟩
 
 open RuleSetMember' in
 def add (rs : RuleSet) : RuleSetMember → RuleSet

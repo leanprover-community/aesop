@@ -344,6 +344,10 @@ instance [BEq α] [Hashable α] : ForIn m (HashSet α) α where
           s := s'
     return s
 
+@[inline]
+def merge [BEq α] [Hashable α] (s t : HashSet α) : HashSet α :=
+  if s.size < t.size then t.insertMany s else s.insertMany t
+
 instance [BEq α] [Hashable α] : BEq (HashSet α) where
   beq s t := Id.run do
     for x in s do

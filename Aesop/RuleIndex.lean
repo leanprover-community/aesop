@@ -8,39 +8,48 @@ import Aesop.RuleIndex.Basic
 
 open Lean
 open Lean.Meta
-open Std (RBMap mkRBMap)
+open Std (RBMap mkRBMap HashSet)
 
 namespace Aesop
 
-structure RuleIndex (α : Type) where
+structure RuleIndex (α : Type) [Ord α] [Hashable α] where
   byTarget : DiscrTree α
   byHyp : DiscrTree α
-  unindexed : Array α
+  unindexed : HashSet α
   deriving Inhabited
 
 namespace RuleIndex
+
+variable {α} [Ord α] [Hashable α]
 
 open MessageData in
 instance [ToMessageData α] : ToMessageData (RuleIndex α) where
   toMessageData ri := node #[
     "indexed by target:" ++ node (ri.byTarget.values.map toMessageData),
     "indexed by hypotheses:" ++ node (ri.byHyp.values.map toMessageData),
-    "unindexed:" ++ node (ri.unindexed.map toMessageData)
+    "unindexed:" ++ node (ri.unindexed.toArray.map toMessageData)
     ]
 
-def empty : RuleIndex α where
-  byTarget := DiscrTree.empty
-  byHyp := DiscrTree.empty
-  unindexed := #[]
+instance : EmptyCollection (RuleIndex α) where
+  emptyCollection := {
+    byTarget := {}
+    byHyp := {}
+    unindexed := {}
+  }
 
-instance : EmptyCollection (RuleIndex α) :=
-  ⟨empty⟩
+def merge (ri₁ ri₂ : RuleIndex α) : RuleIndex α where
+  byTarget := ri₁.byTarget.merge ri₂.byTarget
+  byHyp := ri₁.byHyp.merge ri₂.byHyp
+  unindexed := ri₁.unindexed.merge ri₂.unindexed
+
+instance : Append (RuleIndex α) :=
+  ⟨merge⟩
 
 @[specialize]
-def add [BEq α] (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
+def add (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
     RuleIndex α :=
   match imode with
-  | IndexingMode.unindexed => { ri with unindexed := ri.unindexed.push r }
+  | IndexingMode.unindexed => { ri with unindexed := ri.unindexed.insert r }
   | IndexingMode.target keys =>
     { ri with byTarget := ri.byTarget.insertCore keys r }
   | IndexingMode.hyps keys =>
@@ -73,8 +82,9 @@ def applicableRules (cmp : α → α → Ordering) (ri : RuleIndex α) (goal : M
     MetaM (Array (IndexMatchResult α)) := do
   instantiateMVarsInGoal goal
   let byTarget ← applicableByTargetRules ri goal
-  let unindexed : Array (IndexMatchResult α) := ri.unindexed.map λ r =>
-    { rule := r, matchLocations := #[IndexMatchLocation.none] }
+  let unindexed : Array (IndexMatchResult α) :=
+    ri.unindexed.fold (init := Array.mkEmpty ri.unindexed.size) λ ary r =>
+      ary.push { rule := r, matchLocations := #[IndexMatchLocation.none] }
   let byHyp ← applicableByHypRules ri goal
   let mut result := mkRBMap α (Array IndexMatchLocation) cmp
   result := insertIndexMatchResults result byTarget
