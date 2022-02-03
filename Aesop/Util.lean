@@ -22,6 +22,84 @@ def mergeRightBiased : Option α → Option α → Option α
 end Option
 
 
+inductive Tri {α} (lt eq gt : α → α → Prop) (x y : α)
+| lt (h : lt x y)
+| eq (h : eq x y)
+| gt (h : gt x y)
+
+abbrev Trichotomous {α} (lt eq gt : α → α → Prop) :=
+  ∀ x y, Tri lt eq gt x y
+
+
+namespace Nat
+
+theorem trichotomous_lt_eq_gt : @Trichotomous Nat (· < ·) (· = ·) (· > ·)
+| zero, zero => Tri.eq rfl
+| zero, succ m => Tri.lt $ zero_lt_succ _
+| succ n, zero => Tri.gt $ zero_lt_succ _
+| succ n, succ m =>
+  match trichotomous_lt_eq_gt n m with
+  | Tri.lt p => Tri.lt $ succ_lt_succ p
+  | Tri.eq p => Tri.eq $ congrArg succ p
+  | Tri.gt p => Tri.gt $ succ_lt_succ p
+
+theorem lt_of_not_ge {n m : Nat} (h : ¬ n ≥ m) : n < m :=
+  match trichotomous_lt_eq_gt n m with
+  | Tri.lt p => p
+  | Tri.eq p => False.elim $ h $ Nat.le_of_eq p.symm
+  | Tri.gt p => False.elim $ h $ Nat.le_of_lt p
+
+theorem sub_add_le_sub (n m k : Nat) : n - (m + k) ≤ n - m :=
+  match k with
+  | zero => Nat.le_of_eq rfl
+  | succ k => Nat.le_trans (pred_le _) (sub_add_le_sub _ _ _)
+
+theorem ne_zero_of_zero_lt {n : Nat} (h : 0 < n) : n ≠ 0 := λ contra =>
+  match n with
+  | zero => Nat.lt_irrefl _ h
+  | succ n => by cases contra
+
+theorem zero_sub_eq_zero (n : Nat) : 0 - n = 0 :=
+  match n with
+  | zero => rfl
+  | succ n => show pred (0 - n) = 0 by rw [zero_sub_eq_zero]; rfl
+
+theorem pred_sub (n m : Nat) : pred (n - m) = pred n - m :=
+  match n, m with
+  | zero, zero => rfl
+  | zero, succ m =>
+    show pred (0 - succ m) = 0 - succ m by
+    rw [zero_sub_eq_zero]; rfl
+  | succ n, zero => rfl
+  | succ n, succ m => by
+    show pred (pred (succ n - m)) = pred (pred (succ n) - m)
+    rw [pred_sub]
+
+theorem lt_pred_of_succ_lt {n m : Nat} (h : succ n < m) : n < pred m :=
+  match h with
+  | le.refl => Nat.lt_succ_self _
+  | @le.step _ x h₂ => Nat.lt_trans (Nat.lt_succ_self _) h₂
+
+theorem zero_lt_sub {n m : Nat} (h : m < n) : 0 < n - m :=
+  match m with
+  | zero => h
+  | succ m => by
+    show 0 < pred (n - m)
+    rw [pred_sub]
+    exact zero_lt_sub $ lt_pred_of_succ_lt h
+
+theorem sub_add_lt_sub {n m k : Nat} (h₁ : m + k ≤ n) (h₂ : k ≠ 0) :
+    n - (m + k) < n - m :=
+  match k with
+  | zero => h₂ rfl |>.elim
+  | succ k =>
+    Nat.lt_of_lt_of_le
+      (pred_lt $ ne_zero_of_zero_lt $ zero_lt_sub $ lt_of_succ_le h₁)
+      (sub_add_le_sub _ _ _)
+
+end Nat
+
+
 namespace String
 
 def joinSep (sep : String)  : List String → String
@@ -47,7 +125,112 @@ instance : Inhabited (Subarray α) where
     h₂ := Nat.le_refl 0
   }
 
+def contains [BEq α] (as : Subarray α) (a : α) : Bool :=
+  as.any (· == a)
+
 end Subarray
+
+
+namespace Array
+
+-- Merge arrays `xs` and `ys`. If `xs` and `ys` are sorted according to the
+-- comparison function `le`, the result is as well. Duplicate elements are
+-- preserved.
+def mergeSortedPreservingDuplicates (le : α → α → Bool) (xs ys : Array α) :
+    Array α :=
+  let acc := Array.mkEmpty (xs.size + ys.size)
+  go acc 0 0
+  where
+    go (acc : Array α) (i j : Nat) : Array α :=
+      if hi : i ≥ xs.size then
+        acc ++ ys[j:]
+      else if hj : j ≥ ys.size then
+        acc ++ xs[i:]
+      else
+        have hi : i < xs.size :=
+          Nat.lt_of_not_ge hi
+        have hj : j < ys.size :=
+          Nat.lt_of_not_ge hj
+        have hij : i + j < xs.size + ys.size :=
+          Nat.add_lt_add hi hj
+        let x := xs.get ⟨i, hi⟩
+        let y := ys.get ⟨j, hj⟩
+        if le x y then
+          have : xs.size + ys.size - (i + 1 + j) < xs.size + ys.size - (i + j) := by
+            rw [Nat.add_assoc i 1 j, Nat.add_comm 1 j, ← Nat.add_assoc]
+            exact Nat.sub_succ_lt_self _ _ hij
+          go (acc.push x) (i + 1) j
+        else
+          have : xs.size + ys.size - (i + j + 1) < xs.size + ys.size - (i + j) :=
+            Nat.sub_succ_lt_self _ _ hij
+          go (acc.push y) i (j + 1)
+    termination_by _ => xs.size + ys.size - (i + j)
+
+-- Merge arrays `xs` and `ys`. If `xs` and `ys` are sorted according to
+-- `compare`, the result is as well. Equal elements (meaning `x ∈ xs` and `y ∈
+-- ys` such that `compare x y = eq`) are merged using `merge`. If `xs` and `ys`
+-- do not contain duplicates according to `compare`, then neither does the
+-- result.
+def mergeSortedMergingDuplicates [Ord α]  (xs ys : Array α)
+    (merge : α → α → α) : Array α :=
+  let acc := Array.mkEmpty (xs.size + ys.size)
+  go acc 0 0
+  where
+    go (acc : Array α) (i j : Nat) : Array α :=
+      if hi : i ≥ xs.size then
+        acc ++ ys[j:]
+      else if hj : j ≥ ys.size then
+        acc ++ xs[i:]
+      else
+        have hi : i < xs.size :=
+          Nat.lt_of_not_ge hi
+        have hj : j < ys.size :=
+          Nat.lt_of_not_ge hj
+        have hij : i + j < xs.size + ys.size :=
+          Nat.add_lt_add hi hj
+        let x := xs.get ⟨i, hi⟩
+        let y := ys.get ⟨j, hj⟩
+        match compare x y with
+        | Ordering.lt =>
+          have : xs.size + ys.size - (i + 1 + j) < xs.size + ys.size - (i + j) := by
+            rw [Nat.add_assoc i 1 j, Nat.add_comm 1 j, ← Nat.add_assoc]
+            exact Nat.sub_succ_lt_self _ _ hij
+          go (acc.push x) (i + 1) j
+        | Ordering.gt =>
+          have : xs.size + ys.size - (i + j + 1) < xs.size + ys.size - (i + j) :=
+            Nat.sub_succ_lt_self _ _ hij
+          go (acc.push y) i (j + 1)
+        | Ordering.eq =>
+          have : xs.size + ys.size - (i + 1 + (j + 1)) < xs.size + ys.size - (i + j) := by -- fun :)
+            rw [Nat.add_assoc i 1 (j + 1), Nat.add_comm 1 (j + 1)]
+            show size xs + size ys - (i + (j + 2)) < size xs + size ys - (i + j)
+            rw [← Nat.add_assoc]
+            apply Nat.sub_add_lt_sub _ (by intro contra; cases contra)
+            show i + j + (1 + 1) ≤ xs.size + ys.size
+            rw [Nat.add_assoc i j (1 + 1), ← Nat.add_assoc j 1 1,
+                Nat.add_comm (j + 1) 1, ← Nat.add_assoc i 1 (j + 1)]
+            apply Nat.add_le_add hi hj
+          go (acc.push (merge x y)) (i + 1) (j + 1)
+    termination_by _ => xs.size + ys.size - (i + j)
+
+def mergeSortedFilteringDuplicates [Ord α] (xs ys : Array α) : Array α :=
+  mergeSortedMergingDuplicates xs ys λ x y => x
+
+-- Merge `xs` and `ys`, which do not need to be sorted. Elements which occur in
+-- both `xs` and `ys` are only added once. If `xs` and `ys` do not contain
+-- duplicates, then neither does the result. O(n*m)!
+def mergeUnsortedFilteringDuplicates [BEq α] (xs ys : Array α) : Array α :=
+  -- Ideally we would check whether `xs` or `ys` have spare capacity, to prevent
+  -- copying if possible. But Lean arrays don't expose their capacity.
+  if xs.size < ys.size then go ys xs else go xs ys
+  where
+    @[inline]
+    go (xs ys : Array α) :=
+      let xsSize := xs.size
+      ys.foldl (init := xs) λ xs y =>
+        if xs[:xsSize].contains y then xs else xs.push y
+
+end Array
 
 
 namespace Ord
@@ -345,8 +528,28 @@ instance [αeq_dec : DecidableEq α] {r : α → α → Prop} [r_dec : Decidable
 end Prod.Lex
 
 
-namespace Lean.Meta.DiscrTree.Trie
+namespace Lean.Meta.DiscrTree
 
+namespace Key
+
+-- TODO could be more efficient.
+def cmp (k l : Key) : Ordering :=
+  if lt k l then
+    Ordering.lt
+  else if lt l k then
+    Ordering.gt
+  else
+    Ordering.eq
+
+instance : Ord Key where
+  compare := cmp
+
+end Key
+
+namespace Trie
+
+-- This is just a partial function, but Lean doesn't realise that its type is
+-- inhabited.
 unsafe def foldMUnsafe [Monad m] (initialKeys : Array Key)
     (f : σ → Array Key → α → m σ) (init : σ) : Trie α → m σ
   | Trie.node vs children => do
@@ -364,6 +567,19 @@ def fold (initialKeys : Array Key) (f : σ → Array Key → α → σ) (init : 
     (t : Trie α) : σ :=
   Id.run $ t.foldM initialKeys (init := init) λ s k a => return f s k a
 
+partial def merge : Trie α → Trie α → Trie α
+  | node vs₁ cs₁, node vs₂ cs₂ =>
+    node (mergeValues vs₁ vs₂) (mergeChildren cs₁ cs₂)
+  where
+    mergeValues (vs₁ vs₂ : Array α) : Array α :=
+      if vs₁.size > vs₂.size then vs₁ ++ vs₂ else vs₂ ++ vs₁
+
+    mergeChildren (cs₁ cs₂ : Array (Key × Trie α)) : Array (Key × Trie α) :=
+      have : Ord (Key × Trie α) :=
+        ⟨λ (k₁, _) (k₂, _) => compare k₁ k₂⟩
+      Array.mergeSortedMergingDuplicates cs₁ cs₂
+        (λ (k₁, t₁) (k₂, t₂) => (k₁, merge t₁ t₂))
+
 end Trie
 
 @[inline]
@@ -375,13 +591,9 @@ def foldM [Monad m] (f : σ → Array Key → α → m σ) (init : σ) (t : Disc
 def fold (f : σ → Array Key → α → σ) (init : σ) (t : DiscrTree α) : σ :=
   Id.run $ t.foldM (init := init) λ s keys a => return f s keys a
 
--- TODO inefficient since it doesn't take advantage of the Trie structure at all
 @[inline]
 def merge [BEq α] (t u : DiscrTree α) : DiscrTree α :=
-  if t.root.size < u.root.size then loop t u else loop u t
-  where
-    @[inline]
-    loop t u := t.fold (init := u) DiscrTree.insertCore
+  { root := t.root.merge u.root λ k trie₁ trie₂ => trie₁.merge trie₂ }
 
 def values (t : DiscrTree α) : Array α :=
   t.fold (init := #[]) λ as _ a => as.push a
