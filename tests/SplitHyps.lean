@@ -6,7 +6,7 @@ Authors: Jannis Limperg
 import Lean
 import Aesop
 
-open Aesop.DefaultRules.SplitHyps (splitHyps)
+open Aesop.BuiltinRules.SplitHyps (splitHyps)
 open Lean.Elab.Tactic
 
 syntax (name := splitHyps) "splitHyps" : tactic

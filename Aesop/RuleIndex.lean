@@ -55,10 +55,26 @@ def add (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
   | IndexingMode.hyps keys =>
     { ri with byHyp := ri.byHyp.insertCore keys r }
 
+def foldM [Monad m] (ri : RuleIndex α) (f : σ → α → m σ) (init : σ) : m σ :=
+  match ri with
+  | { byHyp, byTarget, unindexed} => do
+    let mut s := init
+    s ← byHyp.foldValuesM (init := s) f
+    s ← byTarget.foldValuesM (init := s) f
+    unindexed.foldM (init := s) f
+
+@[inline]
+def fold (ri : RuleIndex α) (f : σ → α → σ) (init : σ) : σ :=
+  Id.run $ ri.foldM (init := init) f
+
+def size : RuleIndex α → Nat
+  | { byHyp, byTarget, unindexed } =>
+    byHyp.size + byTarget.size + unindexed.size
+
 @[specialize]
 def applicableByTargetRules (ri : RuleIndex α) (goal : MVarId) :
     MetaM (Array (IndexMatchResult α)) := do
-  let rs ← ri.byTarget.getMatch (← getMVarType goal)
+  let rs ← ri.byTarget.getMatch (← getMVarType goal) -- TODO `getUnify` instead of `getMatch`?
   return rs.map λ r =>
     { rule := r, matchLocations := #[IndexMatchLocation.target] }
 
@@ -82,11 +98,11 @@ def applicableRules (cmp : α → α → Ordering) (ri : RuleIndex α) (goal : M
     MetaM (Array (IndexMatchResult α)) := do
   instantiateMVarsInGoal goal
   let byTarget ← applicableByTargetRules ri goal
+  let byHyp ← applicableByHypRules ri goal
   let unindexed : Array (IndexMatchResult α) :=
     ri.unindexed.fold (init := Array.mkEmpty ri.unindexed.size) λ ary r =>
       ary.push { rule := r, matchLocations := #[IndexMatchLocation.none] }
-  let byHyp ← applicableByHypRules ri goal
-  let mut result := mkRBMap α (Array IndexMatchLocation) cmp
+  let mut result := mkRBMap α (Array IndexMatchLocation) cmp -- TODO avoid RBMap
   result := insertIndexMatchResults result byTarget
   result := insertIndexMatchResults result unindexed
   for rs in byHyp do

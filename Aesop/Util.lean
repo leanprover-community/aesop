@@ -384,6 +384,12 @@ end Std.PersistentHashSet
 
 namespace Std.PersistentHashMap
 
+def insertWith [BEq α] [Hashable α] (m : PersistentHashMap α β) (k : α)
+    (v : Thunk β) (f : β → β) : PersistentHashMap α β :=
+  match m.find? k with
+  | some v' => m.insert k (f v')
+  | none => m.insert k v.get
+
 @[inline]
 def merge [BEq α] [Hashable α] (m n : PersistentHashMap α β) (f : α → β → β → β) :
     PersistentHashMap α β :=
@@ -391,9 +397,7 @@ def merge [BEq α] [Hashable α] (m n : PersistentHashMap α β) (f : α → β 
   where
     @[inline]
     loop m n f := m.foldl (init := n) λ map k v =>
-      match map.find? k with
-      | some v' => map.insert k (f k v v')
-      | none => map.insert k v
+      map.insertWith k v λ v' => f k v v'
 
 mutual
   @[specialize]
@@ -582,6 +586,27 @@ def fold (initialKeys : Array Key) (f : σ → Array Key → α → σ) (init : 
     (t : Trie α) : σ :=
   Id.run $ t.foldM initialKeys (init := init) λ s k a => return f s k a
 
+-- This is just a partial function, but Lean doesn't realise that its type is
+-- inhabited.
+unsafe def foldValuesMUnsafe [Monad m] (f : σ → α → m σ) (init : σ) :
+    Trie α → m σ
+| node vs children => do
+  let s ← vs.foldlM (init := init) f
+  children.foldlM (init := s) λ s (k, c) => c.foldValuesMUnsafe (init := s) f
+
+@[implementedBy foldValuesMUnsafe]
+constant foldValuesM [Monad m] (f : σ → α → m σ) (init : σ) (t : Trie α) :
+    m σ :=
+  pure init
+
+@[inline]
+def foldValues (f : σ → α → σ) (init : σ) (t : Trie α) : σ :=
+  Id.run $ t.foldValuesM (init := init) f
+
+partial def size : Trie α → Nat
+  | Trie.node vs children =>
+    children.foldl (init := vs.size) λ n (k, c) => n + size c
+
 partial def merge : Trie α → Trie α → Trie α
   | node vs₁ cs₁, node vs₂ cs₂ =>
     node (mergeValues vs₁ vs₂) (mergeChildren cs₁ cs₂)
@@ -607,14 +632,25 @@ def fold (f : σ → Array Key → α → σ) (init : σ) (t : DiscrTree α) : �
   Id.run $ t.foldM (init := init) λ s keys a => return f s keys a
 
 @[inline]
-def merge [BEq α] (t u : DiscrTree α) : DiscrTree α :=
-  { root := t.root.merge u.root λ k trie₁ trie₂ => trie₁.merge trie₂ }
+def foldValuesM [Monad m] (f : σ → α → m σ) (init : σ) (t : DiscrTree α) : m σ :=
+  t.root.foldlM (init := init) λ s _ t => t.foldValuesM (init := s) f
+
+@[inline]
+def foldValues (f : σ → α → σ) (init : σ) (t : DiscrTree α) : σ :=
+  Id.run $ t.foldValuesM (init := init) f
 
 def values (t : DiscrTree α) : Array α :=
-  t.fold (init := #[]) λ as _ a => as.push a
+  t.foldValues (init := #[]) λ as a => as.push a
 
 def toArray (t : DiscrTree α) : Array (Array Key × α) :=
   t.fold (init := #[]) λ as keys a => as.push (keys, a)
+
+def size (t : DiscrTree α) : Nat :=
+  t.root.foldl (init := 0) λ n k t => n + t.size
+
+@[inline]
+def merge [BEq α] (t u : DiscrTree α) : DiscrTree α :=
+  { root := t.root.merge u.root λ k trie₁ trie₂ => trie₁.merge trie₂ }
 
 end DiscrTree
 

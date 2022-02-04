@@ -4,9 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Rule.Tac
+import Aesop.Config
 
-namespace Aesop.DefaultRules
+namespace Aesop.BuiltinRules
 
 open Lean
 open Lean.Meta
@@ -17,6 +17,7 @@ def applyHyp (hyp : FVarId) (input : RuleTacInput) : MetaM RuleApplication := do
   output.toRuleApplication
   -- TODO optimise ugoal analysis
 
+@[aesop unsafe 75% (builder tactic uses_no_branch_state) (rulesets [builtin])]
 def applyHyps : RuleTac := λ input =>
   withMVarContext input.goal do
     let lctx ← getLCtx
@@ -34,4 +35,4 @@ def applyHyps : RuleTac := λ input =>
       postBranchState? := none
     }
 
-end Aesop.DefaultRules
+end Aesop.BuiltinRules

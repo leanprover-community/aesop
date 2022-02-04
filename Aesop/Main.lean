@@ -5,8 +5,8 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.BestFirstSearch
+import Aesop.BuiltinRules -- ensures that the builtin rules are registered
 import Aesop.Config
-import Aesop.DefaultRules
 import Lean
 
 open Lean.Elab.Tactic
@@ -17,8 +17,9 @@ namespace Aesop
 def evalAesop : Tactic := λ stx =>
   withMainContext do
     let config ← Config.TacticConfig.parse stx
-    let rs ← Config.getRuleSet
-    let rs := rs.addArray (← defaultRules)
+    let rs ←
+      Config.getAttributeRuleSet (includeDefaultSimpLemmas := true) -- TODO
+        config.enabledRuleSets
     let additionalRuleSetMembers ← liftMetaTacticAux λ goal => do
       let (goal, rs) ← config.buildAdditionalRules goal
       pure (rs, [goal])

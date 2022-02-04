@@ -15,7 +15,14 @@ open Std (HashSet)
 
 namespace Aesop
 
-namespace Parser.Attribute
+namespace Parser.Command
+
+syntax (name := declareAesopRuleSets) "declare_aesop_rule_sets" "[" ident,+,? "]" : command
+
+end Command
+
+
+namespace Attribute
 
 declare_syntax_cat aesop_prio
 
@@ -47,10 +54,11 @@ syntax &"uses_branch_state" : aesop_builder_clause
 syntax &"uses_no_branch_state" : aesop_builder_clause
 syntax "(" &"immediate" ident+ ")" : aesop_builder_clause
 
-declare_syntax_cat aesop_clause
+declare_syntax_cat aesop_clause (behavior := symbol)
 
 syntax "(" &"builder" aesop_builder aesop_builder_clause* ")" : aesop_clause
 syntax "(" &"options" term ")" : aesop_clause
+syntax "(" &"rulesets" "[" ident,+,? "]" ")" : aesop_clause
 
 syntax (name := aesop) &"aesop" aesop_kind aesop_clause* : attr
 
@@ -354,13 +362,18 @@ end Builder
 
 inductive Clause
   | builder (c : Builder)
+  | ruleSets (rss : Array RuleSetName)
   deriving Inhabited
 
 namespace Clause
 
-protected def parse : Syntax → m Clause
+protected def parse (isLocalRule : Bool) : Syntax → m Clause
   | `(aesop_clause|(builder $b:aesop_builder $cs:aesop_builder_clause*)) =>
     builder <$> Builder.parse b cs
+  | `(aesop_clause|(rulesets [ $rss:ident,* ])) => do
+    if isLocalRule then
+      throwError "aesop: 'rulesets' clause not allowed for local rules"
+    ruleSets $ (rss : Array Syntax).map (·.getId)
   | _ => unreachable!
 
 end Clause
@@ -368,26 +381,41 @@ end Clause
 
 structure Clauses where
   builder : Option Builder := none
+  ruleSets : Option (Array RuleSetName) := none
 
 namespace Clauses
 
 def add (cs : Clauses) : Clause → Clauses
   | Clause.builder b =>
     { cs with builder := cs.builder.mergeRightBiased (some b) }
+  | Clause.ruleSets newRss =>
+    let rss :=
+      match cs.ruleSets with
+      | none => newRss
+      | some oldRss =>
+        newRss.foldl (init := oldRss) λ rss rsName =>
+          if rss.contains rsName then rss else rss.push rsName
+    { cs with ruleSets := some rss }
 
 def ofClauseArray (cs : Array Clause) : Clauses :=
   cs.foldl add {}
+
+def ruleSets' (cs : Clauses) : Array RuleSetName :=
+  cs.ruleSets.getD #[defaultRuleSetName]
 
 end Clauses
 
 
 structure NormRuleClauses where
   builder : Builder
+  ruleSets : Array RuleSetName
+  deriving Inhabited
 
 namespace NormRuleClauses
 
 def ofClauses (cs : Clauses) : NormRuleClauses where
   builder := cs.builder.getD Builder.normDefault
+  ruleSets := cs.ruleSets'
 
 end NormRuleClauses
 
@@ -402,10 +430,10 @@ private def normRuleBuilderResultToRuleSetMembers (penalty : Int)
       tac := res.tac
     }
   | NormRuleBuilderResult.simpEntries entries =>
-    #[RuleSetMember'.normSimpEntries entries]
+    entries.map RuleSetMember'.normSimpEntry
 
 def buildGlobalNormRule (penalty : Int) (clauses : NormRuleClauses)
-    (decl : Name) : MetaM (Array RuleSetMember) :=
+    (decl : Name) : MetaM (Array RuleSetMember) := do
   normRuleBuilderResultToRuleSetMembers penalty (RuleIdent.const decl) <$>
     clauses.builder.toGlobalRuleBuilder decl
 
@@ -418,6 +446,7 @@ def buildLocalNormRule (goal : MVarId) (penalty : Int)
 
 structure SafeRuleClauses where
   builder : RegularBuilder
+  ruleSets : Array RuleSetName
   deriving Inhabited
 
 namespace SafeRuleClauses
@@ -428,7 +457,10 @@ def ofClauses (cs : Clauses) : m SafeRuleClauses := do
     | some (Builder.regular b) => pure b
     | some b => errInvalidBuilder b
     | none => pure RegularBuilder.safeDefault
-  return { builder := builder }
+  return {
+    builder := builder
+    ruleSets := cs.ruleSets'
+  }
   where
     errInvalidBuilder {α} (b : Builder) : m α :=
       throwError "aesop: {b.name} builder cannot be used with safe rules"
@@ -461,6 +493,7 @@ def buildLocalSafeRule (goal : MVarId) (penalty : Option Int)
 
 structure UnsafeRuleClauses where
   builder : RegularBuilder
+  ruleSets : Array RuleSetName
   deriving Inhabited
 
 namespace UnsafeRuleClauses
@@ -471,7 +504,10 @@ def ofClauses (cs : Clauses) : m UnsafeRuleClauses := do
     | some (Builder.regular b) => pure b
     | some b => errInvalidBuilder b
     | none => pure RegularBuilder.unsafeDefault
-  return { builder := builder }
+  return {
+    builder := builder
+    ruleSets := cs.ruleSets'
+  }
   where
     errInvalidBuilder {α} (b : Builder) : m α :=
       throwError "aesop: {b.name} builder cannot be used with unsafe rules"
@@ -524,10 +560,10 @@ protected def ofKindAndClauses (kind : RuleKind) (clauses : Array Clause) :
   | RuleKind.unsafe successProbability =>
     «unsafe» successProbability <$> UnsafeRuleClauses.ofClauses clauses
 
-protected def parse : Syntax → m RuleConfig
+protected def parse (isLocalRule : Bool) : Syntax → m RuleConfig
   | `(attr|aesop $kind:aesop_kind $[$clauses:aesop_clause]*) => do
     let kind ← RuleKind.parse kind
-    let clauses ← clauses.mapM Clause.parse
+    let clauses ← clauses.mapM (Clause.parse isLocalRule)
     RuleConfig.ofKindAndClauses kind clauses
   | _ => unreachable!
 
@@ -545,24 +581,48 @@ protected def buildLocalRule (goal : MVarId) (id : RuleIdent) :
   | «unsafe» successProbability clauses =>
     buildLocalUnsafeRule goal successProbability clauses id
 
+protected def ruleSets : RuleConfig → Array RuleSetName
+  | norm _ clauses => clauses.ruleSets
+  | safe _ clauses => clauses.ruleSets
+  | «unsafe» _ clauses => clauses.ruleSets
+
 end RuleConfig
 
-initialize extension : ScopedEnvExtension RuleSetMemberDescr RuleSetMember RuleSet ← do
-  let ext ← registerScopedEnvExtension {
+
+-- TODO how to query the extension in the parsing function used in the
+-- extension?
+
+initialize extension :
+    PersistentEnvExtension
+      (RuleSetName × RuleSetMemberDescr)
+      (RuleSetName × RuleSetMember)
+      RuleSets ← do
+  let ext ← registerPersistentEnvExtension {
     name := `aesop
     mkInitial := return {}
-    ofOLeanEntry := λ rs r => runMetaMAsImportM r.ofDescr
-    toOLeanEntry := λ r => r.toDescr.getD
-      (panic! "aesop attribute extension: trying to serialise a rule set member without a description")
-    addEntry := λ rs r => rs.add r
+    addImportedFn := λ rss => do
+      let mut result := {}
+      for rs in rss do
+        for (rsName, rDescr) in rs do
+          result := result.add rsName (← runMetaMAsImportM rDescr.ofDescr)
+      return result
+    addEntryFn := λ rss (rsName, r) => rss.add rsName r
+    exportEntriesFn := λ rss => rss.toDescrArray!
   }
   let impl : AttributeImpl := {
     name := `aesop
     descr := "Register a declaration as an Aesop rule."
     add := λ decl stx attrKind => do
-      let config ← RuleConfig.parse stx
+      let config ← RuleConfig.parse (isLocalRule := false) stx
       let rules ← runMetaMAsCoreM $ config.buildGlobalRule decl
-      rules.forM λ rule => ext.add rule attrKind
+      let ruleSets := config.ruleSets
+      ruleSets.forM λ rsName => do
+        if ! (ext.getState (← getEnv)).contains rsName then
+          throwError "aesop: no such rule set: {rsName}\n  (Use 'declare_aesop_rule_set' to declare rule sets.)"
+      rules.forM λ rule =>
+        ruleSets.forM λ rsName => do
+          let env ← ext.addEntry (← getEnv) (rsName, rule)
+          setEnv env
     erase := λ _ =>
       throwError "aesop attribute currently cannot be removed"
   }
@@ -570,13 +630,46 @@ initialize extension : ScopedEnvExtension RuleSetMemberDescr RuleSetMember RuleS
   registerBuiltinAttribute impl
   return ext
 
-def getAttrRuleSet : CoreM RuleSet := do
+def getAttributeRuleSets [MonadEnv m] : m RuleSets := do
   extension.getState (← getEnv)
 
-def getRuleSet : MetaM RuleSet := do
-  let defaultSimpLemmas ← getSimpLemmas
-  let rs ← getAttrRuleSet
-  return { rs with normSimpLemmas := defaultSimpLemmas.merge rs.normSimpLemmas }
+def modifyAttributeRuleSets [MonadEnv m] (f : RuleSets → m RuleSets) : m Unit := do
+  let env ← getEnv
+  let rss ← extension.getState env
+  let rss ← f rss
+  let env ← extension.setState env rss
+  setEnv env
+
+def getAttributeRuleSet (includeDefaultSimpLemmas : Bool)
+    (rsNames : Array RuleSetName) : CoreM RuleSet := do
+  let rss ← getAttributeRuleSets
+  let mut result := rss.makeMergedRuleSet rsNames
+  if includeDefaultSimpLemmas then
+    let defaultSimpLemmas ← getSimpLemmas
+    result :=
+      { result with
+        normSimpLemmas := defaultSimpLemmas.merge result.normSimpLemmas }
+  return result
+
+def isRuleSetDeclared [MonadEnv m] (rsName : RuleSetName) : m Bool := do
+  let rss ← getAttributeRuleSets
+  return rss.contains rsName
+
+def declareRuleSet [MonadEnv m] (rsName : RuleSetName) : m Unit := do
+  if rsName == defaultRuleSetName then
+    throwError "aesop: rule set name '{rsName}' is reserved for the default rule set"
+  let rss ← getAttributeRuleSets
+  if rss.contains rsName then
+    throwError "aesop: rule set '{rsName}' already declared"
+  let env ← extension.setState (← getEnv) $ rss.addEmptyRuleSet rsName
+  setEnv env
+
+open Lean.Elab.Command in
+@[commandElab Parser.Command.declareAesopRuleSets]
+def elabDeclareAesopRuleSets : CommandElab
+  | `(declare_aesop_rule_sets [ $rsNames:ident,* ]) =>
+    (rsNames : Array Syntax).forM λ rsName => declareRuleSet rsName.getId
+  | _ => unreachable!
 
 end Config
 
@@ -591,10 +684,16 @@ declare_syntax_cat aesop_tactic_clause
 
 syntax ruleList := "[" aesop_rule,+,? "]"
 
+declare_syntax_cat aesop_rule_set_spec
+
+syntax "-" ident : aesop_rule_set_spec
+syntax ident : aesop_rule_set_spec
+
 syntax "(" &"unsafe" ruleList ")" : aesop_tactic_clause
 syntax "(" &"safe"   ruleList ")" : aesop_tactic_clause
 syntax "(" &"norm"   ruleList ")" : aesop_tactic_clause
 syntax "(" &"options" term ")" : aesop_tactic_clause
+syntax "(" &"rulesets" "[" aesop_rule_set_spec,+,? "]" ")" : aesop_tactic_clause
 
 syntax (name := aesop) &"aesop " (aesop_tactic_clause)* : tactic
 
@@ -617,7 +716,7 @@ protected def parse (prioParser : Option Syntax → Except String α)
       match prioParser prio with
       | Except.ok p => p
       | Except.error e => throwError "aesop: at rule {i}: {e}"
-    let clauses ← clauses.mapM Clause.parse
+    let clauses ← clauses.mapM (Clause.parse (isLocalRule := true))
     let config ← RuleConfig.ofKindAndClauses (ruleKind prio) clauses
     return { ruleIdent := (← RuleIdent.ofName i.getId), config := config }
   | _ => unreachable!
@@ -628,9 +727,28 @@ protected def build (goal : MVarId) (r : AdditionalRule) :
 
 end AdditionalRule
 
+inductive RuleSetSpec
+  | enable (name : RuleSetName)
+  | disable (name : RuleSetName)
+  deriving Inhabited
+
+namespace RuleSetSpec
+
+def parse : Syntax → RuleSetSpec
+  | `(aesop_rule_set_spec| - $r:ident) => disable r.getId
+  | `(aesop_rule_set_spec|   $r:ident) => enable r.getId
+  | _ => unreachable!
+
+def name : RuleSetSpec → RuleSetName
+  | disable n => n
+  | enable  n => n
+
+end RuleSetSpec
+
 inductive TacticClause
   | additionalRules (rs : Array AdditionalRule)
   | options (opts : Aesop.Options)
+  | ruleSets (rsSpecs : Array RuleSetSpec)
 
 namespace TacticClause
 
@@ -647,6 +765,13 @@ def parse : Syntax → TermElabM TacticClause
   | `(aesop_tactic_clause|(options $t:term)) => do
     let e ← elabTerm t (some (mkConst ``Aesop.Options))
     return options (← evalOptionsExpr e)
+  | `(aesop_tactic_clause|(rulesets [$rsspecs:aesop_rule_set_spec,*])) => do
+    let rss ← getAttributeRuleSets
+    ruleSets <$> (rsspecs : Array Syntax).mapM λ stx => do
+      let spec := RuleSetSpec.parse stx
+      if ! (← isRuleSetDeclared spec.name) then
+        throwError "aesop: no such rule set: {spec.name}"
+      return spec
   | _ => unreachable!
 
 end TacticClause
@@ -655,6 +780,7 @@ end TacticClause
 structure TacticConfig where
   additionalRules : Array AdditionalRule := #[]
   options : Aesop.Options := {}
+  enabledRuleSets : Array RuleSetName := defaultEnabledRuleSets
   deriving Inhabited
 
 namespace TacticConfig
@@ -664,6 +790,15 @@ def addTacticClause (conf : TacticConfig) : TacticClause → TacticConfig
     { conf with additionalRules := conf.additionalRules ++ rs }
   | TacticClause.options opts =>
     { conf with options := opts }
+  | TacticClause.ruleSets rsSpecs =>
+    let rss :=
+      rsSpecs.foldl (init := conf.enabledRuleSets) λ rss spec =>
+        match spec with
+        | RuleSetSpec.enable rsName =>
+          if rss.contains rsName then rss else rss.push rsName
+        | RuleSetSpec.disable rsName =>
+          rss.filter (· != rsName)
+    { conf with enabledRuleSets := rss }
 
 def ofTacticClauses (clauses : Array TacticClause) : TacticConfig :=
   clauses.foldl (init := {}) addTacticClause

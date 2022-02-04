@@ -4,12 +4,12 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Rule.Tac
+import Aesop.Config
 
 open Lean
 open Lean.Meta
 
-namespace Aesop.DefaultRules
+namespace Aesop.BuiltinRules
 
 def findLocalDeclWithMVarFreeType? (goal : MVarId) (type : Expr) :
     MetaM (Option FVarId) :=
@@ -24,15 +24,16 @@ def findLocalDeclWithMVarFreeType? (goal : MVarId) (type : Expr) :
         else
           return none
 
+@[aesop safe -50 (builder tactic uses_no_branch_state) (rulesets [builtin])]
 def safeAssumption : RuleTac := λ { goal, .. } =>
   withMVarContext goal do
-    checkNotAssigned goal `Aesop.DefaultRules.assumption
+    checkNotAssigned goal `Aesop.BuiltinRules.safeAssumption
     let tgt ← instantiateMVarsInMVarType goal
     if tgt.hasMVar then
-      throwTacticEx `Aesop.DefaultRules.safeAssumption goal "target contains metavariables"
+      throwTacticEx `Aesop.BuiltinRules.safeAssumption goal "target contains metavariables"
     let hyp? ← findLocalDeclWithMVarFreeType? goal tgt
     match hyp? with
-    | none => throwTacticEx `Aesop.DefaultRules.safeAsumption goal "no matching assumption found"
+    | none => throwTacticEx `Aesop.BuiltinRules.safeAsumption goal "no matching assumption found"
     | some hyp => do
       assignExprMVar goal (mkFVar hyp)
       let postState ← saveState
@@ -45,4 +46,4 @@ def safeAssumption : RuleTac := λ { goal, .. } =>
         postBranchState? := none
       }
 
-end Aesop.DefaultRules
+end Aesop.BuiltinRules

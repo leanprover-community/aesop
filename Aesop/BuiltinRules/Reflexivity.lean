@@ -4,20 +4,21 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Rule.Tac
+import Aesop.Config
 
 open Lean
 open Lean.Meta
 open Lean.Elab
 open Lean.Elab.Tactic
 
-namespace Aesop.DefaultRules
+namespace Aesop.BuiltinRules
 
+@[aesop safe -49 (builder tactic uses_no_branch_state) (rulesets [builtin])]
 def safeReflexivity : RuleTac := λ { goal, .. } => do
   withMVarContext goal do
     let tgt ← instantiateMVarsInMVarType goal
     if tgt.hasMVar then
-      throwTacticEx `Aesop.DefaultRules.safeReflexivity goal "target contains metavariables"
+      throwTacticEx `Aesop.BuiltinRules.safeReflexivity goal "target contains metavariables"
     let [] ← runTacticMAsMetaM (do evalTactic (← `(rfl))) goal
       | throwError "aesop: internal error: safeReflexivity: rfl did not close the goal"
     let postState ← saveState
@@ -29,4 +30,4 @@ def safeReflexivity : RuleTac := λ { goal, .. } => do
       postBranchState? := none
     }
 
-end Aesop.DefaultRules
+end Aesop.BuiltinRules

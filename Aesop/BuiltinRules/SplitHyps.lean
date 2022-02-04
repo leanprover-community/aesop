@@ -3,11 +3,11 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-import Aesop.Rule.Tac
+import Aesop.Config
 
 open Lean
 
-namespace Aesop.DefaultRules.SplitHyps
+namespace Aesop.BuiltinRules.SplitHyps
 
 -- We define the `splitHyp` tactic, which splits hypotheses that are products
 -- or existentials. It recurses into nested products, so `A ∧ B ∧ C` is split
@@ -224,13 +224,13 @@ partial def splitHypCore (goal : MVarId) (originalUserName : Name)
       return (newHyps, goal)
 
 def splitHyp (goal : MVarId) (hyp : FVarId) : MetaM (Array FVarId × MVarId) := do
-  checkNotAssigned goal `Aesop.DefaultRules.SplitHyps.splitHyp
+  checkNotAssigned goal `Aesop.BuiltinRules.SplitHyps.splitHyp
   withMVarContext goal do
     let decl ← getLocalDecl hyp
     splitHypCore goal decl.userName #[] hyp decl.type
 
 def splitHyps (goal : MVarId) : MetaM (Array FVarId × MVarId) := do
-  checkNotAssigned goal `Aesop.DefaultRules.SplitHyps.splitHyps
+  checkNotAssigned goal `Aesop.BuiltinRules.SplitHyps.splitHyps
   let lctx := (← getMVarDecl goal).lctx
   let mut goal := goal
   let mut newHypsList := Array.mkEmpty lctx.decls.size
@@ -246,7 +246,8 @@ def splitHyps (goal : MVarId) : MetaM (Array FVarId × MVarId) := do
 
 end SplitHyps
 
+@[aesop norm 0 (builder tactic uses_no_branch_state) (rulesets [builtin])]
 def splitHyps : SimpleRuleTac := λ input =>
   return { goals := #[((← SplitHyps.splitHyps input.goal).snd, none)] }
 
-end Aesop.DefaultRules
+end Aesop.BuiltinRules
