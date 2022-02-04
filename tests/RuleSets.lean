@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 declare_aesop_rule_sets [A, B, C, D]
 
 @[aesop safe (rulesets [A])]

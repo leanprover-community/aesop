@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 inductive Even : Nat → Type
 | zero : Even 0
 | plusTwo : Even n → Even (n + 2)

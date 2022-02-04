@@ -12,6 +12,8 @@ open Lean.Meta
 open Lean.Elab.Tactic
 open Aesop.RuleTac (applyForwardRule)
 
+set_option aesop.check.all true
+
 /-! # Unit tests for the MetaM tactic that implements forward rules -/
 
 syntax (name := forward) &"forward" ident "[" ident* "]" : tactic
