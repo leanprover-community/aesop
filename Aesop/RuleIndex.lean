@@ -92,7 +92,8 @@ def applicableByHypRules (ri : RuleIndex α) (goal : MVarId) :
     return rulesList
 
 -- Returns the rules in the order given by `cmp` (which can be different from
--- the order given by `Ord α`).
+-- the order given by `Ord α`). `cmp` must return `Ordering.eq` only for rules
+-- which are really equal.
 @[specialize]
 def applicableRules (cmp : α → α → Ordering) (ri : RuleIndex α) (goal : MVarId) :
     MetaM (Array (IndexMatchResult α)) := do

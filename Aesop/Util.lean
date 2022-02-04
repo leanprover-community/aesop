@@ -244,6 +244,18 @@ def mergeUnsortedFilteringDuplicates [BEq α] (xs ys : Array α) : Array α :=
 end Array
 
 
+namespace IO
+
+-- Returns elapsed time in milliseconds.
+def time [Monad m] [MonadLiftT BaseIO m] (x : m α) : m (α × Nat) := do
+  let start ← monoMsNow
+  let a ← x
+  let stop ← monoMsNow
+  return (a, stop - start)
+
+end IO
+
+
 namespace Ord
 
 def lexicographic (o₁ : Ord α) (o₂ : Ord α) : Ord α where
