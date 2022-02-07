@@ -108,8 +108,8 @@ def applicableRules (cmp : α → α → Ordering) (ri : RuleIndex α) (goal : M
   result := insertIndexMatchResults result unindexed
   for rs in byHyp do
     result := insertIndexMatchResults result rs
-  return result.fold (init := #[]) λ rs rule locs => rs.push
-    { rule := rule, matchLocations := locs }
+  return result.fold (init := Array.mkEmpty result.size) λ rs rule locs =>
+    rs.push { rule := rule, matchLocations := locs }
   where
     @[inline]
     insertIndexMatchResults (m : RBMap α (Array IndexMatchLocation) cmp)
