@@ -7,7 +7,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Lean
 import Std
 
-open Std (HashSet)
+open Std (HashSet PHashSet)
 
 
 def BEq.ofOrd (ord : Ord α) : BEq α where
@@ -683,17 +683,34 @@ end DiscrTree
 
 namespace SimpLemmas
 
-def merge (s t : SimpLemmas) : SimpLemmas where
-  pre := s.pre.merge t.pre
-  post := s.post.merge t.post
-  lemmaNames := s.lemmaNames.merge t.lemmaNames
-  toUnfold := s.toUnfold.merge t.toUnfold
-  erased := s.erased.merge t.erased
-
 def addSimpEntry (s : SimpLemmas) : SimpEntry → SimpLemmas
   | SimpEntry.lemma l => addSimpLemmaEntry s l
   | SimpEntry.toUnfold d => s.addDeclToUnfoldCore d
   | SimpEntry.toUnfoldThms n thms => s.registerDeclToUnfoldThms n thms
+
+def merge (s t : SimpLemmas) : SimpLemmas := {
+    pre := s.pre.merge t.pre
+    post := s.post.merge t.post
+    lemmaNames := s.lemmaNames.merge t.lemmaNames
+    toUnfold := s.toUnfold.merge t.toUnfold
+    toUnfoldThms := s.toUnfoldThms.merge t.toUnfoldThms
+      (λ decl thms₁ thms₂ => thms₁)
+      -- We can ignore collisions here because `thms₁` and `thms₂` should be
+      -- identical.
+    erased := mkErased t s $ mkErased s t {}
+  }
+  where
+    -- Adds the erased lemmas from `s` to `init`, excluding those lemmas which
+    -- occur in `t`.
+    mkErased (s t : SimpLemmas) (init : PHashSet Name) : PHashSet Name :=
+      s.erased.fold (init := init) λ x decl =>
+        -- I think the following check suffices to ensure that `decl` does not
+        -- occur in `t`. If `decl` is an unfold theorem (in the sense of
+        -- `toUnfoldThms`), then it occurs also in `t.lemmaNames`.
+        if t.lemmaNames.contains decl || t.toUnfold.contains decl then
+          x
+        else
+          x.insert decl
 
 open MessageData in
 protected def toMessageData (s : SimpLemmas) : MessageData :=
@@ -1072,14 +1089,7 @@ def parseIndexSuffix (s : Substring) : Option Nat :=
 end Substring
 
 
-namespace Lean
-
-namespace Name
-
-end Name
-
-
-namespace LocalContext
+namespace Lean.LocalContext
 
 private inductive MatchUpToIndexSuffix
 | exactMatch
