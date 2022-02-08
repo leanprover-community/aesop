@@ -11,7 +11,7 @@ open Std (PersistentHashMap)
 
 namespace Aesop
 
-def BranchState := PersistentHashMap Name RuleBranchState
+def BranchState := PersistentHashMap RuleName RuleBranchState
 
 namespace BranchState
 

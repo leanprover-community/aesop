@@ -43,10 +43,10 @@ syntax &"unfold" : aesop_builder
 syntax &"tactic" : aesop_builder
 syntax &"constructors" : aesop_builder
 syntax &"forward" : aesop_builder
+syntax &"cases" : aesop_builder
 syntax &"safe_default" : aesop_builder
 syntax &"unsafe_default" : aesop_builder
 syntax &"norm_default" : aesop_builder
-syntax &"cases" : aesop_builder
 
 declare_syntax_cat aesop_builder_clause (behavior := symbol)
 
@@ -218,7 +218,7 @@ def parse (stxs : Array Syntax) : BuilderOptions :=
 end BuilderOptions
 
 
-private def checkBuilderOptionsContainOnly (builderName : String)
+private def checkBuilderOptionsContainOnly (builderName : RuleName.Builder)
     (possibleOptions : Array Name) (opts : BuilderOptions) : m Unit := do
   let mut defined := opts.definedFields
   for n in possibleOptions do
@@ -227,13 +227,13 @@ private def checkBuilderOptionsContainOnly (builderName : String)
     let extraOpts := MessageData.joinSep (defined.toList.map toMessageData) ", "
     throwError "aesop: builder {builderName} does not support these options: {extraOpts}"
 
-private def checkNoBuilderOptions (builderName : String)
+private def checkNoBuilderOptions (builderName : RuleName.Builder)
     (opts : BuilderOptions) : m Unit :=
   checkBuilderOptionsContainOnly builderName #[] opts
 
 def tacticBuilderOptionsOfBuilderOptions (opts : BuilderOptions) :
     m TacticBuilderOptions := do
-  checkBuilderOptionsContainOnly "tactic" #[`usesBranchState] opts
+  checkBuilderOptionsContainOnly RuleName.Builder.tactic #[`usesBranchState] opts
   return { usesBranchState := opts.usesBranchState.getD true }
 
 def tacticBuilderOptionsToBuilderOptions (opts : TacticBuilderOptions) :
@@ -242,7 +242,8 @@ def tacticBuilderOptionsToBuilderOptions (opts : TacticBuilderOptions) :
 
 def forwardBuilderOptionsOfBuilderOptions (opts : BuilderOptions) :
     m ForwardBuilderOptions := do
-  checkBuilderOptionsContainOnly "forward" #[`forwardImmediate] opts
+  checkBuilderOptionsContainOnly RuleName.Builder.forward
+    #[`forwardImmediate] opts
   return { immediateHyps := opts.forwardImmediate.getD #[] }
 
 def forwardBuilderOptionsToBuilderOptions (opts : ForwardBuilderOptions) :
@@ -261,14 +262,14 @@ inductive RegularBuilder
 
 namespace RegularBuilder
 
-protected def name : RegularBuilder → String
-  | apply => "apply"
-  | tactic .. => "tactic"
-  | constructors => "constructors"
-  | cases => "cases"
-  | forward .. => "forward"
-  | unsafeDefault => "unsafe_default"
-  | safeDefault => "safe_default"
+def name : RegularBuilder → RuleName.Builder
+  | apply => RuleName.Builder.apply
+  | tactic .. => RuleName.Builder.tactic
+  | constructors => RuleName.Builder.constructors
+  | cases => RuleName.Builder.cases
+  | forward .. => RuleName.Builder.forward
+  | unsafeDefault => RuleName.Builder.unsafeDefault
+  | safeDefault => RuleName.Builder.safeDefault
 
 def toGlobalRuleBuilder : RegularBuilder → GlobalRuleBuilder RegularRuleBuilderResult
   | apply => GlobalRuleBuilder.apply
@@ -293,52 +294,52 @@ end RegularBuilder
 
 inductive Builder
   | regular (c : RegularBuilder)
-  | simpLemma
-  | simpUnfold
+  | simp
+  | unfold
   | normDefault
   deriving Inhabited
 
 namespace Builder
 
-protected def name : Builder → String
+def name : Builder → RuleName.Builder
   | regular c => c.name
-  | simpLemma => "simp"
-  | simpUnfold => "unfold"
-  | normDefault => "norm_default"
+  | simp => RuleName.Builder.simp
+  | unfold => RuleName.Builder.unfold
+  | normDefault => RuleName.Builder.normDefault
 
 open RegularBuilder in
 protected def parse (builder : Syntax) (clauses : Array Syntax) : m Builder := do
   let opts := BuilderOptions.parse clauses
   match builder with
   | `(aesop_builder|apply) => do
-    checkNoBuilderOptions apply.name opts
+    checkNoBuilderOptions RuleName.Builder.apply opts
     return regular apply
   | `(aesop_builder|tactic) => do
     let opts ← tacticBuilderOptionsOfBuilderOptions opts
     return regular $ tactic opts
   | `(aesop_builder|constructors) => do
-    checkNoBuilderOptions constructors.name opts
+    checkNoBuilderOptions RuleName.Builder.constructors opts
     return regular constructors
   | `(aesop_builder|cases) => do
-    checkNoBuilderOptions cases.name opts
+    checkNoBuilderOptions RuleName.Builder.cases opts
     return regular cases
   | `(aesop_builder|forward) => do
     let opts ← forwardBuilderOptionsOfBuilderOptions opts
     return regular $ forward opts
   | `(aesop_builder|simp) => do
-    checkNoBuilderOptions simpLemma.name opts
-    return simpLemma
+    checkNoBuilderOptions RuleName.Builder.simp opts
+    return simp
   | `(aesop_builder|unfold) => do
-    checkNoBuilderOptions simpUnfold.name opts
-    return simpUnfold
+    checkNoBuilderOptions RuleName.Builder.unfold opts
+    return unfold
   | `(aesop_builder|unsafe_default) => do
-    checkNoBuilderOptions unsafeDefault.name opts
+    checkNoBuilderOptions RuleName.Builder.unsafeDefault opts
     return regular unsafeDefault
   | `(aesop_builder|safe_default) => do
-    checkNoBuilderOptions safeDefault.name opts
+    checkNoBuilderOptions RuleName.Builder.safeDefault opts
     return regular safeDefault
   | `(aesop_builder|norm_default) => do
-    checkNoBuilderOptions normDefault.name opts
+    checkNoBuilderOptions RuleName.Builder.normDefault opts
     return normDefault
   | _ => unreachable!
 
@@ -346,15 +347,15 @@ def toRuleBuilder : Builder → RuleBuilder NormRuleBuilderResult
   | regular c => λ id goal => do
     let (goal, result) ← c.toRuleBuilder id goal
     return (goal, NormRuleBuilderResult.regular result)
-  | simpLemma => RuleBuilder.normSimpLemmas
-  | simpUnfold => RuleBuilder.normSimpUnfold
+  | simp => RuleBuilder.normSimpLemmas
+  | unfold => RuleBuilder.normSimpUnfold
   | normDefault => RuleBuilder.normRuleDefault
 
 def toGlobalRuleBuilder : Builder → GlobalRuleBuilder NormRuleBuilderResult
   | regular c => λ decl =>
     NormRuleBuilderResult.regular <$> c.toGlobalRuleBuilder decl
-  | simpLemma => GlobalRuleBuilder.normSimpLemmas
-  | simpUnfold => GlobalRuleBuilder.normSimpUnfold
+  | simp => GlobalRuleBuilder.normSimpLemmas
+  | unfold => GlobalRuleBuilder.normSimpUnfold
   | normDefault => GlobalRuleBuilder.normRuleDefault
 
 end Builder
@@ -423,7 +424,12 @@ private def normRuleBuilderResultToRuleSetMembers (penalty : Int)
     (id : RuleIdent) : NormRuleBuilderResult → Array RuleSetMember
   | NormRuleBuilderResult.regular results =>
     results.map λ res => RuleSetMember'.normRule {
-      name := `norm ++ res.builderName ++ id.ruleName
+      name := {
+        phase := RuleName.Phase.norm
+        builder := res.builder
+        ident := id.name
+        scope := id.scope
+      }
       indexingMode := res.indexingMode
       usesBranchState := res.mayUseBranchState
       extra := { penalty := penalty }
@@ -471,7 +477,12 @@ private def safeRuleBuilderResultToRuleSetMembers (id : RuleIdent)
     (penalty : Option Int) (r : RegularRuleBuilderResult) :
     Array RuleSetMember :=
   r.map λ res => RuleSetMember'.safeRule {
-    name := `safe ++ res.builderName ++ id.ruleName
+    name := {
+      phase := RuleName.Phase.safe
+      builder := res.builder
+      ident := id.name
+      scope := id.scope
+    }
     indexingMode := res.indexingMode,
     usesBranchState := res.mayUseBranchState
     extra := { penalty := penalty.getD 0, safety := Safety.safe }
@@ -519,7 +530,12 @@ private def unsafeRuleBuilderResultToRuleSetMembers
     (r : RegularRuleBuilderResult) :
     Array RuleSetMember :=
   r.map λ res => RuleSetMember'.unsafeRule {
-    name := `unsafe ++ res.builderName ++ id.ruleName
+    name := {
+      phase := RuleName.Phase.unsafe
+      builder := res.builder
+      ident := id.name
+      scope := id.scope
+    }
     indexingMode := res.indexingMode,
     usesBranchState := res.mayUseBranchState
     extra := { successProbability := successProbability },
@@ -588,9 +604,6 @@ protected def ruleSets : RuleConfig → Array RuleSetName
 
 end RuleConfig
 
-
--- TODO how to query the extension in the parsing function used in the
--- extension?
 
 initialize extension :
     PersistentEnvExtension

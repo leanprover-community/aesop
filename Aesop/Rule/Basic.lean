@@ -5,15 +5,15 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleIndex.Basic
+import Aesop.Rule.Name
 import Aesop.Rule.Tac
 
 open Lean
 
 namespace Aesop
 
-/- The rules in a rule set should be uniquely identified by their name. -/
 structure Rule' (α τ : Type) where
-  name : Name
+  name : RuleName
   indexingMode : IndexingMode
   usesBranchState : Bool
   extra : α
@@ -22,14 +22,11 @@ structure Rule' (α τ : Type) where
 
 namespace Rule'
 
--- Rules are uniquely identified by their name throughout Aesop. The following
--- instances reflect this.
-
 instance : BEq (Rule' α τ) where
   beq r s := r.name == s.name
 
 instance : Ord (Rule' α τ) where
-  compare r s := r.name.quickCmp s.name
+  compare r s := compare r.name s.name
 
 instance : Hashable (Rule' α τ) where
   hash r := hash r.name
@@ -38,7 +35,7 @@ def compareByPriority [Ord α] (r s : Rule' α τ) : Ordering :=
   compare r.extra s.extra
 
 def compareByName (r s : Rule' α τ) : Ordering :=
-  r.name.cmp s.name
+  r.name.compare s.name
 
 def compareByPriorityThenName [Ord α] (r s : Rule' α τ) : Ordering :=
   match compareByPriority r s with

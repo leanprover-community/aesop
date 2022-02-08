@@ -13,7 +13,7 @@ open Lean.Meta
 namespace Aesop
 
 structure SingleRegularRuleBuilderResult where
-  builderName : Name
+  builder : RuleName.Builder
   tac : RuleTacWithBuilderDescr
   indexingMode : IndexingMode
   mayUseBranchState : Bool
@@ -39,13 +39,17 @@ instance : ToString RuleIdent where
     | const decl => toString decl
     | fvar userName => toString userName
 
+def name : RuleIdent → Name
+  | const decl => decl
+  | fvar userName => userName
+
+def scope : RuleIdent → RuleName.Scope
+  | const .. => RuleName.Scope.global
+  | fvar .. => RuleName.Scope.local
+
 def type : RuleIdent → MetaM Expr
   | const c => return (← getConstInfo c).type
   | fvar userName => return (← getLocalDeclFromUserName userName).type
-
-def ruleName : RuleIdent → Name
-  | const c => `global ++ c
-  | fvar userName => `local ++ userName
 
 def ofName (n : Name) : MetaM RuleIdent := do
   try
@@ -115,7 +119,7 @@ def normSimpLemmas : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
 
 def apply : GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
   return #[{
-    builderName := `apply
+    builder := RuleName.Builder.apply
     tac := ← GlobalRuleTacBuilder.apply decl
     indexingMode := ←
       IndexingMode.targetMatchingConclusion (← getConstInfo decl).type
@@ -125,7 +129,7 @@ def apply : GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
 def tactic (opts : TacticBuilderOptions) :
     GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
   return #[{
-    builderName := `tactic
+    builder := RuleName.Builder.tactic
     tac := ← GlobalRuleTacBuilder.tactic decl
     indexingMode := IndexingMode.unindexed
     mayUseBranchState := opts.usesBranchState
@@ -151,7 +155,7 @@ def constructors : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
         throwError "aesop: internal error in constructors builder: nonexistant constructor {c}"
       let imode ← IndexingMode.targetMatchingConclusion cinfo.type
       return {
-        builderName := builderName
+        builder := RuleName.Builder.constructors
         tac := ← GlobalRuleTacBuilder.apply c
         indexingMode := imode
         mayUseBranchState := false
@@ -161,7 +165,7 @@ def cases : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
   let builderName := `cases
   let _ ← checkConstIsInductive builderName decl
   return #[{
-    builderName := builderName
+    builder := RuleName.Builder.cases
     tac := ← GlobalRuleTacBuilder.cases decl
     indexingMode := IndexingMode.unindexed
     mayUseBranchState := false
@@ -180,7 +184,7 @@ namespace GlobalRuleBuilder
 def forward (opts : ForwardBuilderOptions) :
     GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
   return #[{
-    builderName := `forward
+    builder := RuleName.Builder.forward
     tac := ← GlobalRuleTacBuilder.forward decl opts.immediateHyps
     indexingMode := IndexingMode.unindexed -- TODO
     mayUseBranchState := false
@@ -222,7 +226,7 @@ def apply : LocalRuleBuilder RegularRuleBuilderResult := λ hypUserName goal => 
   withMVarContext goal do
     let type := (← getLocalDeclFromUserName hypUserName).type
     let result := #[{
-      builderName := `apply
+      builder := RuleName.Builder.apply
       tac := tac
       indexingMode := ← IndexingMode.targetMatchingConclusion type
       mayUseBranchState := false
@@ -234,7 +238,7 @@ def forward (opts : ForwardBuilderOptions) :
   let (goal, tac) ←
     RuleTacBuilder.forwardFVar hypUserName opts.immediateHyps goal
   let result := #[{
-    builderName := `forward
+    builder := RuleName.Builder.forward
     tac := tac
     indexingMode := IndexingMode.unindexed -- TODO
     mayUseBranchState := true

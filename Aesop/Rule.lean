@@ -140,7 +140,7 @@ def withRule (f : ∀ {α}, Rule' α τ → β) : RegularRule' τ → β
   | «unsafe» r => f r
 
 @[inline]
-def name (r : RegularRule' τ) : Name :=
+def name (r : RegularRule' τ) : RuleName :=
   r.withRule (·.name)
 
 @[inline]

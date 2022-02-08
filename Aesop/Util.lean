@@ -256,15 +256,29 @@ def time [Monad m] [MonadLiftT BaseIO m] (x : m α) : m (α × Nat) := do
 end IO
 
 
+namespace Ordering
+
+@[inline]
+def compareLexicographic (cmp₁ : α → α → Ordering) (cmp₂ : α → α → Ordering)
+    (x y : α) : Ordering :=
+  match cmp₁ x y with
+  | Ordering.eq => cmp₂ x y
+  | ord => ord
+
+end Ordering
+
+
 namespace Ord
 
-def lexicographic (o₁ : Ord α) (o₂ : Ord α) : Ord α where
-  compare x y :=
-    match o₁.compare x y with
-    | Ordering.eq => o₂.compare x y
-    | ord => ord
+def lexicographic (o₁ : Ord α) (o₂ : Ord α) : Ord α :=
+  ⟨Ordering.compareLexicographic o₁.compare o₂.compare⟩
 
 end Ord
+
+
+@[inline]
+def compareBy [Ord β] (f : α → β) (x y : α) : Ordering :=
+  compare (f x) (f y)
 
 
 namespace Std.Format
