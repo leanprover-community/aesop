@@ -424,19 +424,14 @@ private def normRuleBuilderResultToRuleSetMembers (penalty : Int)
     (id : RuleIdent) : NormRuleBuilderResult → Array RuleSetMember
   | NormRuleBuilderResult.regular results =>
     results.map λ res => RuleSetMember'.normRule {
-      name := {
-        phase := RuleName.Phase.norm
-        builder := res.builder
-        ident := id.name
-        scope := id.scope
-      }
+      name := id.toRuleName RuleName.Phase.norm res.builder
       indexingMode := res.indexingMode
       usesBranchState := res.mayUseBranchState
       extra := { penalty := penalty }
       tac := res.tac
     }
-  | NormRuleBuilderResult.simpEntries entries =>
-    entries.map RuleSetMember'.normSimpEntry
+  | NormRuleBuilderResult.simpRules rs =>
+    rs.map RuleSetMember'.normSimpRule
 
 def buildGlobalNormRule (penalty : Int) (clauses : NormRuleClauses)
     (decl : Name) : MetaM (Array RuleSetMember) := do
@@ -477,12 +472,7 @@ private def safeRuleBuilderResultToRuleSetMembers (id : RuleIdent)
     (penalty : Option Int) (r : RegularRuleBuilderResult) :
     Array RuleSetMember :=
   r.map λ res => RuleSetMember'.safeRule {
-    name := {
-      phase := RuleName.Phase.safe
-      builder := res.builder
-      ident := id.name
-      scope := id.scope
-    }
+    name := id.toRuleName RuleName.Phase.safe res.builder
     indexingMode := res.indexingMode,
     usesBranchState := res.mayUseBranchState
     extra := { penalty := penalty.getD 0, safety := Safety.safe }
@@ -530,12 +520,7 @@ private def unsafeRuleBuilderResultToRuleSetMembers
     (r : RegularRuleBuilderResult) :
     Array RuleSetMember :=
   r.map λ res => RuleSetMember'.unsafeRule {
-    name := {
-      phase := RuleName.Phase.unsafe
-      builder := res.builder
-      ident := id.name
-      scope := id.scope
-    }
+    name := id.toRuleName RuleName.Phase.unsafe res.builder
     indexingMode := res.indexingMode,
     usesBranchState := res.mayUseBranchState
     extra := { successProbability := successProbability },

@@ -156,3 +156,10 @@ def tac (r : RegularRule' τ) : τ :=
   r.withRule (·.tac)
 
 end RegularRule'
+
+
+/-! ### Normalisation Simp Rules -/
+
+structure NormSimpRule where
+  ident : RuleIdent
+  entry : SimpEntry

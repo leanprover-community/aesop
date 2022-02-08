@@ -14,7 +14,7 @@ namespace Aesop
 
 inductive RuleSetMember' τ
   | normRule (r : NormRule' τ)
-  | normSimpEntry (e : SimpEntry)
+  | normSimpRule (e : NormSimpRule)
   | unsafeRule (r : UnsafeRule' τ)
   | safeRule (r : SafeRule' τ)
   deriving Inhabited
@@ -26,7 +26,7 @@ namespace RuleSetMember'
 
 def mapM [Monad m] (f : τ → m ι) : RuleSetMember' τ → m (RuleSetMember' ι)
   | normRule r => return normRule (← r.mapTacM f)
-  | normSimpEntry e => return normSimpEntry e
+  | normSimpRule e => return normSimpRule e
   | unsafeRule r => return unsafeRule (← r.mapTacM f)
   | safeRule r => return safeRule (← r.mapTacM f)
 
@@ -36,13 +36,19 @@ def toDescr (r : RuleSetMember) : Option RuleSetMemberDescr :=
 def ofDescr (r : RuleSetMemberDescr) : MetaM RuleSetMember :=
   r.mapM (·.toRuleTacBuilder)
 
+def ident : RuleSetMember' τ → RuleIdent
+  | normRule r => r.name.toRuleIdent
+  | unsafeRule r => r.name.toRuleIdent
+  | safeRule r => r.name.toRuleIdent
+  | normSimpRule e => e.ident
+
 end RuleSetMember'
 
 
 structure RuleSet where
   normRules : RuleIndex NormRule
   normSimpLemmas : SimpLemmas
-  normSimpLemmaDescrs : Array SimpEntry
+  normSimpLemmaDescrs : Array NormSimpRule
   unsafeRules : RuleIndex UnsafeRule
   safeRules : RuleIndex SafeRule
   deriving Inhabited
@@ -83,10 +89,10 @@ open RuleSetMember' in
 def add (rs : RuleSet) : RuleSetMember → RuleSet
   | normRule r =>
     { rs with normRules := rs.normRules.add r r.indexingMode }
-  | normSimpEntry e =>
+  | normSimpRule r =>
     { rs with
-      normSimpLemmas := rs.normSimpLemmas.addSimpEntry e
-      normSimpLemmaDescrs := rs.normSimpLemmaDescrs.push e }
+      normSimpLemmas := rs.normSimpLemmas.addSimpEntry r.entry
+      normSimpLemmaDescrs := rs.normSimpLemmaDescrs.push r }
   | unsafeRule r =>
     { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
   | safeRule r =>
@@ -116,7 +122,7 @@ def foldM [Monad m] (rs : RuleSet) (f : σ → RuleSetMember → m σ) (init : �
     s ← safeRules.foldM   (init := s) λ s r => f s (RuleSetMember'.safeRule r)
     s ← unsafeRules.foldM (init := s) λ s r => f s (RuleSetMember'.unsafeRule r)
     s ← normSimpLemmaDescrs.foldlM (init := s) λ s r =>
-          f s (RuleSetMember'.normSimpEntry r)
+          f s (RuleSetMember'.normSimpRule r)
     return s
 
 @[inline]

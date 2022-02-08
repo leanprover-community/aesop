@@ -23,42 +23,8 @@ abbrev RegularRuleBuilderResult := Array SingleRegularRuleBuilderResult
 
 inductive NormRuleBuilderResult
   | regular (r : RegularRuleBuilderResult)
-  | simpEntries (es : Array SimpEntry)
+  | simpRules (es : Array NormSimpRule)
   deriving Inhabited
-
-
-inductive RuleIdent
-  | const (decl : Name)
-  | fvar (userName : Name)
-  deriving Inhabited
-
-namespace RuleIdent
-
-instance : ToString RuleIdent where
-  toString
-    | const decl => toString decl
-    | fvar userName => toString userName
-
-def name : RuleIdent → Name
-  | const decl => decl
-  | fvar userName => userName
-
-def scope : RuleIdent → RuleName.Scope
-  | const .. => RuleName.Scope.global
-  | fvar .. => RuleName.Scope.local
-
-def type : RuleIdent → MetaM Expr
-  | const c => return (← getConstInfo c).type
-  | fvar userName => return (← getLocalDeclFromUserName userName).type
-
-def ofName (n : Name) : MetaM RuleIdent := do
-  try
-    let _ ← getLocalDeclFromUserName n
-    pure $ fvar n
-  catch _ =>
-    pure $ const n
-
-end RuleIdent
 
 
 namespace IndexingMode
@@ -107,12 +73,14 @@ def normSimpUnfold : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
   let info ← getConstInfo decl
   unless info.hasValue do
     throwError "aesop: unfold builder: expected {decl} to be a definition to unfold"
-  return NormRuleBuilderResult.simpEntries #[SimpEntry.toUnfold decl]
+  return NormRuleBuilderResult.simpRules
+    #[{ ident := RuleIdent.const decl, entry := SimpEntry.toUnfold decl }]
 
 def normSimpLemmas : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
   try {
     let simpLemmas ← mkSimpLemmasFromConst decl (post := true) (prio := 0)
-    return NormRuleBuilderResult.simpEntries $ simpLemmas.map SimpEntry.lemma
+    return NormRuleBuilderResult.simpRules $ simpLemmas.map λ l =>
+      { ident := RuleIdent.const decl, entry := SimpEntry.lemma l }
   } catch e => {
     throwError "aesop: simp builder: exception while trying to add {decl} as a simp lemma:{indentD e.toMessageData}"
   }
