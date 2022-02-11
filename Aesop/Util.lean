@@ -125,6 +125,48 @@ def joinSep (sep : String)  : List String → String
 end String
 
 
+namespace Ordering
+
+def isLT : Ordering → Bool
+  | lt => true
+  | _ => false
+
+def isEQ : Ordering → Bool
+  | eq => true
+  | _ => false
+
+def isGT : Ordering → Bool
+  | gt => true
+  | _ => false
+
+def isGE : Ordering → Bool
+  | lt => false
+  | eq => true
+  | gt => true
+
+@[inline]
+def compareLexicographic (cmp₁ : α → α → Ordering) (cmp₂ : α → α → Ordering)
+    (x y : α) : Ordering :=
+  match cmp₁ x y with
+  | Ordering.eq => cmp₂ x y
+  | ord => ord
+
+end Ordering
+
+
+namespace Ord
+
+def lexicographic (o₁ : Ord α) (o₂ : Ord α) : Ord α :=
+  ⟨Ordering.compareLexicographic o₁.compare o₂.compare⟩
+
+end Ord
+
+
+@[inline]
+def compareBy [Ord β] (f : α → β) (x y : α) : Ordering :=
+  compare (f x) (f y)
+
+
 namespace Subarray
 
 instance : Inhabited (Subarray α) where
@@ -147,7 +189,7 @@ namespace Array
 -- Merge arrays `xs` and `ys`. If `xs` and `ys` are sorted according to the
 -- comparison function `le`, the result is as well. Duplicate elements are
 -- preserved.
-def mergeSortedPreservingDuplicates (le : α → α → Bool) (xs ys : Array α) :
+def mergeSortedPreservingDuplicates [ord : Ord α] (xs ys : Array α) :
     Array α :=
   let acc := Array.mkEmpty (xs.size + ys.size)
   go acc 0 0
@@ -166,7 +208,7 @@ def mergeSortedPreservingDuplicates (le : α → α → Bool) (xs ys : Array α)
           Nat.add_lt_add hi hj
         let x := xs.get ⟨i, hi⟩
         let y := ys.get ⟨j, hj⟩
-        if le x y then
+        if compare x y |>.isLE then
           have : xs.size + ys.size - (i + 1 + j) < xs.size + ys.size - (i + j) := by
             rw [Nat.add_assoc i 1 j, Nat.add_comm 1 j, ← Nat.add_assoc]
             exact Nat.sub_succ_lt_self _ _ hij
@@ -182,7 +224,7 @@ def mergeSortedPreservingDuplicates (le : α → α → Bool) (xs ys : Array α)
 -- ys` such that `compare x y = eq`) are merged using `merge`. If `xs` and `ys`
 -- do not contain duplicates according to `compare`, then neither does the
 -- result.
-def mergeSortedMergingDuplicates [Ord α]  (xs ys : Array α)
+def mergeSortedMergingDuplicates [ord : Ord α] (xs ys : Array α)
     (merge : α → α → α) : Array α :=
   let acc := Array.mkEmpty (xs.size + ys.size)
   go acc 0 0
@@ -224,13 +266,15 @@ def mergeSortedMergingDuplicates [Ord α]  (xs ys : Array α)
           go (acc.push (merge x y)) (i + 1) (j + 1)
     termination_by _ => xs.size + ys.size - (i + j)
 
-def mergeSortedFilteringDuplicates [Ord α] (xs ys : Array α) : Array α :=
+def mergeSortedFilteringDuplicates [ord : Ord α] (xs ys : Array α) :
+    Array α :=
   mergeSortedMergingDuplicates xs ys λ x y => x
 
 -- Merge `xs` and `ys`, which do not need to be sorted. Elements which occur in
 -- both `xs` and `ys` are only added once. If `xs` and `ys` do not contain
 -- duplicates, then neither does the result. O(n*m)!
-def mergeUnsortedFilteringDuplicates [BEq α] (xs ys : Array α) : Array α :=
+def mergeUnsortedFilteringDuplicates [eq : BEq α] (xs ys : Array α) :
+    Array α :=
   -- Ideally we would check whether `xs` or `ys` have spare capacity, to prevent
   -- copying if possible. But Lean arrays don't expose their capacity.
   if xs.size < ys.size then go ys xs else go xs ys
@@ -240,6 +284,27 @@ def mergeUnsortedFilteringDuplicates [BEq α] (xs ys : Array α) : Array α :=
       let xsSize := xs.size
       ys.foldl (init := xs) λ xs y =>
         if xs[:xsSize].contains y then xs else xs.push y
+
+def mergeAdjacentDuplicates [eq : BEq α] (f : α → α → α) (xs : Array α) :
+    Array α :=
+  if h : 0 < xs.size then loop #[] 1 (xs.get ⟨0, h⟩) else xs
+  where
+    loop (acc : Array α) (i : Nat) (hd : α) :=
+      if h : i < xs.size then
+        let x := xs.get ⟨i, h⟩
+        if x == hd then
+          loop acc (i + 1) (f hd x)
+        else
+          loop (acc.push hd) (i + 1) x
+      else
+        acc.push hd
+    termination_by _ i _ => xs.size - i
+
+def deduplicateSorted [eq : BEq α] (xs : Array α) : Array α :=
+  xs.mergeAdjacentDuplicates (λ x y => x)
+
+def deduplicate [Inhabited α] [ord : Ord α] (xs : Array α) : Array α :=
+  deduplicateSorted $ xs.qsort λ x y => compare x y |>.isLT
 
 end Array
 
@@ -254,31 +319,6 @@ def time [Monad m] [MonadLiftT BaseIO m] (x : m α) : m (α × Nat) := do
   return (a, stop - start)
 
 end IO
-
-
-namespace Ordering
-
-@[inline]
-def compareLexicographic (cmp₁ : α → α → Ordering) (cmp₂ : α → α → Ordering)
-    (x y : α) : Ordering :=
-  match cmp₁ x y with
-  | Ordering.eq => cmp₂ x y
-  | ord => ord
-
-end Ordering
-
-
-namespace Ord
-
-def lexicographic (o₁ : Ord α) (o₂ : Ord α) : Ord α :=
-  ⟨Ordering.compareLexicographic o₁.compare o₂.compare⟩
-
-end Ord
-
-
-@[inline]
-def compareBy [Ord β] (f : α → β) (x y : α) : Ordering :=
-  compare (f x) (f y)
 
 
 namespace Std.Format
