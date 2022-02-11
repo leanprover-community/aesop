@@ -159,10 +159,11 @@ def add (rss : RuleSets) (name : RuleSetName) (r : RuleSetMember) : RuleSets :=
   if name == defaultRuleSetName then
     { rss with default := rss.default.add r }
   else
-    { rss with
-      others :=
-        rss.others.insertWith name ⟨λ _ => RuleSet.empty.add r⟩
-          (λ rs => rs.add r) }
+    let rs :=
+      match rss.others.find? name with
+      | none => RuleSet.empty.add r
+      | some rs => rs.add r
+    { rss with others := rss.others.insert name rs }
 
 def addArray (rss : RuleSets) (rules : Array (RuleSetName × RuleSetMember)) :
     RuleSets :=

@@ -427,6 +427,37 @@ instance [BEq α] [Hashable α] : BEq (HashSet α) where
 end Std.HashSet
 
 
+namespace Std.HashMap
+
+variable [BEq α] [Hashable α]
+
+def insertWith (m : HashMap α β) (a : α) (b : β) (f : β → β) : HashMap α β :=
+  let b :=
+    match m.find? a with
+    | none => b
+    | some b' => f b'
+  m.insert a b
+
+def updateM [Monad m] (map : HashMap α β) (k : α) (f : β → m β) :
+    m (HashMap α β) :=
+  match map.find? k with
+  | some v => return map.insert k (← f v)
+  | none => return map
+
+@[inline]
+def update (m : HashMap α β) (a : α) (f : β → β) : HashMap α β :=
+  Id.run $ m.updateM a f
+
+def merge (m n : HashMap α β) (combine : α → β → β → β) : HashMap α β :=
+  if m.size < n.size then loop m n else loop n m
+  where
+    @[inline]
+    loop m n :=
+      m.fold (init := n) λ m a b => m.insertWith a b (λ b' => combine a b b')
+
+end Std.HashMap
+
+
 namespace Std.PersistentHashSet
 
 @[inline]
@@ -437,11 +468,13 @@ def merge [BEq α] [Hashable α] (s t : PersistentHashSet α) : PersistentHashSe
     loop s t := s.fold (init := t) λ s a => s.insert a
 
 -- Elements are returned in unspecified order.
+@[inline]
 def toList [BEq α] [Hashable α] (s : PersistentHashSet α) : List α :=
   s.fold (init := []) λ as a => a :: as
 
 -- Elements are returned in unspecified order. (In fact, they are currently
 -- returned in reverse order of `toList`.)
+@[inline]
 def toArray [BEq α] [Hashable α] (s : PersistentHashSet α) : Array α :=
   s.fold (init := Array.mkEmpty s.size) λ as a => as.push a
 
@@ -450,14 +483,26 @@ end Std.PersistentHashSet
 
 namespace Std.PersistentHashMap
 
-def insertWith [BEq α] [Hashable α] (m : PersistentHashMap α β) (k : α)
-    (v : Thunk β) (f : β → β) : PersistentHashMap α β :=
+variable [BEq α] [Hashable α]
+
+def insertWith (m : PersistentHashMap α β) (k : α) (v : β) (f : β → β) :
+    PersistentHashMap α β :=
   match m.find? k with
   | some v' => m.insert k (f v')
-  | none => m.insert k v.get
+  | none => m.insert k v
+
+def updateM [Monad m] (map : PersistentHashMap α β) (k : α) (f : β → m β) :
+    m (PersistentHashMap α β) :=
+  match map.find? k with
+  | some v => return map.insert k (← f v)
+  | none => return map
 
 @[inline]
-def merge [BEq α] [Hashable α] (m n : PersistentHashMap α β) (f : α → β → β → β) :
+def update (m : PersistentHashMap α β) (k : α) (f : β → β) :
+    PersistentHashMap α β :=
+  Id.run $ m.updateM k f
+
+def merge (m n : PersistentHashMap α β) (f : α → β → β → β) :
     PersistentHashMap α β :=
   if m.size < n.size then loop m n f else loop n m (λ a b b' => f a b' b)
   where
