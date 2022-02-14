@@ -55,23 +55,37 @@ structure SimpleRuleTacOutput where
   goals : Array (MVarId × Option (HashSet MVarId))
   deriving Inhabited
 
-def SimpleRuleTacOutput.toRuleApplication (o : SimpleRuleTacOutput) :
-    MetaM RuleApplication := do
-  let postState ← saveState
-  let mut goals := Array.mkEmpty o.goals.size
+-- Given an array of goals `gᵢ`, this function separates the `gᵢ` which are
+-- 'proper' goals from the `gᵢ` which are ugoals. A `gᵢ` is a ugoal iff any goal
+-- `gⱼ` depends on it (i.e. `gᵢ` appears as a metavariable in the target or
+-- context of `gⱼ`). The returned array contains the proper goals and, for each
+-- proper goal, the set of ugoals on which the proper goal depends.
+--
+-- In the input array, each goal `gᵢ` may optionally be annotated with a set of
+-- metavariables. In this case, we assume that this set contains exactly the
+-- metavariables which appear in `gᵢ`, which allows us to skip some moderately
+-- expensive computations.
+def separateGoalsAndUGoals
+    (goalsAndUGoals : Array (MVarId × Option (HashSet MVarId))) :
+    MetaM (Array (MVarId × HashSet MVarId)) := do
+  let mut goals := Array.mkEmpty goalsAndUGoals.size
   let mut allUGoals := HashSet.empty
-  for (g, ugoals) in o.goals do
+  for (g, ugoals) in goalsAndUGoals do
     match ugoals with
     | some ugoals =>
       goals := goals.push (g, ugoals)
       allUGoals := allUGoals.insertMany ugoals
-    | none => do
+    | none =>
       let ugoals' ← getGoalMVarsNoDelayed g
       goals := goals.push (g, ugoals')
       allUGoals := allUGoals.insertMany ugoals'
-  goals := goals.filter λ (g, _) => ! allUGoals.contains g
+  return goals.filter λ (g, _) => ! allUGoals.contains g
+
+def SimpleRuleTacOutput.toRuleApplication (o : SimpleRuleTacOutput) :
+    MetaM RuleApplication := do
+  let postState ← saveState
   return {
-    goals := goals
+    goals := ← separateGoalsAndUGoals o.goals
     postState := postState
   }
 
@@ -102,6 +116,21 @@ def applyFVar (userName : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input =>
     let goals ← apply input.goal (mkFVar decl.fvarId)
     return { goals := goals.toArray.map λ g => (g, none) }
   -- TODO optimise dependent goal analysis
+
+-- Tries to apply each constant in `decls`. For each one that applies, a rule
+-- application is returned. If none applies, the tactic fails.
+def applyConsts (decls : Array Name) : RuleTac := λ input => do
+  let goal := input.goal
+  let apps ← decls.filterMapM λ decl => observing? do
+    let goals ← apply input.goal (← mkConstWithFreshMVarLevels decl)
+    let postState ← saveState
+    return {
+      goals := ← separateGoalsAndUGoals $ goals.toArray.map λ g => (g, none)
+      -- TODO optimise dependent goal analysis
+      postState := postState
+    }
+  if apps.isEmpty then failure
+  return { applications := apps, postBranchState? := none }
 
 def cases (decl : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input => do
   let goals? ← saturate1 input.goal λ goal => do
@@ -221,6 +250,7 @@ builders.
 -/
 inductive GlobalRuleTacBuilderDescr
   | apply (decl : Name)
+  | constructors (constructorNames : Array Name)
   | forward (decl : Name) (immediate : Array Name)
   | cases (decl : Name)
   | tacticM (decl : Name)
@@ -327,6 +357,12 @@ def apply (decl : Name) : GlobalRuleTacBuilder :=
     descr := GlobalRuleTacBuilderDescr.apply decl
   }
 
+def constructors (constructorNames : Array Name) : GlobalRuleTacBuilder := do
+  return {
+    tac := RuleTac.applyConsts constructorNames
+    descr := GlobalRuleTacBuilderDescr.constructors constructorNames
+  }
+
 def cases (decl : Name) : GlobalRuleTacBuilder :=
   return {
     tac := RuleTac.cases decl
@@ -348,6 +384,7 @@ namespace GlobalRuleTacBuilderDescr
 
 def toRuleTacBuilder : GlobalRuleTacBuilderDescr → GlobalRuleTacBuilder
   | apply decl => GlobalRuleTacBuilder.apply decl
+  | constructors cs => GlobalRuleTacBuilder.constructors cs
   | forward decl immediate => GlobalRuleTacBuilder.forward decl immediate
   | cases decl => GlobalRuleTacBuilder.cases decl
   | tacticM decl => GlobalRuleTacBuilder.tacticM decl

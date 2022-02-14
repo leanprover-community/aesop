@@ -119,18 +119,12 @@ private def checkConstIsInductive (builderName : Name) (decl : Name) :
 
 def constructors : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
   let info ← checkConstIsInductive `constructors decl
-  info.ctors.toArray.mapM processConstructor
-  where
-    processConstructor (c : Name) : MetaM SingleRegularRuleBuilderResult := do
-      let cinfo ← getConstInfo c <|>
-        throwError "aesop: internal error in constructors builder: nonexistant constructor {c}"
-      let imode ← IndexingMode.targetMatchingConclusion cinfo.type
-      return {
-        builder := RuleName.Builder.constructors
-        tac := ← GlobalRuleTacBuilder.apply c
-        indexingMode := imode
-        mayUseBranchState := false
-      }
+  return #[{
+    builder := RuleName.Builder.constructors
+    tac := ← GlobalRuleTacBuilder.constructors info.ctors.toArray
+    indexingMode := IndexingMode.unindexed -- TODO optimise as soon as we have OR for IndexingModes
+    mayUseBranchState := false
+  }]
 
 def cases : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
   let builderName := `cases

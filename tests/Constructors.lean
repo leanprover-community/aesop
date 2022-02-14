@@ -12,10 +12,7 @@ inductive Even : Nat → Type
 | zero : Even 0
 | plusTwo : Even n → Even (n + 2)
 
--- TODO currently broken
--- attribute [aesop safe] Even
+attribute [aesop safe] Even
 
 example : Even 6 := by
-  -- TODO currently broken
-  -- aesop
-  exact Even.plusTwo $ Even.plusTwo $ Even.plusTwo Even.zero
+  aesop
