@@ -158,7 +158,7 @@ end RegularRule'
 
 structure NormSimpRule where
   name : RuleName
-  entry : SimpEntry
+  entries : Array SimpEntry
 
 namespace NormSimpRule
 

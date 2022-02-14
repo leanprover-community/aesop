@@ -143,7 +143,9 @@ def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
     { rs with normRules := rs.normRules.add r r.indexingMode }
   | normSimpRule r =>
     { rs with
-      normSimpLemmas := rs.normSimpLemmas.addSimpEntry r.entry
+      normSimpLemmas :=
+        r.entries.foldl (init := rs.normSimpLemmas) λ simpLemmas e =>
+          simpLemmas.addSimpEntry e
       normSimpLemmaDescrs := rs.normSimpLemmaDescrs.push r }
   | unsafeRule r =>
     { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
