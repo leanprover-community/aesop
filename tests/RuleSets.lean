@@ -32,3 +32,13 @@ example : B := by
 example : C := by
   fail_if_success aesop (rulesets [-default])
   aesop
+
+attribute [aesop safe (rulesets [C])] C
+
+-- Removing the attribute removes all rules associated with C from all rule
+-- sets.
+attribute [-aesop] C
+
+example : C := by
+  fail_if_success aesop (rulesets [C])
+  aesop (safe [C])

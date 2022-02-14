@@ -134,24 +134,20 @@ def isUnsafe : RegularRule' τ → Bool
   | safe _ => false
   | «unsafe» _ => true
 
-@[specialize]
+@[inline]
 def withRule (f : ∀ {α}, Rule' α τ → β) : RegularRule' τ → β
   | safe r => f r
   | «unsafe» r => f r
 
-@[inline]
 def name (r : RegularRule' τ) : RuleName :=
   r.withRule (·.name)
 
-@[inline]
 def indexingMode (r : RegularRule' τ) : IndexingMode :=
   r.withRule (·.indexingMode)
 
-@[inline]
 def usesBranchState (r : RegularRule' τ) : Bool :=
   r.withRule (·.usesBranchState)
 
-@[inline]
 def tac (r : RegularRule' τ) : τ :=
   r.withRule (·.tac)
 
@@ -161,5 +157,15 @@ end RegularRule'
 /-! ### Normalisation Simp Rules -/
 
 structure NormSimpRule where
-  ident : RuleIdent
+  name : RuleName
   entry : SimpEntry
+
+namespace NormSimpRule
+
+instance : BEq NormSimpRule where
+  beq r s := r.name == s.name
+
+instance : Hashable NormSimpRule where
+  hash r := hash r.name
+
+end NormSimpRule

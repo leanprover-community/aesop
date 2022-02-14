@@ -430,8 +430,11 @@ private def normRuleBuilderResultToRuleSetMembers (penalty : Int)
       extra := { penalty := penalty }
       tac := res.tac
     }
-  | NormRuleBuilderResult.simpRules rs =>
-    rs.map RuleSetMember'.normSimpRule
+  | NormRuleBuilderResult.simp rs =>
+    rs.map λ res => RuleSetMember'.normSimpRule {
+      name := id.toRuleName RuleName.Phase.norm res.builder
+      entry := res.entry
+    }
 
 def buildGlobalNormRule (penalty : Int) (clauses : NormRuleClauses)
     (decl : Name) : MetaM (Array RuleSetMember) := do
@@ -602,27 +605,34 @@ initialize extension :
       let mut result := {}
       for rs in rss do
         for (rsName, rDescr) in rs do
-          result := result.add rsName (← runMetaMAsImportM rDescr.ofDescr)
+          result := result.addRule rsName (← runMetaMAsImportM rDescr.ofDescr)
       return result
-    addEntryFn := λ rss (rsName, r) => rss.add rsName r
+    addEntryFn := λ rss (rsName, r) => rss.addRule rsName r
     exportEntriesFn := λ rss => rss.toDescrArray!
   }
   let impl : AttributeImpl := {
     name := `aesop
     descr := "Register a declaration as an Aesop rule."
     add := λ decl stx attrKind => do
+      -- TODO error on attrKind = local or attrKind = scoped
       let config ← RuleConfig.parse (isLocalRule := false) stx
       let rules ← runMetaMAsCoreM $ config.buildGlobalRule decl
       let ruleSets := config.ruleSets
-      ruleSets.forM λ rsName => do
-        if ! (ext.getState (← getEnv)).contains rsName then
-          throwError "aesop: no such rule set: {rsName}\n  (Use 'declare_aesop_rule_set' to declare rule sets.)"
-      rules.forM λ rule =>
-        ruleSets.forM λ rsName => do
-          let env ← ext.addEntry (← getEnv) (rsName, rule)
-          setEnv env
-    erase := λ _ =>
-      throwError "aesop attribute currently cannot be removed"
+      let mut rss := ext.getState (← getEnv)
+      for rsName in ruleSets do
+        if ! rss.containsRuleSet rsName then
+          throwError "aesop: no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.)"
+        for r in rules do
+          if rss.containsRule rsName r.name then
+            throwError "aesop: '{r.name.name}' is already registered in rule set '{rsName}'."
+          rss := rss.addRule rsName r
+      setEnv $ ext.setState (← getEnv) rss
+    erase := λ decl => do
+      let rss := ext.getState (← getEnv)
+      let (rss, erased) := rss.eraseAllRulesWithIdent $ RuleIdent.const decl
+      unless erased do
+        throwError "aesop: {decl} is not registered as an Aesop rule."
+      setEnv $ ← ext.setState (← getEnv) rss
   }
   -- Despite the name, this also works for non-builtin attributes.
   registerBuiltinAttribute impl
@@ -651,13 +661,13 @@ def getAttributeRuleSet (includeDefaultSimpLemmas : Bool)
 
 def isRuleSetDeclared [MonadEnv m] (rsName : RuleSetName) : m Bool := do
   let rss ← getAttributeRuleSets
-  return rss.contains rsName
+  return rss.containsRuleSet rsName
 
 def declareRuleSet [MonadEnv m] (rsName : RuleSetName) : m Unit := do
   if rsName == defaultRuleSetName then
     throwError "aesop: rule set name '{rsName}' is reserved for the default rule set"
   let rss ← getAttributeRuleSets
-  if rss.contains rsName then
+  if rss.containsRuleSet rsName then
     throwError "aesop: rule set '{rsName}' already declared"
   let env ← extension.setState (← getEnv) $ rss.addEmptyRuleSet rsName
   setEnv env

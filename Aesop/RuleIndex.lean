@@ -72,53 +72,63 @@ def size : RuleIndex α → Nat
     byHyp.size + byTarget.size + unindexed.size
 
 @[specialize]
-def applicableByTargetRules (ri : RuleIndex α) (goal : MVarId) :
-    MetaM (Array (IndexMatchResult α)) := do
-  let rs ← ri.byTarget.getMatch (← getMVarType goal) -- TODO `getUnify` instead of `getMatch`?
-  return rs.map λ r =>
-    { rule := r, matchLocations := #[IndexMatchLocation.target] }
+def applicableByTargetRules (ri : RuleIndex α) (goal : MVarId)
+    (include? : α → Bool) : MetaM (Array (IndexMatchResult α)) :=
+  withMVarContext goal do
+    let rules ← ri.byTarget.getMatch (← getMVarType goal) -- TODO `getUnify` instead of `getMatch`?
+    return rules.filterMap λ r =>
+      if include? r then
+        some { rule := r, matchLocations := #[IndexMatchLocation.target] }
+      else
+        none
 
 @[specialize]
-def applicableByHypRules (ri : RuleIndex α) (goal : MVarId) :
-    MetaM (Array (Array (IndexMatchResult α))) :=
+def applicableByHypRules (ri : RuleIndex α) (goal : MVarId)
+    (include? : α → Bool) : MetaM (Array (IndexMatchResult α)) :=
   withMVarContext goal do
-    let mut rulesList := #[]
+    let mut rs := #[]
     for localDecl in ← getLCtx do
       if localDecl.isAuxDecl then continue
       let rules ← ri.byHyp.getMatch localDecl.type
-      let rules := rules.map λ r =>
-        { rule := r, matchLocations := #[IndexMatchLocation.hyp localDecl] }
-      rulesList := rulesList.push rules
-    return rulesList
+      for r in rules do
+        if include? r then
+          let r :=
+            { rule := r, matchLocations := #[IndexMatchLocation.hyp localDecl] }
+          rs := rs.push r
+    return rs
+
+@[specialize]
+def applicableUnindexedRules (ri : RuleIndex α) (include? : α → Bool) :
+    Array (IndexMatchResult α) := Id.run do
+  let mut rs := Array.mkEmpty ri.unindexed.size
+    -- Assumption: include? is true for most rules.
+  for r in ri.unindexed do
+    if include? r then
+      rs := rs.push { rule := r, matchLocations := #[IndexMatchLocation.none] }
+  return rs
 
 -- Returns the rules in the order given by `cmp` (which can be different from
 -- the order given by `Ord α`). `cmp` must return `Ordering.eq` only for rules
 -- which are really equal.
 @[specialize]
-def applicableRules (cmp : α → α → Ordering) (ri : RuleIndex α) (goal : MVarId) :
-    MetaM (Array (IndexMatchResult α)) := do
+def applicableRules (ri : RuleIndex α) (goal : MVarId) (cmp : α → α → Ordering)
+    (include? : α → Bool) : MetaM (Array (IndexMatchResult α)) := do
   instantiateMVarsInGoal goal
-  let byTarget ← applicableByTargetRules ri goal
-  let byHyp ← applicableByHypRules ri goal
-  let unindexed : Array (IndexMatchResult α) :=
-    ri.unindexed.fold (init := Array.mkEmpty ri.unindexed.size) λ ary r =>
-      ary.push { rule := r, matchLocations := #[IndexMatchLocation.none] }
   let mut result := mkRBMap α (Array IndexMatchLocation) cmp -- TODO avoid RBMap
-  result := insertIndexMatchResults result byTarget
-  result := insertIndexMatchResults result unindexed
-  for rs in byHyp do
-    result := insertIndexMatchResults result rs
+  result := insertIndexMatchResults result
+    (← applicableByTargetRules ri goal include?)
+  result := insertIndexMatchResults result
+    (← applicableByHypRules ri goal include?)
+  result := insertIndexMatchResults result
+    (applicableUnindexedRules ri include?)
   return result.fold (init := Array.mkEmpty result.size) λ rs rule locs =>
     rs.push { rule := rule, matchLocations := locs }
   where
     @[inline]
     insertIndexMatchResults (m : RBMap α (Array IndexMatchLocation) cmp)
         (rs : Array (IndexMatchResult α)) :
-        RBMap α (Array IndexMatchLocation) cmp := Id.run do
-      let mut result := m
-      for r in rs do
-        result := result.insertWith r.rule r.matchLocations
-          (· ++ r.matchLocations)
-      return result
+        RBMap α (Array IndexMatchLocation) cmp :=
+      rs.foldl (init := m) λ m r =>
+        m.insertWith r.rule r.matchLocations (· ++ r.matchLocations)
 
 end Aesop.RuleIndex

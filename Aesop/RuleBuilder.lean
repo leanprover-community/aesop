@@ -21,9 +21,13 @@ structure SingleRegularRuleBuilderResult where
 
 abbrev RegularRuleBuilderResult := Array SingleRegularRuleBuilderResult
 
+structure SingleSimpRuleBuilderResult where
+  builder : RuleName.Builder
+  entry : SimpEntry
+
 inductive NormRuleBuilderResult
   | regular (r : RegularRuleBuilderResult)
-  | simpRules (es : Array NormSimpRule)
+  | simp (es : Array SingleSimpRuleBuilderResult)
   deriving Inhabited
 
 
@@ -69,18 +73,20 @@ def TacticBuilderOptions.default : TacticBuilderOptions where
 
 namespace GlobalRuleBuilder
 
+-- TODO We currently don't process unfold theorems and smart unfolding equations
+-- (whatever that is). See SimpLemmas.lean:mkSimpAttr.
 def normSimpUnfold : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
   let info ← getConstInfo decl
   unless info.hasValue do
     throwError "aesop: unfold builder: expected {decl} to be a definition to unfold"
-  return NormRuleBuilderResult.simpRules
-    #[{ ident := RuleIdent.const decl, entry := SimpEntry.toUnfold decl }]
+  return NormRuleBuilderResult.simp
+    #[{ builder := RuleName.Builder.unfold, entry := SimpEntry.toUnfold decl }]
 
 def normSimpLemmas : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
   try {
     let simpLemmas ← mkSimpLemmasFromConst decl (post := true) (prio := 0)
-    return NormRuleBuilderResult.simpRules $ simpLemmas.map λ l =>
-      { ident := RuleIdent.const decl, entry := SimpEntry.lemma l }
+    return NormRuleBuilderResult.simp $ simpLemmas.map λ l =>
+      { builder := RuleName.Builder.simp, entry := SimpEntry.lemma l }
   } catch e => {
     throwError "aesop: simp builder: exception while trying to add {decl} as a simp lemma:{indentD e.toMessageData}"
   }
@@ -112,12 +118,9 @@ private def checkConstIsInductive (builderName : Name) (decl : Name) :
   return info
 
 def constructors : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
-  let info ← checkConstIsInductive builderName decl
+  let info ← checkConstIsInductive `constructors decl
   info.ctors.toArray.mapM processConstructor
   where
-    builderName : Name :=
-      `constructors
-
     processConstructor (c : Name) : MetaM SingleRegularRuleBuilderResult := do
       let cinfo ← getConstInfo c <|>
         throwError "aesop: internal error in constructors builder: nonexistant constructor {c}"

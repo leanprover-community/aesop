@@ -11,6 +11,7 @@ open Lean.Meta
 
 namespace Aesop.RuleName
 
+-- TODO rename to Aesop.PhaseName
 inductive Phase
   | norm
   | safe
@@ -32,6 +33,7 @@ instance : ToString Phase where
 
 end Phase
 
+-- TODO rename to Aesop.ScopeName
 inductive Scope
   | global
   | «local»
@@ -51,6 +53,9 @@ instance : ToString Scope where
 
 end Scope
 
+-- TODO rename to Aesop.BuilderName
+-- TODO the *Default builders are only used during construction and should
+-- never be used in an actual rule name. So remove them from this type.
 inductive Builder
   | apply
   | cases
@@ -134,7 +139,7 @@ end RuleName
 inductive RuleIdent
   | const (decl : Name)
   | fvar (userName : Name)
-  deriving Inhabited
+  deriving Inhabited, BEq, Hashable
 
 namespace RuleIdent
 
