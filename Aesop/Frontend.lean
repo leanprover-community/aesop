@@ -13,7 +13,7 @@ open Lean.Meta
 open Lean.Elab.Term
 open Std (HashSet)
 
-namespace Aesop
+namespace Aesop.Frontend
 
 namespace Parser.Command
 
@@ -64,8 +64,6 @@ syntax (name := aesop) &"aesop" aesop_kind aesop_clause* : attr
 
 end Parser.Attribute
 
-
-namespace Config
 
 variable [Monad m] [MonadError m]
 
@@ -678,8 +676,6 @@ def elabDeclareAesopRuleSets : CommandElab
     (rsNames : Array Syntax).forM λ rsName => declareRuleSet rsName.getId
   | _ => unreachable!
 
-end Config
-
 
 namespace Parser.Tactic
 
@@ -706,8 +702,6 @@ syntax (name := aesop) &"aesop " (aesop_tactic_clause)* : tactic
 
 end Parser.Tactic
 
-
-namespace Config
 
 structure AdditionalRule where
   ruleIdent : RuleIdent
@@ -828,4 +822,4 @@ def buildAdditionalRules (goal : MVarId) (c : TacticConfig) :
 
 end TacticConfig
 
-end Aesop.Config
+end Aesop.Frontend

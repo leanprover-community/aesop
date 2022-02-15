@@ -10,7 +10,7 @@ import Aesop.BuiltinRules.Assumption
 import Aesop.BuiltinRules.ApplyHyps
 import Aesop.BuiltinRules.Reflexivity
 import Aesop.BuiltinRules.SplitHyps
-import Aesop.Config
+import Aesop.Frontend
 
 open Lean
 open Lean.Elab
