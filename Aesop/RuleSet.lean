@@ -67,11 +67,12 @@ structure RuleSet where
   normSimpLemmas : SimpLemmas
   unsafeRules : RuleIndex UnsafeRule
   safeRules : RuleIndex SafeRule
-  normSimpLemmaDescrs : Array NormSimpRule
+  normSimpLemmaDescrs : HashMap RuleName (Array SimpEntry)
     -- A cache of the norm simp rules added to `normSimpLemmas`. Invariant: the
-    -- simp lemmas in `SimpLemmas` are exactly the simp lemmas corresponding to
-    -- the `NormSimpRule`s in `normSimpLemmaDescrs`. We use this cache to
-    -- serialise `NormSimpRule`s.
+    -- simp entries in this map are a subset of those in `normSimpLemmas`. When
+    -- a rule is erased, its entry is removed from this map. We use this map (a)
+    -- to figure out which `SimpEntry`s to erase from `normSimpLemmas` when a
+    -- rule is erased; (b) to serialise the norm simp rules.
   ruleNames : HashMap RuleIdent (Array RuleName)
     -- A cache of (non-erased) rule names. Invariant: `ruleNames` contains
     -- exactly the names of the rules in `normRules`, `normSimpLemmaDescrs`,
@@ -101,7 +102,7 @@ def empty : RuleSet where
   normSimpLemmas := {}
   unsafeRules := {}
   safeRules := {}
-  normSimpLemmaDescrs := #[]
+  normSimpLemmaDescrs := {}
   ruleNames := {}
   erased := {}
 
@@ -113,7 +114,10 @@ def merge (rs₁ rs₂ : RuleSet) : RuleSet where
   normSimpLemmas := rs₁.normSimpLemmas.merge rs₂.normSimpLemmas
   unsafeRules := rs₁.unsafeRules ++ rs₂.unsafeRules
   safeRules := rs₁.safeRules ++ rs₂.safeRules
-  normSimpLemmaDescrs := rs₁.normSimpLemmaDescrs ++ rs₂.normSimpLemmaDescrs
+  normSimpLemmaDescrs :=
+    rs₁.normSimpLemmaDescrs.merge rs₂.normSimpLemmaDescrs λ _ nsd₁ nsd₂ => nsd₁
+    -- We can merge left-biased here because `nsd₁` and `nsd₂` should be equal
+    -- anyway.
   ruleNames :=
     rs₁.ruleNames.merge rs₂.ruleNames λ _ ns₁ ns₂ =>
       ns₁.mergeUnsortedFilteringDuplicates ns₂
@@ -146,7 +150,7 @@ def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
       normSimpLemmas :=
         r.entries.foldl (init := rs.normSimpLemmas) λ simpLemmas e =>
           simpLemmas.addSimpEntry e
-      normSimpLemmaDescrs := rs.normSimpLemmaDescrs.push r }
+      normSimpLemmaDescrs := rs.normSimpLemmaDescrs.insert r.name r.entries }
   | unsafeRule r =>
     { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
   | safeRule r =>
@@ -163,15 +167,29 @@ def erase (rs : RuleSet) (f : RuleNameFilter) : RuleSet × Bool :=
     let (toErase, toKeep) := ns.partition f.match
     if toErase.isEmpty then
       (rs, false)
-    else
-      let erased :=
-        toErase.foldl (init := rs.erased) λ erased n => erased.insert n
+    else Id.run do
       let ruleNames :=
         if toKeep.isEmpty then
           rs.ruleNames.erase f.ident
         else
           rs.ruleNames.insert f.ident toKeep
-      ({ rs with erased := erased, ruleNames := ruleNames }, true)
+
+      let mut erased := rs.erased
+      let mut normSimpLemmaDescrs := rs.normSimpLemmaDescrs
+      let mut normSimpLemmas := rs.normSimpLemmas
+      for r in toErase do
+        erased := erased.insert r
+        if let (some simpEntries) := normSimpLemmaDescrs.find? r then
+          normSimpLemmaDescrs := normSimpLemmaDescrs.erase r
+          for e in simpEntries do
+            normSimpLemmas := normSimpLemmas.eraseSimpEntry e
+      let res := { rs with
+        ruleNames := ruleNames
+        erased := erased
+        normSimpLemmas := normSimpLemmas
+        normSimpLemmaDescrs := normSimpLemmaDescrs
+      }
+      return (res, true)
 
 def eraseAllRulesWithIdent (rs : RuleSet) (i : RuleIdent) : RuleSet × Bool :=
   rs.erase { ident := i, builders := #[], phases := #[] }
@@ -202,10 +220,13 @@ def applicableSafeRules (rs : RuleSet) (goal : MVarId) :
 def foldM [Monad m] (rs : RuleSet) (f : σ → RuleSetMember → m σ) (init : σ) :
     m σ := do
   let mut s := init
-  s ← rs.normRules.foldM            (init := s) λ s r => go s (RuleSetMember'.normRule r)
-  s ← rs.safeRules.foldM            (init := s) λ s r => go s (RuleSetMember'.safeRule r)
-  s ← rs.unsafeRules.foldM          (init := s) λ s r => go s (RuleSetMember'.unsafeRule r)
-  s ← rs.normSimpLemmaDescrs.foldlM (init := s) λ s r => go s (RuleSetMember'.normSimpRule r)
+  s ← rs.normRules.foldM           (init := s) λ s r => go s (RuleSetMember'.normRule r)
+  s ← rs.safeRules.foldM           (init := s) λ s r => go s (RuleSetMember'.safeRule r)
+  s ← rs.unsafeRules.foldM         (init := s) λ s r => go s (RuleSetMember'.unsafeRule r)
+  s ← rs.normSimpLemmaDescrs.foldM (init := s) λ s n es =>
+        f s (RuleSetMember'.normSimpRule { name := n, entries := es })
+        -- Erased rules are removed from `normSimpLemmaDescrs`, so we do not
+        -- need to filter here.
   return s
   where
     @[inline]

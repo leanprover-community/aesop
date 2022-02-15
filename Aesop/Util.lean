@@ -769,9 +769,25 @@ end DiscrTree
 namespace SimpLemmas
 
 def addSimpEntry (s : SimpLemmas) : SimpEntry → SimpLemmas
-  | SimpEntry.lemma l => addSimpLemmaEntry s l
-  | SimpEntry.toUnfold d => s.addDeclToUnfoldCore d
+  | SimpEntry.lemma l =>
+    let s := addSimpLemmaEntry s l
+    match l.name? with
+    | some l => { s with erased := s.erased.erase l }
+    | none => s
+  | SimpEntry.toUnfold d =>
+    { s with toUnfold := s.toUnfold.insert d }
   | SimpEntry.toUnfoldThms n thms => s.registerDeclToUnfoldThms n thms
+
+def eraseSimpEntry (s : SimpLemmas) : SimpEntry → SimpLemmas
+  | SimpEntry.lemma l =>
+    match l.name? with
+    | some l =>
+      { s with erased := s.erased.insert l, lemmaNames := s.lemmaNames.erase l }
+    | none => s
+  | SimpEntry.toUnfold d =>
+    { s with toUnfold := s.toUnfold.erase d }
+  | SimpEntry.toUnfoldThms n thms =>
+    { s with toUnfoldThms := s.toUnfoldThms.erase n }
 
 def merge (s t : SimpLemmas) : SimpLemmas := {
     pre := s.pre.merge t.pre

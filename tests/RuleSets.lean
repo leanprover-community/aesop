@@ -11,15 +11,18 @@ set_option aesop.check.all true
 declare_aesop_rule_sets [A, B, C, D]
 
 @[aesop safe (rulesets [A])]
-inductive A where
+inductive A : Prop where
 | intro
 
 @[aesop safe (rulesets [B])]
-inductive B where
+inductive B : Prop where
 | intro
 
 @[aesop safe]
-inductive C where
+inductive C : Prop where
+| intro
+
+inductive D : Prop where
 | intro
 
 example : A := by
@@ -42,3 +45,16 @@ attribute [-aesop] C
 example : C := by
   fail_if_success aesop (rulesets [C])
   aesop (safe [C])
+
+@[aesop norm (builder simp)]
+theorem ad : D ↔ A :=
+  ⟨λ _ => A.intro, λ _ => D.intro⟩
+
+example : D := by
+  aesop (rulesets [A])
+
+attribute [-aesop] ad
+
+example : D := by
+  fail_if_success aesop (rulesets [A])
+  aesop (norm [ad]) (rulesets [A])
