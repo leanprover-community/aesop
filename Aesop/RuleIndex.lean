@@ -20,7 +20,7 @@ structure RuleIndex (α : Type) [Ord α] [Hashable α] where
 
 namespace RuleIndex
 
-variable {α} [Ord α] [Hashable α]
+variable [Ord α] [Hashable α]
 
 open MessageData in
 instance [ToMessageData α] : ToMessageData (RuleIndex α) where
@@ -28,7 +28,7 @@ instance [ToMessageData α] : ToMessageData (RuleIndex α) where
     "indexed by target:" ++ node (ri.byTarget.values.map toMessageData),
     "indexed by hypotheses:" ++ node (ri.byHyp.values.map toMessageData),
     "unindexed:" ++ node (ri.unindexed.toArray.map toMessageData)
-    ]
+  ]
 
 instance : EmptyCollection (RuleIndex α) where
   emptyCollection := {
