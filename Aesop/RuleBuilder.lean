@@ -82,10 +82,11 @@ def normSimpUnfold : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
 
 def normSimpLemmas : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
   try {
-    let simpLemmas ← mkSimpLemmasFromConst decl (post := true) (prio := 0)
+    let simpLemmas ←
+      mkSimpTheoremsFromConst decl (post := true) (inv := false) (prio := 0)
     return NormRuleBuilderResult.simp {
       builder := RuleName.Builder.simp
-      entries := simpLemmas.map SimpEntry.lemma
+      entries := simpLemmas.map SimpEntry.thm
     }
   } catch e => {
     throwError "aesop: simp builder: exception while trying to add {decl} as a simp lemma:{indentD e.toMessageData}"

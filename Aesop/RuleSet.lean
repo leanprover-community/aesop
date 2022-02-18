@@ -64,7 +64,7 @@ end RuleNameFilter
 
 structure RuleSet where
   normRules : RuleIndex NormRule
-  normSimpLemmas : SimpLemmas
+  normSimpLemmas : SimpTheorems
   unsafeRules : RuleIndex UnsafeRule
   safeRules : RuleIndex SafeRule
   normSimpLemmaDescrs : HashMap RuleName (Array SimpEntry)
@@ -231,7 +231,7 @@ def foldM [Monad m] (rs : RuleSet) (f : σ → RuleSetMember → m σ) (init : �
   where
     @[inline]
     go (s : σ) (r : RuleSetMember) : m σ :=
-      if rs.erased.contains r.name then s else f s r
+      if rs.erased.contains r.name then pure s else f s r
 
 @[inline]
 def fold (rs : RuleSet) (f : σ → RuleSetMember → σ) (init : σ) : σ :=
@@ -313,7 +313,7 @@ def modifyRuleSetM [Monad m] (rss : RuleSets) (rsName : RuleSetName)
   if rsName == defaultRuleSetName then
     return { rss with default := ← f rss.default }
   else
-    let (some rs) ← rss.others.find? rsName | return rss
+    let (some rs) := rss.others.find? rsName | return rss
     return { rss with others := rss.others.insert rsName (← f rs) }
 
 -- If `rss` does not contain a rule set with name `rsName`, `rss` is returned

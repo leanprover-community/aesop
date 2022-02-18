@@ -194,7 +194,7 @@ partial def splitHypCore (goal : MVarId) (originalUserName : Name)
         withLocalDeclD originalUserName witnessHypType λ witness => do
           let propertyHypType ←
             mkForallFVars binderFVars $
-            (← headBeta (mkApp propertyType (mkAppN witness binderFVars)))
+              headBeta (mkApp propertyType (mkAppN witness binderFVars))
           withLocalDeclD originalUserName propertyHypType λ property =>
             mkForallFVars (#[witness, property]) oldTarget
       let goal ← withMVarContext goal $
@@ -214,7 +214,7 @@ partial def splitHypCore (goal : MVarId) (originalUserName : Name)
         match (← observing? $ clear goal hyp) with
         | none => (goal, false)
         | some goal => (goal, true)
-      let propertyHypTypeWithoutBinders ← headBeta $
+      let propertyHypTypeWithoutBinders := headBeta $
         mkApp propertyType $ mkAppN (mkFVar witnessHyp) binderFVars
       let (newHyps, goal) ←
         splitHypCore goal originalUserName binderFVars propertyHyp

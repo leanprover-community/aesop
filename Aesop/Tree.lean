@@ -1152,7 +1152,7 @@ def adjustUnificationGoalOrigins
   let rappMap := (← get).rappMap
   unificationGoalOrigins.mapM λ r => do
     let id := (← r.get).id
-    let (some newRappRef) ← rappMap.find? id
+    let (some newRappRef) := rappMap.find? id
       | throwError "aesop/copyTree: internal error: unificationGoalOrigins points to unknown rapp {id}"
     return newRappRef
 
@@ -1294,7 +1294,7 @@ private def checkUnificationGoalsCore : Sum GoalRef RappRef → MetaM Unit :=
       withoutModifyingState do
         restoreState r.metaState
         for (m, _) in r.unificationGoalOrigins do
-          let (some _) ← (← getMCtx).findDecl? m | throwError
+          let (some _) := (← getMCtx).findDecl? m | throwError
             "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is not declared in the metavariable context"
           if (← isExprMVarAssigned m) then throwError
             "{Check.tree.name}: in rapp {r.id}: unification goal {m.name} is assigned"

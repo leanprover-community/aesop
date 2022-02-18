@@ -86,7 +86,7 @@ protected def parse : Syntax → Except String Prio
   | `(aesop_prio|- $n:numLit) => return penalty $ - n.toNat
   | `(aesop_prio|$n:numLit) => return penalty $ n.toNat
   | `(aesop_prio|$n:numLit %) => do
-    let (some p) ← Percent.ofNat n.toNat
+    let (some p) := Percent.ofNat n.toNat
       | throw "percentage must be between 0 and 100."
     return successProbability p
   | _ => unreachable!
@@ -372,7 +372,7 @@ protected def parse (isLocalRule : Bool) : Syntax → m Clause
   | `(aesop_clause|(rulesets [ $rss:ident,* ])) => do
     if isLocalRule then
       throwError "aesop: 'rulesets' clause not allowed for local rules"
-    ruleSets $ (rss : Array Syntax).map (·.getId)
+    return ruleSets $ (rss : Array Syntax).map (·.getId)
   | _ => unreachable!
 
 end Clause
@@ -532,7 +532,7 @@ def buildGlobalUnsafeRule (successProbability : Percent)
     (clauses : UnsafeRuleClauses) (id : Name) :
     MetaM RuleSetMember := do
   let res ← clauses.builder.toGlobalRuleBuilder id
-  unsafeRuleBuilderResultToRuleSetMember successProbability
+  return unsafeRuleBuilderResultToRuleSetMember successProbability
     (RuleIdent.const id) res
 
 def buildLocalUnsafeRule (goal : MVarId) (successProbability : Percent)
@@ -556,7 +556,7 @@ protected def ofKindAndClauses (kind : RuleKind) (clauses : Array Clause) :
   let clauses := Clauses.ofClauseArray clauses
   match kind with
   | RuleKind.norm penalty =>
-    norm penalty <$> NormRuleClauses.ofClauses clauses
+    return norm penalty $ NormRuleClauses.ofClauses clauses
   | RuleKind.safe penalty =>
     safe penalty <$> SafeRuleClauses.ofClauses clauses
   | RuleKind.unsafe successProbability =>
@@ -629,28 +629,27 @@ initialize extension :
       let (rss, erased) := rss.eraseAllRulesWithIdent $ RuleIdent.const decl
       unless erased do
         throwError "aesop: {decl} is not registered as an Aesop rule."
-      setEnv $ ← ext.setState (← getEnv) rss
+      setEnv $ ext.setState (← getEnv) rss
   }
   -- Despite the name, this also works for non-builtin attributes.
   registerBuiltinAttribute impl
   return ext
 
-def getAttributeRuleSets [MonadEnv m] : m RuleSets := do
-  extension.getState (← getEnv)
+def getAttributeRuleSets [MonadEnv m] : m RuleSets :=
+  return extension.getState (← getEnv)
 
 def modifyAttributeRuleSets [MonadEnv m] (f : RuleSets → m RuleSets) : m Unit := do
   let env ← getEnv
-  let rss ← extension.getState env
+  let rss := extension.getState env
   let rss ← f rss
-  let env ← extension.setState env rss
-  setEnv env
+  setEnv $ extension.setState env rss
 
 def getAttributeRuleSet (includeDefaultSimpLemmas : Bool)
     (rsNames : Array RuleSetName) : CoreM RuleSet := do
   let rss ← getAttributeRuleSets
   let mut result := rss.makeMergedRuleSet rsNames
   if includeDefaultSimpLemmas then
-    let defaultSimpLemmas ← getSimpLemmas
+    let defaultSimpLemmas ← getSimpTheorems
     result :=
       { result with
         normSimpLemmas := defaultSimpLemmas.merge result.normSimpLemmas }
@@ -666,8 +665,7 @@ def declareRuleSet [MonadEnv m] (rsName : RuleSetName) : m Unit := do
   let rss ← getAttributeRuleSets
   if rss.containsRuleSet rsName then
     throwError "aesop: rule set '{rsName}' already declared"
-  let env ← extension.setState (← getEnv) $ rss.addEmptyRuleSet rsName
-  setEnv env
+  setEnv $ extension.setState (← getEnv) $ rss.addEmptyRuleSet rsName
 
 open Lean.Elab.Command in
 @[commandElab Parser.Command.declareAesopRuleSets]
@@ -715,7 +713,7 @@ protected def parse (prioParser : Option Syntax → Except String α)
   | `(aesop_rule|$i:ident $[$prio:aesop_prio]? $clauses:aesop_clause*) => do
     let prio ←
       match prioParser prio with
-      | Except.ok p => p
+      | Except.ok p => pure p
       | Except.error e => throwError "aesop: at rule {i}: {e}"
     let clauses ← clauses.mapM (Clause.parse (isLocalRule := true))
     let config ← RuleConfig.ofKindAndClauses (ruleKind prio) clauses

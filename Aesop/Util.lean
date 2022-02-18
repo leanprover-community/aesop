@@ -765,12 +765,11 @@ def merge [BEq α] (t u : DiscrTree α) : DiscrTree α :=
 
 end DiscrTree
 
+namespace SimpTheorems
 
-namespace SimpLemmas
-
-def addSimpEntry (s : SimpLemmas) : SimpEntry → SimpLemmas
-  | SimpEntry.lemma l =>
-    let s := addSimpLemmaEntry s l
+def addSimpEntry (s : SimpTheorems) : SimpEntry → SimpTheorems
+  | SimpEntry.thm l =>
+    let s := addSimpTheoremEntry s l
     match l.name? with
     | some l => { s with erased := s.erased.erase l }
     | none => s
@@ -778,8 +777,8 @@ def addSimpEntry (s : SimpLemmas) : SimpEntry → SimpLemmas
     { s with toUnfold := s.toUnfold.insert d }
   | SimpEntry.toUnfoldThms n thms => s.registerDeclToUnfoldThms n thms
 
-def eraseSimpEntry (s : SimpLemmas) : SimpEntry → SimpLemmas
-  | SimpEntry.lemma l =>
+def eraseSimpEntry (s : SimpTheorems) : SimpEntry → SimpTheorems
+  | SimpEntry.thm l =>
     match l.name? with
     | some l =>
       { s with erased := s.erased.insert l, lemmaNames := s.lemmaNames.erase l }
@@ -789,7 +788,7 @@ def eraseSimpEntry (s : SimpLemmas) : SimpEntry → SimpLemmas
   | SimpEntry.toUnfoldThms n thms =>
     { s with toUnfoldThms := s.toUnfoldThms.erase n }
 
-def merge (s t : SimpLemmas) : SimpLemmas := {
+def merge (s t : SimpTheorems) : SimpTheorems := {
     pre := s.pre.merge t.pre
     post := s.post.merge t.post
     lemmaNames := s.lemmaNames.merge t.lemmaNames
@@ -803,7 +802,7 @@ def merge (s t : SimpLemmas) : SimpLemmas := {
   where
     -- Adds the erased lemmas from `s` to `init`, excluding those lemmas which
     -- occur in `t`.
-    mkErased (s t : SimpLemmas) (init : PHashSet Name) : PHashSet Name :=
+    mkErased (s t : SimpTheorems) (init : PHashSet Name) : PHashSet Name :=
       s.erased.fold (init := init) λ x decl =>
         -- I think the following check suffices to ensure that `decl` does not
         -- occur in `t`. If `decl` is an unfold theorem (in the sense of
@@ -814,7 +813,7 @@ def merge (s t : SimpLemmas) : SimpLemmas := {
           x.insert decl
 
 open MessageData in
-protected def toMessageData (s : SimpLemmas) : MessageData :=
+protected def toMessageData (s : SimpTheorems) : MessageData :=
   node #[
     "pre lemmas:" ++ node (s.pre.values.map toMessageData),
     "post lemmas:" ++ node (s.post.values.map toMessageData),
@@ -824,12 +823,12 @@ protected def toMessageData (s : SimpLemmas) : MessageData :=
       (s.erased.toArray.qsort Name.lt |>.map toMessageData)
   ]
 
-end SimpLemmas
+end SimpTheorems
 
 -- Runs `tac` on `goal`, then on the subgoals created by `tac`, etc. Returns the
 -- goals to which `tac` does not apply any more. If `tac` applies infinitely
 -- often, `saturate'` diverges. If `tac` does not apply to `goal`, a singleton
--- arry containing `goal` is returned.
+-- array containing `goal` is returned.
 partial def saturate' (goal : MVarId)
     (tac : MVarId → MetaM (Option (Array MVarId))) :
     MetaM (Array MVarId) :=
@@ -852,19 +851,13 @@ partial def saturate1 (goal : MVarId)
   | none => return none
   | some goals => return some (← goals.forM go |>.run #[]).snd
   where
-    go (goal : MVarId) : StateRefT (Array MVarId) MetaM Unit := do
-      match ← tac goal with
-      | none => modify λ s => s.push goal
-      | some goals => goals.forM go
+    go (goal : MVarId) : StateRefT (Array MVarId) MetaM Unit :=
+      withIncRecDepth do
+        match ← tac goal with
+        | none => modify λ s => s.push goal
+        | some goals => goals.forM go
 
--- TODO The following defs are copied from Lean.Meta.Tactic.Simp.SimpLemmas
-
-private partial def shouldPreprocess (type : Expr) : MetaM Bool :=
-  forallTelescopeReducing type fun xs result => return !result.isEq
-
-private def checkTypeIsProp (type : Expr) : MetaM Unit :=
-  unless (← isProp type) do
-    throwError "invalid 'simp', proposition expected{indentExpr type}"
+-- TODO The following defs are copied from Lean.Meta.Tactic.Simp.SimpTheorems
 
 private partial def isPerm : Expr → Expr → MetaM Bool
   | Expr.app f₁ a₁ _, Expr.app f₂ a₂ _ => isPerm f₁ f₂ <&&> isPerm a₁ a₂
@@ -875,41 +868,81 @@ private partial def isPerm : Expr → Expr → MetaM Bool
   | Expr.lam n₁ d₁ b₁ _, Expr.lam n₂ d₂ b₂ _ => isPerm d₁ d₂ <&&> withLocalDeclD n₁ d₁ fun x => isPerm (b₁.instantiate1 x) (b₂.instantiate1 x)
   | Expr.letE n₁ t₁ v₁ b₁ _, Expr.letE n₂ t₂ v₂ b₂ _ =>
     isPerm t₁ t₂ <&&> isPerm v₁ v₂ <&&> withLetDecl n₁ t₁ v₁ fun x => isPerm (b₁.instantiate1 x) (b₂.instantiate1 x)
-  | Expr.proj _ i₁ b₁ _, Expr.proj _ i₂ b₂ _ => i₁ == i₂ <&&> isPerm b₁ b₂
-  | s, t => s == t
+  | Expr.proj _ i₁ b₁ _, Expr.proj _ i₂ b₂ _ => pure (i₁ == i₂) <&&> isPerm b₁ b₂
+  | s, t => return s == t
 
-private partial def preprocess (e type : Expr) : MetaM (List (Expr × Expr)) := do
+private def checkBadRewrite (lhs rhs : Expr) : MetaM Unit := do
+  let lhs ← DiscrTree.whnfDT lhs (root := true)
+  if lhs == rhs && lhs.isFVar then
+    throwError "invalid `simp` theorem, equation is equivalent to{indentExpr (← mkEq lhs rhs)}"
+
+private partial def shouldPreprocess (type : Expr) : MetaM Bool :=
+  forallTelescopeReducing type fun xs result => do
+    if let some (_, lhs, rhs) := result.eq? then
+      checkBadRewrite lhs rhs
+      return false
+    else
+      return true
+
+private partial def preprocess (e type : Expr) (inv : Bool) (isGlobal : Bool) : MetaM (List (Expr × Expr)) :=
+  go e type
+where
+  go (e type : Expr) : MetaM (List (Expr × Expr)) := do
   let type ← whnf type
   if type.isForall then
     forallTelescopeReducing type fun xs type => do
       let e := mkAppN e xs
-      let ps ← preprocess e type
+      let ps ← go e type
       ps.mapM fun (e, type) =>
         return (← mkLambdaFVars xs e, ← mkForallFVars xs type)
-  else if type.isEq then
-    return [(e, type)]
+  else if let some (_, lhs, rhs) := type.eq? then
+    if isGlobal then
+      checkBadRewrite lhs rhs
+    if inv then
+      let type ← mkEq rhs lhs
+      let e    ← mkEqSymm e
+      return [(e, type)]
+    else
+      return [(e, type)]
   else if let some (lhs, rhs) := type.iff? then
-    let type ← mkEq lhs rhs
-    let e    ← mkPropExt e
-    return [(e, type)]
+    if isGlobal then
+      checkBadRewrite lhs rhs
+    if inv then
+      let type ← mkEq rhs lhs
+      let e    ← mkEqSymm (← mkPropExt e)
+      return [(e, type)]
+    else
+      let type ← mkEq lhs rhs
+      let e    ← mkPropExt e
+      return [(e, type)]
   else if let some (_, lhs, rhs) := type.ne? then
+    if inv then
+      throwError "invalid '←' modifier in rewrite rule to 'False'"
     let type ← mkEq (← mkEq lhs rhs) (mkConst ``False)
     let e    ← mkEqFalse e
     return [(e, type)]
   else if let some p := type.not? then
+    if inv then
+      throwError "invalid '←' modifier in rewrite rule to 'False'"
     let type ← mkEq p (mkConst ``False)
     let e    ← mkEqFalse e
     return [(e, type)]
   else if let some (type₁, type₂) := type.and? then
     let e₁ := mkProj ``And 0 e
     let e₂ := mkProj ``And 1 e
-    return (← preprocess e₁ type₁) ++ (← preprocess e₂ type₂)
+    return (← go e₁ type₁) ++ (← go e₂ type₂)
   else
+    if inv then
+      throwError "invalid '←' modifier in rewrite rule to 'True'"
     let type ← mkEq type (mkConst ``True)
     let e    ← mkEqTrue e
     return [(e, type)]
 
-private def mkSimpLemmaCore (e : Expr) (levelParams : Array Name) (proof : Expr) (post : Bool) (prio : Nat) (name? : Option Name) : MetaM SimpLemma := do
+private def checkTypeIsProp (type : Expr) : MetaM Unit :=
+  unless (← isProp type) do
+    throwError "invalid 'simp', proposition expected{indentExpr type}"
+
+private def mkSimpTheoremCore (e : Expr) (levelParams : Array Name) (proof : Expr) (post : Bool) (prio : Nat) (name? : Option Name) : MetaM SimpTheorem := do
   let type ← instantiateMVars (← inferType e)
   withNewMCtxDepth do
     let (xs, _, type) ← withReducible <| forallMetaTelescopeReducing type
@@ -920,20 +953,20 @@ private def mkSimpLemmaCore (e : Expr) (levelParams : Array Name) (proof : Expr)
       | none => throwError "unexpected kind of 'simp' theorem{indentExpr type}"
     return { keys := keys, perm := perm, post := post, levelParams := levelParams, proof := proof, name? := name?, priority := prio }
 
-def mkSimpLemmasFromConst (declName : Name) (post : Bool) (prio : Nat) : MetaM (Array SimpLemma) := do
+def mkSimpTheoremsFromConst (declName : Name) (post : Bool) (inv : Bool) (prio : Nat) : MetaM (Array SimpTheorem) := do
   let cinfo ← getConstInfo declName
   let val := mkConst declName (cinfo.levelParams.map mkLevelParam)
   withReducible do
     let type ← inferType val
     checkTypeIsProp type
-    if (← shouldPreprocess type) then
+    if inv || (← shouldPreprocess type) then
       let mut r := #[]
-      for (val, type) in (← preprocess val type) do
+      for (val, type) in (← preprocess val type inv (isGlobal := true)) do
         let auxName ← mkAuxLemma cinfo.levelParams type val
-        r := r.push <| (← mkSimpLemmaCore (mkConst auxName (cinfo.levelParams.map mkLevelParam)) #[] (mkConst auxName) post prio declName)
+        r := r.push <| (← mkSimpTheoremCore (mkConst auxName (cinfo.levelParams.map mkLevelParam)) #[] (mkConst auxName) post prio declName)
       return r
     else
-      #[← mkSimpLemmaCore (mkConst declName (cinfo.levelParams.map mkLevelParam)) #[] (mkConst declName) post prio declName]
+      return #[← mkSimpTheoremCore (mkConst declName (cinfo.levelParams.map mkLevelParam)) #[] (mkConst declName) post prio declName]
 
 def instantiateMVarsInMVarType (mvarId : MVarId) : MetaM Expr := do
   let type := (← getMVarDecl mvarId).type
@@ -947,7 +980,7 @@ def instantiateMVarsInMVarType (mvarId : MVarId) : MetaM Expr := do
 def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
     MetaM Expr := do
   let mdecl ← getMVarDecl mvarId
-  let (some ldecl) ← mdecl.lctx.find? fvarId | throwError
+  let (some ldecl) := mdecl.lctx.find? fvarId | throwError
     "unknown local constant {fvarId.name} (in local context of metavariable ?{mvarId.name})"
   let type ← instantiateMVars ldecl.type
   let mdecl :=
@@ -962,7 +995,7 @@ def instantiateMVarsInGoal (mvarId : MVarId) : MetaM Unit := do
   discard $ getMVarDecl mvarId
     -- The line above throws an error if the `mvarId` is not declared. The line
     -- below panics.
-  let mctx ← mctx.instantiateMVarDeclMVars mvarId
+  let mctx := mctx.instantiateMVarDeclMVars mvarId
   modify λ s => { s with mctx := mctx }
 
 def setMVarLCtx (mvarId : MVarId) (lctx : LocalContext) : MetaM Unit := do
@@ -1031,8 +1064,8 @@ def isValidMVarAssignment (mvarId : MVarId) (e : Expr) : MetaM Bool :=
 
 def isDeclaredMVar (mvarId : MVarId) : MetaM Bool := do
   match (← getMCtx).findDecl? mvarId with
-  | some _ => true
-  | none => false
+  | some _ => pure true
+  | none => pure false
 
 def getHypMVarsNoDelayed (goal : MVarId) : MetaM (HashSet MVarId) := do
   instantiateMVarsInGoal goal

@@ -272,7 +272,7 @@ def runNormRuleTac (bs : BranchState)
           unless ugoalOrigins.contains ugoal do throwError
             "{Check.rules.name}: normalisation rule {rule.name} introduced a new unification goal. {Thunk.get errorContext}"
         for (ugoal, _) in ugoalOrigins do
-          if ← ! previouslyAssignedUgoals.contains ugoal <&&> isExprMVarAssigned ugoal then throwError
+          if ! (← pure (previouslyAssignedUgoals.contains ugoal) <&&> isExprMVarAssigned ugoal) then throwError
             "{Check.rules.name}: normalisation rule {rule.name} assigned a unification goal. {Thunk.get errorContext}"
       return some (g, postBranchState)
     | _ => throwError
@@ -318,7 +318,7 @@ def runNormRules (goal : MVarId) (branchState : BranchState)
 def runNormalizationSimp (goal : MVarId) (rs : RuleSet) :
     MetaM (Option MVarId) := do
   let simpCtx :=
-    { (← Simp.Context.mkDefault) with simpLemmas := rs.normSimpLemmas }
+    { (← Simp.Context.mkDefault) with simpTheorems := rs.normSimpLemmas }
     -- TODO This computation should be done once, not every time we normalise
     -- a goal.
   simpAll goal simpCtx
@@ -401,7 +401,7 @@ def leastCommonUnificationGoalOrigin (unificationGoals : UnificationGoals) :
   let mut min := unificationGoals[0].snd.snd
   if unificationGoals.size = 1 then
     return min
-  let mut minId ← (← min.get).id
+  let mut minId := (← min.get).id
   for (_, _, rref) in unificationGoals do
     let id := (← rref.get).id
     if id < minId then
@@ -493,7 +493,7 @@ namespace UGoalAssignmentResult
 def newUnificationGoalOrigins (parent : GoalRef) : UGoalAssignmentResult →
     MetaM (PersistentHashMap MVarId RappRef)
   | noneAssigned => do (← parent.get).unificationGoalOrigins
-  | assigned u .. => u
+  | assigned u .. => pure u
 
 def newParentGoal (parent : GoalRef) : UGoalAssignmentResult → GoalRef
   | noneAssigned => parent
@@ -532,9 +532,9 @@ def processUnificationGoalAssignment (parent : GoalRef)
   let (newBranchRoot, { goalMap := goalMap, .. }) ← copyRappBranch oldBranchRoot
   aesop_trace[steps] "The root of the copied branch is rapp {(← newBranchRoot.get).id}."
   assignUnificationGoalsInRappBranch assignedUGoals oldBranchRoot
-  let newUGoals ← removeUnificationGoals assignedUGoals parentUGoalOrigins
+  let newUGoals := removeUnificationGoals assignedUGoals parentUGoalOrigins
   return UGoalAssignmentResult.assigned newUGoals
-    (← goalMap.find! (← parent.get).id)
+    (goalMap.find! (← parent.get).id)
 
 inductive RuleResult
 | proven
@@ -694,7 +694,7 @@ partial def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
       gref.modify λ g => g.setState GoalState.inactive
   where
     loop (queue : UnsafeQueue) : SearchM (UnsafeQueue × RuleResult) := do
-      let (some (r, queue)) ← queue.pop? |
+      let (some (r, queue)) := queue.pop? |
         return (queue, RuleResult.failed)
       aesop_trace[steps] "Trying {r.rule}"
       let result ←

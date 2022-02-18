@@ -303,7 +303,7 @@ def toRuleTacBuilder (b : GlobalRuleTacBuilder) : RuleTacBuilder := λ goal =>
   return (goal, ← b)
 
 private def checkDeclType (expectedType : Expr) (decl : Name) : MetaM Unit := do
-  let actualType ← (← getConstInfo decl).type
+  let actualType := (← getConstInfo decl).type
   unless (← isDefEq expectedType actualType) do
     throwError "aesop: {decl} was expected to have type{indentExpr expectedType}\nbut has type{indentExpr actualType}"
 
