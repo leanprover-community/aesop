@@ -23,7 +23,7 @@ def evalAesop : Tactic := λ stx =>
       liftMetaTacticAux λ goal => do
         let (goal, ruleSet) ← config.getRuleSet goal
         return (ruleSet, [goal])
-    aesop_trace[ruleSet] "{ruleSet}"
+    aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
     let (_, searchTime) ← IO.time $ searchTactic ruleSet config.options
     aesop_trace[profile] toMessageData
       { configParsing := configParseTime

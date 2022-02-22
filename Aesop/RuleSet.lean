@@ -90,11 +90,14 @@ namespace RuleSet
 open MessageData in
 instance : ToMessageData RuleSet where
   toMessageData rs :=
-    "Aesop rule set:" ++ node #[
+    unlines #[
       "Unsafe rules:" ++ toMessageData rs.unsafeRules,
       "Safe rules:" ++ toMessageData rs.safeRules,
       "Normalisation rules:" ++ toMessageData rs.normRules,
-      "Normalisation simp lemmas:" ++ rs.normSimpLemmas.toMessageData
+      "Normalisation simp lemmas:" ++ rs.normSimpLemmas.toMessageData,
+      "Erased rules:" ++ indentD (unlines $
+        rs.erased.toArray.qsort (λ x y => compare x y |>.isLT)
+          |>.map toMessageData)
     ]
 
 def empty : RuleSet where
@@ -288,6 +291,16 @@ protected def empty : RuleSets where
 
 instance : EmptyCollection RuleSets :=
   ⟨RuleSets.empty⟩
+
+open MessageData in
+instance : ToMessageData RuleSets where
+  toMessageData rss :=
+    let printRuleSet rsName rs := m!"{rsName}:{indentD $ toMessageData rs}"
+    let cmp (x y : RuleSetName × RuleSet) : Bool := x.fst.cmp y.fst |>.isLT
+    unlines $
+      #[ printRuleSet defaultRuleSetName rss.default ] ++
+      (rss.others.toArray.qsort cmp |>.map λ (rsName, rs) =>
+        printRuleSet rsName rs)
 
 -- If a rule set with name `rsName` already exists, it is overwritten.
 -- Precondition: `rsName ≠ defaultRuleSetName`.

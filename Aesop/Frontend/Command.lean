@@ -26,4 +26,7 @@ elab "erase_aesop_rules" "[" es:Aesop.rule_expr,* "]" : command => do
         rss ← rss.eraseRulesChecked rsFilter rFilter
     return rss
 
+elab "#aesop_rules" : command => do
+  Elab.logInfo $ toMessageData (← getAttributeRuleSets)
+
 end Aesop.Frontend.Parser

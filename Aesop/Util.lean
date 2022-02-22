@@ -373,7 +373,7 @@ end Std.Format
 namespace Lean.MessageData
 
 @[inline]
-def join (ms : List MessageData) : MessageData :=
+def join (ms : Array MessageData) : MessageData :=
 ms.foldl (· ++ ·) nil
 
 @[inlineIfReduce]
@@ -385,16 +385,27 @@ def isEmptyShallow : MessageData → Bool
 def indentDSkipEmpty (m : MessageData) : MessageData :=
   if m.isEmptyShallow then nil else indentD m
 
-@[inline]
-def unlines (ms : List MessageData) : MessageData :=
-  joinSep ms Format.line
+def joinSepArray (ms : Array MessageData) (sep : MessageData) :
+    MessageData := Id.run do
+  let mut result := nil
+  let last := ms.size - 1
+  for i in [0:ms.size] do
+    if i ≥ last then
+      result := result ++ ms[i]
+    else
+      result := result ++ ms[i] ++ sep
+  return result
 
 @[inline]
-def indentDUnlines : List MessageData → MessageData :=
+def unlines (ms : Array MessageData) : MessageData :=
+  joinSepArray ms Format.line
+
+@[inline]
+def indentDUnlines : Array MessageData → MessageData :=
   indentDSkipEmpty ∘ unlines
 
 @[inline]
-def indentDUnlinesSkipEmpty (fs : List MessageData) : MessageData :=
+def indentDUnlinesSkipEmpty (fs : Array MessageData) : MessageData :=
   indentDSkipEmpty $ unlines $ fs.filter (¬ ·.isEmptyShallow)
 
 def toMessageDataIf (b : Bool) (f : Thunk MessageData) : MessageData :=
@@ -623,6 +634,9 @@ constant forIn [BEq α] [Hashable α] {m : Type u → Type v} [Monad m]
 
 instance [BEq α] [Hashable α] : ForIn m (PersistentHashMap α β) (α × β) where
   forIn map := map.forIn
+
+def toArray (map : PersistentHashMap α β) : Array (α × β) :=
+  map.foldl (init := Array.mkEmpty map.size) λ acc a b => acc.push (a, b)
 
 end Std.PersistentHashMap
 
