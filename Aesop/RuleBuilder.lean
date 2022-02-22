@@ -144,6 +144,7 @@ private def throwDefaultBuilderFailure (ruleType : String) (id : Name) : MetaM �
 
 structure ForwardBuilderOptions where
   immediateHyps : Array Name
+  deriving Inhabited
 
 namespace GlobalRuleBuilder
 
@@ -230,6 +231,20 @@ end LocalRuleBuilder
 
 namespace RuleBuilder
 
+def toGlobalRuleBuilder (r : RuleBuilder α) : GlobalRuleBuilder α := λ decl =>
+  Prod.snd <$> r (RuleIdent.const decl) ⟨`_dummy⟩
+  -- NOTE: We assume that the 'global part' of `r` does not use the `_dummy`
+  -- mvar.
+
+def toLocalRuleBuilder (r : RuleBuilder α) :
+    LocalRuleBuilder α := λ fvarId goal =>
+  r (RuleIdent.fvar fvarId) goal
+
+def toNormRuleBuilder (r : RuleBuilder RegularRuleBuilderResult) :
+    RuleBuilder NormRuleBuilderResult := λ id goal => do
+  let (goal, res) ← r id goal
+  return (goal, NormRuleBuilderResult.regular res)
+
 def ofGlobalAndLocalRuleBuilder (global : GlobalRuleBuilder α)
     («local» : LocalRuleBuilder α) : RuleBuilder α := λ id goal => do
   match id with
@@ -266,15 +281,15 @@ def constructors : RuleBuilder RegularRuleBuilderResult :=
 def cases : RuleBuilder RegularRuleBuilderResult :=
   ofGlobalRuleBuilder "cases" $ GlobalRuleBuilder.cases
 
-def unsafeRuleDefault : RuleBuilder RegularRuleBuilderResult :=
+def unsafeDefault : RuleBuilder RegularRuleBuilderResult :=
   ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.unsafeRuleDefault
     LocalRuleBuilder.unsafeRuleDefault
 
-def safeRuleDefault : RuleBuilder RegularRuleBuilderResult :=
+def safeDefault : RuleBuilder RegularRuleBuilderResult :=
   ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.safeRuleDefault
     LocalRuleBuilder.safeRuleDefault
 
-def normRuleDefault : RuleBuilder NormRuleBuilderResult :=
+def normDefault : RuleBuilder NormRuleBuilderResult :=
   ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.normRuleDefault
     LocalRuleBuilder.normRuleDefault
 

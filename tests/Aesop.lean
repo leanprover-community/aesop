@@ -28,13 +28,13 @@ inductive EvenOrOdd : Nat → Prop
 | even {n} : Even n → EvenOrOdd n
 | odd {n} : Odd n → EvenOrOdd n
 
-attribute [aesop  50%] EvenOrOdd.even EvenOrOdd.odd
+attribute [aesop 50%] EvenOrOdd.even EvenOrOdd.odd
 attribute [aesop safe] Even.zero Even.plus_two
 attribute [aesop 100%] Odd.one Odd.plus_two
 
 def EvenOrOdd' (n : Nat) : Prop := EvenOrOdd n
 
-@[aesop norm (builder tactic)]
+@[aesop norm tactic]
 def testNormTactic : TacticM Unit := do
   evalTactic (← `(tactic|try simp only [EvenOrOdd']))
 
@@ -52,7 +52,7 @@ section Transitivity
 axiom A : Type
 axiom R : A → A → Prop
 
-@[aesop 10%]
+@[aesop unsafe 10%]
 axiom R_trans : ∀ x y z, R x y → R y z → R x z
 
 set_option trace.aesop.steps true
@@ -73,9 +73,9 @@ structure Wrap (α) where
   unwrap : α
 
 example (h : α → α) (h' : Wrap α) : α := by
-  fail_if_success aesop (safe [h]) (options { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0 })
-  fail_if_success aesop (safe [h]) (options { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0 })
-  fail_if_success aesop (safe [h]) (options { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0 })
+  fail_if_success aesop (add safe h) (options := { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0 })
+  fail_if_success aesop (add safe h) (options := { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0 })
+  fail_if_success aesop (add safe h) (options := { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0 })
   exact h'.unwrap
 
 end Loop

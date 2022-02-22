@@ -19,7 +19,7 @@ open Lean.Elab.Tactic
 namespace Aesop.BuiltinRules
 
 -- TODO avoid TacticM?
-@[aesop norm -1 (builder tactic uses_no_branch_state) (rulesets [builtin])]
+@[aesop norm -1 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
 def intros : TacticM Unit := do
   evalTactic (← `(tactic|intros))
 

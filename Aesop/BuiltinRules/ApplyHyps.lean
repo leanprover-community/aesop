@@ -17,7 +17,7 @@ def applyHyp (hyp : FVarId) (input : RuleTacInput) : MetaM RuleApplication := do
   output.toRuleApplication
   -- TODO optimise ugoal analysis
 
-@[aesop unsafe 75% (builder tactic uses_no_branch_state) (rulesets [builtin])]
+@[aesop unsafe 75% (tactic (uses_branch_state := false)) (rule_sets [builtin])]
 def applyHyps : RuleTac := λ input =>
   withMVarContext input.goal do
     let lctx ← getLCtx

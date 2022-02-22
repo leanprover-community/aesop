@@ -7,12 +7,12 @@ import Aesop
 
 set_option aesop.check.all true
 
-@[aesop unsafe 50% (builder cases)]
+@[aesop 50% cases]
 inductive FancyAnd (α β : Prop) : Prop
 | dummy (p : Empty)
 | and (a : α) (b : β)
 
-attribute [aesop safe -51 (builder cases)] Empty
+attribute [aesop safe -51 cases] Empty
 
 example {α β} (h : FancyAnd α β) : α ∧ β := by
   aesop

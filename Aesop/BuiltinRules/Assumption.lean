@@ -24,7 +24,7 @@ def findLocalDeclWithMVarFreeType? (goal : MVarId) (type : Expr) :
         else
           return none
 
-@[aesop safe -50 (builder tactic uses_no_branch_state) (rulesets [builtin])]
+@[aesop safe -50 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
 def safeAssumption : RuleTac := λ { goal, .. } =>
   withMVarContext goal do
     checkNotAssigned goal `Aesop.BuiltinRules.safeAssumption

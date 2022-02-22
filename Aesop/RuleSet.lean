@@ -322,16 +322,24 @@ def modifyRuleSet (rss : RuleSets) (rsName : RuleSetName)
     (f : RuleSet → RuleSet) : RuleSets :=
   Id.run $ rss.modifyRuleSetM rsName (λ rs => pure $ f rs)
 
--- Precondition: a rule set with name `rsName` exists in `rss`.
-def addRule (rss : RuleSets) (rsName : RuleSetName) (r : RuleSetMember) :
-    RuleSets :=
-  rss.modifyRuleSet rsName (·.add r)
-
 def containsRule (rss : RuleSets) (rsName : RuleSetName) (rName : RuleName) :
     Bool :=
   match rss.getRuleSet? rsName with
   | none => false
   | some rs => rs.contains rName
+
+-- Precondition: a rule set with name `rsName` exists in `rss`.
+def addRule (rss : RuleSets) (rsName : RuleSetName) (r : RuleSetMember) :
+    RuleSets :=
+  rss.modifyRuleSet rsName (·.add r)
+
+def addRuleChecked [Monad m] [MonadError m] (rss : RuleSets)
+    (rsName : RuleSetName) (rule : RuleSetMember) : m RuleSets := do
+  if ! rss.containsRuleSet rsName then throwError
+    "aesop: no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.)"
+  if rss.containsRule rsName rule.name then throwError
+    "aesop: '{rule.name.name}' is already registered in rule set '{rsName}'"
+  return rss.addRule rsName rule
 
 -- Returns the updated rule sets and `true` if at least one rule was erased
 -- (from at least one rule set).
@@ -352,9 +360,16 @@ def eraseRules (rss : RuleSets) (rsf : RuleSetNameFilter) (rf : RuleNameFilter) 
         erased := true
   return (result, erased)
 
-def eraseAllRulesWithIdent (rss : RuleSets) (i : RuleIdent) : RuleSets × Bool :=
-  rss.eraseRules { ruleSetNames := #[] }
-    { ident := i, builders := #[], phases := #[] }
+def eraseRulesChecked [Monad m] [MonadError m] (rss : RuleSets)
+    (rsf : RuleSetNameFilter) (rf : RuleNameFilter) : m RuleSets := do
+  let (rss, anyErased) := rss.eraseRules rsf rf
+  unless anyErased do
+    let rsNames := rsf.ruleSetNames
+    if rsNames.isEmpty then
+      throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any rule set."
+    else
+      throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any of the rule sets {String.joinSep ", " $ rsNames.map toString}."
+  return rss
 
 -- If a name in `rsNames` does not appear in `rss`, it is silently skipped.
 def makeMergedRuleSet (rss : RuleSets)

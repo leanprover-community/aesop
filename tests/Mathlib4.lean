@@ -40,7 +40,7 @@ theorem heq_of_eq_rec_right {φ : α → Sort v} {a a' : α} {p₁ : φ a} {p₂
 theorem of_heq_true (h : HEq a True) : a := of_eq_true (eq_of_heq h)
 
 -- TODO use applicable hyps by default
-def And.elim (f : a → b → α) (h : a ∧ b) : α := by aesop (safe [f])
+def And.elim (f : a → b → α) (h : a ∧ b) : α := by aesop (add safe f)
 
 theorem And.symm : a ∧ b → b ∧ a := by aesop
 
@@ -67,7 +67,7 @@ def Iff.elim (f : (a → b) → (b → a) → c) (h : a ↔ b) : c :=
 
 -- TODO add Iff.intro as default rule
 theorem iff_comm : (a ↔ b) ↔ (b ↔ a) := by
-  aesop (safe [Iff.intro])
+  aesop (add safe Iff.intro)
 
 -- TODO don't do contextual simp for all hyps by default (so this should fail)
 theorem Eq.to_iff : a = b → (a ↔ b) := by
@@ -100,7 +100,7 @@ theorem imp_congr_ctx (h₁ : a ↔ c) (h₂ : c → (b ↔ d)) : (a → b) ↔ 
 (imp_congr_left h₁).trans (imp_congr_right h₂)
 
 theorem imp_congr (h₁ : a ↔ c) (h₂ : b ↔ d) : (a → b) ↔ (c → d) := by
-  aesop (safe [imp_congr_ctx])
+  aesop (add safe imp_congr_ctx)
 
 theorem Not.intro {a : Prop} (h : a → False) : ¬a := by aesop
 

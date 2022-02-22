@@ -13,7 +13,7 @@ open Lean.Elab.Tactic
 
 namespace Aesop.BuiltinRules
 
-@[aesop safe -49 (builder tactic uses_no_branch_state) (rulesets [builtin])]
+@[aesop safe -49 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
 def safeReflexivity : RuleTac := λ { goal, .. } => do
   withMVarContext goal do
     let tgt ← instantiateMVarsInMVarType goal

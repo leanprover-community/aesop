@@ -25,7 +25,7 @@ syntax (name := memoryStressTest) "memoryStressTest" ident : tactic
 def evalMemoryStressTest : Tactic
 | `(tactic| memoryStressTest $rule:ident) =>
   for i in [0:10000] do
-    evalTactic (← `(tactic| try aesop (safe [$rule:ident (builder tactic)]) (options { maxRuleApplications := 10, maxRuleApplicationDepth := 10, maxGoals := 0 })))
+    evalTactic (← `(tactic| try aesop (add safe $rule:ident tactic) (options := { maxRuleApplications := 10, maxRuleApplicationDepth := 10, maxGoals := 0 })))
 | _ => unreachable!
 
 -- Our very own True, to prevent the Aesop default rules from solving the goal.

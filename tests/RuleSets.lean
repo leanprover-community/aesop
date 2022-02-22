@@ -10,11 +10,11 @@ set_option aesop.check.all true
 
 declare_aesop_rule_sets [A, B, C, D]
 
-@[aesop safe (rulesets [A])]
+@[aesop safe (rule_sets [A])]
 inductive A : Prop where
 | intro
 
-@[aesop safe (rulesets [B])]
+@[aesop safe (rule_sets [B])]
 inductive B : Prop where
 | intro
 
@@ -27,34 +27,34 @@ inductive D : Prop where
 
 example : A := by
   fail_if_success aesop
-  aesop (rulesets [A])
+  aesop (rule_sets [A])
 
 example : B := by
-  aesop (rulesets [A, B])
+  aesop (rule_sets [A, B])
 
 example : C := by
-  fail_if_success aesop (rulesets [-default])
+  fail_if_success aesop (rule_sets [-default])
   aesop
 
-attribute [aesop safe (rulesets [C])] C
+attribute [aesop safe (rule_sets [C])] C
 
 -- Removing the attribute removes all rules associated with C from all rule
 -- sets.
 attribute [-aesop] C
 
 example : C := by
-  fail_if_success aesop (rulesets [C])
-  aesop (safe [C])
+  fail_if_success aesop (rule_sets [C])
+  aesop (add safe C)
 
-@[aesop norm (builder simp)]
+@[aesop norm simp]
 theorem ad : D ↔ A :=
   ⟨λ _ => A.intro, λ _ => D.intro⟩
 
 example : D := by
-  aesop (rulesets [A])
+  aesop (rule_sets [A])
 
 attribute [-aesop] ad
 
 example : D := by
-  fail_if_success aesop (rulesets [A])
-  aesop (norm [ad]) (rulesets [A])
+  fail_if_success aesop (rule_sets [A])
+  aesop (add norm ad) (rule_sets [A])

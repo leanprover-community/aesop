@@ -22,6 +22,10 @@ instance (priority := low) [ord : Ord α] : BEq α :=
 
 namespace Option
 
+def forM [Monad m] (f : α → m Unit) : Option α → m Unit
+  | none => pure ()
+  | some a => f a
+
 def mergeLeftBiased : Option α → Option α → Option α
   | some x, y => some x
   | none, y => y
@@ -113,14 +117,13 @@ end Nat
 
 namespace String
 
-def joinSep (sep : String)  : List String → String
-  | [] => ""
-  | "" :: ss => joinSep sep ss
-  | s :: ss =>
-    let tail := joinSep sep ss
-    match tail with
-    | "" => s
-    | _ => s ++ sep ++ tail
+def joinSep (sep : String) (ss : Array String) : String :=
+  let firstNonempty? := ss.findIdx? (! ·.isEmpty)
+  match firstNonempty? with
+  | none => ""
+  | some firstNonempty =>
+    ss.foldl (start := firstNonempty + 1) (init := ss[firstNonempty]) λ res s =>
+      if s.isEmpty then res else res ++ sep ++ s
 
 end String
 
@@ -155,6 +158,21 @@ end Ordering
 
 
 namespace Ord
+
+def isLT (o : Ord α) (x y : α) : Bool :=
+  o.compare x y |>.isLT
+
+def isLE (o : Ord α) (x y : α) : Bool :=
+  o.compare x y |>.isLE
+
+def isEQ (o : Ord α) (x y : α) : Bool :=
+  o.compare x y |>.isEQ
+
+def isGT (o : Ord α) (x y : α) : Bool :=
+  o.compare x y |>.isGT
+
+def isGE (o : Ord α) (x y : α) : Bool :=
+  o.compare x y |>.isGE
 
 def lexicographic (o₁ : Ord α) (o₂ : Ord α) : Ord α :=
   ⟨Ordering.compareLexicographic o₁.compare o₂.compare⟩

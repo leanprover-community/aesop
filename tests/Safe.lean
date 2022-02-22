@@ -26,9 +26,9 @@ theorem even'_of_even' : Even' n → Even' n :=
 -- and never visited again.
 example : Even' 2 := by
   fail_if_success aesop
-    (safe [even'_of_false 0, Even'.mk 1])
+    (add safe [even'_of_false 0, Even'.mk 1])
   fail_if_success aesop
-    (safe [even'_of_even']) (unsafe [Even'.mk 100%])
-    (options { maxRuleApplications := 10 })
+    (add safe [even'_of_even'], unsafe [Even'.mk 100%])
+    (options := { maxRuleApplications := 10 })
   aesop
-    (safe [even'_of_false 1, Even'.mk 0])
+    (add safe [even'_of_false 1, Even'.mk 0])

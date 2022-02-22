@@ -23,12 +23,18 @@ inductive EvenOrOdd : Nat → Prop
 -- We can add constants as rules.
 example : EvenOrOdd 3 := by
   aesop
-    (safe [Even.zero, Even.plus_two, Odd.one, Odd.plus_two])
-    (unsafe [EvenOrOdd.even 50% (builder apply), EvenOrOdd.odd 50%])
+    (add safe [Even.zero, Even.plus_two, Odd.one, Odd.plus_two],
+         unsafe [apply 50% EvenOrOdd.even, 50% EvenOrOdd.odd])
 
 -- Same with local hypotheses, or a mix.
 example : EvenOrOdd 3 := by
-  have h₂ : ∀ n, Odd n → EvenOrOdd n := λ _ p => EvenOrOdd.odd p
+  have h : ∀ n, Odd n → EvenOrOdd n := λ _ p => EvenOrOdd.odd p
   aesop
-    (safe [Odd.one, Odd.plus_two])
-    (unsafe [EvenOrOdd.even 50%, h₂ 50%])
+    (add safe [Odd.one, Odd.plus_two], unsafe [EvenOrOdd.even 50%, h 50%])
+
+attribute [aesop 50%] Even.zero Even.plus_two
+
+-- We can also erase rules.
+example : EvenOrOdd 2 := by
+  fail_if_success aesop (add safe EvenOrOdd.even) (erase Even.zero)
+  aesop (add safe EvenOrOdd.even)

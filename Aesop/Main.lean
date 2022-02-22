@@ -6,7 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.BestFirstSearch
 import Aesop.BuiltinRules -- ensures that the builtin rules are registered
-import Aesop.Frontend
+import Aesop.Frontend.Tactic
 import Aesop.Profiling
 import Lean
 
@@ -15,20 +15,16 @@ open Lean.Elab.Tactic
 
 namespace Aesop
 
-@[tactic Frontend.Parser.Tactic.aesop]
+@[tactic Frontend.Parser.aesopTactic]
 def evalAesop : Tactic := λ stx =>
   withMainContext do
     let (config, configParseTime) ← IO.time $ Frontend.TacticConfig.parse stx
-    let (rs, ruleSetConstructionTime) ← IO.time do
-      let rs ←
-        Frontend.getAttributeRuleSet (includeDefaultSimpLemmas := true) -- TODO
-          config.enabledRuleSets
-      let additionalRuleSetMembers ← liftMetaTacticAux λ goal => do
-        let (goal, rs) ← config.buildAdditionalRules goal
-        pure (rs, [goal])
-      return rs.addArray additionalRuleSetMembers
-    aesop_trace[ruleSet] "{rs}"
-    let (_, searchTime) ← IO.time $ searchTactic rs config.options
+    let (ruleSet, ruleSetConstructionTime) ← IO.time $
+      liftMetaTacticAux λ goal => do
+        let (goal, ruleSet) ← config.getRuleSet goal
+        return (ruleSet, [goal])
+    aesop_trace[ruleSet] "{ruleSet}"
+    let (_, searchTime) ← IO.time $ searchTactic ruleSet config.options
     aesop_trace[profile] toMessageData
       { configParsing := configParseTime
         ruleSetConstruction := ruleSetConstructionTime

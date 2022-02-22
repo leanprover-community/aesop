@@ -49,6 +49,5 @@ example {P Q R : α → Type} (rule : ∀ a (p : P a) (q : Q a), R a)
 
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂) (r₂ : (a : α) → δ₁ ∧ δ₂) :
     γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
-  aesop (safe
-    [r₁ (builder forward (immediate a b)),
-     r₂ (builder forward (immediate a))])
+  aesop (add safe
+    [r₁ (forward (immediate := [a, b])), r₂ (forward (immediate := [a]))])

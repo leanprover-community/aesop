@@ -160,12 +160,10 @@ def type : RuleIdent → MetaM Expr
   | const c => return (← getConstInfo c).type
   | fvar userName => return (← getLocalDeclFromUserName userName).type
 
-def ofName (n : Name) : MetaM RuleIdent := do
-  try
-    let _ ← getLocalDeclFromUserName n
-    pure $ fvar n
-  catch _ =>
-    pure $ const n
+def ofName [Monad m] [MonadLCtx m] (n : Name) : m RuleIdent := do
+  match (← getLCtx).findFromUserName? n with
+  | none => pure $ const n
+  | some _ => pure $ fvar n
 
 def toRuleName (phase : RuleName.Phase) (builder : RuleName.Builder)
     (i : RuleIdent) : RuleName where

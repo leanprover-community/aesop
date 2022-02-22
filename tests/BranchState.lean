@@ -14,8 +14,8 @@ def limitedEvenPlusTwo : RuleTac :=
   RuleTac.withApplicationLimit 2 $ RuleTac.applyConst ``Even.plusTwo
 
 example : Even 4 := by
-  aesop (safe [limitedEvenPlusTwo])
+  aesop (add safe limitedEvenPlusTwo)
 
 example : Even 6 := by
-  fail_if_success aesop (safe [limitedEvenPlusTwo])
-  aesop (safe [limitedEvenPlusTwo (builder tactic uses_no_branch_state)])
+  fail_if_success aesop (add safe limitedEvenPlusTwo)
+  aesop (add safe (tactic (uses_branch_state := false)) limitedEvenPlusTwo)

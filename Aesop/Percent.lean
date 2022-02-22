@@ -10,7 +10,7 @@ open Lean
 open Std
 
 /-
-Invariant: between 0 and 0.1
+Invariant: between 0 and 1.0
 -/
 structure Percent where
   toFloat : Float
