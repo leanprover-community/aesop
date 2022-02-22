@@ -543,13 +543,18 @@ inductive RuleResult
 
 namespace RuleResult
 
-def isFailed : RuleResult → Bool
-  | failed => true
-  | _ => false
+def isSuccessful : RuleResult → Bool
+  | proven => true
+  | failed => false
+  | succeeded => true
+
+def isFailed (r : RuleResult) : Bool :=
+  ! r.isSuccessful
 
 def isProven : RuleResult → Bool
   | proven => true
-  | _ => false
+  | failed => false
+  | succeeded => false
 
 end RuleResult
 
@@ -576,6 +581,9 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
     aesop_trace[stepsBranchStates] "Updated branch state: {rule.withRule λ r => postBranchState.find? r}"
     match rapps.find? (·.goals.isEmpty) with
     | none =>
+      if rule.isSafe then
+        aesop_trace[steps] "Goal becomes inactive after a successful safe rule application."
+        parentRef.modify λ parent => parent.setState GoalState.inactive
       let mut parentRef := parentRef
       for rapp in rapps do
         parentRef ←
@@ -645,7 +653,7 @@ def runFirstSafeRule (gref : GoalRef) : SearchM RuleResult := do
   for r in rules do
     aesop_trace[steps] "Trying {r.rule}"
     result ← runRegularRule gref (RegularRule'.safe r.rule) r.matchLocations
-    if result.isFailed then continue else break
+    if result.isSuccessful then break
   return result
 
 def SafeRule.asUnsafeRule (r : SafeRule) : UnsafeRule :=
@@ -686,7 +694,9 @@ partial def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
   gref.modify λ g => g.setUnsafeQueue remainingQueue
   aesop_trace[steps] "Remaining unsafe rules:{MessageData.node $ remainingQueue.toArray.map toMessageData}"
   if remainingQueue.isEmpty then
-    if ← (← gref.get).isUnprovableNoCache then
+    if (← gref.get).state.isProven then
+      pure ()
+    else if ← (← gref.get).isUnprovableNoCache then
       aesop_trace[steps] "Goal is unprovable."
       gref.setUnprovable (firstGoalUnconditional := true)
     else
@@ -699,7 +709,7 @@ partial def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
       aesop_trace[steps] "Trying {r.rule}"
       let result ←
         runRegularRule gref (RegularRule'.unsafe r.rule) r.matchLocations
-      if ¬ result.isFailed
+      if result.isSuccessful
         then return (queue, result)
         else loop queue
 

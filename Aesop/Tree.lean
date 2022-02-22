@@ -151,7 +151,8 @@ At each point during the search, a goal is in one of these states:
 - `active`: the goal is not proven, but not all rules that can be applied to
   it have been applied yet.
 - `inactive`: all rules that can be applied to the goal have been applied, but
-  some of its rule applications may be provable.
+  some of its rule applications may be provable. (If a safe rule is successfully
+  applied to a goal, the goal immediately becomes inactive.)
 - `provenByRuleApplication`: the goal has a child rapp that is proven.
 - `provenByNormalization`: the goal was proven during normalization.
 - `unprovable`: all rules that can be applied to the goal have been applied, but
