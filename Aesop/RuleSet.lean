@@ -388,15 +388,17 @@ def makeMergedRuleSet (rss : RuleSets)
 def toDescrArray! (rss : RuleSets) :
     Array (RuleSetName × RuleSetMemberDescr) := Id.run do
   let mut s := #[]
-  s := addRuleSetMembers s rss.default
-  s := rss.others.foldl (init := s) λ s _ rs => addRuleSetMembers s rs
+  s := addRuleSetMembers s defaultRuleSetName rss.default
+  s := rss.others.foldl (init := s) λ s rsName rs =>
+    addRuleSetMembers s rsName rs
   return s
   where
     addRuleSetMembers (s : Array (RuleSetName × RuleSetMemberDescr))
-        (rs : RuleSet) : Array (RuleSetName × RuleSetMemberDescr) :=
+        (rsName : RuleSetName) (rs : RuleSet) :
+        Array (RuleSetName × RuleSetMemberDescr) :=
       rs.fold (init := s) λ s r =>
         let descr := r.toDescr.getD $ panic!
           "aesop: trying to serialise a rule set where not every rule has a RuleSetMemberDescr"
-        s.push (defaultRuleSetName, descr)
+        s.push (rsName, descr)
 
 end Aesop.RuleSets
