@@ -321,7 +321,8 @@ def runNormalizationSimp (goal : MVarId) (rs : RuleSet) :
     { (← Simp.Context.mkDefault) with simpTheorems := rs.normSimpLemmas }
     -- TODO This computation should be done once, not every time we normalise
     -- a goal.
-  simpAll goal simpCtx
+  let goal? ← simpAll goal simpCtx
+  goal?.mapM λ goal => Prod.snd <$> intros goal
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def normalizeGoalMVar (rs : RuleSet) (goal : MVarId)

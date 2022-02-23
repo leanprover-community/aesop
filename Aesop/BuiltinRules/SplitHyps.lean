@@ -246,7 +246,7 @@ def splitHyps (goal : MVarId) : MetaM (Array FVarId × MVarId) := do
 
 end SplitHyps
 
-@[aesop norm 0 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
+@[aesop norm 1 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
 def splitHyps : SimpleRuleTac := λ input =>
   return { goals := #[((← SplitHyps.splitHyps input.goal).snd, none)] }
 
