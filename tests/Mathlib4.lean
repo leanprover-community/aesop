@@ -18,8 +18,8 @@ def proof_irrel := @proofIrrel
 def congr_fun := @congrFun
 def congr_arg := @congrArg
 
--- TODO subst builder
-theorem not_of_eq_false {p : Prop} (h : p = False) : ¬p := fun hp => h ▸ hp
+theorem not_of_eq_false {p : Prop} (h : p = False) : ¬p := by
+  aesop
 
 -- TODO How to use a lemma like this? Maybe this is a nice example of e-matching.
 theorem cast_proof_irrel (h₁ h₂ : α = β) (a : α) : cast h₁ a = cast h₂ a := by
@@ -39,15 +39,15 @@ theorem heq_of_eq_rec_right {φ : α → Sort v} {a a' : α} {p₁ : φ a} {p₂
 
 theorem of_heq_true (h : HEq a True) : a := of_eq_true (eq_of_heq h)
 
--- TODO use applicable hyps by default
-def And.elim (f : a → b → α) (h : a ∧ b) : α := by aesop (add safe f)
+def And.elim (f : a → b → α) (h : a ∧ b) : α := by
+  aesop
 
-theorem And.symm : a ∧ b → b ∧ a := by aesop
+theorem And.symm : a ∧ b → b ∧ a := by
+  aesop
 
 -- TODO automatic cases on or in hyp (needs per-hyp rules)
--- TODO cases builder
 theorem Or.myelim {a b c : Prop} (h₁ : a → c) (h₂ : b → c) (h : a ∨ b) : c := by
-  cases h <;> aesop
+  aesop (add safe cases Or)
 
 -- TODO make normalisation a fixpoint loop?
 -- TODO deal with negation
