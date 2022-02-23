@@ -132,23 +132,50 @@ def applyConsts (decls : Array Name) : RuleTac := λ input => do
   if apps.isEmpty then failure
   return { applications := apps, postBranchState? := none }
 
-def cases (decl : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input => do
-  let goals? ← saturate1 input.goal λ goal => do
-    let (some hyp) ← findFirstApplicableHyp goal
-      | return none
-    let newGoals ← Meta.cases goal hyp
-    return newGoals.map (·.mvarId)
-  match goals? with
-  | none => throwError "No hypothesis of type {decl} found"
-  | some goals => return { goals := goals.map λ g => (g, none) }
+partial def cases (decl : Name) (isRecursiveType : Bool) : RuleTac :=
+  SimpleRuleTac.toRuleTac λ input => do
+    let goals? ← go #[] #[] input.goal
+    match goals? with
+    | none => throwError "No hypothesis of type {decl} found"
+    | some goals => return { goals := goals.map λ g => (g, none) }
   where
-    findFirstApplicableHyp (goal : MVarId) : MetaM (Option FVarId) :=
+    findFirstApplicableHyp (excluded : Array FVarId) (goal : MVarId) :
+        MetaM (Option FVarId) :=
       withMVarContext goal do
-        let ctx ← getLCtx
-        return ctx.findDecl? λ ldecl =>
-          if ldecl.type.isAppOf decl then some ldecl.fvarId else none
+        return (← getLCtx).findDecl? λ ldecl =>
+          if ! ldecl.isAuxDecl &&
+             ldecl.type.isAppOf decl &&
+             ! excluded.contains ldecl.fvarId then
           -- Note: We currently check for occurrences of `decl` structurally,
           -- not up to WHNF.
+            some ldecl.fvarId
+          else
+            none
+
+    go (newGoals : Array MVarId) (excluded : Array FVarId)
+        (goal : MVarId) : MetaM (Option (Array MVarId)) := do
+      let (some hyp) ← findFirstApplicableHyp excluded goal
+        | return none
+      try
+        let goals ← Meta.cases goal hyp
+        let mut newGoals := newGoals
+        for g in goals do
+          let excluded :=
+            if ! isRecursiveType then
+              excluded
+            else
+              let excluded := excluded.map λ fvarId =>
+                match g.subst.find? fvarId with
+                | some (Expr.fvar fvarId' ..) => fvarId'
+                | _ => fvarId
+              excluded ++ g.fields.map (·.fvarId!)
+          let newGoals? ← go newGoals excluded g.mvarId
+          match newGoals? with
+          | some newGoals' => newGoals := newGoals'
+          | none => newGoals := newGoals.push g.mvarId
+        return some newGoals
+      catch e =>
+        return none
 
 private partial def makeForwardHyps (e : Expr) (immediate : Array Name) : MetaM (Array Expr) := do
   let type ← inferType e
@@ -252,7 +279,7 @@ inductive GlobalRuleTacBuilderDescr
   | apply (decl : Name)
   | constructors (constructorNames : Array Name)
   | forward (decl : Name) (immediate : Array Name)
-  | cases (decl : Name)
+  | cases (decl : Name) (isRecursiveType : Bool)
   | tacticM (decl : Name)
   | ruleTac (decl : Name)
   | simpleRuleTac (decl : Name)
@@ -363,10 +390,10 @@ def constructors (constructorNames : Array Name) : GlobalRuleTacBuilder := do
     descr := GlobalRuleTacBuilderDescr.constructors constructorNames
   }
 
-def cases (decl : Name) : GlobalRuleTacBuilder :=
+def cases (decl : Name) (isRecursiveType : Bool) : GlobalRuleTacBuilder :=
   return {
-    tac := RuleTac.cases decl
-    descr := GlobalRuleTacBuilderDescr.cases decl
+    tac := RuleTac.cases decl isRecursiveType
+    descr := GlobalRuleTacBuilderDescr.cases decl isRecursiveType
   }
 
 def forward (decl : Name) (immediate : Array Name) :
@@ -386,7 +413,7 @@ def toRuleTacBuilder : GlobalRuleTacBuilderDescr → GlobalRuleTacBuilder
   | apply decl => GlobalRuleTacBuilder.apply decl
   | constructors cs => GlobalRuleTacBuilder.constructors cs
   | forward decl immediate => GlobalRuleTacBuilder.forward decl immediate
-  | cases decl => GlobalRuleTacBuilder.cases decl
+  | cases decl isRecursiveType => GlobalRuleTacBuilder.cases decl isRecursiveType
   | tacticM decl => GlobalRuleTacBuilder.tacticM decl
   | simpleRuleTac decl => GlobalRuleTacBuilder.simpleRuleTac decl
   | ruleTac decl => GlobalRuleTacBuilder.ruleTac decl

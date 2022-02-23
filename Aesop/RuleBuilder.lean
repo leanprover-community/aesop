@@ -129,10 +129,11 @@ def constructors : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
 
 def cases : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
   let builderName := `cases
-  let _ ← checkConstIsInductive builderName decl
+  let inductInfo ← checkConstIsInductive builderName decl
   return {
     builder := BuilderName.cases
     tac := ← GlobalRuleTacBuilder.cases decl
+      (isRecursiveType := inductInfo.isRec)
     indexingMode := IndexingMode.unindexed
     mayUseBranchState := false
   }
