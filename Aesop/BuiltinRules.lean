@@ -23,4 +23,8 @@ namespace Aesop.BuiltinRules
 def intros : TacticM Unit := do
   evalTactic (← `(tactic|intros))
 
+@[aesop safe -30 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
+def contradiction : TacticM Unit :=
+  liftMetaTactic λ goal => do Meta.contradiction goal; return []
+
 end Aesop.BuiltinRules
