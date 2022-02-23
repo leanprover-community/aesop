@@ -75,10 +75,10 @@ syntax &"unsafe" : Aesop.phase
 
 end Parser
 
-def parsePhaseName : Syntax → RuleName.Phase
-  | `(phase| safe) => RuleName.Phase.safe
-  | `(phase| norm) => RuleName.Phase.norm
-  | `(phase| unsafe) => RuleName.Phase.unsafe
+def parsePhaseName : Syntax → PhaseName
+  | `(phase| safe) => PhaseName.safe
+  | `(phase| norm) => PhaseName.norm
+  | `(phase| unsafe) => PhaseName.unsafe
   | _ => unreachable!
 
 
@@ -95,6 +95,59 @@ def parseBoolLit : Syntax → Bool
   | `(bool_lit| true) => true
   | `(bool_lit| false) => false
   | _ => unreachable!
+
+
+namespace Parser
+
+declare_syntax_cat Aesop.builder_name (behavior := symbol)
+
+syntax &"apply" : Aesop.builder_name
+syntax &"simp" : Aesop.builder_name
+syntax &"unfold" : Aesop.builder_name
+syntax &"tactic" : Aesop.builder_name
+syntax &"constructors" : Aesop.builder_name
+syntax &"forward" : Aesop.builder_name
+syntax &"cases" : Aesop.builder_name
+syntax &"safe_default" : Aesop.builder_name
+syntax &"unsafe_default" : Aesop.builder_name
+syntax &"norm_default" : Aesop.builder_name
+
+end Parser
+
+inductive DBuilderName
+  | regular (b : BuilderName)
+  | safeDefault
+  | unsafeDefault
+  | normDefault
+  deriving Inhabited
+
+namespace DBuilderName
+
+def parse : Syntax → DBuilderName
+  | `(builder_name| apply) => regular $ BuilderName.apply
+  | `(builder_name| simp) => regular $ BuilderName.simp
+  | `(builder_name| unfold) => regular $ BuilderName.unfold
+  | `(builder_name| tactic) => regular $ BuilderName.tactic
+  | `(builder_name| constructors) => regular $ BuilderName.constructors
+  | `(builder_name| forward) => regular $ BuilderName.forward
+  | `(builder_name| cases) => regular $ BuilderName.cases
+  | `(builder_name| safe_default) => safeDefault
+  | `(builder_name| unsafe_default) => unsafeDefault
+  | `(builder_name| norm_default) => normDefault
+  | _ => unreachable!
+
+instance : ToString DBuilderName where
+  toString
+    | regular b => toString b
+    | safeDefault => "safe_default"
+    | unsafeDefault => "unsafe_default"
+    | normDefault => "norm_default"
+
+def toBuilderName? : DBuilderName → Option BuilderName
+  | regular b => some b
+  | _ => none
+
+end DBuilderName
 
 
 namespace Parser
@@ -121,7 +174,7 @@ def parse [Inhabited α] (bo : BuilderOptions m α) : Syntax → m α
       return bo.combine o (← bo.parseOption stx)
   | _ => unreachable!
 
-protected def none (builder : RuleName.Builder) : BuilderOptions m Unit where
+protected def none (builder : DBuilderName) : BuilderOptions m Unit where
   parseOption _ :=
     throwError "aesop: builder {builder} does not accept any options"
   empty := ()
@@ -131,7 +184,7 @@ def tactic : BuilderOptions m TacticBuilderOptions where
   parseOption
     | `(builder_option| (uses_branch_state := $b:Aesop.bool_lit)) =>
       return { usesBranchState := parseBoolLit b }
-    | _ => throwError "aesop: invalid option for builder {RuleName.Builder.tactic}"
+    | _ => throwError "aesop: invalid option for builder {BuilderName.tactic}"
   empty := { usesBranchState := true }
   combine o p := { usesBranchState := p.usesBranchState }
 
@@ -139,7 +192,7 @@ def forward : BuilderOptions m ForwardBuilderOptions where
   parseOption
     | `(builder_option| (immediate := [$ns:ident,*])) =>
       return { immediateHyps := (ns : Array Syntax).map (·.getId) }
-    | _ => throwError "aesop: invalid option for builder {RuleName.Builder.forward}"
+    | _ => throwError "aesop: invalid option for builder {BuilderName.forward}"
   empty := { immediateHyps := #[] }
   combine o p := { immediateHyps := p.immediateHyps }
 
@@ -148,38 +201,12 @@ end BuilderOptions
 
 namespace Parser
 
-declare_syntax_cat Aesop.builder_name (behavior := symbol)
-
-syntax &"apply" : Aesop.builder_name
-syntax &"simp" : Aesop.builder_name
-syntax &"unfold" : Aesop.builder_name
-syntax &"tactic" : Aesop.builder_name
-syntax &"constructors" : Aesop.builder_name
-syntax &"forward" : Aesop.builder_name
-syntax &"cases" : Aesop.builder_name
-syntax &"safe_default" : Aesop.builder_name
-syntax &"unsafe_default" : Aesop.builder_name
-syntax &"norm_default" : Aesop.builder_name
-
 declare_syntax_cat Aesop.builder (behavior := symbol)
 
 syntax Aesop.builder_name : Aesop.builder
 syntax "(" Aesop.builder_name builderOptions ")" : Aesop.builder
 
 end Parser
-
-def parseBuilderName : Syntax → RuleName.Builder
-  | `(builder_name| apply) => RuleName.Builder.apply
-  | `(builder_name| simp) => RuleName.Builder.simp
-  | `(builder_name| unfold) => RuleName.Builder.unfold
-  | `(builder_name| tactic) => RuleName.Builder.tactic
-  | `(builder_name| constructors) => RuleName.Builder.constructors
-  | `(builder_name| forward) => RuleName.Builder.forward
-  | `(builder_name| cases) => RuleName.Builder.cases
-  | `(builder_name| safe_default) => RuleName.Builder.safeDefault
-  | `(builder_name| unsafe_default) => RuleName.Builder.unsafeDefault
-  | `(builder_name| norm_default) => RuleName.Builder.normDefault
-  | _ => unreachable!
 
 inductive Builder
   | apply
@@ -220,28 +247,29 @@ instance : ToString Builder where
     | unsafeDefault => "(unsafe_default)"
     | normDefault => "(norm_default)"
 
-def parseOptions (b : RuleName.Builder) (opts : Syntax) : m Builder := do
+open DBuilderName in
+def parseOptions (b : DBuilderName) (opts : Syntax) : m Builder := do
   match b with
-  | RuleName.Builder.apply => checkNoOptions; return apply
-  | RuleName.Builder.simp => checkNoOptions; return simp
-  | RuleName.Builder.unfold => checkNoOptions; return unfold
-  | RuleName.Builder.tactic =>
+  | regular BuilderName.apply => checkNoOptions; return apply
+  | regular BuilderName.simp => checkNoOptions; return simp
+  | regular BuilderName.unfold => checkNoOptions; return unfold
+  | regular BuilderName.tactic =>
     return tactic $ ← BuilderOptions.tactic.parse opts
-  | RuleName.Builder.constructors => checkNoOptions; return constructors
-  | RuleName.Builder.forward =>
+  | regular BuilderName.constructors => checkNoOptions; return constructors
+  | regular BuilderName.forward =>
     return forward $ ← BuilderOptions.forward.parse opts
-  | RuleName.Builder.cases => checkNoOptions; return cases
-  | RuleName.Builder.safeDefault => checkNoOptions; return safeDefault
-  | RuleName.Builder.unsafeDefault => checkNoOptions; return unsafeDefault
-  | RuleName.Builder.normDefault => checkNoOptions; return normDefault
+  | regular BuilderName.cases => checkNoOptions; return cases
+  | DBuilderName.safeDefault => checkNoOptions; return safeDefault
+  | DBuilderName.unsafeDefault => checkNoOptions; return unsafeDefault
+  | DBuilderName.normDefault => checkNoOptions; return normDefault
   where
     checkNoOptions := BuilderOptions.none b |>.parse opts
 
 def parse : Syntax → m Builder
   | `(builder| $b:Aesop.builder_name) =>
-    parseOptions (parseBuilderName b) (mkNode ``Parser.builderOptions #[])
+    parseOptions (DBuilderName.parse b) (mkNode ``Parser.builderOptions #[])
   | `(builder| ($b:Aesop.builder_name $opts:builderOptions)) =>
-    parseOptions (parseBuilderName b) opts
+    parseOptions (DBuilderName.parse b) opts
   | _ => unreachable!
 
 def toRegularRuleBuilder : Builder →
@@ -270,26 +298,27 @@ def toNormRuleBuilder : Builder →
   | unsafeDefault => RuleBuilder.unsafeDefault.toNormRuleBuilder
   | normDefault => RuleBuilder.normDefault
 
-def toBuilderName : Builder → RuleName.Builder
-  | apply => RuleName.Builder.apply
-  | simp => RuleName.Builder.simp
-  | unfold => RuleName.Builder.unfold
-  | tactic .. => RuleName.Builder.tactic
-  | constructors => RuleName.Builder.constructors
-  | forward .. => RuleName.Builder.forward
-  | cases => RuleName.Builder.cases
-  | safeDefault => RuleName.Builder.safeDefault
-  | unsafeDefault => RuleName.Builder.unsafeDefault
-  | normDefault => RuleName.Builder.normDefault
+open DBuilderName in
+def toBuilderName : Builder → DBuilderName
+  | apply => regular BuilderName.apply
+  | simp => regular BuilderName.simp
+  | unfold => regular BuilderName.unfold
+  | tactic .. => regular BuilderName.tactic
+  | constructors => regular BuilderName.constructors
+  | forward .. => regular BuilderName.forward
+  | cases => regular BuilderName.cases
+  | safeDefault => DBuilderName.safeDefault
+  | unsafeDefault => DBuilderName.unsafeDefault
+  | normDefault => DBuilderName.normDefault
 
 end Builder
 
 
 open Builder in
-def defaultBuilderForPhase : RuleName.Phase → Builder
-  | RuleName.Phase.safe => safeDefault
-  | RuleName.Phase.norm => normDefault
-  | RuleName.Phase.«unsafe» => unsafeDefault
+def defaultBuilderForPhase : PhaseName → Builder
+  | PhaseName.safe => safeDefault
+  | PhaseName.norm => normDefault
+  | PhaseName.«unsafe» => unsafeDefault
 
 
 namespace Parser
@@ -333,7 +362,7 @@ syntax (name := featIdent) ident : Aesop.feature
 end Parser
 
 inductive Feature
-  | phase (p : RuleName.Phase)
+  | phase (p : PhaseName)
   | priority (p : Priority)
   | builder (b : Builder)
   | name (n : Name)
@@ -429,7 +458,7 @@ end RuleExpr
 
 structure RuleConfig (f : Type → Type) where
   ident : f RuleIdent
-  phase : f RuleName.Phase
+  phase : f PhaseName
   priority : f Priority
   builder : f Builder
   ruleSets : RuleSets
@@ -453,7 +482,7 @@ def toStringId (c : RuleConfig Id) : String :=
   String.joinSep " "
     #[toString c.ident, toString c.phase, toString c.builder, toString c.ruleSets]
 
-def getPenalty (phase : RuleName.Phase) (c : RuleConfig Id) : m Int := do
+def getPenalty (phase : PhaseName) (c : RuleConfig Id) : m Int := do
   let (some penalty) := c.priority.toInt? | throwError
     "aesop: {phase} rules must specify an integer penalty (not a success probability)"
   return penalty
@@ -466,7 +495,7 @@ def getSuccessProbability (c : RuleConfig Id) : m Percent := do
 def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
     MetaM (MVarId × RuleSetMember × Array RuleSetName) := do
   match c.phase with
-  | phase@RuleName.Phase.safe =>
+  | phase@PhaseName.safe =>
     let penalty ← c.getPenalty phase
     let (goal, res) ← runRegularBuilder phase c.builder
     let rule := RuleSetMember'.safeRule {
@@ -478,7 +507,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
       -- TODO support 'almost safe' rules
     }
     return (goal, rule, c.ruleSets.ruleSets)
-  | phase@RuleName.Phase.«unsafe» =>
+  | phase@PhaseName.«unsafe» =>
     let successProbability ← c.getSuccessProbability
     let (goal, res) ← runRegularBuilder phase c.builder
     let rule := RuleSetMember'.unsafeRule {
@@ -489,7 +518,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
       extra := { successProbability }
     }
     return (goal, rule, c.ruleSets.ruleSets)
-  | phase@RuleName.Phase.norm =>
+  | phase@PhaseName.norm =>
     let penalty ← c.getPenalty phase
     let (goal, res) ← c.builder.toNormRuleBuilder c.ident goal
     match res with
@@ -509,7 +538,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
       }
       return (goal, rule, c.ruleSets.ruleSets)
   where
-    runRegularBuilder (phase : RuleName.Phase) (b : Builder) :
+    runRegularBuilder (phase : PhaseName) (b : Builder) :
         MetaM (MVarId × RegularRuleBuilderResult) := do
       let (some b) := b.toRegularRuleBuilder | throwError
         "aesop: builder {b} cannot be used for {phase} rules"
@@ -526,10 +555,16 @@ def toRuleNameFilter (c : RuleConfig Option) :
     m (RuleSetNameFilter × RuleNameFilter) := do
   let (some ident) := c.ident | throwError
     "aesop: rule name not specified"
-  let builders :=
+  let builders ←
     match c.builder with
-    | none => #[]
-    | some b => #[b.toBuilderName]
+    | none => pure #[]
+    | some b => do
+      let (some builder) := b.toBuilderName.toBuilderName? | throwError
+        "aesop: {b.toBuilderName} cannot be used when erasing rules.\nUse the corresponding non-default builder (e.g. 'apply' or 'constructors') instead."
+        -- TODO We could instead look for the correct non-default builder
+        -- ourselves by re-running the logic that determines which builder to
+        -- use.
+      pure #[builder]
   let phases :=
     match c.phase with
     | none => #[]
@@ -573,20 +608,20 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
         return { r with ruleSets }
 
     getPhaseAndPriority (c : RuleConfig Option) :
-        m (RuleName.Phase × Priority) :=
+        m (PhaseName × Priority) :=
       match c.phase, c.priority with
       | none, none =>
         throwError "aesop: phase (safe/unsafe/norm) not specified."
-      | some RuleName.Phase.unsafe, none =>
+      | some PhaseName.unsafe, none =>
         throwError "aesop: unsafe rules must specify a success probability ('x%')."
-      | some phase@RuleName.Phase.safe, none =>
+      | some phase@PhaseName.safe, none =>
         return (phase, Priority.int defaultSafePenalty)
-      | some phase@RuleName.Phase.norm, none =>
+      | some phase@PhaseName.norm, none =>
         return (phase, Priority.int defaultNormPenalty)
       | some phase, some prio =>
         return (phase, prio)
       | none, some prio@(Priority.percent prob) =>
-        return (RuleName.Phase.unsafe, prio)
+        return (PhaseName.unsafe, prio)
       | none, some _ =>
         throwError "aesop: phase (safe/unsafe/norm) not specified."
 

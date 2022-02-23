@@ -13,14 +13,14 @@ open Lean.Meta
 namespace Aesop
 
 structure RegularRuleBuilderResult where
-  builder : RuleName.Builder
+  builder : BuilderName
   tac : RuleTacWithBuilderDescr
   indexingMode : IndexingMode
   mayUseBranchState : Bool
   deriving Inhabited
 
 structure SimpRuleBuilderResult where
-  builder : RuleName.Builder
+  builder : BuilderName
   entries : Array SimpEntry
 
 inductive NormRuleBuilderResult
@@ -78,14 +78,14 @@ def normSimpUnfold : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
   unless info.hasValue do
     throwError "aesop: unfold builder: expected {decl} to be a definition to unfold"
   return NormRuleBuilderResult.simp
-    { builder := RuleName.Builder.unfold, entries := #[SimpEntry.toUnfold decl] }
+    { builder := BuilderName.unfold, entries := #[SimpEntry.toUnfold decl] }
 
 def normSimpLemmas : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
   try {
     let simpLemmas ←
       mkSimpTheoremsFromConst decl (post := true) (inv := false) (prio := 0)
     return NormRuleBuilderResult.simp {
-      builder := RuleName.Builder.simp
+      builder := BuilderName.simp
       entries := simpLemmas.map SimpEntry.thm
     }
   } catch e => {
@@ -94,7 +94,7 @@ def normSimpLemmas : GlobalRuleBuilder NormRuleBuilderResult := λ decl => do
 
 def apply : GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
   return {
-    builder := RuleName.Builder.apply
+    builder := BuilderName.apply
     tac := ← GlobalRuleTacBuilder.apply decl
     indexingMode := ←
       IndexingMode.targetMatchingConclusion (← getConstInfo decl).type
@@ -104,7 +104,7 @@ def apply : GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
 def tactic (opts : TacticBuilderOptions) :
     GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
   return {
-    builder := RuleName.Builder.tactic
+    builder := BuilderName.tactic
     tac := ← GlobalRuleTacBuilder.tactic decl
     indexingMode := IndexingMode.unindexed
     mayUseBranchState := opts.usesBranchState
@@ -121,7 +121,7 @@ private def checkConstIsInductive (builderName : Name) (decl : Name) :
 def constructors : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
   let info ← checkConstIsInductive `constructors decl
   return {
-    builder := RuleName.Builder.constructors
+    builder := BuilderName.constructors
     tac := ← GlobalRuleTacBuilder.constructors info.ctors.toArray
     indexingMode := IndexingMode.unindexed -- TODO optimise as soon as we have OR for IndexingModes
     mayUseBranchState := false
@@ -131,7 +131,7 @@ def cases : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
   let builderName := `cases
   let _ ← checkConstIsInductive builderName decl
   return {
-    builder := RuleName.Builder.cases
+    builder := BuilderName.cases
     tac := ← GlobalRuleTacBuilder.cases decl
     indexingMode := IndexingMode.unindexed
     mayUseBranchState := false
@@ -151,7 +151,7 @@ namespace GlobalRuleBuilder
 def forward (opts : ForwardBuilderOptions) :
     GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
   return {
-    builder := RuleName.Builder.forward
+    builder := BuilderName.forward
     tac := ← GlobalRuleTacBuilder.forward decl opts.immediateHyps
     indexingMode := IndexingMode.unindexed -- TODO
     mayUseBranchState := false
@@ -193,7 +193,7 @@ def apply : LocalRuleBuilder RegularRuleBuilderResult := λ hypUserName goal => 
   withMVarContext goal do
     let type := (← getLocalDeclFromUserName hypUserName).type
     let result := {
-      builder := RuleName.Builder.apply
+      builder := BuilderName.apply
       tac := tac
       indexingMode := ← IndexingMode.targetMatchingConclusion type
       mayUseBranchState := false
@@ -205,7 +205,7 @@ def forward (opts : ForwardBuilderOptions) :
   let (goal, tac) ←
     RuleTacBuilder.forwardFVar hypUserName opts.immediateHyps goal
   let result := {
-    builder := RuleName.Builder.forward
+    builder := BuilderName.forward
     tac := tac
     indexingMode := IndexingMode.unindexed -- TODO
     mayUseBranchState := true

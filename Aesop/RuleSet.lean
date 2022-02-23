@@ -48,8 +48,8 @@ end RuleSetMember'
 
 structure RuleNameFilter where
   ident : RuleIdent
-  builders : Array RuleName.Builder -- `#[]` means 'match any builder'
-  phases : Array RuleName.Phase     -- `#[]` means 'match any phase'
+  builders : Array BuilderName -- `#[]` means 'match any builder'
+  phases : Array PhaseName     -- `#[]` means 'match any phase'
 
 namespace RuleNameFilter
 
@@ -245,8 +245,8 @@ def foldGlobalRulesForDeclM [Monad m] (decl : Name) (rs : RuleSet)
     (f : σ → RuleSetMember → m σ) (init : σ) : m σ :=
   rs.foldM (init := init) λ s r =>
     match r.name.scope with
-    | RuleName.Scope.global => f s r
-    | RuleName.Scope.local => pure init
+    | ScopeName.global => f s r
+    | ScopeName.local => pure init
 
 -- TODO remove?
 @[inline]

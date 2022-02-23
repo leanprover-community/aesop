@@ -9,10 +9,9 @@ import Aesop.Util
 open Lean
 open Lean.Meta
 
-namespace Aesop.RuleName
+namespace Aesop
 
--- TODO rename to Aesop.PhaseName
-inductive Phase
+inductive PhaseName
   | norm
   | safe
   | «unsafe»
@@ -20,85 +19,80 @@ inductive Phase
   -- NOTE: Constructors should be listed in alphabetical order for the Ord
   -- instance.
 
-namespace Phase
+namespace PhaseName
 
-instance : Ord Phase where
+instance : Ord PhaseName where
   compare s₁ s₂ := compare s₁.toCtorIdx s₂.toCtorIdx
 
-instance : ToString Phase where
+instance : ToString PhaseName where
   toString
     | norm => "norm"
     | safe => "safe"
     | «unsafe» => "unsafe"
 
-end Phase
+end PhaseName
 
--- TODO rename to Aesop.ScopeName
-inductive Scope
+
+inductive ScopeName
   | global
   | «local»
   deriving Inhabited, BEq, Hashable
   -- NOTE: Constructors should be listed in alphabetical order for the Ord
   -- instance.
 
-namespace Scope
+namespace ScopeName
 
-instance : Ord Scope where
+instance : Ord ScopeName where
   compare s₁ s₂ := compare s₁.toCtorIdx s₂.toCtorIdx
 
-instance : ToString Scope where
+instance : ToString ScopeName where
   toString
     | global => "global"
     | «local» => "local"
 
-end Scope
+end ScopeName
 
--- TODO rename to Aesop.BuilderName
+
 -- TODO the *Default builders are only used during construction and should
 -- never be used in an actual rule name. So remove them from this type.
-inductive Builder
+inductive BuilderName
   | apply
   | cases
   | constructors
   | forward
-  | normDefault
-  | safeDefault
   | simp
   | tactic
   | unfold
-  | unsafeDefault
   deriving Inhabited, BEq, Hashable
   -- NOTE: Constructors should be listed in alphabetical order for the Ord
   -- instance.
 
-namespace Builder
+namespace BuilderName
 
-instance : Ord Builder where
+instance : Ord BuilderName where
   compare b₁ b₂ := compare b₁.toCtorIdx b₂.toCtorIdx
 
-instance : ToString Builder where
+instance : ToString BuilderName where
   toString
     | apply => "apply"
     | cases => "cases"
     | constructors => "constructors"
     | forward => "forward"
-    | normDefault => "norm_default"
-    | safeDefault => "safe_default"
     | simp => "simp"
     | tactic => "tactic"
     | unfold => "unfold"
-    | unsafeDefault => "unsafe_default"
 
-end RuleName.Builder
+end BuilderName
+
 
 -- Rules are identified by a `RuleName` throughout Aesop. We assume that rule
 -- names are unique within our 'universe', i.e. within the rule sets that we are
 -- working with. All data structures should enforce this invariant.
 structure RuleName where
   name : Name
-  builder : RuleName.Builder
-  phase : RuleName.Phase
-  scope : RuleName.Scope
+  builder : BuilderName
+  phase : PhaseName
+  scope : ScopeName
   protected hash : UInt64 :=
     mixHash (hash name) $ mixHash (hash builder) $ mixHash (hash phase)
       (hash scope)
@@ -152,9 +146,9 @@ def name : RuleIdent → Name
   | const decl => decl
   | fvar userName => userName
 
-def scope : RuleIdent → RuleName.Scope
-  | const .. => RuleName.Scope.global
-  | fvar .. => RuleName.Scope.local
+def scope : RuleIdent → ScopeName
+  | const .. => ScopeName.global
+  | fvar .. => ScopeName.local
 
 def type : RuleIdent → MetaM Expr
   | const c => return (← getConstInfo c).type
@@ -165,7 +159,7 @@ def ofName [Monad m] [MonadLCtx m] (n : Name) : m RuleIdent := do
   | none => pure $ const n
   | some _ => pure $ fvar n
 
-def toRuleName (phase : RuleName.Phase) (builder : RuleName.Builder)
+def toRuleName (phase : PhaseName) (builder : BuilderName)
     (i : RuleIdent) : RuleName where
   phase := phase
   builder := builder
@@ -179,8 +173,8 @@ namespace RuleName
 
 def toRuleIdent (i : RuleName) : RuleIdent :=
   match i.scope with
-  | Scope.global => RuleIdent.const i.name
-  | Scope.local => RuleIdent.fvar i.name
+  | ScopeName.global => RuleIdent.const i.name
+  | ScopeName.local => RuleIdent.fvar i.name
 
 end RuleName
 
