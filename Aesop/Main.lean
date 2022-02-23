@@ -24,11 +24,18 @@ def evalAesop : Tactic := λ stx =>
         let (goal, ruleSet) ← config.getRuleSet goal
         return (ruleSet, [goal])
     aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
-    let (_, searchTime) ← IO.time $ searchTactic ruleSet config.options
+    let (err?, searchTime) ← IO.time $
+      try
+        searchTactic ruleSet config.options
+        return none
+      catch e =>
+        return some e
     aesop_trace[profile] toMessageData
       { configParsing := configParseTime
         ruleSetConstruction := ruleSetConstructionTime
         search := searchTime
         : ProfilingTimes }
+    if let (some err) := err? then
+      throw err
 
 end Aesop
