@@ -6,10 +6,22 @@ open Lean.Elab.Term
 
 namespace Aesop
 
+/--
+Options that modify Aesop's behaviour. Available options are:
+
+- `maxRuleApplicationDepth`: maximum number of rule applications in any branch
+  of the search tree, aka maximum search depth. When a branch exceeds this
+  limit, it is considered unprovable; other branches may still be explored. 0
+  means no limit.
+- `maxRuleApplications`: maximum number of rule applications in the search tree.
+  When this limit is exceeded, the search ends. 0 means no limit.
+- `maxGoals`: maximum number of goals in the search tree. When this limit is
+  exceeded, the search ends. 0 means no limit.
+-/
 structure Options where
-  maxRuleApplicationDepth := 30 -- 0 means no limit
-  maxRuleApplications := 200    -- 0 means no limit
-  maxGoals := 0                 -- 0 means no limit
+  maxRuleApplicationDepth := 30
+  maxRuleApplications := 200
+  maxGoals := 0
   deriving Inhabited, BEq, Repr
 
 unsafe def evalOptionsExprImpl (e : Expr) : TermElabM Aesop.Options := do
