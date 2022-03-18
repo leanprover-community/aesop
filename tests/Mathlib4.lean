@@ -221,7 +221,7 @@ theorem forall_not_of_not_exists {p : α → Prop} (hne : ¬∃ x, p x) (x) : ¬
 instance forall_prop_decidable {p} (P : p → Prop)
   [Dp : Decidable p] [DP : ∀ h, Decidable (P h)] : Decidable (∀ h, P h) :=
   if h : p
-  then decidableOfDecidableOfIff (DP h) ⟨λ h2 _ => h2, λ al => al h⟩
+  then decidable_of_decidable_of_iff ⟨λ h2 _ => h2, λ al => al h⟩
   else isTrue (λ h2 => absurd h2 h)
 
 @[simp] theorem forall_eq {p : α → Prop} {a' : α} : (∀a, a = a' → p a) ↔ p a' :=
@@ -293,7 +293,7 @@ end WellFounded
 theorem iff_of_eq (e : a = b) : a ↔ b := e ▸ Iff.rfl
 
 def decidable_of_iff (a : Prop) (h : a ↔ b) [D : Decidable a] : Decidable b :=
-decidableOfDecidableOfIff D h
+decidable_of_decidable_of_iff h
 
 /-
 Stuff from mathlib's logic/basic.lean.

@@ -74,13 +74,11 @@ theorem ne_zero_of_zero_lt {n : Nat} (h : 0 < n) : n ≠ 0 := λ contra =>
   | zero => Nat.lt_irrefl _ h
   | succ n => by cases contra
 
-theorem zero_sub_eq_zero (n : Nat) : 0 - n = 0 :=
-  match n with
+theorem zero_sub_eq_zero : ∀ n, 0 - n = 0
   | zero => rfl
-  | succ n => show pred (0 - n) = 0 by rw [zero_sub_eq_zero]; rfl
+  | succ n => show pred (0 - n) = 0 by rw [zero_sub_eq_zero n]; rfl
 
-theorem pred_sub (n m : Nat) : pred (n - m) = pred n - m :=
-  match n, m with
+theorem pred_sub : ∀ n m, pred (n - m) = pred n - m
   | zero, zero => rfl
   | zero, succ m =>
     show pred (0 - succ m) = 0 - succ m by
@@ -88,10 +86,9 @@ theorem pred_sub (n m : Nat) : pred (n - m) = pred n - m :=
   | succ n, zero => rfl
   | succ n, succ m => by
     show pred (pred (succ n - m)) = pred (pred (succ n) - m)
-    rw [pred_sub]
+    rw [pred_sub (succ n) m]
 
-theorem lt_pred_of_succ_lt {n m : Nat} (h : succ n < m) : n < pred m :=
-  match h with
+theorem lt_pred_of_succ_lt {n m : Nat} : succ n < m → n < pred m
   | le.refl => Nat.lt_succ_self _
   | @le.step _ x h₂ => Nat.lt_trans (Nat.lt_succ_self _) h₂
 
