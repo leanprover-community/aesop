@@ -99,7 +99,6 @@ structure TraceModifiers where
   goals : Bool
   unsafeQueues : Bool
   failedRapps : Bool
-  unificationGoals : Bool
 
 def TraceModifiers.get : m TraceModifiers := do
   let opts ← getOptions
@@ -107,7 +106,6 @@ def TraceModifiers.get : m TraceModifiers := do
     goals := TraceModifier.goals.isEnabled' opts
     unsafeQueues := TraceModifier.unsafeQueues.isEnabled' opts
     failedRapps := TraceModifier.failedRapps.isEnabled' opts
-    unificationGoals := TraceModifier.unificationGoals.isEnabled' opts
   }
 
 end Aesop

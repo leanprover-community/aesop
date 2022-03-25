@@ -19,6 +19,12 @@ instance : Inhabited UnsafeQueue :=
 def initial (rs : Array (IndexMatchResult UnsafeRule)) : UnsafeQueue :=
   rs.toSubarray
 
+protected def empty : UnsafeQueue :=
+  #[].toSubarray
+
+instance : EmptyCollection UnsafeQueue :=
+  ⟨UnsafeQueue.empty⟩
+
 @[inline]
 def pop? (queue : UnsafeQueue) :
     Option (IndexMatchResult UnsafeRule × UnsafeQueue) :=

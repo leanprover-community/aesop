@@ -99,10 +99,6 @@ initialize failedRapps : TraceModifier ←
   registerTraceModifier `failedRuleApplications false
     "(aesop) When printing a goal node, print the failed rule applications."
 
-initialize unificationGoals : TraceModifier ←
-  registerTraceModifier `unificationGoals false
-    "(aesop) When printing a rule application node, print the unification goals."
-
 end TraceModifier
 
 end Aesop

@@ -4,8 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
--- TODO clean up this test case
-import Lean
 import Aesop
 
 set_option aesop.check.all true
@@ -46,26 +44,6 @@ end EvenOdd
 example : 0 = 0 := by aesop
 
 
--- An example involving transitivity. This tests our handling of metavariables.
-section Transitivity
-
-axiom A : Type
-axiom R : A → A → Prop
-
-@[aesop unsafe 10%]
-axiom R_trans : ∀ x y z, R x y → R y z → R x z
-
-set_option trace.aesop.steps true
-set_option trace.aesop.steps.tree true
-
--- TODO This test case currently fails, but should succeed.
-example {a b c d} (hab : R a b) (hbc : R b c) (hcd : R c d) : R a d := by
-  -- aesop (options { maxRuleApplicationDepth := 3, maxRuleApplications := 5 })
-  exact R_trans _ _ _ hab $ R_trans _ _ _ hbc hcd
-
-end Transitivity
-
-
 -- An intentionally looping Aesop call, to test the limiting options
 section Loop
 
@@ -73,6 +51,7 @@ structure Wrap (α) where
   unwrap : α
 
 example (h : α → α) (h' : Wrap α) : α := by
+  -- TODO check that Aesop reports the correct error, to eliminate false positives
   fail_if_success aesop (add safe h) (options := { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0 })
   fail_if_success aesop (add safe h) (options := { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0 })
   fail_if_success aesop (add safe h) (options := { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0 })

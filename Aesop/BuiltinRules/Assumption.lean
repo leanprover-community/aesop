@@ -15,17 +15,16 @@ def findLocalDeclWithMVarFreeType? (goal : MVarId) (type : Expr) :
     MetaM (Option FVarId) :=
   withMVarContext goal do
     (← getLCtx).findDeclRevM? λ localDecl => do
-        if localDecl.isAuxDecl then return none
-        let localType ← instantiateMVarsInLocalDeclType goal localDecl.fvarId
-        if localType.hasMVar then
+        if localDecl.isAuxDecl then
           return none
-        else if (← isDefEq type localType) then
+        let localType ← instantiateMVarsInLocalDeclType goal localDecl.fvarId
+        if ← pure ! localType.hasMVar <&&> isDefEq type localType then
           return some localDecl.fvarId
         else
           return none
 
 @[aesop safe -50 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
-def safeAssumption : RuleTac := λ { goal, .. } =>
+def safeAssumption : SimpleRuleTac := λ { goal, .. } =>
   withMVarContext goal do
     checkNotAssigned goal `Aesop.BuiltinRules.safeAssumption
     let tgt ← instantiateMVarsInMVarType goal
@@ -36,14 +35,10 @@ def safeAssumption : RuleTac := λ { goal, .. } =>
     | none => throwTacticEx `Aesop.BuiltinRules.safeAsumption goal "no matching assumption found"
     | some hyp => do
       assignExprMVar goal (mkFVar hyp)
-      let postState ← saveState
-      let rapp := {
-        goals := #[]
-        postState := postState
-      }
       return {
-        applications := #[rapp]
-        postBranchState? := none
+        introducedMVars := IntroducedMVars.raw #[]
+        assignedMVars? := none
+        -- TODO optimise mvar analysis
       }
 
 end Aesop.BuiltinRules

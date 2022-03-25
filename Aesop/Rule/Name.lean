@@ -53,8 +53,6 @@ instance : ToString ScopeName where
 end ScopeName
 
 
--- TODO the *Default builders are only used during construction and should
--- never be used in an actual rule name. So remove them from this type.
 inductive BuilderName
   | apply
   | cases

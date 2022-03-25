@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
+import Aesop.Util.UnionFind
 import Lean
 import Std
 
@@ -321,6 +322,9 @@ def deduplicateSorted [eq : BEq α] (xs : Array α) : Array α :=
 def deduplicate [Inhabited α] [ord : Ord α] (xs : Array α) : Array α :=
   deduplicateSorted $ xs.qsort λ x y => compare x y |>.isLT
 
+def equalSet [BEq α] (xs ys : Array α) : Bool :=
+  xs.all (ys.contains ·) && ys.all (xs.contains ·)
+
 end Array
 
 
@@ -422,6 +426,9 @@ def insertMany [ForIn Id ρ α] [BEq α] [Hashable α] (s : HashSet α) (as : ρ
   for a in as do
     s := s.insert a
   return s
+
+protected def ofArray [BEq α] [Hashable α] (as : Array α) : HashSet α :=
+  HashSet.empty.insertMany as
 
 instance [BEq α] [Hashable α] : ForIn m (HashSet α) α where
   forIn map init step := do
@@ -1070,20 +1077,6 @@ def copyMVar (mvarId : MVarId) : MetaM MVarId := do
     decl.userName decl.numScopeArgs
   return mv.mvarId!
 
-def runMetaMInSavedState (s : Meta.SavedState) (x : MetaM α) :
-    MetaM (α × Meta.SavedState) :=
-  withoutModifyingState do
-    restoreState s
-    let result ← x
-    let finalState ← saveState
-    return (result, finalState)
-
-def runMetaMObservingFinalState (x : MetaM α) : MetaM (α × Meta.SavedState) :=
-  withoutModifyingState do
-    let result ← x
-    let finalState ← saveState
-    return (result, finalState)
-
 def isValidMVarAssignment (mvarId : MVarId) (e : Expr) : MetaM Bool :=
   withMVarContext mvarId do
     let (some _) ← observing? $ check e | return false
@@ -1110,6 +1103,68 @@ def getTargetMVarsNoDelayed (goal : MVarId) : MetaM (Array MVarId) := do
 def getGoalMVarsNoDelayed (goal : MVarId) : MetaM (HashSet MVarId) := do
   let hypMVars ← getHypMVarsNoDelayed goal
   return hypMVars.insertMany (← getTargetMVarsNoDelayed goal)
+
+def isExprMVarDeclared [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool :=
+  return (← getMCtx).decls.contains mvarId
+
+def isLevelMVarDeclared [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool :=
+  return (← getMCtx).lDepth.contains mvarId
+
+def delayedAssignMVar [Monad m] [MonadMCtx m] (mvarId : MVarId)
+    (ass : DelayedMetavarAssignment) : m Unit :=
+  modifyMCtx λ mctx =>
+    { mctx with dAssignment := mctx.dAssignment.insert mvarId ass }
+
+def eraseExprMVarAssignment [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Unit :=
+  modifyMCtx λ mctx => { mctx with
+    eAssignment := mctx.eAssignment.erase mvarId
+    dAssignment := mctx.dAssignment.erase mvarId
+  }
+
+def unassignedExprMVarsNoDelayed : MetaM (Array MVarId) := do
+  let mctx ← getMCtx
+  let mut result := #[]
+  for (mvarId, decl) in mctx.decls do
+    if ← notM (isExprMVarAssigned mvarId) <&&> notM (isDelayedAssigned mvarId) then
+      result := result.push mvarId
+  return result
+
+def runMetaMObservingFinalState (x : MetaM α) : MetaM (α × Meta.SavedState) :=
+  withoutModifyingState do
+    let result ← x
+    let finalState ← saveState
+    return (result, finalState)
+
+namespace SavedState
+
+def runMetaM (s : Meta.SavedState) (x : MetaM α) :
+    MetaM (α × Meta.SavedState) :=
+  withoutModifyingState do
+    restoreState s
+    let result ← x
+    let finalState ← saveState
+    return (result, finalState)
+
+def runMetaM' (s : Meta.SavedState) (x : MetaM α) : MetaM α :=
+  Prod.fst <$> s.runMetaM x
+
+end SavedState
+
+-- Returns the mvars that are not declared in `preState`, but declared and
+-- unassigned in `postState`. Delayed-assigned mvars are considered assigned.
+def introducedExprMVars (preState postState : SavedState) :
+    MetaM (Array MVarId) := do
+  let unassignedPost ← postState.runMetaM' unassignedExprMVarsNoDelayed
+  preState.runMetaM' do
+    unassignedPost.filterM (notM ∘ isExprMVarDeclared)
+
+-- Returns the mvars that are declared but unassigned in `preState`, and
+-- assigned in `postState`. Delayed-assigned mvars are considered assigned.
+def assignedExprMVars (preState postState : SavedState) :
+    MetaM (Array MVarId) := do
+  let unassignedPre ← preState.runMetaM' unassignedExprMVarsNoDelayed
+  postState.runMetaM' do
+    unassignedPre.filterM λ m => isExprMVarAssigned m <||> isDelayedAssigned m
 
 end Lean.Meta
 
@@ -1189,6 +1244,7 @@ def runTermElabMAsMetaM (x : TermElabM α) : MetaM α :=
 end Lean
 
 
+-- TODO remove this whole section
 namespace Lean.Elab.Tactic
 
 open Lean.Elab.Term

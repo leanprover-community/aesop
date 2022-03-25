@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.BestFirstSearch
+import Aesop.Search.Main
 import Aesop.BuiltinRules -- ensures that the builtin rules are registered
 import Aesop.Frontend.Tactic
 import Aesop.Profiling
@@ -26,7 +26,7 @@ def evalAesop : Tactic := λ stx =>
     aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
     let (err?, searchTime) ← IO.time $
       try
-        searchTactic ruleSet config.options
+        bestFirst ruleSet config.options
         return none
       catch e =>
         return some e

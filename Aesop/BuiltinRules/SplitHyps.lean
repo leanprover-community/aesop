@@ -248,6 +248,10 @@ end SplitHyps
 
 @[aesop norm 1 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
 def splitHyps : SimpleRuleTac := λ input =>
-  return { goals := #[((← SplitHyps.splitHyps input.goal).snd, none)] }
+  return {
+    introducedMVars := IntroducedMVars.raw #[(← SplitHyps.splitHyps input.goal).snd]
+    assignedMVars? := none
+    -- TODO optimise mvar analysis
+  }
 
 end Aesop.BuiltinRules

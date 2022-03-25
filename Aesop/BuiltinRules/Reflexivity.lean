@@ -14,7 +14,7 @@ open Lean.Elab.Tactic
 namespace Aesop.BuiltinRules
 
 @[aesop safe -49 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
-def safeReflexivity : RuleTac := λ { goal, .. } => do
+def safeReflexivity : SimpleRuleTac := λ { goal, .. } => do
   withMVarContext goal do
     let tgt ← instantiateMVarsInMVarType goal
     if tgt.hasMVar then
@@ -23,11 +23,9 @@ def safeReflexivity : RuleTac := λ { goal, .. } => do
       | throwError "aesop: internal error: safeReflexivity: rfl did not close the goal"
     let postState ← saveState
     return {
-      applications := #[{
-        goals := #[]
-        postState := postState
-      }]
-      postBranchState? := none
+      introducedMVars := IntroducedMVars.raw #[]
+      assignedMVars? := none
+      -- TODO optimise mvar analysis
     }
 
 end Aesop.BuiltinRules
