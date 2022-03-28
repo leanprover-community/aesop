@@ -107,10 +107,10 @@ def SimpleRuleTac.toRuleTac (t : SimpleRuleTac) : RuleTac := λ input => do
 /-! # Metavariable Analysis -/
 
 -- Given an array of mvars `gᵢ`, this function separates the `gᵢ` which are
--- proper goals from the `gᵢ` which are proper mvar. A `gᵢ` is a proper mvar iff
--- any goal `gⱼ` depends on it (i.e. `gᵢ` occurs in the target or local context
--- of `gⱼ`). The returned array contains the proper goals and, for each proper
--- goal, the set of proper mvars on which the proper goal depends.
+-- proper goals from the `gᵢ` which are proper mvars. A `gᵢ` is a proper mvar
+-- iff any goal `gⱼ` depends on it (i.e. `gᵢ` occurs in the target or local
+-- context of `gⱼ`). The returned array contains the proper goals and, for each
+-- proper goal, the set of proper mvars on which the proper goal depends.
 private def analyzeMVars (mvars : Array MVarId) :
     MetaM (Array (MVarId × HashSet MVarId) × HashSet MVarId) := do
   let mut goalsAndProperMVars := #[]

@@ -12,6 +12,15 @@ namespace Aesop
 
 /-! ### Irrelevant -/
 
+/-
+Each of our node types (goal, rapp, mvar cluster) is irrelevant under the
+same conditions:
+
+1. the node is proven or unprovable *or*
+2. the node's parent is irrelevant. (If the node has no parent, this condition
+   does not apply.)
+-/
+
 def Goal.isIrrelevantNoCache (g : Goal) : BaseIO Bool :=
   (return g.state.isIrrelevant) <||>
   (return (← g.parent.get).isIrrelevant)
