@@ -408,8 +408,8 @@ unsafe def tacticMUnsafe (decl : Name) : GlobalRuleTacBuilder := do
       -- It is in principle possible for the environment to change so that
       -- `decl` has a different type at the point where this tactic is called.
       -- We assume that this doesn't happen. Ideally, we would evaluate `tac`
-      -- directly after `checkDeclType`, but this fails when
-      -- `ofTacticMUnitConstUnsafe` is called by the `@[aesop]` attribute.
+      -- directly after `checkDeclType`, but this fails when this function is
+      -- called by the `@[aesop]` attribute.
     let goals ← runTacticMAsMetaM tac input.goal
     return {
       introducedMVars := IntroducedMVars.raw goals.toArray

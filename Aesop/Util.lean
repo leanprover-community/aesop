@@ -1070,13 +1070,6 @@ def assertHypothesesWithBinderInfos (mvarId : MVarId)
     assignExprMVar mvarId val
     introNP mvarNew.mvarId! hs.size
 
--- TODO unused?
-def copyMVar (mvarId : MVarId) : MetaM MVarId := do
-  let decl ← getMVarDecl mvarId
-  let mv ← mkFreshExprMVarAt decl.lctx decl.localInstances decl.type decl.kind
-    decl.userName decl.numScopeArgs
-  return mv.mvarId!
-
 def isValidMVarAssignment (mvarId : MVarId) (e : Expr) : MetaM Bool :=
   withMVarContext mvarId do
     let (some _) ← observing? $ check e | return false
@@ -1242,45 +1235,6 @@ def runTermElabMAsMetaM (x : TermElabM α) : MetaM α :=
   x.run'
 
 end Lean
-
-
--- TODO remove this whole section
-namespace Lean.Elab.Tactic
-
-open Lean.Elab.Term
-open Lean.Meta
-
-syntax (name := Parser.runTactic) &"run" term : tactic
-
-private abbrev TacticMUnit := TacticM Unit
-
--- TODO copied from evalExpr
-unsafe def evalTacticMUnitUnsafe (value : Expr) : TermElabM (TacticM Unit) :=
-  withoutModifyingEnv do
-    let name ← mkFreshUserName `_tmp
-    let type ← inferType value
-    unless (← isDefEq type (mkConst ``TacticMUnit)) do
-      throwError "unexpected type at evalTacticMUnit:{indentExpr type}"
-    let decl := Declaration.defnDecl {
-       name := name, levelParams := [], type := type,
-       value := value, hints := ReducibilityHints.opaque,
-       safety := DefinitionSafety.unsafe
-    }
-    ensureNoUnassignedMVars decl
-    addAndCompile decl
-    evalConst (TacticM Unit) name
-
-@[implementedBy evalTacticMUnitUnsafe]
-constant evalTacticMUnit : Expr → TermElabM (TacticM Unit)
-
-@[tactic Parser.runTactic]
-def evalRunTactic : Tactic
-  | `(tactic|run $t:term) => do
-    let t ← elabTerm t (some (mkApp (mkConst ``TacticM) (mkConst ``Unit)))
-    (← evalTacticMUnit t)
-  | _ => unreachable!
-
-end Lean.Elab.Tactic
 
 
 namespace String
