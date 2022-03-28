@@ -323,28 +323,25 @@ an Aesop rule. Currently available builders are:
 
 - **`apply`**: generates a rule which tries to apply the given declaration or
   hypothesis `x` to the target. The rule acts like the tactic `apply x`.
-- **`forward`**: when applied to a declaration or hypothesis with type `A₁ → ...
-  Aₙ → B`, generates a rule which adds a hypothesis `h : B` to the goal's
-  context and produces subgoals with targets `A₁`, ..., `Aₙ` (unless some of the
-  `Aᵢ` were already determined by unification, in which case no subgoal is
-  generated for them). A subset of the `Aᵢ` can also be marked as **immediate**
-  when the builder is used. Then the rule will only be applied to goals which,
-  for each immediate `Aᵢ`, contain a hypothesis `h : Aᵢ`. Example: consider
-  the lemma `even_or_odd`.
+- **`forward`**: when applied to a declaration or hypothesis of type `A₁ → ...
+  Aₙ → B`, generates a rule which looks for hypotheses `h₁ : A₁`, ..., `hₙ : Aₙ`
+  in the goal and, if they are found, adds a new hypothesis `h : B`. As an
+  example, consider the lemma `even_or_odd`:
+
   ```lean
   even_or_odd : ∀ (n : Nat), Even n ∨ Odd n
   ```
-  Registering this as a forward rule with `n` immediate, i.e.
-  ```text
-  (forward (immediate := n)) even_or_odd
-  ```
-  will cause the goal
+
+  Registering this as a forward rule will cause the goal
+
   ```lean
   n : Nat
   m : Nat
   ⊢ T
   ```
+
   to be transformed into this:
+
   ```lean
   n : Nat
   hn : Even n ∨ Odd n
@@ -352,6 +349,21 @@ an Aesop rule. Currently available builders are:
   hm : Even m ∨ Odd m
   ⊢ T
   ```
+
+  The forward builder may also be given a list of *immediate names*:
+
+  ```
+  (forward (immediate := [n])) even_or_odd 
+  ```
+
+  The immediate names, here `n`, refer to the arguments of `even_or_odd`. When
+  Aesop applies a forward rule with explicit immediate names, it only matches
+  the corresponding arguments to hypotheses. (Here, `even_or_odd` has only one
+  argument, so there is no difference.)
+  
+  When no immediate names are given, Aesop considers every argument immediate,
+  except for instance arguments and dependent arguments (i.e. those that can be
+  inferred from the types of later arguments).
 - **`constructors`**: when applied to an inductive type or structure `T`,
   generates a rule which tries to apply each constructor of `T` to the target.
   This is a multi-rule, so if multiple constructors apply, they are considered

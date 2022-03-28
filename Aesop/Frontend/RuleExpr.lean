@@ -191,9 +191,9 @@ def tactic : BuilderOptions m TacticBuilderOptions where
 def forward : BuilderOptions m ForwardBuilderOptions where
   parseOption
     | `(builder_option| (immediate := [$ns:ident,*])) =>
-      return { immediateHyps := (ns : Array Syntax).map (·.getId) }
+      return { immediateHyps := some $ (ns : Array Syntax).map (·.getId) }
     | _ => throwError "aesop: invalid option for builder {BuilderName.forward}"
-  empty := { immediateHyps := #[] }
+  empty := { immediateHyps := none }
   combine o p := { immediateHyps := p.immediateHyps }
 
 end BuilderOptions
@@ -227,10 +227,10 @@ private def tacticBuilderOptionsToString (opts : TacticBuilderOptions) : String 
   if opts.usesBranchState then "" else "(uses_branch_state := false)"
 
 private def forwardBuilderOptionsToString (opts : ForwardBuilderOptions) : String :=
-  if opts.immediateHyps.isEmpty then
-    ""
+  if let (some immediate) := opts.immediateHyps then
+    s!"(immediate := {immediate})"
   else
-    s!"(immediate := {opts.immediateHyps})"
+    ""
 
 instance : ToString Builder where
   toString

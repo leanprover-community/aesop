@@ -144,7 +144,7 @@ private def throwDefaultBuilderFailure (ruleType : String) (id : Name) : MetaM Î
   throwError "aesop: Unable to interpret {id} as {ruleType} rule. Try specifying a builder."
 
 structure ForwardBuilderOptions where
-  immediateHyps : Array Name
+  immediateHyps : Option (Array Name)
   deriving Inhabited
 
 namespace GlobalRuleBuilder
