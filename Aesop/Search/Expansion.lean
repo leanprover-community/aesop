@@ -118,7 +118,7 @@ def runNormRules (goal : MVarId) (mvars : Array MVarId)
 def runNormalizationSimp (goal : MVarId) (rs : RuleSet) :
     MetaM (Option MVarId) := do
   let simpCtx :=
-    { (← Simp.Context.mkDefault) with simpTheorems := rs.normSimpLemmas }
+    { (← Simp.Context.mkDefault) with simpTheorems := #[rs.normSimpLemmas] }
     -- TODO This computation should be done once, not every time we normalise
     -- a goal.
   let preMetaState ← saveState
