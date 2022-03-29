@@ -4,11 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
--- This test can be used to check for memory leaks. It executes Aesop 10000
--- times with a rule set containing a no-op rule (TODO and the default rules,
--- which we should remove for this test) and a limit of 10 goal applications.
--- If everything works properly, the test should only require a small,
--- constant amount of memory.
+-- This test can be used to check for memory leaks. It executes Aesop `N`
+-- times with a rule set containing a no-op rule (and the builtin rules) and
+-- with a limit of 10 goal applications. If everything works properly, the test
+-- should only require a small, constant amount of memory.
 
 import Aesop
 import Lean
@@ -16,17 +15,15 @@ import Lean
 open Lean
 open Lean.Elab.Tactic
 
-def noopRule : Aesop.SimpleRuleTac := λ input => do
-  return { goals := #[(input.goal, none)] }
+def N : Nat := 10000
 
-syntax (name := memoryStressTest) "memoryStressTest" ident : tactic
+@[aesop safe]
+def noopRule : TacticM Unit := return
 
-@[tactic memoryStressTest]
-def evalMemoryStressTest : Tactic
-| `(tactic| memoryStressTest $rule:ident) =>
-  for i in [0:10000] do
-    evalTactic (← `(tactic| try aesop (add safe $rule:ident tactic) (options := { maxRuleApplications := 10, maxRuleApplicationDepth := 10, maxGoals := 0 })))
-| _ => unreachable!
+elab &"memoryStressTest" : tactic =>
+  for i in [0:N] do
+    evalTactic
+      (← `(tactic| try aesop (options := { maxRuleApplications := 10 })))
 
 -- Our very own True, to prevent the Aesop default rules from solving the goal.
 structure TT where
