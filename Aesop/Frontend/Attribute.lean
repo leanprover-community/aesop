@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Frontend.RuleExpr
-import Aesop.RuleBuilder
 import Aesop.RuleSet
 
 open Lean

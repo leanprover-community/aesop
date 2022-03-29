@@ -18,6 +18,18 @@ inductive IndexingMode : Type
   | hyps (keys : Array DiscrTree.Key)
   deriving Inhabited
 
+namespace IndexingMode
+
+def targetMatchingConclusion (type : Expr) : MetaM IndexingMode := do
+  let path ← withoutModifyingState do
+    let (_, _, conclusion) ← forallMetaTelescope type
+    DiscrTree.mkPath conclusion
+    -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
+    -- turn into `Key.star`) but not fvars.
+  return IndexingMode.target path
+
+end IndexingMode
+
 
 inductive IndexMatchLocation
   | target

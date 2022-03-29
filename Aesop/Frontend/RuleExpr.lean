@@ -7,7 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Frontend.ParseT
 import Aesop.Percent
 import Aesop.Rule.Name
-import Aesop.RuleBuilder
+import Aesop.Builder
 import Aesop.RuleSet
 
 open Lean

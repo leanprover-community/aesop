@@ -71,11 +71,6 @@ def tacToDescr (r : Rule' α RuleTacWithBuilderDescr) :
     Rule' α (Option GlobalRuleTacBuilderDescr) :=
   r.mapTac (·.descr)
 
-@[inline]
-def descrToTac (goal : MVarId) (r : Rule' α GlobalRuleTacBuilderDescr) :
-    MetaM (Rule' α RuleTacWithBuilderDescr) :=
-  r.mapTacM (·.toRuleTacBuilder)
-
 end Rule'
 
 end Aesop
