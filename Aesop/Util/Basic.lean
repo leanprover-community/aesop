@@ -1159,6 +1159,20 @@ def assignedExprMVars (preState postState : SavedState) :
   postState.runMetaM' do
     unassignedPre.filterM λ m => isExprMVarAssigned m <||> isDelayedAssigned m
 
+def sortFVarsByReverseContextOrder (goal : MVarId) (hyps : Array FVarId) :
+    MetaM (Array FVarId) :=
+  withMVarContext goal do
+    let lctx ← getLCtx
+    let hyps := hyps.map λ fvarId =>
+      match lctx.fvarIdToDecl.find? fvarId with
+      | none => (0, fvarId)
+      | some ldecl => (ldecl.index, fvarId)
+    let hyps := hyps.qsort λ h i => h.fst > i.fst
+    return hyps.map (·.snd)
+
+def tryClearMany' (goal : MVarId) (hyps : Array FVarId) : MetaM MVarId := do
+  tryClearMany goal (← sortFVarsByReverseContextOrder goal hyps)
+
 end Lean.Meta
 
 

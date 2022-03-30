@@ -20,7 +20,7 @@ namespace Aesop.GlobalRuleTacBuilderDescr
 def toRuleTacBuilder : GlobalRuleTacBuilderDescr → GlobalRuleTacBuilder
   | apply decl => GlobalRuleTacBuilder.apply decl
   | constructors cs => GlobalRuleTacBuilder.constructors cs
-  | forward decl immediate => GlobalRuleTacBuilder.forwardCore decl immediate
+  | forward decl immediate clear => GlobalRuleTacBuilder.forwardCore decl immediate clear
   | cases decl isRecursiveType => GlobalRuleTacBuilder.cases decl isRecursiveType
   | tacticM decl => GlobalRuleTacBuilder.tacticM decl
   | simpleRuleTac decl => GlobalRuleTacBuilder.simpleRuleTac decl

@@ -57,6 +57,7 @@ inductive BuilderName
   | apply
   | cases
   | constructors
+  | elim
   | forward
   | simp
   | tactic
@@ -75,6 +76,7 @@ instance : ToString BuilderName where
     | apply => "apply"
     | cases => "cases"
     | constructors => "constructors"
+    | elim => "elim"
     | forward => "forward"
     | simp => "simp"
     | tactic => "tactic"

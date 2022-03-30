@@ -107,6 +107,7 @@ syntax &"unfold" : Aesop.builder_name
 syntax &"tactic" : Aesop.builder_name
 syntax &"constructors" : Aesop.builder_name
 syntax &"forward" : Aesop.builder_name
+syntax &"elim" : Aesop.builder_name
 syntax &"cases" : Aesop.builder_name
 syntax &"safe_default" : Aesop.builder_name
 syntax &"unsafe_default" : Aesop.builder_name
@@ -130,6 +131,7 @@ def parse : Syntax → DBuilderName
   | `(builder_name| tactic) => regular $ BuilderName.tactic
   | `(builder_name| constructors) => regular $ BuilderName.constructors
   | `(builder_name| forward) => regular $ BuilderName.forward
+  | `(builder_name| elim) => regular $ BuilderName.elim
   | `(builder_name| cases) => regular $ BuilderName.cases
   | `(builder_name| safe_default) => safeDefault
   | `(builder_name| unsafe_default) => unsafeDefault
@@ -188,13 +190,22 @@ def tactic : BuilderOptions m TacticBuilderOptions where
   empty := { usesBranchState := true }
   combine o p := { usesBranchState := p.usesBranchState }
 
-def forward : BuilderOptions m ForwardBuilderOptions where
+private def forwardCore (clear : Bool) :
+    BuilderOptions m ForwardBuilderOptions where
   parseOption
-    | `(builder_option| (immediate := [$ns:ident,*])) =>
-      return { immediateHyps := some $ (ns : Array Syntax).map (·.getId) }
+    | `(builder_option| (immediate := [$ns:ident,*])) => return {
+        immediateHyps := some $ (ns : Array Syntax).map (·.getId)
+        clear := clear
+      }
     | _ => throwError "aesop: invalid option for builder {BuilderName.forward}"
-  empty := { immediateHyps := none }
-  combine o p := { immediateHyps := p.immediateHyps }
+  empty := { immediateHyps := none, clear := clear }
+  combine o p := { immediateHyps := p.immediateHyps, clear := clear }
+
+def forward : BuilderOptions m ForwardBuilderOptions :=
+  forwardCore (clear := false)
+
+def elim : BuilderOptions m ForwardBuilderOptions :=
+  forwardCore (clear := true)
 
 end BuilderOptions
 
@@ -258,6 +269,8 @@ def parseOptions (b : DBuilderName) (opts : Syntax) : m Builder := do
   | regular BuilderName.constructors => checkNoOptions; return constructors
   | regular BuilderName.forward =>
     return forward $ ← BuilderOptions.forward.parse opts
+  | regular BuilderName.elim =>
+    return forward $ ← BuilderOptions.elim.parse opts
   | regular BuilderName.cases => checkNoOptions; return cases
   | DBuilderName.safeDefault => checkNoOptions; return safeDefault
   | DBuilderName.unsafeDefault => checkNoOptions; return unsafeDefault

@@ -191,7 +191,7 @@ builders.
 inductive GlobalRuleTacBuilderDescr
   | apply (decl : Name)
   | constructors (constructorNames : Array Name)
-  | forward (decl : Name) (immediate : UnorderedArraySet Nat)
+  | forward (decl : Name) (immediate : UnorderedArraySet Nat) (clear : Bool)
   | cases (decl : Name) (isRecursiveType : Bool)
   | tacticM (decl : Name)
   | ruleTac (decl : Name)
