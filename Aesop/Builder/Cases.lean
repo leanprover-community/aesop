@@ -66,18 +66,17 @@ def GlobalRuleTacBuilder.cases (decl : Name) (isRecursiveType : Bool) :
     descr := GlobalRuleTacBuilderDescr.cases decl isRecursiveType
   }
 
-def GlobalRuleBuilder.cases : GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
-  let builderName := `cases
-  let inductInfo ← checkConstIsInductive builderName decl
-  return {
-    builder := BuilderName.cases
-    tac := ← GlobalRuleTacBuilder.cases decl
-      (isRecursiveType := inductInfo.isRec)
-    indexingMode := IndexingMode.unindexed
-    mayUseBranchState := false
-  }
-
-def RuleBuilder.cases : RuleBuilder RegularRuleBuilderResult :=
-  ofGlobalRuleBuilder "cases" $ GlobalRuleBuilder.cases
+def RuleBuilder.cases : RuleBuilder :=
+  RuleBuilder.ofGlobalRuleBuilder BuilderName.cases λ phase decl => do
+    let inductInfo ← RuleBuilder.checkConstIsInductive name decl
+    return RuleBuilderResult.regular {
+      builder := name
+      tac := ← GlobalRuleTacBuilder.cases decl
+          (isRecursiveType := inductInfo.isRec)
+      indexingMode := IndexingMode.unindexed
+      mayUseBranchState := false
+    }
+  where
+    name := BuilderName.cases
 
 end Aesop

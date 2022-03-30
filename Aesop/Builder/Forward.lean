@@ -163,6 +163,7 @@ def forward (decl : Name)
 
 end GlobalRuleTacBuilder
 
+
 def RuleTacBuilder.forward (userName : Name) (immediate : Option (Array Name))
     (clear : Bool) : RuleTacBuilder := λ goal => do
   let (goal, #[newHyp]) ← copyRuleHypotheses goal #[userName]
@@ -174,30 +175,23 @@ def RuleTacBuilder.forward (userName : Name) (immediate : Option (Array Name))
         descr := none }
     return (goal, tac)
 
-def GlobalRuleBuilder.forward (opts : ForwardBuilderOptions) :
-    GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
-  return {
-    builder := BuilderName.forward
-    tac := ← GlobalRuleTacBuilder.forward decl opts.immediateHyps opts.clear
-    indexingMode := IndexingMode.unindexed -- TODO
-    mayUseBranchState := false
-  }
-
-def LocalRuleBuilder.forward (opts : ForwardBuilderOptions) :
-    LocalRuleBuilder RegularRuleBuilderResult := λ hypUserName goal => do
-  let (goal, tac) ←
-    RuleTacBuilder.forward hypUserName opts.immediateHyps opts.clear goal
-  let result := {
-    builder := BuilderName.forward
-    tac := tac
-    indexingMode := IndexingMode.unindexed -- TODO
-    mayUseBranchState := true
-  }
-  return (goal, result)
-
 def RuleBuilder.forward (opts : ForwardBuilderOptions) :
-    RuleBuilder RegularRuleBuilderResult :=
-  ofGlobalAndLocalRuleBuilder (GlobalRuleBuilder.forward opts)
-    (LocalRuleBuilder.forward opts)
+    RuleBuilder := λ input =>
+  match input.kind with
+  | RuleBuilderKind.global decl => do
+    let tac ← GlobalRuleTacBuilder.forward decl opts.immediateHyps opts.clear
+    return RuleBuilderOutput.global $ mkResult tac
+  | RuleBuilderKind.local fvarUserName goal => do
+    let (goal, tac) ←
+      RuleTacBuilder.forward fvarUserName opts.immediateHyps opts.clear goal
+    return RuleBuilderOutput.local (mkResult tac) goal
+  where
+    mkResult (tac : RuleTacWithBuilderDescr) : RuleBuilderResult :=
+      RuleBuilderResult.regular {
+        builder := BuilderName.forward
+        tac := tac
+        indexingMode := IndexingMode.unindexed -- TODO
+        mayUseBranchState := true
+      }
 
 end Aesop

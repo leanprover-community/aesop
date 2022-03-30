@@ -12,6 +12,18 @@ open Lean.Meta
 
 namespace Aesop
 
+inductive RuleBuilderKind
+  | global (decl : Name)
+  | «local» (fvarUserName : Name) (goal : MVarId)
+
+def RuleBuilderKind.toRuleIdent : RuleBuilderKind → RuleIdent
+  | global decl => RuleIdent.const decl
+  | «local» fvarUserName .. => RuleIdent.fvar fvarUserName
+
+structure RuleBuilderInput where
+  phase : PhaseName
+  kind : RuleBuilderKind
+
 structure RegularRuleBuilderResult where
   builder : BuilderName
   tac : RuleTacWithBuilderDescr
@@ -23,32 +35,28 @@ structure SimpRuleBuilderResult where
   builder : BuilderName
   entries : Array SimpEntry
 
-inductive NormRuleBuilderResult
+inductive RuleBuilderResult
   | regular (r : RegularRuleBuilderResult)
   | simp (r : SimpRuleBuilderResult)
   deriving Inhabited
 
-/--
-A `GlobalRuleBuilder` takes the name of a global constant and produces a
-`RegularRuleBuilderResult` or `NormRuleBuilderResult`.
--/
-abbrev GlobalRuleBuilder α := Name → MetaM α
+inductive RuleBuilderOutput
+  | global (r : RuleBuilderResult)
+  | «local» (r : RuleBuilderResult) (goal : MVarId)
 
 /--
-A `LocalRuleBuilder` takes the `userName` of a hypothesis and produces a
-`RegularRuleBuilderResult` or `NormRuleBuilderResult`. It operates on the given
-goal and may change it.
+Invariant:
+
+- if the `RuleBuilderInput` contains a `RuleBuilderKind.local`, then the builder
+  returns a `RuleBuilderOutput.local`, and similar for
+  `RuleBuilderKind.global`.
 -/
-abbrev LocalRuleBuilder α := Name → MVarId → MetaM (MVarId × α)
 
-/--
-A `RuleBuilder` is either a `GobalRuleBuilder` or a `LocalRuleBuilder`
--/
-abbrev RuleBuilder α := RuleIdent → MVarId → MetaM (MVarId × α)
+abbrev RuleBuilder := RuleBuilderInput → MetaM RuleBuilderOutput
 
-namespace GlobalRuleBuilder
+namespace RuleBuilder
 
-def checkConstIsInductive (builderName : Name) (decl : Name) :
+def checkConstIsInductive (builderName : BuilderName) (decl : Name) :
     MetaM InductiveVal := do
   let (some info) ← getConst? decl
     | throwError "aesop: {builderName} builder: unknown constant '{decl}'"
@@ -56,35 +64,13 @@ def checkConstIsInductive (builderName : Name) (decl : Name) :
     | throwError "aesop: {builderName} builder: expected '{decl}' to be an inductive type"
   return info
 
-end GlobalRuleBuilder
+def ofGlobalRuleBuilder (name : BuilderName)
+    (globalBuilder : PhaseName → Name → MetaM RuleBuilderResult) :
+    RuleBuilder := λ input =>
+  match input.kind with
+  | RuleBuilderKind.local .. =>
+    throwError "aesop: {name} builder does not support local hypotheses"
+  | RuleBuilderKind.global decl =>
+    RuleBuilderOutput.global <$> globalBuilder input.phase decl
 
-
-namespace RuleBuilder
-
-def toGlobalRuleBuilder (r : RuleBuilder α) : GlobalRuleBuilder α := λ decl =>
-  Prod.snd <$> r (RuleIdent.const decl) ⟨`_aesop_rule_builder_dummy⟩
-  -- NOTE: We assume that the 'global part' of `r` does not use the `_dummy`
-  -- mvar.
-
-def toLocalRuleBuilder (r : RuleBuilder α) :
-    LocalRuleBuilder α := λ fvarId goal =>
-  r (RuleIdent.fvar fvarId) goal
-
-def toNormRuleBuilder (r : RuleBuilder RegularRuleBuilderResult) :
-    RuleBuilder NormRuleBuilderResult := λ id goal => do
-  let (goal, res) ← r id goal
-  return (goal, NormRuleBuilderResult.regular res)
-
-def ofGlobalAndLocalRuleBuilder (global : GlobalRuleBuilder α)
-    («local» : LocalRuleBuilder α) : RuleBuilder α := λ id goal => do
-  match id with
-  | RuleIdent.const const => return (goal, ← global const)
-  | RuleIdent.fvar hyp => «local» hyp goal
-
-def ofGlobalRuleBuilder (builderName : String) (global : GlobalRuleBuilder α) :
-    RuleBuilder α :=
-  ofGlobalAndLocalRuleBuilder global
-    (λ _ _ => throwError
-      "aesop: {builderName} builder: this builder does not support local hypotheses")
-
-end Aesop.RuleBuilder
+end RuleBuilder

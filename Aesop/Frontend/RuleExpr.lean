@@ -109,17 +109,13 @@ syntax &"constructors" : Aesop.builder_name
 syntax &"forward" : Aesop.builder_name
 syntax &"elim" : Aesop.builder_name
 syntax &"cases" : Aesop.builder_name
-syntax &"safe_default" : Aesop.builder_name
-syntax &"unsafe_default" : Aesop.builder_name
-syntax &"norm_default" : Aesop.builder_name
+syntax &"default" : Aesop.builder_name
 
 end Parser
 
 inductive DBuilderName
   | regular (b : BuilderName)
-  | safeDefault
-  | unsafeDefault
-  | normDefault
+  | dflt
   deriving Inhabited
 
 namespace DBuilderName
@@ -133,17 +129,13 @@ def parse : Syntax → DBuilderName
   | `(builder_name| forward) => regular $ BuilderName.forward
   | `(builder_name| elim) => regular $ BuilderName.elim
   | `(builder_name| cases) => regular $ BuilderName.cases
-  | `(builder_name| safe_default) => safeDefault
-  | `(builder_name| unsafe_default) => unsafeDefault
-  | `(builder_name| norm_default) => normDefault
+  | `(builder_name| default) => dflt
   | _ => unreachable!
 
 instance : ToString DBuilderName where
   toString
     | regular b => toString b
-    | safeDefault => "safe_default"
-    | unsafeDefault => "unsafe_default"
-    | normDefault => "norm_default"
+    | dflt => "default"
 
 def toBuilderName? : DBuilderName → Option BuilderName
   | regular b => some b
@@ -227,9 +219,7 @@ inductive Builder
   | constructors
   | forward (opts : ForwardBuilderOptions)
   | cases
-  | safeDefault
-  | unsafeDefault
-  | normDefault
+  | dflt
   deriving Inhabited
 
 namespace Builder
@@ -245,18 +235,16 @@ private def forwardBuilderOptionsToString (opts : ForwardBuilderOptions) : Strin
 
 instance : ToString Builder where
   toString
-    | apply => "(apply)"
-    | simp => "(simp)"
-    | unfold => "(unfold)"
+    | apply => "apply"
+    | simp => "simp"
+    | unfold => "unfold"
     | tactic opts =>
       "(" ++ String.joinSep " " #["tactic", tacticBuilderOptionsToString opts] ++ ")"
-    | constructors => "(constructors)"
+    | constructors => "constructors"
     | forward opts =>
       "(" ++ String.joinSep " " #["forward", forwardBuilderOptionsToString opts] ++ ")"
-    | cases => "(cases)"
-    | safeDefault => "(safe_default)"
-    | unsafeDefault => "(unsafe_default)"
-    | normDefault => "(norm_default)"
+    | cases => "cases"
+    | dflt => "default"
 
 open DBuilderName in
 def parseOptions (b : DBuilderName) (opts : Syntax) : m Builder := do
@@ -272,9 +260,7 @@ def parseOptions (b : DBuilderName) (opts : Syntax) : m Builder := do
   | regular BuilderName.elim =>
     return forward $ ← BuilderOptions.elim.parse opts
   | regular BuilderName.cases => checkNoOptions; return cases
-  | DBuilderName.safeDefault => checkNoOptions; return safeDefault
-  | DBuilderName.unsafeDefault => checkNoOptions; return unsafeDefault
-  | DBuilderName.normDefault => checkNoOptions; return normDefault
+  | DBuilderName.dflt => checkNoOptions; return default
   where
     checkNoOptions := BuilderOptions.none b |>.parse opts
 
@@ -285,34 +271,18 @@ def parse : Syntax → m Builder
     parseOptions (DBuilderName.parse b) opts
   | _ => unreachable!
 
-def toRegularRuleBuilder : Builder →
-    Option (RuleBuilder RegularRuleBuilderResult)
+def toRuleBuilder : Builder → RuleBuilder
   | apply => RuleBuilder.apply
-  | simp => none
-  | unfold => none
+  | simp => RuleBuilder.normSimpLemmas
+  | unfold => RuleBuilder.normSimpUnfold
   | tactic opts => RuleBuilder.tactic opts
   | constructors => RuleBuilder.constructors
   | forward opts => RuleBuilder.forward opts
   | cases => RuleBuilder.cases
-  | safeDefault => RuleBuilder.safeDefault
-  | unsafeDefault => RuleBuilder.unsafeDefault
-  | normDefault => none
-
-def toNormRuleBuilder : Builder →
-    RuleBuilder NormRuleBuilderResult
-  | apply => RuleBuilder.apply.toNormRuleBuilder
-  | simp => RuleBuilder.normSimpLemmas
-  | unfold => RuleBuilder.normSimpUnfold
-  | tactic opts => RuleBuilder.tactic opts |>.toNormRuleBuilder
-  | constructors => RuleBuilder.constructors.toNormRuleBuilder
-  | forward opts => RuleBuilder.forward opts |>.toNormRuleBuilder
-  | cases => RuleBuilder.cases.toNormRuleBuilder
-  | safeDefault => RuleBuilder.safeDefault.toNormRuleBuilder
-  | unsafeDefault => RuleBuilder.unsafeDefault.toNormRuleBuilder
-  | normDefault => RuleBuilder.normDefault
+  | dflt => RuleBuilder.default
 
 open DBuilderName in
-def toBuilderName : Builder → DBuilderName
+def toDBuilderName : Builder → DBuilderName
   | apply => regular BuilderName.apply
   | simp => regular BuilderName.simp
   | unfold => regular BuilderName.unfold
@@ -320,19 +290,9 @@ def toBuilderName : Builder → DBuilderName
   | constructors => regular BuilderName.constructors
   | forward .. => regular BuilderName.forward
   | cases => regular BuilderName.cases
-  | safeDefault => DBuilderName.safeDefault
-  | unsafeDefault => DBuilderName.unsafeDefault
-  | normDefault => DBuilderName.normDefault
+  | dflt => DBuilderName.dflt
 
 end Builder
-
-
-open Builder in
-def defaultBuilderForPhase : PhaseName → Builder
-  | PhaseName.safe => safeDefault
-  | PhaseName.norm => normDefault
-  | PhaseName.«unsafe» => unsafeDefault
-
 
 namespace Parser
 
@@ -510,7 +470,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
   match c.phase with
   | phase@PhaseName.safe =>
     let penalty ← c.getPenalty phase
-    let (goal, res) ← runRegularBuilder phase c.builder
+    let (goal, res) ← runRegularBuilder goal phase c.builder
     let rule := RuleSetMember'.safeRule {
       name := c.ident.toRuleName phase res.builder
       tac := res.tac
@@ -522,7 +482,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
     return (goal, rule, c.ruleSets.ruleSets)
   | phase@PhaseName.«unsafe» =>
     let successProbability ← c.getSuccessProbability
-    let (goal, res) ← runRegularBuilder phase c.builder
+    let (goal, res) ← runRegularBuilder goal phase c.builder
     let rule := RuleSetMember'.unsafeRule {
       name := c.ident.toRuleName phase res.builder
       tac := res.tac
@@ -533,9 +493,9 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
     return (goal, rule, c.ruleSets.ruleSets)
   | phase@PhaseName.norm =>
     let penalty ← c.getPenalty phase
-    let (goal, res) ← c.builder.toNormRuleBuilder c.ident goal
+    let (goal, res) ← runBuilder goal phase c.builder
     match res with
-    | NormRuleBuilderResult.regular res =>
+    | RuleBuilderResult.regular res =>
       let rule := RuleSetMember'.normRule {
         name := c.ident.toRuleName phase res.builder
         tac := res.tac
@@ -544,18 +504,34 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
         extra := { penalty }
       }
       return (goal, rule, c.ruleSets.ruleSets)
-    | NormRuleBuilderResult.simp res =>
+    | RuleBuilderResult.simp res =>
       let rule := RuleSetMember'.normSimpRule {
         name := c.ident.toRuleName phase res.builder
         entries := res.entries
       }
       return (goal, rule, c.ruleSets.ruleSets)
   where
-    runRegularBuilder (phase : PhaseName) (b : Builder) :
+    runBuilder (goal : MVarId) (phase : PhaseName) (b : Builder) :
+        MetaM (MVarId × RuleBuilderResult) := do
+      let builderInput : RuleBuilderInput :=
+        match c.ident with
+        | RuleIdent.const decl => {
+            phase := phase
+            kind := RuleBuilderKind.global decl
+          }
+        | RuleIdent.fvar fvarUserName => {
+            phase := phase
+            kind := RuleBuilderKind.local fvarUserName goal
+          }
+      match ← b.toRuleBuilder builderInput with
+      | RuleBuilderOutput.global r => return (goal, r)
+      | RuleBuilderOutput.local r goal => return (goal, r)
+
+    runRegularBuilder (goal : MVarId) (phase : PhaseName) (b : Builder) :
         MetaM (MVarId × RegularRuleBuilderResult) := do
-      let (some b) := b.toRegularRuleBuilder | throwError
-        "aesop: builder {b} cannot be used for {phase} rules"
-      b c.ident goal
+      let (goal, RuleBuilderResult.regular r) ← runBuilder goal phase b
+        | throwError "aesop: builder {b} cannot be used for {phase} rules"
+      return (goal, r)
 
 -- Precondition: `c.ident = RuleIdent.const _`.
 def buildGlobalRule (c : RuleConfig Id) :
@@ -572,11 +548,10 @@ def toRuleNameFilter (c : RuleConfig Option) :
     match c.builder with
     | none => pure #[]
     | some b => do
-      let (some builder) := b.toBuilderName.toBuilderName? | throwError
-        "aesop: {b.toBuilderName} cannot be used when erasing rules.\nUse the corresponding non-default builder (e.g. 'apply' or 'constructors') instead."
-        -- TODO We could instead look for the correct non-default builder
-        -- ourselves by re-running the logic that determines which builder to
-        -- use.
+      let (some builder) := b.toDBuilderName.toBuilderName? | throwError
+        "aesop: {b.toDBuilderName} cannot be used when erasing rules.\nUse the corresponding non-default builder (e.g. 'apply' or 'constructors') instead."
+        -- We could instead look for the correct non-default builder ourselves
+        -- by re-running the logic that determines which builder to use.
       pure #[builder]
   let phases :=
     match c.phase with
@@ -642,8 +617,7 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
       let (some ident) := c.ident | throwError
         "aesop: rule name not specified"
       let (phase, priority) ← getPhaseAndPriority c
-      let builder :=
-        c.builder.getD $ defaultBuilderForPhase phase
+      let builder := c.builder.getD Builder.dflt
       let ruleSets :=
         if c.ruleSets.ruleSets.isEmpty then
           ⟨#[defaultRuleSetName]⟩

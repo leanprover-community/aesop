@@ -18,17 +18,16 @@ def GlobalRuleTacBuilder.constructors (constructorNames : Array Name) :
     descr := GlobalRuleTacBuilderDescr.constructors constructorNames
   }
 
-def GlobalRuleBuilder.constructors :
-    GlobalRuleBuilder RegularRuleBuilderResult := λ decl => do
-  let info ← GlobalRuleBuilder.checkConstIsInductive `constructors decl
-  return {
-    builder := BuilderName.constructors
-    tac := ← GlobalRuleTacBuilder.constructors info.ctors.toArray
-    indexingMode := IndexingMode.unindexed -- TODO optimise as soon as we have OR for IndexingModes
-    mayUseBranchState := false
-  }
-
-def RuleBuilder.constructors : RuleBuilder RegularRuleBuilderResult :=
-  ofGlobalRuleBuilder "constructors" $ GlobalRuleBuilder.constructors
+def RuleBuilder.constructors : RuleBuilder :=
+  ofGlobalRuleBuilder name λ phase decl => do
+    let info ← RuleBuilder.checkConstIsInductive name decl
+    return RuleBuilderResult.regular {
+      builder := name
+      tac := ← GlobalRuleTacBuilder.constructors info.ctors.toArray
+      indexingMode := IndexingMode.unindexed -- TODO optimise as soon as we have OR for IndexingModes
+      mayUseBranchState := false
+    }
+  where
+    name := BuilderName.constructors
 
 end Aesop

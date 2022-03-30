@@ -74,17 +74,15 @@ def tactic (decl : Name) : GlobalRuleTacBuilder := do
 end GlobalRuleTacBuilder
 
 
-def GlobalRuleBuilder.tactic (opts : TacticBuilderOptions) :
-    GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
-  return {
-    builder := BuilderName.tactic
-    tac := ← GlobalRuleTacBuilder.tactic decl
-    indexingMode := IndexingMode.unindexed
-    mayUseBranchState := opts.usesBranchState
-  }
-
-def RuleBuilder.tactic (opts : TacticBuilderOptions) :
-    RuleBuilder RegularRuleBuilderResult :=
-  ofGlobalRuleBuilder "tactic" $ GlobalRuleBuilder.tactic opts
+def RuleBuilder.tactic (opts : TacticBuilderOptions) : RuleBuilder :=
+  ofGlobalRuleBuilder name λ phase decl =>
+    return RuleBuilderResult.regular {
+      builder := name
+      tac := ← GlobalRuleTacBuilder.tactic decl
+      indexingMode := IndexingMode.unindexed
+      mayUseBranchState := opts.usesBranchState
+    }
+  where
+    name := BuilderName.tactic
 
 end Aesop

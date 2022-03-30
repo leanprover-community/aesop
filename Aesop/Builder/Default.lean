@@ -13,11 +13,6 @@ open Lean.Meta
 
 namespace Aesop
 
-private def throwDefaultBuilderFailure (ruleType : String) (id : Name) : MetaM α :=
-  throwError "aesop: Unable to interpret {id} as {ruleType} rule. Try specifying a builder."
-
-namespace GlobalRuleBuilder
-
 -- TODO In the default builders below, we should distinguish between fatal and
 -- nonfatal errors. E.g. if the `tactic` builder finds a declaration that is not
 -- of tactic type, this is a nonfatal error and we should continue with the next
@@ -26,59 +21,30 @@ namespace GlobalRuleBuilder
 -- next builder is more confusing than anything because the user probably
 -- intended to add a simp lemma.
 
-def unsafeRuleDefault : GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
-  constructors decl <|>
-  tactic TacticBuilderOptions.default decl <|>
-  apply decl <|>
-  throwDefaultBuilderFailure "an unsafe" decl
-
-def safeRuleDefault : GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
-  constructors decl <|>
-  tactic TacticBuilderOptions.default decl <|>
-  apply decl <|>
-  throwDefaultBuilderFailure "a safe" decl
-
-def normRuleDefault : GlobalRuleBuilder NormRuleBuilderResult := λ decl =>
-  NormRuleBuilderResult.regular <$> tactic TacticBuilderOptions.default decl <|>
-  normSimpLemmas decl <|>
-  NormRuleBuilderResult.regular <$> apply decl <|>
-  throwDefaultBuilderFailure "a norm" decl
-
-end GlobalRuleBuilder
-
-
-namespace LocalRuleBuilder
-
-def unsafeRuleDefault : LocalRuleBuilder RegularRuleBuilderResult :=
-  λ hypUserName goal =>
-    apply hypUserName goal <|>
-    throwDefaultBuilderFailure "an unsafe" hypUserName
-
-def safeRuleDefault : LocalRuleBuilder RegularRuleBuilderResult :=
-  λ hypUserName goal =>
-    apply hypUserName goal <|>
-    throwDefaultBuilderFailure "a safe" hypUserName
-
-def normRuleDefault : LocalRuleBuilder NormRuleBuilderResult :=
-  λ hypUserName goal =>
-    throwError "aesop: Please specify a builder for norm rule {hypUserName}."
-
-end LocalRuleBuilder
-
-
 namespace RuleBuilder
 
-def unsafeDefault : RuleBuilder RegularRuleBuilderResult :=
-  ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.unsafeRuleDefault
-    LocalRuleBuilder.unsafeRuleDefault
+private def err (ruleType : String) : RuleBuilder := λ input =>
+  throwError m!"aesop: Unable to interpret {input.kind.toRuleIdent} as {ruleType} rule. Try specifying a builder."
 
-def safeDefault : RuleBuilder RegularRuleBuilderResult :=
-  ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.safeRuleDefault
-    LocalRuleBuilder.safeRuleDefault
-
-def normDefault : RuleBuilder NormRuleBuilderResult :=
-  ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.normRuleDefault
-    LocalRuleBuilder.normRuleDefault
+def default : RuleBuilder := λ input =>
+  match input.phase with
+  | PhaseName.safe =>
+    constructors input <|>
+    tactic' input <|>
+    apply input <|>
+    err "an unsafe" input
+  | PhaseName.unsafe =>
+    constructors input <|>
+    tactic' input <|>
+    apply input <|>
+    err "an unsafe" input
+  | PhaseName.norm =>
+    tactic' input <|>
+    normSimpLemmas input <|>
+    apply input <|>
+    err "a norm" input
+  where
+    tactic' := tactic TacticBuilderOptions.default
 
 end RuleBuilder
 

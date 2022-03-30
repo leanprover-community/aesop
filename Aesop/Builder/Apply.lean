@@ -42,7 +42,7 @@ def applyConsts (decls : Array Name) : RuleTac := λ input => do
     }
     return (rapp, postState)
   if apps.isEmpty then
-    failure
+    throwError "failed to apply any of these declarations:{MessageData.node $ decls.map toMessageData}"
   return { applications := apps, postBranchState? := none }
 
 end RuleTac
@@ -63,30 +63,26 @@ def RuleTacBuilder.applyFVar (userName : Name) : RuleTacBuilder := λ goal => do
         descr := none }
     return (goal, tac)
 
-def GlobalRuleBuilder.apply :
-    GlobalRuleBuilder RegularRuleBuilderResult := λ decl =>
-  return {
-    builder := BuilderName.apply
-    tac := ← GlobalRuleTacBuilder.apply decl
-    indexingMode := ←
-      IndexingMode.targetMatchingConclusion (← getConstInfo decl).type
-    mayUseBranchState := false
-  }
-
-def LocalRuleBuilder.apply :
-    LocalRuleBuilder RegularRuleBuilderResult := λ hypUserName goal => do
-  let (goal, tac) ← RuleTacBuilder.applyFVar hypUserName goal
-  withMVarContext goal do
-    let type := (← getLocalDeclFromUserName hypUserName).type
-    let result := {
-      builder := BuilderName.apply
-      tac := tac
-      indexingMode := ← IndexingMode.targetMatchingConclusion type
-      mayUseBranchState := false
-    }
-    return (goal, result)
-
-def RuleBuilder.apply : RuleBuilder RegularRuleBuilderResult :=
-  ofGlobalAndLocalRuleBuilder GlobalRuleBuilder.apply LocalRuleBuilder.apply
+def RuleBuilder.apply : RuleBuilder := λ input =>
+  match input.kind with
+  | RuleBuilderKind.global decl => do
+    let tac ← GlobalRuleTacBuilder.apply decl
+    let type := (← getConstInfo decl).type
+    RuleBuilderOutput.global <$> mkResult tac type
+  | RuleBuilderKind.local fvarUserName goal =>
+    withMVarContext goal do
+      let (goal, tac) ← RuleTacBuilder.applyFVar fvarUserName goal
+      let type := (← getLocalDeclFromUserName fvarUserName).type
+      let result ← mkResult tac type
+      return RuleBuilderOutput.local result goal
+  where
+    mkResult (tac : RuleTacWithBuilderDescr) (type : Expr) :
+        MetaM RuleBuilderResult :=
+      return RuleBuilderResult.regular {
+        builder := BuilderName.apply
+        tac := tac
+        indexingMode := ← IndexingMode.targetMatchingConclusion type
+        mayUseBranchState := false
+      }
 
 end Aesop
