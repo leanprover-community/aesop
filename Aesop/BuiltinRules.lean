@@ -34,7 +34,12 @@ def contradiction : TacticM Unit :=
 --   those for products split into multiple goals; those for existentials
 --   introduce a metavariable. We want to wait as long as possible with either.
 --   We could even consider making these rules `unsafe`.
-attribute [aesop [safe -31 cases, safe 100 constructors]] And Prod PProd MProd
-  Exists Sigma PSigma
+attribute [aesop [norm 0 cases, safe 100 constructors]] And Prod PProd MProd
+attribute [aesop [safe 0 cases, safe 100 constructors]] Exists Sigma PSigma
+  -- TODO It should be possible to make the `cases` rule for Exists etc. a
+  -- norm rule rather than a safe rule. However, this currently fails when the
+  -- goal contains metavariables, since `cases` may replace the meta. Aesop
+  -- then considers the replacement a newly introduced meta, which norm rules
+  -- are not allowed to add.
 
 end Aesop.BuiltinRules
