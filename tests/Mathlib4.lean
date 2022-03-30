@@ -45,13 +45,10 @@ def And.elim (f : a → b → α) (h : a ∧ b) : α := by
 theorem And.symm : a ∧ b → b ∧ a := by
   aesop
 
--- TODO automatic cases on or in hyp (needs per-hyp rules)
 theorem Or.myelim {a b c : Prop} (h₁ : a → c) (h₂ : b → c) (h : a ∨ b) : c := by
-  aesop (add safe cases Or)
+  aesop
 
--- TODO make normalisation a fixpoint loop?
--- TODO deal with negation
--- TODO use hyps in the context by default
+-- TODO how to deal with this?
 theorem not_not_em (a : Prop) : ¬¬(a ∨ ¬a) := by
   show ((a ∨ (a → False)) → False) → False
   exact fun H => H (Or.inr fun h => H (Or.inl h))
@@ -59,11 +56,8 @@ theorem not_not_em (a : Prop) : ¬¬(a ∨ ¬a) := by
 theorem Or.symm (h : a ∨ b) : b ∨ a := by
   cases h <;> aesop
 
--- TODO use iff in the context as norm rule?
--- TODO allow local hyps to be added as norm simp rules
-def Iff.elim (f : (a → b) → (b → a) → c) (h : a ↔ b) : c :=
-  f h.mp h.mpr
-  -- by aesop (norm [h (builder simp)])
+def Iff.elim (f : (a → b) → (b → a) → c) (h : a ↔ b) : c := by
+  aesop
 
 -- TODO add Iff.intro as default rule
 theorem iff_comm : (a ↔ b) ↔ (b ↔ a) := by
@@ -92,9 +86,10 @@ theorem forall_congr_iff {p q : α → Prop} (h : ∀ x, p x ↔ q x) :
 
 theorem imp_congr_left (h : a ↔ b) : (a → c) ↔ (b → c) := by aesop
 
--- TODO Iff elim
+-- TODO how to deal with this?
+set_option trace.aesop.steps true in
 theorem imp_congr_right (h : a → (b ↔ c)) : (a → b) ↔ (a → c) :=
-⟨fun hab ha => (h ha).1 (hab ha), fun hcd ha => (h ha).2 (hcd ha)⟩
+  ⟨fun hab ha => (h ha).1 (hab ha), fun hcd ha => (h ha).2 (hcd ha)⟩
 
 theorem imp_congr_ctx (h₁ : a ↔ c) (h₂ : c → (b ↔ d)) : (a → b) ↔ (c → d) :=
 (imp_congr_left h₁).trans (imp_congr_right h₂)

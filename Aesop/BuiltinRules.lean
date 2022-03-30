@@ -35,11 +35,20 @@ def contradiction : TacticM Unit :=
 --   introduce a metavariable. We want to wait as long as possible with either.
 --   We could even consider making these rules `unsafe`.
 attribute [aesop [norm 0 cases, safe 100 constructors]] And Prod PProd MProd
-attribute [aesop [safe 0 cases, safe 100 constructors]] Exists Sigma PSigma
+attribute [aesop [safe 0 cases, safe 100 constructors]] Exists Subtype Sigma
+  PSigma
   -- TODO It should be possible to make the `cases` rule for Exists etc. a
   -- norm rule rather than a safe rule. However, this currently fails when the
   -- goal contains metavariables, since `cases` may replace the meta. Aesop
   -- then considers the replacement a newly introduced meta, which norm rules
   -- are not allowed to add.
+
+-- Sums are split and introduced lazily.
+attribute [aesop [safe 100 cases, 50% constructors]] Or Sum PSum
+
+-- Iff is treated like a product.
+attribute [aesop [norm 0 cases, safe 100 constructors]] Iff
+
+attribute [aesop norm 0 [cases, constructors]] ULift
 
 end Aesop.BuiltinRules
