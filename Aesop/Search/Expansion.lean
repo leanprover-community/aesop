@@ -97,22 +97,28 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (ri : RuleTacInput) :
       "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal ri.goal}"
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def runNormRule (goal : MVarId) (mvars : Array MVarId) (branchState : BranchState)
+def runNormRule (goal : MVarId) (mvars : Array MVarId) (bs : BranchState)
     (rule : IndexMatchResult NormRule) :
     MetaM NormRuleResult := do
-  aesop_trace[stepsNormalization] "Running {rule.rule}"
+  let branchState? := bs.find? rule.rule
+  aesop_trace[stepsNormalization] do
+    aesop_trace![stepsNormalization] "Running {rule.rule}"
+    if ← TraceOption.stepsBranchStates.isEnabled then
+      aesop_trace![stepsNormalization] "Branch state before rule application: {branchState?}"
   let ruleInput := {
     goal, mvars
     indexMatchLocations := rule.matchLocations
-    branchState? := branchState.find? rule.rule
+    branchState?
   }
-  let result ← runNormRuleTac branchState rule.rule ruleInput
+  let result ← runNormRuleTac bs rule.rule ruleInput
   aesop_trace[stepsNormalization] do
     match result with
     | NormRuleResult.failed e =>
       aesop_trace![stepsNormalization] "Rule failed with error:{indentD e.toMessageData}"
-    | NormRuleResult.succeeded goal _ =>
+    | NormRuleResult.succeeded goal bs =>
       aesop_trace![stepsNormalization] "Rule succeeded. New goal:{indentD $ MessageData.ofGoal goal}"
+      if ← TraceOption.stepsBranchStates.isEnabled then
+        aesop_trace![stepsNormalization] "Branch state after rule application: {bs.find? rule.rule}"
     | NormRuleResult.proven =>
       aesop_trace![stepsNormalization] "Rule proved the goal."
   return result
