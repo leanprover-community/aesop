@@ -36,6 +36,13 @@ def isProven : RuleResult → Bool
 
 end RuleResult
 
+
+inductive NormRuleResult
+  | succeeded (goal : MVarId) (branchState : BranchState)
+  | proven
+  | failed (err : Exception)
+
+
 def runRegularRuleTac (goal : Goal) (rule : RuleTac) (ruleName : RuleName)
     (indexMatchLocations : Array IndexMatchLocation)
     (branchState : Option RuleBranchState) :
@@ -59,28 +66,32 @@ def runRegularRuleTac (goal : Goal) (rule : RuleTac) (ruleName : RuleName)
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def runNormRuleTac (bs : BranchState) (rule : NormRule) (ri : RuleTacInput) :
-    MetaM (Option (MVarId × BranchState)) := do
+    MetaM NormRuleResult := do
   let preMetaState ← saveState
-  let result ←
+  let result? ←
     try
-      rule.tac.tac ri
+      Sum.inl <$> rule.tac.tac ri
     catch e =>
-      err m! "rule failed with error:{indentD e.toMessageData}"
-  let #[(rapp, postMetaState)] := result.applications
-    | err m!"rule did not produce exactly one rule application."
-  restoreState postMetaState
-  if ← Check.rules.isEnabled <&&>
-    notM (rapp.introducedMVars.check preMetaState postMetaState) then
-    throwError "{Check.rules.name}: norm rule {rule.name} reported incorrect metavariables."
-  let (goals, introducedMVars) ← rapp.introducedMVars.get ri.mvars
-  if goals.isEmpty then
-    return none
-  let (#[(g, mvars)]) := goals
-    | err m!"rule produced more than one subgoal."
-  unless introducedMVars.isEmpty do
-    err m!"rule introduced additional metavariables"
-  let postBranchState := bs.update rule result.postBranchState?
-  return some (g, postBranchState)
+      pure $ Sum.inr e
+  match result? with
+  | Sum.inr e =>
+    return NormRuleResult.failed e
+  | Sum.inl result =>
+    let #[(rapp, postMetaState)] := result.applications
+      | err m!"rule did not produce exactly one rule application."
+    restoreState postMetaState
+    if ← Check.rules.isEnabled <&&>
+      notM (rapp.introducedMVars.check preMetaState postMetaState) then
+      throwError "{Check.rules.name}: norm rule {rule.name} reported incorrect metavariables."
+    let (goals, introducedMVars) ← rapp.introducedMVars.get ri.mvars
+    if goals.isEmpty then
+      return NormRuleResult.proven
+    let (#[(g, mvars)]) := goals
+      | err m!"rule produced more than one subgoal."
+    unless introducedMVars.isEmpty do
+      err m!"rule introduced additional metavariables"
+    let postBranchState := bs.update rule result.postBranchState?
+    return NormRuleResult.succeeded g postBranchState
   where
     err {α} (msg : MessageData) : MetaM α := throwError
       "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal ri.goal}"
@@ -88,7 +99,7 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (ri : RuleTacInput) :
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def runNormRule (goal : MVarId) (mvars : Array MVarId) (branchState : BranchState)
     (rule : IndexMatchResult NormRule) :
-    MetaM (Option (MVarId × BranchState)) := do
+    MetaM NormRuleResult := do
   aesop_trace[stepsNormalization] "Running {rule.rule}"
   let ruleInput := {
     goal, mvars
@@ -96,11 +107,15 @@ def runNormRule (goal : MVarId) (mvars : Array MVarId) (branchState : BranchStat
     branchState? := branchState.find? rule.rule
   }
   let result ← runNormRuleTac branchState rule.rule ruleInput
-  match result with
-  | none => return none
-  | some result@(newGoal, _) =>
-    aesop_trace[stepsNormalization] "Goal after {rule.rule}:{indentD $ MessageData.ofGoal newGoal}"
-    return some result
+  aesop_trace[stepsNormalization] do
+    match result with
+    | NormRuleResult.failed e =>
+      aesop_trace![stepsNormalization] "Rule failed with error:{indentD e.toMessageData}"
+    | NormRuleResult.succeeded goal _ =>
+      aesop_trace![stepsNormalization] "Rule succeeded. New goal:{indentD $ MessageData.ofGoal goal}"
+    | NormRuleResult.proven =>
+      aesop_trace![stepsNormalization] "Rule proved the goal."
+  return result
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def runNormRules (goal : MVarId) (mvars : Array MVarId)
@@ -109,11 +124,14 @@ def runNormRules (goal : MVarId) (mvars : Array MVarId)
   let mut goal := goal
   let mut branchState := branchState
   for rule in rules do
-    let (some (g, bs)) ← runNormRule goal mvars branchState rule
-      | return none
-    goal := g
-    branchState := branchState
-  return some (goal, branchState)
+    let result ← runNormRule goal mvars branchState rule
+    match result with
+    | NormRuleResult.proven => return none
+    | NormRuleResult.failed _ => continue
+    | NormRuleResult.succeeded g bs =>
+      goal := g
+      branchState := branchState
+  return (goal, branchState)
 
 def runNormalizationSimp (goal : MVarId) (rs : RuleSet) :
     MetaM (Option MVarId) := do
