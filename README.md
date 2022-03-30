@@ -364,6 +364,37 @@ an Aesop rule. Currently available builders are:
   When no immediate names are given, Aesop considers every argument immediate,
   except for instance arguments and dependent arguments (i.e. those that can be
   inferred from the types of later arguments).
+
+  When a forward rule has been successfully applied, it will not be tried again
+  when processing its subgoals (and their subgoals, etc.). Without this limit,
+  many forward rules would be applied infinitely often.
+- **`elim`**: works like `forward`, but after the rule has been applied,
+  hypotheses that were used as immediate arguments are cleared. As the name
+  suggests, this is useful when you want to eliminate a hypothesis. E.g. the
+  rule
+  ```
+  @[aesop norm elim]
+  theorem and_elim_right : α ∧ β → α := ...
+  ```
+  will cause the goal
+  ```
+  h₁ : (α ∧ β) ∧ γ
+  h₂ : δ ∧ ε
+  ```
+  to be transformed into
+  ```
+  h₁ : α
+  h₂ : δ
+  ```
+
+  Unlike with `forward` rules, when an `elim` rule is successfully applied, it
+  may be applied again to the resulting subgoals (and their subgoals, etc.).
+  There is less danger of infinite cycles because the original hypothesis is
+  cleared.
+
+  However, if the hypothesis or hypotheses to which the `elim` rule is applied
+  have dependencies, they are not cleared. In this case, you'll probably get
+  an infinite cycle. (TODO fix this.)
 - **`constructors`**: when applied to an inductive type or structure `T`,
   generates a rule which tries to apply each constructor of `T` to the target.
   This is a multi-rule, so if multiple constructors apply, they are considered
