@@ -136,7 +136,7 @@ def runNormRules (goal : MVarId) (mvars : Array MVarId)
     | NormRuleResult.failed _ => continue
     | NormRuleResult.succeeded g bs =>
       goal := g
-      branchState := branchState
+      branchState := bs
   return (goal, branchState)
 
 def runNormalizationSimp (goal : MVarId) (rs : RuleSet) :
