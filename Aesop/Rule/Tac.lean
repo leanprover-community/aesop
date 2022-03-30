@@ -174,7 +174,7 @@ def withApplicationLimit (n : Nat) : RuleTac → RuleTac :=
   withBranchState
     (λ bs => do
       if bs.numApplications >= n then
-        throwError "application limit {n} reached")
+        throwError "Rule is limited to {n} application(s) per branch.")
     (λ bs => { bs with numApplications := bs.numApplications + 1 })
 
 end RuleTac

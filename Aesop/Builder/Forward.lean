@@ -134,13 +134,22 @@ def forwardExpr (e : Expr) (immediate : UnorderedArraySet Nat) (clear : Bool) :
 
 def forwardConst (decl : Name) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac :=
-  withApplicationLimit 1 $ forwardExpr (mkConst decl) immediate clear
+  let tac := forwardExpr (mkConst decl) immediate clear
+  if clear then
+    tac
+  else
+    withApplicationLimit 1 tac
+    -- TODO this is very crude
 
 def forwardFVar (userName : Name) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac :=
-  withApplicationLimit 1 λ input => withMVarContext input.goal do
+  let tac := λ input => withMVarContext input.goal do
     let ldecl ← getLocalDeclFromUserName userName
     forwardExpr (mkFVar ldecl.fvarId) immediate clear input
+  if clear then
+    tac
+  else
+    withApplicationLimit 1 tac
 
 end RuleTac
 
