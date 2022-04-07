@@ -1,5 +1,7 @@
 import Aesop
 
+set_option aesop.check.all true
+
 abbrev State := String → Int
 
 inductive Com where
