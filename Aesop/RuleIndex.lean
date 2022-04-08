@@ -75,7 +75,7 @@ def size : RuleIndex α → Nat
 def applicableByTargetRules (ri : RuleIndex α) (goal : MVarId)
     (include? : α → Bool) : MetaM (Array (IndexMatchResult α)) :=
   withMVarContext goal do
-    let rules ← ri.byTarget.getMatch (← getMVarType goal) -- TODO `getUnify` instead of `getMatch`?
+    let rules ← ri.byTarget.getUnify (← getMVarType goal)
     return rules.filterMap λ r =>
       if include? r then
         some { rule := r, matchLocations := #[IndexMatchLocation.target] }
