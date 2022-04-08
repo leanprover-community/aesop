@@ -16,10 +16,7 @@ partial def RuleTac.cases (decl : Name) (isRecursiveType : Bool) : RuleTac :=
     let goals? ← go #[] #[] input.goal
     match goals? with
     | none => throwError "No hypothesis of type {decl} found"
-    | some goals => return {
-      introducedMVars := IntroducedMVars.raw goals
-      assignedMVars? := none
-    }
+    | some goals => return goals.toList
   where
     findFirstApplicableHyp (excluded : Array FVarId) (goal : MVarId) :
         MetaM (Option FVarId) :=

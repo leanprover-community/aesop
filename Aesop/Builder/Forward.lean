@@ -126,11 +126,8 @@ def forwardExpr (e : Expr) (immediate : UnorderedArraySet Nat) (clear : Bool) :
     RuleTac :=
   SimpleRuleTac.toRuleTac λ input => withMVarContext input.goal do
     let goal ← applyForwardRule input.goal e immediate clear
-    return {
-      introducedMVars := IntroducedMVars.raw #[goal]
-      assignedMVars? := none
-      -- TODO optimise mvar analysis
-    }
+    return [goal]
+    -- TODO optimise mvar analysis
 
 def forwardConst (decl : Name) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac :=

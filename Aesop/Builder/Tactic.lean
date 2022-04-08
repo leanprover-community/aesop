@@ -35,11 +35,7 @@ unsafe def tacticMUnsafe (decl : Name) : GlobalRuleTacBuilder := do
       -- We assume that this doesn't happen. Ideally, we would evaluate `tac`
       -- directly after `checkDeclType`, but this fails when this function is
       -- called by the `@[aesop]` attribute.
-    let goals ← runTacticMAsMetaM tac input.goal
-    return {
-      introducedMVars := IntroducedMVars.raw goals.toArray
-      assignedMVars? := none
-    }
+    runTacticMAsMetaM tac input.goal
   return { tac := tac, descr := GlobalRuleTacBuilderDescr.tacticM decl }
 
 @[implementedBy tacticMUnsafe]

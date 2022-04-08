@@ -47,21 +47,24 @@ def runRegularRuleTac (goal : Goal) (rule : RuleTac) (ruleName : RuleName)
     (indexMatchLocations : Array IndexMatchLocation)
     (branchState : Option RuleBranchState) :
     MetaM (Sum Exception RuleTacOutput) := do
+  let (some (postNormGoal, preState)) := goal.postNormGoalAndState? | throwError
+    "aesop: internal error: expected goal {goal.id} to be normalised (but not proven by normalisation)"
+  let input :=
+    { goal := postNormGoal
+      mvars := goal.mvars
+      indexMatchLocations := indexMatchLocations
+      branchState? := branchState }
   let preMetaState ← saveState
   let result ←
     try
-      Sum.inr <$> goal.runMetaMInPostNormState' λ postNormGoal => rule
-        { goal := postNormGoal
-          mvars := goal.mvars
-          indexMatchLocations := indexMatchLocations
-          branchState? := branchState }
+      Sum.inr <$> preState.runMetaM' (rule input)
     catch e =>
       return Sum.inl e
   if ← Check.rules.isEnabled then
     if let (Sum.inr ruleOutput) := result then
-      ruleOutput.applications.forM λ (rapp, postMetaState) => do
-        if ! (← rapp.introducedMVars.check preMetaState postMetaState) then throwError
-          "{Check.rules.name}: while applying rule {ruleName} to goal {goal.id}: rule reported wrong introduced mvars."
+      ruleOutput.applications.forM λ rapp => do
+        if let (some err) ← rapp.check input preState then throwError
+          "{Check.rules.name}: while applying rule {ruleName} to goal {goal.id}: {err}"
   return result
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
@@ -77,18 +80,17 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (ri : RuleTacInput) :
   | Sum.inr e =>
     return NormRuleResult.failed e
   | Sum.inl result =>
-    let #[(rapp, postMetaState)] := result.applications
+    let #[rapp] := result.applications
       | err m!"rule did not produce exactly one rule application."
-    restoreState postMetaState
-    if ← Check.rules.isEnabled <&&>
-      notM (rapp.introducedMVars.check preMetaState postMetaState) then
-      throwError "{Check.rules.name}: norm rule {rule.name} reported incorrect metavariables."
-    let (goals, introducedMVars) ← rapp.introducedMVars.get ri.mvars
-    if goals.isEmpty then
+    restoreState rapp.postState
+    if ← Check.rules.isEnabled then
+      if let (some err) ← rapp.check ri preMetaState then throwError
+        "{Check.rules.name}: while applying norm rule {rule.name}: {err}"
+    if rapp.goals.isEmpty then
       return NormRuleResult.proven
-    let (#[(g, mvars)]) := goals
+    let (#[(g, mvars)]) := rapp.goals
       | err m!"rule produced more than one subgoal."
-    unless introducedMVars.isEmpty do
+    unless rapp.introducedMVars.isEmpty do
       err m!"rule introduced additional metavariables"
     let postBranchState := bs.update rule result.postBranchState?
     return NormRuleResult.succeeded g postBranchState
@@ -221,7 +223,7 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
     let postBranchState :=
       rule.withRule λ r => parent.branchState.update r output.postBranchState?
     aesop_trace[stepsBranchStates] "Updated branch state: {rule.withRule λ r => postBranchState.find? r}"
-    match rapps.find? λ (rapp, _) => rapp.introducedMVars.isEmpty with
+    match rapps.find? λ rapp => rapp.goals.isEmpty with
     | some rapp =>
       aesop_trace[steps] "One of the rule applications has no subgoals. Goal is proven."
       let #[rref] ← addRapps parent rule.name postBranchState #[rapp]
@@ -261,27 +263,21 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
     @[inline]
     addRapps (parent : Goal) (ruleName : RuleName)
         (postBranchState : BranchState)
-        (rapps : Array (RuleApplication × Meta.SavedState)) :
+        (rapps : Array RuleApplication) :
         SearchM Q (Array RappRef) := do
       let (some (parentGoal, parentMetaState)) := parent.postNormGoalAndState? | throwError
         "aesop: internal error while adding new rapp: expected goal {parent.id} to be normalised (but not proven by normalisation)."
       let successProbability :=
         parent.successProbability * rule.successProbability
-      let rrefs ← rapps.mapM λ (rapp, postMetaState) => do
-        let (goals, introducedMVars) ←
-          postMetaState.runMetaM' $ rapp.introducedMVars.get parent.mvars
-        let assignedMVars ←
-          match rapp.assignedMVars? with
-          | none => assignedMVars parent.mvars postMetaState
-          | some x => pure x
+      let rrefs ← rapps.mapM λ rapp => do
         let rref ← addRapp {
           parent := parentRef
           appliedRule := rule
           successProbability
-          metaState := postMetaState
-          introducedMVars
-          assignedMVars
-          children := goals.map λ (goal, mvars) =>
+          metaState := rapp.postState
+          introducedMVars := rapp.introducedMVars
+          assignedMVars := rapp.assignedMVars
+          children := rapp.goals.map λ (goal, mvars) =>
             { goal, mvars, branchState := postBranchState }
         }
         (← rref.get).children.forM λ cref => do enqueueGoals (← cref.get).goals

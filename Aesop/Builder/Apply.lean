@@ -12,22 +12,14 @@ open Lean.Meta
 namespace Aesop.RuleTac
 
 def applyConst (decl : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input => do
-  let goals ← apply input.goal (← mkConstWithFreshMVarLevels decl)
-  return {
-    introducedMVars := IntroducedMVars.raw goals.toArray
-    assignedMVars? := none
-  }
+  apply input.goal (← mkConstWithFreshMVarLevels decl)
   -- TODO optimise mvar analysis
 
 def applyFVar (userName : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input =>
   withMVarContext input.goal do
     let decl ← getLocalDeclFromUserName userName
-    let goals ← apply input.goal (mkFVar decl.fvarId)
-    return {
-      introducedMVars := IntroducedMVars.raw goals.toArray
-      assignedMVars? := none
-    }
-  -- TODO optimise mvar analysis
+    apply input.goal (mkFVar decl.fvarId)
+    -- TODO optimise mvar analysis
 
 -- Tries to apply each constant in `decls`. For each one that applies, a rule
 -- application is returned. If none applies, the tactic fails.
@@ -36,11 +28,9 @@ def applyConsts (decls : Array Name) : RuleTac := λ input => do
   let apps ← decls.filterMapM λ decl => observing? do
     let goals ← apply input.goal (← mkConstWithFreshMVarLevels decl)
     let postState ← saveState
-    let rapp := {
-      introducedMVars := IntroducedMVars.raw goals.toArray
-      assignedMVars? := none
-    }
-    return (rapp, postState)
+    let (goals, introducedMVars) ← getProperGoalsAndNewMVars input.mvars goals
+    let assignedMVars ← getAssignedMVars input.mvars
+    return { postState, goals, introducedMVars, assignedMVars }
   if apps.isEmpty then
     throwError "failed to apply any of these declarations:{MessageData.node $ decls.map toMessageData}"
   return { applications := apps, postBranchState? := none }

@@ -21,11 +21,6 @@ def safeReflexivity : SimpleRuleTac := λ { goal, .. } => do
       throwTacticEx `Aesop.BuiltinRules.safeReflexivity goal "target contains metavariables"
     let [] ← runTacticMAsMetaM (do evalTactic (← `(rfl))) goal
       | throwError "aesop: internal error: safeReflexivity: rfl did not close the goal"
-    let postState ← saveState
-    return {
-      introducedMVars := IntroducedMVars.raw #[]
-      assignedMVars? := none
-      -- TODO optimise mvar analysis
-    }
+    return []
 
 end Aesop.BuiltinRules

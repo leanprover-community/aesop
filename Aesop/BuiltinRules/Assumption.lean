@@ -35,10 +35,6 @@ def safeAssumption : SimpleRuleTac := λ { goal, .. } =>
     | none => throwTacticEx `Aesop.BuiltinRules.safeAsumption goal "no matching assumption found"
     | some hyp => do
       assignExprMVar goal (mkFVar hyp)
-      return {
-        introducedMVars := IntroducedMVars.raw #[]
-        assignedMVars? := none
-        -- TODO optimise mvar analysis
-      }
+      return []
 
 end Aesop.BuiltinRules
