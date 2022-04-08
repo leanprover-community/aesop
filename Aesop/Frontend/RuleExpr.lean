@@ -38,14 +38,14 @@ def parse (stx : Syntax) : ParseT m Priority :=
     unless (← read).parsePriorities do throwError
       "aesop: unexpected priority."
     match stx with
-    | `(priority| $p:numLit %) =>
+    | `(priority| $p:num %) =>
       let p := p.toNat
       match Percent.ofNat p with
       | some p => return percent p
       | none => throwError "aesop: percentage '{p}%' is not between 0 and 100."
-    | `(priority| - $i:numLit) =>
+    | `(priority| - $i:num) =>
       return int $ - i.toNat
-    | `(priority| $i:numLit) =>
+    | `(priority| $i:num) =>
       return int i.toNat
     | _ => unreachable!
 
