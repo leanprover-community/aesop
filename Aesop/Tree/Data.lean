@@ -276,10 +276,8 @@ structure GoalData (Rapp MVarCluster : Type) : Type where
     -- we reach the search depth limit. Any goal beyond this limit becomes
     -- irrelevant and therefore unprovable.
   preNormGoal : MVarId
-    -- Initially, `preNormGoal = goal`. When we normalise a goal, `goal`
-    -- becomes the goal after normalisation and `preNormGoal` is assigned to
-    -- an expression involving `goal`. If normalisation solves the goal, then
-    -- `goal` remains equal to `preNormGoal`.
+    -- The goal before normalisation. The goal after normalisation (if any) is
+    -- contained in the `normalizationState`.
   normalizationState : NormalizationState
   mvars : Array MVarId
     -- Unassigned expression metavariables that appear in the goal, i.e. that

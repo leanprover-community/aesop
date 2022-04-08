@@ -145,6 +145,14 @@ def isGE : Ordering → Bool
   | eq => true
   | gt => true
 
+def opposite : Ordering → Ordering
+  | lt => gt
+  | eq => eq
+  | gt => lt
+
+end Ordering
+
+
 @[inline]
 def compareLexicographic (cmp₁ : α → α → Ordering) (cmp₂ : α → α → Ordering)
     (x y : α) : Ordering :=
@@ -152,7 +160,13 @@ def compareLexicographic (cmp₁ : α → α → Ordering) (cmp₂ : α → α �
   | Ordering.eq => cmp₂ x y
   | ord => ord
 
-end Ordering
+@[inline]
+def compareBy [Ord β] (f : α → β) (x y : α) : Ordering :=
+  compare (f x) (f y)
+
+@[inline]
+def compareOpposite (cmp : α → α → Ordering) (x y : α) : Ordering :=
+  cmp x y |>.opposite
 
 
 namespace Ord
@@ -172,30 +186,52 @@ def isGT (o : Ord α) (x y : α) : Bool :=
 def isGE (o : Ord α) (x y : α) : Bool :=
   o.compare x y |>.isGE
 
+@[inline]
 def lexicographic (o₁ : Ord α) (o₂ : Ord α) : Ord α :=
-  ⟨Ordering.compareLexicographic o₁.compare o₂.compare⟩
+  ⟨compareLexicographic o₁.compare o₂.compare⟩
+
+@[inline]
+def opposite (o : Ord α) : Ord α :=
+  ⟨compareOpposite o.compare⟩
 
 end Ord
 
 
-@[inline]
-def compareBy [Ord β] (f : α → β) (x y : α) : Ordering :=
-  compare (f x) (f y)
-
-
 namespace Subarray
 
-instance : Inhabited (Subarray α) where
-  default := {
-    as := #[]
-    start := 0
-    stop := 0
-    h₁ := Nat.le_refl 0
-    h₂ := Nat.le_refl 0
-  }
+protected def empty : Subarray α where
+  as := #[]
+  start := 0
+  stop := 0
+  h₁ := Nat.le_refl 0
+  h₂ := Nat.le_refl 0
+
+instance : EmptyCollection (Subarray α) :=
+  ⟨Subarray.empty⟩
+
+instance : Inhabited (Subarray α) :=
+  ⟨{}⟩
+
+def size (as : Subarray α) : Nat :=
+  as.stop - as.start
+
+def isEmpty (as : Subarray α) : Bool :=
+  as.start == as.stop
 
 def contains [BEq α] (as : Subarray α) (a : α) : Bool :=
   as.any (· == a)
+
+def popFront? (as : Subarray α) : Option (α × Subarray α) :=
+  if h : as.start < as.stop
+    then
+      let head := as.as.get ⟨as.start, Nat.lt_of_lt_of_le h as.h₂⟩
+      let tail :=
+        { as with
+          start := as.start + 1
+          h₁ := Nat.le_of_lt_succ $ Nat.succ_lt_succ h  }
+      some (head, tail)
+    else
+      none
 
 end Subarray
 

@@ -52,7 +52,7 @@ structure IndexMatchResult (α : Type) where
   matchLocations : Array IndexMatchLocation
   deriving Inhabited
 
-namespace RuleIndexMatchResult
+namespace IndexMatchResult
 
 instance [Ord α] : Ord (IndexMatchResult α) where
   compare r s := compare r.rule s.rule
@@ -63,4 +63,4 @@ instance [Ord α] : LT (IndexMatchResult α) :=
 instance [ToMessageData α] : ToMessageData (IndexMatchResult α) where
   toMessageData r := toMessageData r.rule
 
-end Aesop.RuleIndexMatchResult
+end Aesop.IndexMatchResult

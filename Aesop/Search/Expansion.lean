@@ -15,26 +15,16 @@ namespace Aesop
 variable [Aesop.Queue Q]
 
 inductive RuleResult
-| proven
-| failed
-| succeeded
+  | proven
+  | failed
+  | succeeded
+  | postponed (result : PostponedSafeRule)
 
-namespace RuleResult
-
-def isSuccessful : RuleResult → Bool
+def RuleResult.isSuccessful
   | proven => true
-  | failed => false
   | succeeded => true
-
-def isFailed (r : RuleResult) : Bool :=
-  ! r.isSuccessful
-
-def isProven : RuleResult → Bool
-  | proven => true
   | failed => false
-  | succeeded => false
-
-end RuleResult
+  | postponed .. => false
 
 
 inductive NormRuleResult
@@ -42,50 +32,47 @@ inductive NormRuleResult
   | proven
   | failed (err : Exception)
 
-
-def runRegularRuleTac (goal : Goal) (rule : RuleTac) (ruleName : RuleName)
-    (indexMatchLocations : Array IndexMatchLocation)
-    (branchState : Option RuleBranchState) :
+def runRuleTac (tac : RuleTac) (ruleName : RuleName)
+    (preState : Meta.SavedState) (input : RuleTacInput) :
     MetaM (Sum Exception RuleTacOutput) := do
-  let (some (postNormGoal, preState)) := goal.postNormGoalAndState? | throwError
-    "aesop: internal error: expected goal {goal.id} to be normalised (but not proven by normalisation)"
-  let input :=
-    { goal := postNormGoal
-      mvars := goal.mvars
-      indexMatchLocations := indexMatchLocations
-      branchState? := branchState }
-  let preMetaState ← saveState
   let result ←
     try
-      Sum.inr <$> preState.runMetaM' (rule input)
+      Sum.inr <$> preState.runMetaM' (tac input)
     catch e =>
       return Sum.inl e
   if ← Check.rules.isEnabled then
     if let (Sum.inr ruleOutput) := result then
       ruleOutput.applications.forM λ rapp => do
-        if let (some err) ← rapp.check input preState then throwError
-          "{Check.rules.name}: while applying rule {ruleName} to goal {goal.id}: {err}"
+        if let (some err) ← rapp.check input preState then
+          throwError "{Check.rules.name}: while applying rule {ruleName}: {err}"
   return result
 
+def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
+    (indexMatchLocations : Array IndexMatchLocation)
+    (branchState : Option RuleBranchState) :
+    MetaM (Sum Exception RuleTacOutput) := do
+  let some (postNormGoal, postNormState) := goal.postNormGoalAndState? | throwError
+    "aesop: internal error: expected goal {goal.id} to be normalised (but not proven by normalisation)."
+  let input := {
+    goal := postNormGoal
+    mvars := goal.mvars
+    indexMatchLocations := indexMatchLocations
+    branchState? := branchState
+  }
+  runRuleTac tac ruleName postNormState input
+
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def runNormRuleTac (bs : BranchState) (rule : NormRule) (ri : RuleTacInput) :
+def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
     MetaM NormRuleResult := do
   let preMetaState ← saveState
-  let result? ←
-    try
-      Sum.inl <$> rule.tac.tac ri
-    catch e =>
-      pure $ Sum.inr e
+  let result? ← runRuleTac rule.tac.tac rule.name preMetaState input
   match result? with
-  | Sum.inr e =>
+  | Sum.inl e =>
     return NormRuleResult.failed e
-  | Sum.inl result =>
+  | Sum.inr result =>
     let #[rapp] := result.applications
       | err m!"rule did not produce exactly one rule application."
     restoreState rapp.postState
-    if ← Check.rules.isEnabled then
-      if let (some err) ← rapp.check ri preMetaState then throwError
-        "{Check.rules.name}: while applying norm rule {rule.name}: {err}"
     if rapp.goals.isEmpty then
       return NormRuleResult.proven
     let (#[(g, mvars)]) := rapp.goals
@@ -96,7 +83,7 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (ri : RuleTacInput) :
     return NormRuleResult.succeeded g postBranchState
   where
     err {α} (msg : MessageData) : MetaM α := throwError
-      "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal ri.goal}"
+      "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal input.goal}"
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def runNormRule (goal : MVarId) (mvars : Array MVarId) (bs : BranchState)
@@ -148,18 +135,18 @@ def runNormalizationSimp (goal : MVarId) (rs : RuleSet) :
     -- TODO This computation should be done once, not every time we normalise
     -- a goal.
   let preMetaState ← saveState
-  let goal? ← simpAll goal simpCtx
+  let newGoal? ← simpAll goal simpCtx
   if ← Check.rules.isEnabled then
     let postMetaState ← saveState
     let introduced :=
-      (← introducedExprMVars preMetaState postMetaState).filter (some · != goal?)
+      (← introducedExprMVars preMetaState postMetaState).filter (some · != newGoal?)
     unless introduced.isEmpty do
       throwError "{Check.rules.name}: norm simp introduced metas:{introduced.map (·.name)}"
     let assigned :=
       (← assignedExprMVars preMetaState postMetaState).filter (· != goal)
     unless assigned.isEmpty do
       throwError "{Check.rules.name}: norm simp assigned metas:{introduced.map (·.name)}"
-  goal?.mapM λ goal => Prod.snd <$> intros goal
+  newGoal?.mapM λ goal => Prod.snd <$> intros goal
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def normalizeGoalMVar (rs : RuleSet) (goal : MVarId) (mvars : Array MVarId)
@@ -204,6 +191,56 @@ def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Q Bool := do
     gref.markProvenByNormalization
     return true
 
+def addRapps (parentRef : GoalRef) (rule : RegularRule)
+    (output : RuleTacOutput) : SearchM Q RuleResult := do
+  let parent ← parentRef.get
+  let rapps := output.applications
+  let postBranchState :=
+    rule.withRule λ r => parent.branchState.update r output.postBranchState?
+  aesop_trace[stepsBranchStates] "Updated branch state: {rule.withRule λ r => postBranchState.find? r}"
+  let successProbability := parent.successProbability * rule.successProbability
+  let rrefs ← go postBranchState successProbability rapps
+  let provenRref? ← rrefs.findM? λ rref => return (← rref.get).state.isProven
+  if let (some provenRref) := provenRref? then
+    aesop_trace[steps] "One of the rule applications has no subgoals. Goal is proven."
+    return RuleResult.proven
+  else
+    return RuleResult.succeeded
+  where
+    -- TODO compress: much of the rapp/goal data is not interesting for new
+    -- rapps/goals.
+    traceNewRapps (rrefs : Array RappRef) : SearchM Q Unit := do
+      let traceMods ← TraceModifiers.get
+      let rappMsgs ← rrefs.mapM λ rref => do
+        let r ← rref.get
+        let rappMsg ← r.toMessageData traceMods
+        let subgoalMsgs ← r.foldSubgoalsM (init := #[]) λ msgs gref =>
+          return msgs.push (← (← gref.get).toMessageData traceMods)
+        return rappMsg ++ MessageData.node subgoalMsgs
+      aesop_trace![steps] "New rapps and goals:{MessageData.node rappMsgs}"
+
+    go (postBranchState : BranchState) (successProbability : Percent)
+        (rapps : Array RuleApplication) : SearchM Q (Array RappRef) := do
+      let parent ← parentRef.get
+      let (some (parentGoal, parentMetaState)) := parent.postNormGoalAndState? | throwError
+        "aesop: internal error while adding new rapp: expected goal {parent.id} to be normalised (but not proven by normalisation)."
+      let rrefs ← rapps.mapM λ rapp => do
+        let rref ← addRapp {
+          parent := parentRef
+          appliedRule := rule
+          successProbability
+          metaState := rapp.postState
+          introducedMVars := rapp.introducedMVars
+          assignedMVars := rapp.assignedMVars
+          children := rapp.goals.map λ (goal, mvars) =>
+            { goal, mvars, branchState := postBranchState }
+        }
+        (← rref.get).children.forM λ cref => do enqueueGoals (← cref.get).goals
+        rref.markProven -- no-op if the rapp is not, in fact, proven
+        return rref
+      aesop_trace[steps] do traceNewRapps rrefs
+      return rrefs
+
 def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
     (indexMatchLocations : Array IndexMatchLocation) :
     SearchM Q RuleResult := do
@@ -219,125 +256,83 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
     onFailure $ "Rule returned no rule applications."
   | Sum.inr output =>
     let rapps := output.applications
+    if let (RegularRule'.safe rule) := rule then
+      if rapps.any (! ·.assignedMVars.isEmpty) then
+        aesop_trace[steps] "Safe rule assigned metavariables. Postponing it."
+        return RuleResult.postponed ⟨rule, output⟩
     aesop_trace[steps] "Rule succeeded, producing {rapps.size} rule application(s)."
-    let postBranchState :=
-      rule.withRule λ r => parent.branchState.update r output.postBranchState?
-    aesop_trace[stepsBranchStates] "Updated branch state: {rule.withRule λ r => postBranchState.find? r}"
-    match rapps.find? λ rapp => rapp.goals.isEmpty with
-    | some rapp =>
-      aesop_trace[steps] "One of the rule applications has no subgoals. Goal is proven."
-      let #[rref] ← addRapps parent rule.name postBranchState #[rapp]
-        | unreachable!
-      rref.markProven -- TODO avoid repeated isProvenNoCache check
-      return RuleResult.proven
-    | none =>
-      discard $ addRapps parent rule.name postBranchState rapps
-      return RuleResult.succeeded
+    addRapps parentRef rule output
   where
     onFailure (msg : MessageData) : SearchM Q RuleResult := do
       aesop_trace[stepsRuleFailures] "Rule failed with message:{indentD msg}"
       parentRef.modify λ g => g.setFailedRapps $ g.failedRapps.push rule
       return RuleResult.failed
 
-    -- TODO compress: much of the rapp/goal data is not interesting for new
-    -- rapps/goals.
-    traceNewRapps (rrefs : Array RappRef) : SearchM Q Unit := do
-      let traceMods ← TraceModifiers.get
-      let rappMsgs ← rrefs.mapM λ rref => do
-        let r ← rref.get
-        let rappMsg ← r.toMessageData traceMods
-        let subgoalMsgs ← r.foldSubgoalsM (init := #[]) λ msgs gref =>
-          return msgs.push (← (← gref.get).toMessageData traceMods)
-        return rappMsg ++ MessageData.node subgoalMsgs
-      aesop_trace![steps] "New rapps and goals:{MessageData.node rappMsgs}"
-
-    assignedMVars (goalMVars : Array MVarId) (postMetaState : Meta.SavedState) :
-        MetaM (HashSet MVarId) :=
-      postMetaState.runMetaM' do
-        let mut result := {}
-        for m in goalMVars do
-          if ← isExprMVarAssigned m <||> isDelayedAssigned m then
-            result := result.insert m
-        return result
-
-    @[inline]
-    addRapps (parent : Goal) (ruleName : RuleName)
-        (postBranchState : BranchState)
-        (rapps : Array RuleApplication) :
-        SearchM Q (Array RappRef) := do
-      let (some (parentGoal, parentMetaState)) := parent.postNormGoalAndState? | throwError
-        "aesop: internal error while adding new rapp: expected goal {parent.id} to be normalised (but not proven by normalisation)."
-      let successProbability :=
-        parent.successProbability * rule.successProbability
-      let rrefs ← rapps.mapM λ rapp => do
-        let rref ← addRapp {
-          parent := parentRef
-          appliedRule := rule
-          successProbability
-          metaState := rapp.postState
-          introducedMVars := rapp.introducedMVars
-          assignedMVars := rapp.assignedMVars
-          children := rapp.goals.map λ (goal, mvars) =>
-            { goal, mvars, branchState := postBranchState }
-        }
-        (← rref.get).children.forM λ cref => do enqueueGoals (← cref.get).goals
-        return rref
-      aesop_trace[steps] do traceNewRapps rrefs
-      return rrefs
-
-def runFirstSafeRule (gref : GoalRef) : SearchM Q RuleResult := do
+def runFirstSafeRule (gref : GoalRef) :
+    SearchM Q (RuleResult × Array PostponedSafeRule) := do
   let g ← gref.get
   if g.unsafeRulesSelected then
-    return RuleResult.failed
+    return (RuleResult.failed, #[])
     -- If the unsafe rules have been selected, we have already tried all the
     -- safe rules.
   let rules ← selectSafeRules g
   aesop_trace[steps] "Selected safe rules:{MessageData.node $ rules.map toMessageData}"
   aesop_trace[steps] "Trying safe rules"
-  let mut result := RuleResult.failed
+  let mut postponedRules := {}
   for r in rules do
     aesop_trace[steps] "Trying {r.rule}"
-    result ← runRegularRule gref (RegularRule'.safe r.rule) r.matchLocations
-    if result.isSuccessful then break
-  return result
+    let result' ←
+      runRegularRule gref (RegularRule'.safe r.rule) r.matchLocations
+    match result' with
+    | RuleResult.failed => continue
+    | RuleResult.proven => return (result', #[])
+    | RuleResult.succeeded => return (result', #[])
+    | RuleResult.postponed r =>
+      postponedRules := postponedRules.push r
+  return (RuleResult.failed, postponedRules)
 
-partial def runFirstUnsafeRule (gref : GoalRef) (includeSafeRules : Bool) :
-    SearchM Q Unit := do
-  let queue ← selectUnsafeRules gref includeSafeRules
+partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
+    (parentRef : GoalRef) : SearchM Q Unit := do
+  let queue ← selectUnsafeRules postponedSafeRules parentRef
   aesop_trace[steps] "Trying unsafe rules"
   let (remainingQueue, result) ← loop queue
-  gref.modify λ g => g.setUnsafeQueue remainingQueue
-  aesop_trace[steps] "Remaining unsafe rules:{MessageData.node $ remainingQueue.toArray.map toMessageData}"
+  parentRef.modify λ g => g.setUnsafeQueue remainingQueue
+  aesop_trace[steps] "Remaining unsafe rules:{MessageData.node remainingQueue.entriesToMessageData}"
   if remainingQueue.isEmpty then
-    if (← gref.get).state.isProven then
+    if (← parentRef.get).state.isProven then
       return
-    if ← (← gref.get).isUnprovableNoCache then
+    if ← (← parentRef.get).isUnprovableNoCache then
       aesop_trace[steps] "Goal is unprovable."
-      gref.markUnprovable
+      parentRef.markUnprovable
     else
       aesop_trace[steps] "All rules applied, goal is exhausted."
   where
     loop (queue : UnsafeQueue) : SearchM Q (UnsafeQueue × RuleResult) := do
-      let (some (r, queue)) := queue.pop?
+      let (some (r, queue)) := queue.popFront?
         | return (queue, RuleResult.failed)
-      aesop_trace[steps] "Trying {r.rule}"
-      let result ←
-        runRegularRule gref (RegularRule'.unsafe r.rule) r.matchLocations
-      if result.isSuccessful
-        then return (queue, result)
-        else loop queue
+      match r with
+      | .unsafeRule r =>
+        aesop_trace[steps] "Trying {r.rule}"
+        let result ←
+          runRegularRule parentRef (RegularRule'.unsafe r.rule) r.matchLocations
+        match result with
+        | RuleResult.proven => return (queue, result)
+        | RuleResult.succeeded => return (queue, result)
+        | RuleResult.postponed .. => throwError
+          "aesop: internal error: applying an unsafe rule yielded a postponed safe rule."
+        | RuleResult.failed => loop queue
+      | .postponedSafeRule r =>
+        aesop_trace[steps] "Applying postponed safe rule {r.rule}"
+        let result ←
+          addRapps parentRef (RegularRule'.unsafe r.toUnsafeRule) r.output
+        return (queue, result)
 
 def expandGoal (gref : GoalRef) : SearchM Q Unit := do
   if ← normalizeGoalIfNecessary gref then
     -- Goal was already proven by normalisation.
     return
-  if (← gref.get).hasMVar then
-    aesop_trace[steps] "Goal contains metavariables. Treating safe rules as unsafe."
-    runFirstUnsafeRule gref (includeSafeRules := true)
-  else
-    let safeResult ← runFirstSafeRule gref
-    if safeResult.isFailed then
-      runFirstUnsafeRule gref (includeSafeRules := false)
-
+  let (safeResult, postponedSafeRules) ← runFirstSafeRule gref
+  unless safeResult.isSuccessful do
+    runFirstUnsafeRule postponedSafeRules gref
 
 end Aesop

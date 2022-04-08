@@ -157,7 +157,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     addedInIteration := (← read).currentIteration
     lastExpandedInIteration := Iteration.none
     unsafeRulesSelected := false
-    unsafeQueue := UnsafeQueue.empty
+    unsafeQueue := {}
     branchState := g.branchState
     failedRapps := #[]
   }

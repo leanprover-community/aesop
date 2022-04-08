@@ -41,7 +41,7 @@ protected def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
         if ! traceMods.goals then none else
           m!"Goal:{indentD $ ofGoal g.currentGoal}",
         if ! traceMods.unsafeQueues || ! g.unsafeRulesSelected then none else
-          m!"Unsafe queue:{node $ g.unsafeQueue.toArray.map toMessageData}",
+          m!"Unsafe queue:{node g.unsafeQueue.entriesToMessageData}",
         if ! traceMods.failedRapps then none else
           m!"Failed rule applications:{node $ g.failedRapps.map toMessageData}"
       ]

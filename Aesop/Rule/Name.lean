@@ -109,9 +109,9 @@ instance : BEq RuleName where
     n₁.scope == n₂.scope && n₁.name == n₂.name
 
 protected def compare : (_ _ : RuleName) → Ordering :=
-  Ordering.compareLexicographic (compareBy (·.builder)) $
-  Ordering.compareLexicographic (compareBy (·.phase)) $
-  Ordering.compareLexicographic (compareBy (·.scope)) $
+  compareLexicographic (compareBy (·.builder)) $
+  compareLexicographic (compareBy (·.phase)) $
+  compareLexicographic (compareBy (·.scope)) $
   (λ n₁ n₂ => n₁.name.cmp n₂.name)
 
 protected def quickCompare (n₁ n₂ : RuleName) : Ordering :=

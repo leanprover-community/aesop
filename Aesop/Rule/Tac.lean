@@ -139,6 +139,7 @@ The result of a rule tactic contains:
 structure RuleTacOutput where
   applications : Array RuleApplication
   postBranchState? : Option RuleBranchState
+  deriving Inhabited
 
 
 /--

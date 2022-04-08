@@ -54,9 +54,6 @@ instance : ToString Percent where
 instance : HPow Percent Nat Percent where
   hPow | ⟨p⟩, n => ⟨p ^ n.toFloat⟩
 
-def ninety : Percent :=
-  ⟨0.9⟩
-
 def hundred : Percent :=
   ⟨1⟩
 

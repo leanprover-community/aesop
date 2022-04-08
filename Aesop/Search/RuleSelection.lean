@@ -12,37 +12,23 @@ namespace Aesop
 
 variable [Aesop.Queue Q]
 
-def SafeRule.asUnsafeRule (r : SafeRule) : UnsafeRule :=
-  { r with extra := { successProbability := Percent.ninety } }
-
 def selectSafeRules (g : Goal) :
     SearchM Q (Array (IndexMatchResult SafeRule)) := do
   let ruleSet := (← read).ruleSet
   g.runMetaMInPostNormState' λ postNormGoal =>
     ruleSet.applicableSafeRules postNormGoal
 
-def selectUnsafeRules (gref : GoalRef) (includeSafeRules : Bool) :
-    SearchM Q UnsafeQueue := do
+def selectUnsafeRules (postponedSafeRules : Array PostponedSafeRule)
+    (gref : GoalRef) : SearchM Q UnsafeQueue := do
   let g ← gref.get
   match g.unsafeQueue? with
   | some rules => return rules
   | none => do
     let ruleSet := (← read).ruleSet
-    let unsafeRules ← g.runMetaMInPostNormState' λ postNormGoal =>
+    let unsafeRules ←  g.runMetaMInPostNormState' λ postNormGoal =>
       ruleSet.applicableUnsafeRules postNormGoal
-    let rules ←
-      if includeSafeRules then
-          let safeRules ← selectSafeRules g
-          let rules :=
-            safeRules.map (λ r => { r with rule := r.rule.asUnsafeRule })
-              |>.mergeSortedPreservingDuplicates unsafeRules
-              -- TODO why do we preserve duplicates here?
-          aesop_trace[steps] "Selected unsafe rules (including safe rules treated as unsafe):{MessageData.node $ rules.map toMessageData}"
-          pure rules
-      else
-        aesop_trace[steps] "Selected unsafe rules:{MessageData.node $ unsafeRules.map toMessageData}"
-        pure unsafeRules
-    let unsafeQueue := UnsafeQueue.initial rules
+    let unsafeQueue := UnsafeQueue.initial postponedSafeRules unsafeRules
+    aesop_trace[steps] "Selected unsafe rules:{MessageData.node $ unsafeQueue.entriesToMessageData}"
     gref.set $ g.setUnsafeRulesSelected true |>.setUnsafeQueue unsafeQueue
     return unsafeQueue
 

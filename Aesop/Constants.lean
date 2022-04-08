@@ -9,6 +9,9 @@ import Aesop.Percent
 namespace Aesop
 
 def unificationGoalPenalty : Percent :=
-  Percent.ofNat 80 |>.get!
+  ⟨0.8⟩
+
+def postponedSafeRuleSuccessProbability : Percent :=
+  ⟨0.9⟩
 
 end Aesop
