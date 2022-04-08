@@ -8,6 +8,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 axiom Ring : Type
 axiom Morphism (R S : Ring) : Type
 
