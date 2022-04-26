@@ -13,7 +13,7 @@ import Aesop.Util
 
 open Lean
 open Lean.Meta
-open Lean.Elab.Tactic (liftMetaTactic TacticM)
+open Lean.Elab.Tactic (liftMetaTacticAux TacticM)
 
 namespace Aesop
 
@@ -44,13 +44,13 @@ def expandNextGoal : SearchM Q Unit := do
 
 def checkGoalLimit : SearchM Q Unit := do
   let maxGoals := (← read).options.maxGoals
-  let currentGoals := (← get).numGoals
+  let currentGoals := (← getTree).numGoals
   if maxGoals != 0 && currentGoals >= maxGoals then throwError
     "aesop: maximum number of goals ({maxGoals}) reached. Set the 'maxGoals' option to increase the limit."
 
 def checkRappLimit : SearchM Q Unit := do
   let maxRapps := (← read).options.maxRuleApplications
-  let currentRapps := (← get).numRapps
+  let currentRapps := (← getTree).numRapps
   if maxRapps != 0 && currentRapps >= maxRapps then throwError
     "aesop: maximum number of rule applications ({maxRapps}) reached. Set the 'maxRuleApplications' option to increase the limit."
 
@@ -76,7 +76,7 @@ def finishIfProven : SearchM Q Bool := do
 
 partial def searchLoop : SearchM Q Unit := do
   aesop_trace[steps] "=== Search loop iteration {← getIteration}"
-  let root := (← get).root
+  let root := (← getTree).root
   if (← root.get).state.isUnprovable then
     throwError "aesop: failed to prove the goal after exhaustive search"
   if ← finishIfProven then
@@ -90,18 +90,11 @@ partial def searchLoop : SearchM Q Unit := do
   incrementIteration
   searchLoop
 
-def search (Q) [Queue Q] (rs : RuleSet) (options : Aesop.Options)
-    (mainGoal : MVarId) : MetaM Unit := do
-  checkNotAssigned mainGoal `aesop
+def search' (Q) [Queue Q] (rs : RuleSet) (options : Aesop.Options)
+    (goal : MVarId) (profile : Profile) : MetaM Profile := do
+  checkNotAssigned goal `aesop
   let go : SearchM Q Unit := try searchLoop finally freeTree
-  go.run rs options mainGoal
-
-@[inline]
-private def toSearchTactic (s : RuleSet → Aesop.Options → MVarId → MetaM Unit)
-    (rs : RuleSet) (options : Aesop.Options) : TacticM Unit :=
-  liftMetaTactic λ goal => do s rs options goal; return []
-
-def bestFirst : RuleSet → Aesop.Options → TacticM Unit :=
-  toSearchTactic (search BestFirstQueue)
+  let (_, state, _) ← SearchM.run rs options goal profile go
+  return state.profile
 
 end Aesop

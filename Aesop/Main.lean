@@ -8,34 +8,33 @@ import Aesop.Search.Main
 import Aesop.BuiltinRules -- ensures that the builtin rules are registered
 import Aesop.Frontend.Tactic
 import Aesop.Profiling
-import Lean
 
 open Lean
 open Lean.Elab.Tactic
 
 namespace Aesop
 
+def search (Q) [Queue Q] (config : Frontend.TacticConfig) (goal : MVarId)
+    (profile : Profile) : MetaM Profile := do
+  let ((goal, ruleSet), ruleSetConstructionTime) ← IO.time $
+    config.getRuleSet goal
+  let profile := { profile with ruleSetConstruction := ruleSetConstructionTime }
+  aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
+  search' BestFirstQueue ruleSet config.options goal profile
+
 @[tactic Frontend.Parser.aesopTactic]
 def evalAesop : Tactic := λ stx =>
   withMainContext do
-    let (config, configParseTime) ← IO.time $ Frontend.TacticConfig.parse stx
-    let (ruleSet, ruleSetConstructionTime) ← IO.time $
-      liftMetaTacticAux λ goal => do
-        let (goal, ruleSet) ← config.getRuleSet goal
-        return (ruleSet, [goal])
-    aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
-    let (err?, searchTime) ← IO.time $
-      try
-        bestFirst ruleSet config.options
-        return none
-      catch e =>
-        return some e
-    aesop_trace[profile] toMessageData
-      { configParsing := configParseTime
-        ruleSetConstruction := ruleSetConstructionTime
-        search := searchTime
-        : ProfilingTimes }
-    if let (some err) := err? then
-      throw err
+    let (profile, totalTime) ← IO.time do
+      let (config, configParseTime) ← IO.time $ Frontend.TacticConfig.parse stx
+      let profile := { Profile.empty with configParsing := configParseTime }
+      let (profile, searchTime) ← IO.time $
+        liftMetaTacticAux λ goal => do
+          let profile ← search BestFirstQueue config goal profile
+          return (profile, [])
+      let profile := { profile with search := searchTime }
+      pure profile
+    let profile := { profile with total := totalTime }
+    aesop_trace[profile] toMessageData profile
 
 end Aesop

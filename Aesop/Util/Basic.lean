@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
+import Aesop.Nanos
 import Aesop.Util.UnionFind
 import Lean
 import Std
@@ -361,17 +362,27 @@ def deduplicate [Inhabited α] [ord : Ord α] (xs : Array α) : Array α :=
 def equalSet [BEq α] (xs ys : Array α) : Bool :=
   xs.all (ys.contains ·) && ys.all (xs.contains ·)
 
+def qsortOrd [Inhabited α] [ord : Ord α] (xs : Array α) : Array α :=
+  xs.qsort λ x y => compare x y |>.isLT
+
 end Array
 
 
 namespace IO
 
--- Returns elapsed time in milliseconds.
-def time [Monad m] [MonadLiftT BaseIO m] (x : m α) : m (α × Nat) := do
-  let start ← monoMsNow
+@[inline]
+def time [Monad m] [MonadLiftT BaseIO m] (x : m α) : m (α × Aesop.Nanos) := do
+  let start ← monoNanosNow
   let a ← x
-  let stop ← monoMsNow
-  return (a, stop - start)
+  let stop ← monoNanosNow
+  return (a, ⟨stop - start⟩)
+
+@[inline]
+def time' [Monad m] [MonadLiftT BaseIO m] (x : m Unit) : m Aesop.Nanos := do
+  let start ← monoNanosNow
+  x
+  let stop ← monoNanosNow
+  return ⟨stop - start⟩
 
 end IO
 

@@ -63,7 +63,7 @@ def toHumanString (p : Percent) : String :=
   | [beforePoint] => beforePoint ++ "%"
   | [beforePoint, afterPoint] =>
     beforePoint ++ "." ++ afterPoint.take 4 ++ "%"
-  | _ => "ERROR%"
+  | _ => unreachable!
 
 protected def ofNat (n : Nat) : Option Percent :=
   Percent.ofFloat $ n.toFloat / 100
