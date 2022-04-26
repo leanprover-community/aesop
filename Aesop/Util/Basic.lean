@@ -524,6 +524,16 @@ def merge (m n : HashMap α β) (combine : α → β → β → β) : HashMap α
     loop m n :=
       m.fold (init := n) λ m a b => m.insertWith a b (λ b' => combine a b b')
 
+instance : ForIn m (HashMap α β) (α × β) where
+  forIn m init f := do
+    let mut acc := init
+    for buckets in m.val.buckets.val do
+      for d in buckets do
+        match ← f d acc with
+        | .done b => return b
+        | .yield b => acc := b
+    return acc
+
 end Std.HashMap
 
 
