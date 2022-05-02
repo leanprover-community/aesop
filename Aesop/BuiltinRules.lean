@@ -33,11 +33,6 @@ def intros : RuleTac := λ input => do
       postBranchState? := none
     }
 
-
-@[aesop safe -30 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
-def contradiction : TacticM Unit :=
-  liftMetaTactic λ goal => do Meta.contradiction goal; return []
-
 -- Products are
 -- - split eagerly, directly after norm simp, since these splits may enable
 --   other rules to fire;
