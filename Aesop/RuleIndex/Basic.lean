@@ -21,12 +21,12 @@ inductive IndexingMode : Type
 namespace IndexingMode
 
 def targetMatchingConclusion (type : Expr) : MetaM IndexingMode := do
-  let path ← withoutModifyingState do
-    let (_, _, conclusion) ← forallMetaTelescope type
-    DiscrTree.mkPath conclusion
-    -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
-    -- turn into `Key.star`) but not fvars.
-  return IndexingMode.target path
+  let path ← DiscrTree.getConclusionKeys type
+  return target path
+
+def hypsMatchingConst (decl : Name) : MetaM IndexingMode := do
+  let path ← DiscrTree.getConstKeys decl
+  return hyps path
 
 end IndexingMode
 

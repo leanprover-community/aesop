@@ -70,7 +70,7 @@ def RuleBuilder.cases : RuleBuilder :=
       builder := name
       tac := ← GlobalRuleTacBuilder.cases decl
           (isRecursiveType := inductInfo.isRec)
-      indexingMode := IndexingMode.unindexed
+      indexingMode := ← IndexingMode.hypsMatchingConst decl
       mayUseBranchState := false
     }
   where

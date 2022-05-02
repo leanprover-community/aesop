@@ -418,6 +418,15 @@ def formatIf (b : Bool) (f : Thunk Format) : Format :=
 end Std.Format
 
 
+namespace Lean.Expr
+
+def arity : Expr → Nat
+  | forallE _ _ body _ => 1 + arity body
+  | _ => 0
+
+end Lean.Expr
+
+
 namespace Lean.MessageData
 
 @[inline]
@@ -756,7 +765,7 @@ namespace Lean.Meta.DiscrTree
 namespace Key
 
 -- TODO could be more efficient.
-def cmp (k l : Key) : Ordering :=
+protected def cmp (k l : Key) : Ordering :=
   if lt k l then
     Ordering.lt
   else if lt l k then
@@ -765,9 +774,30 @@ def cmp (k l : Key) : Ordering :=
     Ordering.eq
 
 instance : Ord Key where
-  compare := cmp
+  compare := Key.cmp
 
 end Key
+
+-- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
+-- `n` stars).
+def getConclusionKeys (type : Expr) : MetaM (Array DiscrTree.Key) :=
+  withoutModifyingState do
+    let (_, _, conclusion) ← forallMetaTelescope type
+    DiscrTree.mkPath conclusion
+    -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
+    -- turn into `Key.star`) but not fvars.
+
+-- For a constant `d` with type `∀ (x₁, ..., xₙ), T`, returns keys that
+-- match `d * ... *` (with `n` stars).
+def getConstKeys (decl : Name) : MetaM (Array DiscrTree.Key) := do
+  let (some info) ← getConst? decl
+    | throwUnknownConstant decl
+  let arity := info.type.arity
+  let mut keys := Array.mkEmpty (arity + 1)
+  keys := keys.push $ .const decl arity
+  for i in [0:arity] do
+    keys := keys.push $ .star
+  return keys
 
 namespace Trie
 
