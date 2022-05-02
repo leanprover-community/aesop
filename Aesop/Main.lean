@@ -32,8 +32,7 @@ def evalAesop : Tactic := λ stx =>
         liftMetaTacticAux λ goal => do
           let profile ← search BestFirstQueue config goal profile
           return (profile, [])
-      let profile := { profile with search := searchTime }
-      pure profile
+      pure { profile with search := searchTime }
     let profile := { profile with total := totalTime }
     aesop_trace[profile] toMessageData profile
 

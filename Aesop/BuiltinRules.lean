@@ -14,14 +14,25 @@ import Aesop.Frontend
 open Lean
 open Lean.Elab
 open Lean.Elab.Tactic
+open Lean.Meta
 
 namespace Aesop.BuiltinRules
 
 @[aesop norm -100 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
-def intros : TacticM Unit := do
-  liftMetaTactic λ goal => do
-    let (_, goal) ← Meta.intros goal
-    return [goal]
+def intros : RuleTac := λ input => do
+    let (_, goal) ← Meta.intros input.goal
+    let postState ← saveState
+    let mvars ← getGoalMVarsNoDelayed goal
+    return {
+      applications := #[{
+        goals := #[(goal, mvars)]
+        postState
+        introducedMVars := {}
+        assignedMVars := {}
+      }]
+      postBranchState? := none
+    }
+
 
 @[aesop safe -30 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
 def contradiction : TacticM Unit :=
