@@ -178,12 +178,12 @@ variable [MonadTrace m] [MonadOptions m] [MonadRef m] [AddMessageContext m]
 @[inline]
 def recordAndTraceRuleSelectionProfile (phase : PhaseName) (elapsed : Nanos) :
     m Unit := do
-  aesop_trace![profile] "[{elapsed.printAsMillis}] {phase} rule selection"
+  aesop_trace[stepsProfile] "[{elapsed.printAsMillis}] {phase} rule selection"
   recordRuleSelectionProfile elapsed
 
 @[inline]
 def recordAndTraceRuleProfile (rp : RuleProfile) : m Unit := do
-  aesop_trace![profile] "{rp}"
+  aesop_trace[stepsProfile] toMessageData rp
   recordRuleProfile rp
 
 end

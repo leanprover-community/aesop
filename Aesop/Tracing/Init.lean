@@ -40,7 +40,7 @@ initialize proof : TraceOption ←
 
 initialize profile : TraceOption ←
   registerTraceOption `profile false
-    "(aesop) Print execution times for various parts of the tactic."
+    "(aesop) Print a summary of execution times after the tactic has finished. See also trace.aesop.steps.profile."
 
 initialize steps : TraceOption ←
   registerTraceOption `steps false
@@ -69,6 +69,10 @@ initialize Init.stepsRuleSelection : TraceOption ←
 initialize Init.stepsTree : TraceOption ←
   registerTraceOption `steps.tree false
     "(aesop) Print the search tree after each iteration of the search loop. Has no effect unless trace.aesop.steps is true."
+
+initialize Init.stepsProfile : TraceOption ←
+  registerTraceOption `steps.profile false
+    "(aesop) Print profiling information for individual actions taken during the search. Has no effect unless trace.aesop.steps is true."
 
 end TraceOption
 

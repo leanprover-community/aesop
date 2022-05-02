@@ -53,7 +53,7 @@ macro "aesop_trace[" opt:ident "]"
 -- The following slightly weird setup with the `Init.*` TraceOptions is
 -- necessary because when we define something via `initialize`, we can't
 -- evaluate that thing in the module where it was initialised. We therefore
--- cannot use `steps.option` in the `Init` module.
+-- can't use `steps.option` in the `Init` module.
 
 @[inline]
 def stepsActiveGoalQueue : TraceOption :=
@@ -78,6 +78,10 @@ def stepsRuleSelection : TraceOption :=
 @[inline]
 def stepsTree : TraceOption :=
   { Init.stepsTree with parentOption := steps.option }
+
+@[inline]
+def stepsProfile : TraceOption :=
+  { Init.stepsProfile with parentOption := steps.option }
 
 end TraceOption
 
