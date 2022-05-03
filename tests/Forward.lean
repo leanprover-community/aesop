@@ -21,10 +21,11 @@ syntax (name := elim)    &"elim"    ident ("[" ident* "]")? : tactic
 
 def forwardTac (goal : MVarId) (id : Syntax) (immediate : Option (Array Syntax))
     (clear : Bool) : MetaM (List MVarId) := do
-  let e := mkFVar (← getLocalDeclFromUserName id.getId).fvarId
-  let immediate ← RuleBuilder.getImmediatePremises e
+  let userName := id.getId
+  let ldecl ← getLocalDeclFromUserName userName
+  let immediate ← RuleBuilder.getImmediatePremises userName ldecl.type
     (immediate.map (·.map (·.getId)))
-  return [← RuleTac.applyForwardRule goal e immediate clear]
+  return [← RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) immediate clear]
 
 @[tactic forward]
 def evalForward : Tactic

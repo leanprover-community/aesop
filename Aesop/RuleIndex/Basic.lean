@@ -20,6 +20,12 @@ inductive IndexingMode : Type
 
 namespace IndexingMode
 
+instance : ToFormat IndexingMode where
+  format
+    | unindexed => "unindexed"
+    | target keys => f!"target {keys}"
+    | hyps keys => f!"hyps {keys}"
+
 def targetMatchingConclusion (type : Expr) : MetaM IndexingMode := do
   let path ← DiscrTree.getConclusionKeys type
   return target path

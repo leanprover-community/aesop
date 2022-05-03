@@ -365,6 +365,44 @@ def equalSet [BEq α] (xs ys : Array α) : Bool :=
 def qsortOrd [Inhabited α] [ord : Ord α] (xs : Array α) : Array α :=
   xs.qsort λ x y => compare x y |>.isLT
 
+@[inline]
+protected def maxD [ord : Ord α] (d : α) (xs : Array α) (start := 0)
+    (stop := xs.size) : α :=
+  xs.foldl (init := d) (start := start) (stop := stop) λ max x =>
+    if compare x max |>.isLT then max else x
+
+@[inline]
+protected def max? [ord : Ord α] (xs : Array α) (start := 0)
+    (stop := xs.size) : Option α :=
+  if h : start < xs.size then
+    some $ xs.maxD (xs.get ⟨start, h⟩) start stop
+  else
+    none
+
+@[inline]
+protected def max [ord : Ord α] [Inhabited α] (xs : Array α) (start := 0)
+    (stop := xs.size) : α :=
+  xs.maxD default start stop
+
+@[inline]
+protected def minD [ord : Ord α] (d : α) (xs : Array α) (start := 0)
+    (stop := xs.size) : α :=
+  xs.foldl (init := d) (start := start) (stop := stop) λ min x =>
+    if compare x min |>.isGE then min else x
+
+@[inline]
+protected def min? [ord : Ord α] (xs : Array α) (start := 0)
+    (stop := xs.size) : Option α :=
+  if h : start < xs.size then
+    some $ xs.minD (xs.get ⟨start, h⟩) start stop
+  else
+    none
+
+@[inline]
+protected def min [ord : Ord α] [Inhabited α] (xs : Array α) (start := 0)
+    (stop := xs.size) : α :=
+  xs.minD default start stop
+
 end Array
 
 
@@ -780,7 +818,7 @@ end Key
 
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
 -- `n` stars).
-def getConclusionKeys (type : Expr) : MetaM (Array DiscrTree.Key) :=
+def getConclusionKeys (type : Expr) : MetaM (Array Key) :=
   withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
     DiscrTree.mkPath conclusion
@@ -789,7 +827,7 @@ def getConclusionKeys (type : Expr) : MetaM (Array DiscrTree.Key) :=
 
 -- For a constant `d` with type `∀ (x₁, ..., xₙ), T`, returns keys that
 -- match `d * ... *` (with `n` stars).
-def getConstKeys (decl : Name) : MetaM (Array DiscrTree.Key) := do
+def getConstKeys (decl : Name) : MetaM (Array Key) := do
   let (some info) ← getConst? decl
     | throwUnknownConstant decl
   let arity := info.type.arity
