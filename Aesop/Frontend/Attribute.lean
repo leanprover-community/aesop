@@ -45,7 +45,7 @@ end AttrConfig
 
 initialize extension :
     PersistentEnvExtension
-      (RuleSetName × RuleSetMemberDescr)
+      (RuleSetName × RuleSetMember)
       (RuleSetName × RuleSetMember)
       Aesop.RuleSets ← do
   let ext ← registerPersistentEnvExtension {
@@ -54,11 +54,11 @@ initialize extension :
     addImportedFn := λ rss => do
       let mut result := {}
       for rs in rss do
-        for (rsName, rDescr) in rs do
-          result := result.addRule rsName (← runMetaMAsImportM rDescr.ofDescr)
+        for (rsName, r) in rs do
+          result := result.addRule rsName r
       return result
     addEntryFn := λ rss (rsName, r) => rss.addRule rsName r
-    exportEntriesFn := λ rss => rss.toDescrArray!
+    exportEntriesFn := λ rss => rss.globalRules
   }
   let impl : AttributeImpl := {
     name := `aesop

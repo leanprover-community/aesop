@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.RuleTac
 import Aesop.Search.RuleSelection
 
 open Lean
@@ -65,7 +66,7 @@ def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
 def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
     MetaM NormRuleResult := do
   let preMetaState ← saveState
-  let result? ← runRuleTac rule.tac.tac rule.name preMetaState input
+  let result? ← runRuleTac rule.tac.run rule.name preMetaState input
   match result? with
   | Sum.inl e =>
     return NormRuleResult.failed e
@@ -273,7 +274,7 @@ def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
   let initialBranchState := rule.withRule λ r => parent.branchState.find? r
   aesop_trace[stepsBranchStates] "Initial branch state: {initialBranchState}"
   let ruleOutput? ←
-    runRegularRuleTac parent rule.tac.tac rule.name indexMatchLocations
+    runRegularRuleTac parent rule.tac.run rule.name indexMatchLocations
       initialBranchState
   match ruleOutput? with
   | Sum.inl exc => onFailure exc.toMessageData
@@ -281,7 +282,7 @@ def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
     onFailure $ "Rule returned no rule applications."
   | Sum.inr output =>
     let rapps := output.applications
-    if let (RegularRule'.safe rule) := rule then
+    if let (.safe rule) := rule then
       if rapps.any (! ·.assignedMVars.isEmpty) then
         aesop_trace[steps] "Safe rule assigned metavariables. Postponing it."
         return RuleResult.postponed ⟨rule, output⟩
@@ -322,7 +323,7 @@ def runFirstSafeRule (gref : GoalRef) :
   for r in rules do
     aesop_trace[steps] "Trying {r.rule}"
     let result' ←
-      runRegularRule gref (RegularRule'.safe r.rule) r.matchLocations
+      runRegularRule gref (.safe r.rule) r.matchLocations
     match result' with
     | .failed => continue
     | .proven => return (result', #[])
@@ -354,7 +355,7 @@ partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
       | .unsafeRule r =>
         aesop_trace[steps] "Trying {r.rule}"
         let result ←
-          runRegularRule parentRef (RegularRule'.unsafe r.rule) r.matchLocations
+          runRegularRule parentRef (.«unsafe» r.rule) r.matchLocations
         match result with
         | .proven => return (queue, result)
         | .succeeded => return (queue, result)
@@ -364,7 +365,7 @@ partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
       | .postponedSafeRule r =>
         aesop_trace[steps] "Applying postponed safe rule {r.rule}"
         let result ←
-          addRapps parentRef (RegularRule'.unsafe r.toUnsafeRule) r.output
+          addRapps parentRef (.«unsafe» r.toUnsafeRule) r.output
         return (queue, result)
 
 def expandGoal (gref : GoalRef) : SearchM Q Unit := do

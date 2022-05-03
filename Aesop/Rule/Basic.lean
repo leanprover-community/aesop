@@ -4,73 +4,50 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.RuleIndex.Basic
 import Aesop.Rule.Name
-import Aesop.Rule.Tac
+import Aesop.RuleIndex.Basic
+import Aesop.RuleTac.Basic
 
 open Lean
 
 namespace Aesop
 
-structure Rule' (α τ : Type) where
+structure Rule (α : Type) where
   name : RuleName
   indexingMode : IndexingMode
   usesBranchState : Bool
   extra : α
-  tac : τ
+  tac : RuleTacDescr
   deriving Inhabited
 
-namespace Rule'
+namespace Rule
 
-instance : BEq (Rule' α τ) where
+instance : BEq (Rule α) where
   beq r s := r.name == s.name
 
-instance : Ord (Rule' α τ) where
+instance : Ord (Rule α) where
   compare r s := compare r.name s.name
 
-instance : Hashable (Rule' α τ) where
+instance : Hashable (Rule α) where
   hash r := hash r.name
 
-def compareByPriority [Ord α] (r s : Rule' α τ) : Ordering :=
+def compareByPriority [Ord α] (r s : Rule α) : Ordering :=
   compare r.extra s.extra
 
-def compareByName (r s : Rule' α τ) : Ordering :=
+def compareByName (r s : Rule α) : Ordering :=
   r.name.compare s.name
 
-def compareByPriorityThenName [Ord α] (r s : Rule' α τ) : Ordering :=
+def compareByPriorityThenName [Ord α] (r s : Rule α) : Ordering :=
   match compareByPriority r s with
   | Ordering.eq => compareByName r s
   | ord => ord
 
 @[inline]
-def map (f : α → β) (g : τ → ι) (r : Rule' α τ) : Rule' β ι :=
-  { r with tac := g r.tac, extra := f r.extra }
+protected def map (f : α → β) (r : Rule α) : Rule β :=
+  { r with extra := f r.extra }
 
 @[inline]
-def mapExtra (f : α → β) (r : Rule' α τ) : Rule' β τ :=
-  map f id r
+protected def mapM [Monad m] (f : α → m β) (r : Rule α) : m (Rule β) :=
+  return { r with extra := ← f r.extra }
 
-@[inline]
-def mapTac (f : τ → ι) (r : Rule' α τ) : Rule' α ι :=
-  map id f r
-
-@[inline]
-def mapM [Monad m] (f : α → m β) (g : τ → m ι) (r : Rule' α τ) : m (Rule' β ι) :=
-  return { r with tac := (← g r.tac), extra := (← f r.extra) }
-
-@[inline]
-def mapExtraM [Monad m] (f : α → m β) (r : Rule' α τ) : m (Rule' β τ) :=
-  mapM f pure r
-
-@[inline]
-def mapTacM [Monad m] (f : τ → m ι) (r : Rule' α τ) : m (Rule' α ι) :=
-  mapM pure f r
-
-@[inline]
-def tacToDescr (r : Rule' α RuleTacWithBuilderDescr) :
-    Rule' α (Option GlobalRuleTacBuilderDescr) :=
-  r.mapTac (·.descr)
-
-end Rule'
-
-end Aesop
+end Aesop.Rule

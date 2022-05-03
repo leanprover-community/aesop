@@ -7,7 +7,6 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Aesop.Rule.Basic
 import Aesop.RuleIndex
 import Aesop.Percent
-import Aesop.Rule.Tac
 import Aesop.Util
 
 namespace Aesop
@@ -20,7 +19,7 @@ open Std (RBMap mkRBMap)
 
 structure NormRuleInfo where
   penalty : Int
-  deriving Inhabited, DecidableEq
+  deriving Inhabited
 
 instance : Ord NormRuleInfo where
   compare i j := compare i.penalty j.penalty
@@ -31,10 +30,9 @@ instance : LT NormRuleInfo :=
 instance : LE NormRuleInfo :=
   leOfOrd
 
-abbrev NormRule' := Rule' NormRuleInfo
-abbrev NormRule := NormRule' RuleTacWithBuilderDescr
+abbrev NormRule := Rule NormRuleInfo
 
-instance : ToFormat (NormRule' τ) where
+instance : ToFormat NormRule where
   format r := f!"[{r.extra.penalty}] {r.name}"
 
 def defaultNormPenalty : Int := 1
@@ -45,7 +43,7 @@ def defaultNormPenalty : Int := 1
 inductive Safety
   | safe
   | almostSafe
-  deriving Inhabited, DecidableEq
+  deriving Inhabited
 
 namespace Safety
 
@@ -59,7 +57,7 @@ end Safety
 structure SafeRuleInfo where
   penalty : Int
   safety : Safety
-  deriving Inhabited, DecidableEq
+  deriving Inhabited
 
 instance : Ord SafeRuleInfo where
   compare i j := compare i.penalty j.penalty
@@ -70,10 +68,9 @@ instance : LT SafeRuleInfo :=
 instance : LE SafeRuleInfo :=
   leOfOrd
 
-abbrev SafeRule' := Rule' SafeRuleInfo
-abbrev SafeRule := SafeRule' RuleTacWithBuilderDescr
+abbrev SafeRule := Rule SafeRuleInfo
 
-instance : ToFormat (SafeRule' τ) where
+instance : ToFormat SafeRule where
   format r := f!"[{r.extra.penalty}/{r.extra.safety}] {r.name}"
 
 def defaultSafePenalty : Int := 1
@@ -96,62 +93,56 @@ instance : LT UnsafeRuleInfo :=
 instance : LE UnsafeRuleInfo :=
   leOfOrd
 
-abbrev UnsafeRule' := Rule' UnsafeRuleInfo
-abbrev UnsafeRule := UnsafeRule' RuleTacWithBuilderDescr
+abbrev UnsafeRule := Rule UnsafeRuleInfo
 
-instance : ToFormat (UnsafeRule' τ) where
+instance : ToFormat UnsafeRule where
   format r := f!"[{r.extra.successProbability.toHumanString}] {r.name}"
 
 
 /-! ### Regular Rules -/
 
-inductive RegularRule' τ
-  | safe (r : SafeRule' τ)
-  | «unsafe» (r : UnsafeRule' τ)
-  deriving BEq
+inductive RegularRule
+  | safe (r : SafeRule)
+  | «unsafe» (r : UnsafeRule)
+  deriving Inhabited, BEq
 
-abbrev RegularRule := RegularRule' RuleTacWithBuilderDescr
+namespace RegularRule
 
-instance [Inhabited τ] : Inhabited (RegularRule' τ) where
-  default := RegularRule'.«safe» default
-
-namespace RegularRule'
-
-instance : ToFormat (RegularRule' τ) where
+instance : ToFormat RegularRule where
   format
     | safe r => format r
     | «unsafe» r => format r
 
-def successProbability : RegularRule' τ → Percent
+def successProbability : RegularRule → Percent
   | safe r => Percent.hundred
   | «unsafe» r => r.extra.successProbability
 
-def isSafe : RegularRule' τ → Bool
+def isSafe : RegularRule → Bool
   | safe _ => true
   | «unsafe» _ => false
 
-def isUnsafe : RegularRule' τ → Bool
+def isUnsafe : RegularRule → Bool
   | safe _ => false
   | «unsafe» _ => true
 
 @[inline]
-def withRule (f : ∀ {α}, Rule' α τ → β) : RegularRule' τ → β
+def withRule (f : ∀ {α}, Rule α → β) : RegularRule → β
   | safe r => f r
   | «unsafe» r => f r
 
-def name (r : RegularRule' τ) : RuleName :=
+def name (r : RegularRule) : RuleName :=
   r.withRule (·.name)
 
-def indexingMode (r : RegularRule' τ) : IndexingMode :=
+def indexingMode (r : RegularRule) : IndexingMode :=
   r.withRule (·.indexingMode)
 
-def usesBranchState (r : RegularRule' τ) : Bool :=
+def usesBranchState (r : RegularRule) : Bool :=
   r.withRule (·.usesBranchState)
 
-def tac (r : RegularRule' τ) : τ :=
+def tac (r : RegularRule) : RuleTacDescr :=
   r.withRule (·.tac)
 
-end RegularRule'
+end RegularRule
 
 
 /-! ### Normalisation Simp Rules -/

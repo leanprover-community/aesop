@@ -21,14 +21,14 @@ instance : Inhabited BranchState :=
 protected def empty : BranchState :=
   {}
 
-def find? (r : Rule' α τ) (bs : BranchState) : Option RuleBranchState :=
+def find? (r : Rule α) (bs : BranchState) : Option RuleBranchState :=
   if r.usesBranchState then PersistentHashMap.find? bs r.name else none
 
-def insert (r : Rule' α τ) (rbs : RuleBranchState) (bs : BranchState) :
+def insert (r : Rule α) (rbs : RuleBranchState) (bs : BranchState) :
     BranchState :=
   if r.usesBranchState then PersistentHashMap.insert bs r.name rbs else bs
 
-def update (r : Rule' α τ) (rbs : Option RuleBranchState) (bs : BranchState) :
+def update (r : Rule α) (rbs : Option RuleBranchState) (bs : BranchState) :
     BranchState :=
   if r.usesBranchState then
     match rbs with

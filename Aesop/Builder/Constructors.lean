@@ -11,19 +11,12 @@ open Lean.Meta
 
 namespace Aesop
 
-def GlobalRuleTacBuilder.constructors (constructorNames : Array Name) :
-    GlobalRuleTacBuilder := do
-  return {
-    tac := RuleTac.applyConsts constructorNames
-    descr := GlobalRuleTacBuilderDescr.constructors constructorNames
-  }
-
 def RuleBuilder.constructors : RuleBuilder :=
   ofGlobalRuleBuilder name λ phase decl => do
     let info ← RuleBuilder.checkConstIsInductive name decl
     return RuleBuilderResult.regular {
       builder := name
-      tac := ← GlobalRuleTacBuilder.constructors info.ctors.toArray
+      tac := .constructors info.ctors.toArray
       indexingMode := IndexingMode.unindexed -- TODO optimise as soon as we have OR for IndexingModes
       mayUseBranchState := false
     }

@@ -26,7 +26,7 @@ structure RuleBuilderInput where
 
 structure RegularRuleBuilderResult where
   builder : BuilderName
-  tac : RuleTacWithBuilderDescr
+  tac : RuleTacDescr
   indexingMode : IndexingMode
   mayUseBranchState : Bool
   deriving Inhabited
@@ -45,13 +45,10 @@ inductive RuleBuilderOutput
   | «local» (r : RuleBuilderResult) (goal : MVarId)
 
 /--
-Invariant:
-
-- if the `RuleBuilderInput` contains a `RuleBuilderKind.local`, then the builder
-  returns a `RuleBuilderOutput.local`, and similar for
-  `RuleBuilderKind.global`.
+Invariant: if the `RuleBuilderInput` contains a `RuleBuilderKind.local`,
+then the builder returns a `RuleBuilderOutput.local`, and similar for
+`RuleBuilderKind.global`.
 -/
-
 abbrev RuleBuilder := RuleBuilderInput → MetaM RuleBuilderOutput
 
 namespace RuleBuilder

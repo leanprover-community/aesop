@@ -17,7 +17,10 @@ structure ForwardBuilderOptions where
   clear : Bool
   deriving Inhabited
 
-def getImmediateNames (e : Expr) : Option (Array Name) →
+
+namespace RuleBuilder
+
+def getImmediatePremises (e : Expr) : Option (Array Name) →
     MetaM (UnorderedArraySet Nat)
   | none => do
     -- If no immediate names are given, every argument becomes immediate,
@@ -48,151 +51,23 @@ def getImmediateNames (e : Expr) : Option (Array Name) →
         "aesop: while registering '{e}' as a forward rule: function does not have arguments with these names: '{unseen}'"
       return UnorderedArraySet.ofDeduplicatedArray result
 
-namespace RuleTac
-
-private partial def makeForwardHyps (e : Expr)
-    (immediate : UnorderedArraySet Nat) (collectUsedHyps : Bool) :
-    MetaM (Array Expr × Array FVarId) := do
-  let type ← inferType e
-  withNewMCtxDepth do
-    let (argMVars, binderInfos, conclusion) ← forallMetaTelescope type
-
-    let app := mkAppN e argMVars
-    let mut instMVars := Array.mkEmpty argMVars.size
-    let mut immediateMVars := Array.mkEmpty argMVars.size
-    for i in [0:argMVars.size] do
-      let mvarId := argMVars[i].mvarId!
-      let argName := (← getMVarDecl mvarId).userName
-      if immediate.contains i then
-        immediateMVars := immediateMVars.push mvarId
-      else if binderInfos[i].isInstImplicit then
-        instMVars := instMVars.push mvarId
-
-    loop app instMVars immediateMVars 0 #[] #[] #[]
-  where
-    loop (app : Expr) (instMVars : Array MVarId) (immediateMVars : Array MVarId)
-        (i : Nat) (proofsAcc : Array Expr) (currentUsedHyps : Array FVarId)
-        (usedHypsAcc : Array FVarId) :
-        MetaM (Array Expr × Array FVarId) := do
-      if h : i < immediateMVars.size then
-        let mvarId := immediateMVars.get ⟨i, h⟩
-        let type ← getMVarType mvarId
-        (← getLCtx).foldlM (init := (proofsAcc, usedHypsAcc)) λ s@(proofsAcc, usedHypsAcc) ldecl =>
-          if ldecl.isAuxDecl then
-            pure s
-          else
-            withoutModifyingState do
-              if ← isDefEq ldecl.type type then
-                assignExprMVar mvarId (mkFVar ldecl.fvarId)
-                let currentUsedHyps :=
-                  if collectUsedHyps then
-                    currentUsedHyps.push ldecl.fvarId
-                  else
-                    currentUsedHyps
-                loop app instMVars immediateMVars (i + 1) proofsAcc
-                    currentUsedHyps usedHypsAcc
-              else
-                pure s
-      else
-        for instMVar in instMVars do
-          withMVarContext instMVar do
-            let inst ← synthInstance (← getMVarType instMVar)
-            assignExprMVar instMVar inst
-        let proofsAcc := proofsAcc.push (← abstractMVars app).expr
-        let usedHypsAcc := usedHypsAcc ++ currentUsedHyps
-        return (proofsAcc, usedHypsAcc)
-
-def applyForwardRule (goal : MVarId) (e : Expr)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) : MetaM MVarId :=
-  withMVarContext goal do
-    let (newHyps, usedHyps) ←
-      makeForwardHyps e immediate (collectUsedHyps := clear)
-    if newHyps.isEmpty then
-      throwError "while trying to apply {e} as a forward rule: found no viable instantiations for the immediate arguments"
-    let userNames ← getUnusedUserNames newHyps.size `fwd
-    let (_, goal) ← assertHypotheses goal $ ← newHyps.mapIdxM λ i val =>
-      return {
-        userName := userNames[i]
-        value := val
-        type := ← inferType val
-      }
-    if clear then
-      tryClearMany' goal usedHyps
-    else
-      return goal
-
-@[inline]
-def forwardExpr (e : Expr) (immediate : UnorderedArraySet Nat) (clear : Bool) :
-    RuleTac :=
-  SimpleRuleTac.toRuleTac λ input => withMVarContext input.goal do
-    let goal ← applyForwardRule input.goal e immediate clear
-    return [goal]
-    -- TODO optimise mvar analysis
-
-def forwardConst (decl : Name) (immediate : UnorderedArraySet Nat)
-    (clear : Bool) : RuleTac :=
-  let tac := forwardExpr (mkConst decl) immediate clear
-  if clear then
-    tac
-  else
-    withApplicationLimit 1 tac
-    -- TODO this is very crude
-
-def forwardFVar (userName : Name) (immediate : UnorderedArraySet Nat)
-    (clear : Bool) : RuleTac :=
-  let tac := λ input => withMVarContext input.goal do
-    let ldecl ← getLocalDeclFromUserName userName
-    forwardExpr (mkFVar ldecl.fvarId) immediate clear input
-  if clear then
-    tac
-  else
-    withApplicationLimit 1 tac
-
-end RuleTac
-
-
-namespace GlobalRuleTacBuilder
-
-def forwardCore (decl : Name)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) :
-    GlobalRuleTacBuilder :=
-  return {
-    tac := RuleTac.forwardConst decl immediate clear
-    descr := GlobalRuleTacBuilderDescr.forward decl immediate clear
-  }
-
-def forward (decl : Name)
-    (immediate : Option (Array Name)) (clear : Bool) :
-    GlobalRuleTacBuilder := do
-  let immediate ← getImmediateNames (mkConst decl) immediate
-  forwardCore decl immediate clear
-
-end GlobalRuleTacBuilder
-
-
-def RuleTacBuilder.forward (userName : Name) (immediate : Option (Array Name))
-    (clear : Bool) : RuleTacBuilder := λ goal => do
-  let (goal, #[newHyp]) ← copyRuleHypotheses goal #[userName]
-    | unreachable!
-  withMVarContext goal do
-    let immediate ← getImmediateNames (mkFVar newHyp) immediate
-    let tac :=
-      { tac := RuleTac.forwardFVar (← getLocalDecl newHyp).userName immediate clear
-        descr := none }
-    return (goal, tac)
-
-def RuleBuilder.forward (opts : ForwardBuilderOptions) :
-    RuleBuilder := λ input =>
+def forward (opts : ForwardBuilderOptions) : RuleBuilder := λ input =>
   match input.kind with
   | RuleBuilderKind.global decl => do
-    let tac ← GlobalRuleTacBuilder.forward decl opts.immediateHyps opts.clear
+    let immediate ←
+      getImmediatePremises (← mkConstWithFreshMVarLevels decl) opts.immediateHyps
+    let tac := .forwardConst decl immediate opts.clear
     return RuleBuilderOutput.global $ mkResult tac
   | RuleBuilderKind.local fvarUserName goal => do
-    let (goal, tac) ←
-      RuleTacBuilder.forward fvarUserName opts.immediateHyps opts.clear goal
-    return RuleBuilderOutput.local (mkResult tac) goal
+    let (goal, #[newHyp]) ← copyRuleHypotheses goal #[fvarUserName]
+      | unreachable!
+    withMVarContext goal do
+      let immediate ← getImmediatePremises (mkFVar newHyp) opts.immediateHyps
+      let newUserName := (← getLocalDecl newHyp).userName
+      let tac := .forwardFVar newUserName immediate opts.clear
+      return RuleBuilderOutput.local (mkResult tac) goal
   where
-    mkResult (tac : RuleTacWithBuilderDescr) : RuleBuilderResult :=
+    mkResult (tac : RuleTacDescr) : RuleBuilderResult :=
       RuleBuilderResult.regular {
         builder := BuilderName.forward
         tac := tac
@@ -200,4 +75,4 @@ def RuleBuilder.forward (opts : ForwardBuilderOptions) :
         mayUseBranchState := true
       }
 
-end Aesop
+end Aesop.RuleBuilder

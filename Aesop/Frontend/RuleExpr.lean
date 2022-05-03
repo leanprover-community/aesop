@@ -471,7 +471,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
   | phase@PhaseName.safe =>
     let penalty ← c.getPenalty phase
     let (goal, res) ← runRegularBuilder goal phase c.builder
-    let rule := RuleSetMember'.safeRule {
+    let rule := RuleSetMember.safeRule {
       name := c.ident.toRuleName phase res.builder
       tac := res.tac
       indexingMode := res.indexingMode
@@ -483,7 +483,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
   | phase@PhaseName.«unsafe» =>
     let successProbability ← c.getSuccessProbability
     let (goal, res) ← runRegularBuilder goal phase c.builder
-    let rule := RuleSetMember'.unsafeRule {
+    let rule := RuleSetMember.unsafeRule {
       name := c.ident.toRuleName phase res.builder
       tac := res.tac
       indexingMode := res.indexingMode
@@ -496,7 +496,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
     let (goal, res) ← runBuilder goal phase c.builder
     match res with
     | RuleBuilderResult.regular res =>
-      let rule := RuleSetMember'.normRule {
+      let rule := RuleSetMember.normRule {
         name := c.ident.toRuleName phase res.builder
         tac := res.tac
         indexingMode := res.indexingMode
@@ -505,7 +505,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
       }
       return (goal, rule, c.ruleSets.ruleSets)
     | RuleBuilderResult.simp res =>
-      let rule := RuleSetMember'.normSimpRule {
+      let rule := RuleSetMember.normSimpRule {
         name := c.ident.toRuleName phase res.builder
         entries := res.entries
       }

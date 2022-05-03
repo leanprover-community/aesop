@@ -182,59 +182,37 @@ def withApplicationLimit (n : Nat) : RuleTac → RuleTac :=
 end RuleTac
 
 
-/-! # Rule Tactic Builders -/
+/-! # Rule Tactic Descriptions -/
 
-/--
-A `GlobalRuleTacBuilderDescr` represents a `GlobalRuleTacBuilder`. When we
-serialise the rule set to an olean file, we serialise
-`GlobalRuleTacBuilderDescr`s because we can't (currently?) serialise the actual
-builders.
--/
-inductive GlobalRuleTacBuilderDescr
-  | apply (decl : Name)
+inductive RuleTacDescr
+  | applyConst (decl     : Name)
+  | applyFVar  (userName : Name)
   | constructors (constructorNames : Array Name)
-  | forward (decl : Name) (immediate : UnorderedArraySet Nat) (clear : Bool)
+  | forwardConst (decl     : Name) (immediate : UnorderedArraySet Nat) (clear : Bool)
+  | forwardFVar  (userName : Name) (immediate : UnorderedArraySet Nat) (clear : Bool)
   | cases (decl : Name) (isRecursiveType : Bool)
   | tacticM (decl : Name)
   | ruleTac (decl : Name)
   | simpleRuleTac (decl : Name)
-  deriving Inhabited, BEq
-
-/--
-A `RuleTacWithBuilderDescr` bundles a `RuleTac` and optionally the
-goal-independent builder which computed the `RuleTac`. Global rules (i.e. those
-stored by the `@[aesop]` attribute) always have a builder description, which is
-interpreted to deserialise the rule when we deserialise the rule set from an
-olean file. Local rules do not have a builder description since they are never
-serialised.
--/
-structure RuleTacWithBuilderDescr where
-  tac : RuleTac
-  descr : Option GlobalRuleTacBuilderDescr
   deriving Inhabited
 
-/--
-A `GlobalRuleTacBuilder` constructs a global rule, which is independent of
-the goal we are trying to solve.
--/
-abbrev GlobalRuleTacBuilder := MetaM RuleTacWithBuilderDescr
+namespace RuleTacDescr
 
-/--
-A `RuleTacBuilder` constructs a global or local rule. Builders for local rules
-may depend on and modify the goal we are trying to solve.
--/
-abbrev RuleTacBuilder := MVarId → MetaM (MVarId × RuleTacWithBuilderDescr)
+def isGlobal : RuleTacDescr → Bool
+  | applyConst .. => true
+  | applyFVar .. => false
+  | constructors .. => true
+  | forwardConst .. => true
+  | forwardFVar .. => false
+  | cases .. => true
+  | tacticM .. => true
+  | ruleTac .. => true
+  | simpleRuleTac .. => true
 
-
-namespace GlobalRuleTacBuilder
-
-def toRuleTacBuilder (b : GlobalRuleTacBuilder) : RuleTacBuilder := λ goal =>
-  return (goal, ← b)
-
-end GlobalRuleTacBuilder
+end RuleTacDescr
 
 
-namespace RuleTacBuilder
+/-! # Miscellany -/
 
 def copyRuleHypotheses (goal : MVarId) (userNames : Array Name) :
     MetaM (MVarId × Array FVarId) := do
@@ -249,4 +227,4 @@ def copyRuleHypotheses (goal : MVarId) (userNames : Array Name) :
   let (newHyps, goal) ← assertHypothesesWithBinderInfos goal newHyps
   return (goal, newHyps)
 
-end Aesop.RuleTacBuilder
+end Aesop

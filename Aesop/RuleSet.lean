@@ -14,37 +14,28 @@ open Std (HashMap HashSet)
 
 namespace Aesop
 
-inductive RuleSetMember' τ
-  | normRule (r : NormRule' τ)
+inductive RuleSetMember
+  | normRule (r : NormRule)
   | normSimpRule (e : NormSimpRule)
-  | unsafeRule (r : UnsafeRule' τ)
-  | safeRule (r : SafeRule' τ)
+  | unsafeRule (r : UnsafeRule)
+  | safeRule (r : SafeRule)
   deriving Inhabited
 
-abbrev RuleSetMember := RuleSetMember' RuleTacWithBuilderDescr
-abbrev RuleSetMemberDescr := RuleSetMember' GlobalRuleTacBuilderDescr
+namespace RuleSetMember
 
-namespace RuleSetMember'
-
-def mapM [Monad m] (f : τ → m ι) : RuleSetMember' τ → m (RuleSetMember' ι)
-  | normRule r => return normRule (← r.mapTacM f)
-  | normSimpRule e => return normSimpRule e
-  | unsafeRule r => return unsafeRule (← r.mapTacM f)
-  | safeRule r => return safeRule (← r.mapTacM f)
-
-def toDescr (r : RuleSetMember) : Option RuleSetMemberDescr :=
-  OptionM.run $ r.mapM (·.descr)
-
-def ofDescr (r : RuleSetMemberDescr) : MetaM RuleSetMember :=
-  r.mapM (·.toRuleTacBuilder)
-
-def name : RuleSetMember' τ → RuleName
+def name : RuleSetMember → RuleName
   | normRule r => r.name
   | unsafeRule r => r.name
   | safeRule r => r.name
   | normSimpRule e => e.name
 
-end RuleSetMember'
+def isGlobal : RuleSetMember → Bool
+  | normRule r => r.tac.isGlobal
+  | unsafeRule r => r.tac.isGlobal
+  | safeRule r => r.tac.isGlobal
+  | normSimpRule r => true
+
+end RuleSetMember
 
 
 structure RuleNameFilter where
@@ -139,7 +130,6 @@ def merge (rs₁ rs₂ : RuleSet) : RuleSet where
 instance : Append RuleSet :=
   ⟨merge⟩
 
-open RuleSetMember' in
 def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
   let n := r.name
   let erased := rs.erased.erase n
@@ -147,17 +137,17 @@ def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
     if ns.contains n then ns else ns.push n
   let rs := { rs with erased := erased, ruleNames := ruleNames }
   match r with
-  | normRule r =>
+  | .normRule r =>
     { rs with normRules := rs.normRules.add r r.indexingMode }
-  | normSimpRule r =>
+  | .normSimpRule r =>
     { rs with
       normSimpLemmas :=
         r.entries.foldl (init := rs.normSimpLemmas) λ simpLemmas e =>
           simpLemmas.addSimpEntry e
       normSimpLemmaDescrs := rs.normSimpLemmaDescrs.insert r.name r.entries }
-  | unsafeRule r =>
+  | .unsafeRule r =>
     { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
-  | safeRule r =>
+  | .safeRule r =>
     { rs with safeRules := rs.safeRules.add r r.indexingMode }
 
 def addArray (rs : RuleSet) (ra : Array RuleSetMember) : RuleSet :=
@@ -208,27 +198,27 @@ def contains (rs : RuleSet) (n : RuleName) : Bool :=
 
 def applicableNormalizationRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult NormRule)) :=
-  rs.normRules.applicableRules goal Rule'.compareByPriorityThenName
+  rs.normRules.applicableRules goal Rule.compareByPriorityThenName
     (!rs.isErased ·.name)
 
 def applicableUnsafeRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult UnsafeRule)) := do
-  rs.unsafeRules.applicableRules goal Rule'.compareByPriorityThenName
+  rs.unsafeRules.applicableRules goal Rule.compareByPriorityThenName
     (!rs.isErased ·.name)
 
 def applicableSafeRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult SafeRule)) := do
-  rs.safeRules.applicableRules goal Rule'.compareByPriorityThenName
+  rs.safeRules.applicableRules goal Rule.compareByPriorityThenName
     (!rs.isErased ·.name)
 
 def foldM [Monad m] (rs : RuleSet) (f : σ → RuleSetMember → m σ) (init : σ) :
     m σ := do
   let mut s := init
-  s ← rs.normRules.foldM           (init := s) λ s r => go s (RuleSetMember'.normRule r)
-  s ← rs.safeRules.foldM           (init := s) λ s r => go s (RuleSetMember'.safeRule r)
-  s ← rs.unsafeRules.foldM         (init := s) λ s r => go s (RuleSetMember'.unsafeRule r)
+  s ← rs.normRules.foldM           (init := s) λ s r => go s (.normRule r)
+  s ← rs.safeRules.foldM           (init := s) λ s r => go s (.safeRule r)
+  s ← rs.unsafeRules.foldM         (init := s) λ s r => go s (.unsafeRule r)
   s ← rs.normSimpLemmaDescrs.foldM (init := s) λ s n es =>
-        f s (RuleSetMember'.normSimpRule { name := n, entries := es })
+        f s (.normSimpRule { name := n, entries := es })
         -- Erased rules are removed from `normSimpLemmaDescrs`, so we do not
         -- need to filter here.
   return s
@@ -320,6 +310,16 @@ def eraseRuleSet (rss : RuleSets) (rsName : RuleSetName) : RuleSets :=
 def getRuleSet? (rss : RuleSets) (rsName : RuleSetName) : Option RuleSet :=
   if rsName == defaultRuleSetName then rss.default else rss.others.find? rsName
 
+@[inline]
+def foldM [Monad m] (f : σ → RuleSetName → RuleSet → m σ) (init : σ)
+    (rss : RuleSets) : m σ := do
+  let acc ← f init defaultRuleSetName rss.default
+  rss.others.foldlM (init := acc) f
+
+@[inline]
+def fold (f : σ → RuleSetName → RuleSet → σ) (init : σ) (rss : RuleSets) : σ :=
+  Id.run $ foldM f init rss
+
 -- If `rss` does not contain a rule set with name `rsName`, `rss` is returned
 -- unchanged.
 def modifyRuleSetM [Monad m] (rss : RuleSets) (rsName : RuleSetName)
@@ -398,21 +398,12 @@ def makeMergedRuleSet (rss : RuleSets)
     | some rs => result := result ++ rs
   return result
 
--- Precondition: all rule set members in `rss` have a `RuleSetMemberDescr`.
-def toDescrArray! (rss : RuleSets) :
-    Array (RuleSetName × RuleSetMemberDescr) := Id.run do
-  let mut s := #[]
-  s := addRuleSetMembers s defaultRuleSetName rss.default
-  s := rss.others.foldl (init := s) λ s rsName rs =>
-    addRuleSetMembers s rsName rs
-  return s
-  where
-    addRuleSetMembers (s : Array (RuleSetName × RuleSetMemberDescr))
-        (rsName : RuleSetName) (rs : RuleSet) :
-        Array (RuleSetName × RuleSetMemberDescr) :=
-      rs.fold (init := s) λ s r =>
-        let descr := r.toDescr.getD $ panic!
-          "aesop: trying to serialise a rule set where not every rule has a RuleSetMemberDescr"
-        s.push (rsName, descr)
+def globalRules (rss : RuleSets) : Array (RuleSetName × RuleSetMember) :=
+  rss.fold (init := #[]) λ acc rsName rs =>
+    rs.fold (init := acc) λ acc r =>
+      if r.isGlobal then
+        acc.push (rsName, r)
+      else
+        acc
 
 end Aesop.RuleSets
