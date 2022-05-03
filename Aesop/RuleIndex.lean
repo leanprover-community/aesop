@@ -89,7 +89,7 @@ def applicableByHypRules (ri : RuleIndex α) (goal : MVarId)
     let mut rs := #[]
     for localDecl in ← getLCtx do
       if localDecl.isAuxDecl then continue
-      let rules ← ri.byHyp.getMatch localDecl.type
+      let rules ← ri.byHyp.getUnify localDecl.type
       for r in rules do
         if include? r then
           let r :=
