@@ -162,7 +162,7 @@ def compareLexicographic (cmp₁ : α → α → Ordering) (cmp₂ : α → α �
   | ord => ord
 
 @[inline]
-def compareBy [Ord β] (f : α → β) (x y : α) : Ordering :=
+def compareBy [ord : Ord β] (f : α → β) (x y : α) : Ordering :=
   compare (f x) (f y)
 
 @[inline]
