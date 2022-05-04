@@ -54,6 +54,9 @@ partial def add (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
     { ri with byTarget := ri.byTarget.insertCore keys r }
   | IndexingMode.hyps keys =>
     { ri with byHyp := ri.byHyp.insertCore keys r }
+  | IndexingMode.or imodes =>
+    imodes.foldl (init := ri) λ ri imode =>
+      ri.add r imode
 
 def foldM [Monad m] (ri : RuleIndex α) (f : σ → α → m σ) (init : σ) : m σ :=
   match ri with

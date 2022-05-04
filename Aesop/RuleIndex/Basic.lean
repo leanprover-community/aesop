@@ -16,15 +16,19 @@ inductive IndexingMode : Type
   | unindexed
   | target (keys : Array DiscrTree.Key)
   | hyps (keys : Array DiscrTree.Key)
+  | or (imodes : Array IndexingMode)
   deriving Inhabited
 
 namespace IndexingMode
 
-instance : ToFormat IndexingMode where
-  format
-    | unindexed => "unindexed"
-    | target keys => f!"target {keys}"
-    | hyps keys => f!"hyps {keys}"
+protected partial def format : IndexingMode → Format
+  | unindexed => "unindexed"
+  | target keys => f!"target {keys}"
+  | hyps keys => f!"hyps {keys}"
+  | or imodes => f!"or {imodes.map IndexingMode.format}"
+
+instance : ToFormat IndexingMode :=
+  ⟨IndexingMode.format⟩
 
 def targetMatchingConclusion (type : Expr) : MetaM IndexingMode := do
   let path ← DiscrTree.getConclusionKeys type
