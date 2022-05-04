@@ -39,12 +39,12 @@ protected def ofSortedArray (xs : Array α) : UnorderedArraySet α :=
   ⟨xs.deduplicateSorted⟩
 
 /-- O(n*log(n)) -/
-protected def ofArrayOrd [ord : Ord α] [Inhabited α] (xs : Array α) :
+protected def ofArray [ord : Ord α] [Inhabited α] (xs : Array α) :
     UnorderedArraySet α :=
   ⟨xs.deduplicate⟩
 
 /-- O(n^2) -/
-protected def ofArray (xs : Array α) : UnorderedArraySet α :=
+protected def ofArraySlow (xs : Array α) : UnorderedArraySet α :=
   xs.foldl (init := {}) λ s x => s.insert x
 
 protected def toArray (s : UnorderedArraySet α) : Array α :=
