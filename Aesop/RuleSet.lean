@@ -188,10 +188,12 @@ def erase (rs : RuleSet) (f : RuleNameFilter) : RuleSet × Bool :=
 def eraseAllRulesWithIdent (rs : RuleSet) (i : RuleIdent) : RuleSet × Bool :=
   rs.erase { ident := i, builders := #[], phases := #[] }
 
+@[inline]
 private def isErased (rs : RuleSet) (n : RuleName) : Bool :=
   rs.erased.contains n
 
 def contains (rs : RuleSet) (n : RuleName) : Bool :=
+  ! rs.isErased n &&
   match rs.ruleNames.find? n.toRuleIdent with
   | none => false
   | some ns => ns.contains n
