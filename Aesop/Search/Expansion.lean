@@ -49,7 +49,7 @@ def runRuleTac (tac : RuleTac) (ruleName : RuleName)
   return result
 
 def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
-    (indexMatchLocations : Array IndexMatchLocation)
+    (indexMatchLocations : UnorderedArraySet IndexMatchLocation)
     (branchState : Option RuleBranchState) :
     MetaM (Sum Exception RuleTacOutput) := do
   let some (postNormGoal, postNormState) := goal.postNormGoalAndState? | throwError
@@ -97,7 +97,7 @@ def runNormRuleCore (goal : MVarId) (mvars : Array MVarId) (bs : BranchState)
       aesop_trace![stepsNormalization] "Branch state before rule application: {branchState?}"
   let ruleInput := {
     goal, mvars
-    indexMatchLocations := rule.matchLocations
+    indexMatchLocations := rule.locations
     branchState?
   }
   let result ← runNormRuleTac bs rule.rule ruleInput
@@ -268,7 +268,7 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
       return rrefs
 
 def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
-    (indexMatchLocations : Array IndexMatchLocation) :
+    (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
     SearchM Q RuleResult := do
   let parent ← parentRef.get
   let initialBranchState := rule.withRule λ r => parent.branchState.find? r
@@ -295,7 +295,7 @@ def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
       return RuleResult.failed
 
 def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
-    (indexMatchLocations : Array IndexMatchLocation) :
+    (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
     SearchM Q RuleResult :=
   profiling (runRegularRuleCore parentRef rule indexMatchLocations)
     λ result elapsed => do
@@ -323,7 +323,7 @@ def runFirstSafeRule (gref : GoalRef) :
   for r in rules do
     aesop_trace[steps] "Trying {r.rule}"
     let result' ←
-      runRegularRule gref (.safe r.rule) r.matchLocations
+      runRegularRule gref (.safe r.rule) r.locations
     match result' with
     | .failed => continue
     | .proven => return (result', #[])
@@ -355,7 +355,7 @@ partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
       | .unsafeRule r =>
         aesop_trace[steps] "Trying {r.rule}"
         let result ←
-          runRegularRule parentRef (.«unsafe» r.rule) r.matchLocations
+          runRegularRule parentRef (.«unsafe» r.rule) r.locations
         match result with
         | .proven => return (queue, result)
         | .succeeded => return (queue, result)

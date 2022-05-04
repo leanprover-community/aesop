@@ -198,17 +198,17 @@ def contains (rs : RuleSet) (n : RuleName) : Bool :=
 
 def applicableNormalizationRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult NormRule)) :=
-  rs.normRules.applicableRules goal Rule.compareByPriorityThenName
+  rs.normRules.applicableRules (ord := ⟨Rule.compareByPriorityThenName⟩) goal
     (!rs.isErased ·.name)
 
 def applicableUnsafeRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult UnsafeRule)) := do
-  rs.unsafeRules.applicableRules goal Rule.compareByPriorityThenName
+  rs.unsafeRules.applicableRules (ord := ⟨Rule.compareByPriorityThenName⟩) goal
     (!rs.isErased ·.name)
 
 def applicableSafeRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult SafeRule)) := do
-  rs.safeRules.applicableRules goal Rule.compareByPriorityThenName
+  rs.safeRules.applicableRules (ord := ⟨Rule.compareByPriorityThenName⟩) goal
     (!rs.isErased ·.name)
 
 def foldM [Monad m] (rs : RuleSet) (f : σ → RuleSetMember → m σ) (init : σ) :

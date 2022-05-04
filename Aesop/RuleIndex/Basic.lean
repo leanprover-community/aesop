@@ -39,23 +39,43 @@ end IndexingMode
 
 inductive IndexMatchLocation
   | target
-  | hyp (ldecl : LocalDecl)
   | none
+  | hyp (ldecl : LocalDecl)
+  deriving Inhabited
 
 namespace IndexMatchLocation
 
 instance : ToMessageData IndexMatchLocation where
   toMessageData
     | target => "target"
-    | hyp ldecl => m!"hyp {ldecl.userName}"
     | none => "none"
+    | hyp ldecl => m!"hyp {ldecl.userName}"
+
+instance : BEq IndexMatchLocation where
+  beq
+    | target, target => true
+    | none, none => true
+    | hyp ldecl₁, hyp ldecl₂ => ldecl₁.fvarId == ldecl₂.fvarId
+    | _, _ => false
+
+instance : Ord IndexMatchLocation where
+  compare
+    | target, target => .eq
+    | target, none => .lt
+    | target, hyp .. => .lt
+    | none, target => .gt
+    | none, none => .eq
+    | none, hyp .. => .lt
+    | hyp .., target => .gt
+    | hyp .., none => .gt
+    | hyp ldecl₁, hyp ldecl₂ => ldecl₁.fvarId.name.quickCmp ldecl₂.fvarId.name
 
 end IndexMatchLocation
 
 
 structure IndexMatchResult (α : Type) where
   rule : α
-  matchLocations : Array IndexMatchLocation
+  locations : UnorderedArraySet IndexMatchLocation
   deriving Inhabited
 
 namespace IndexMatchResult

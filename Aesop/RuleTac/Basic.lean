@@ -58,7 +58,7 @@ def getAssignedMVars (previousMVars : Array MVarId) :
 structure RuleTacInput where
   goal : MVarId
   mvars : Array MVarId
-  indexMatchLocations : Array IndexMatchLocation
+  indexMatchLocations : UnorderedArraySet IndexMatchLocation
   branchState? : Option RuleBranchState
   deriving Inhabited
 
