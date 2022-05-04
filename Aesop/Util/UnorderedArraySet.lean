@@ -13,6 +13,7 @@ namespace Aesop
 structure UnorderedArraySet (α) [BEq α] where
   private mk ::
   private rep : Array α
+  deriving Inhabited
 
 namespace UnorderedArraySet
 
