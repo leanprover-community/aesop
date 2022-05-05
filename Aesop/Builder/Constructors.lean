@@ -17,10 +17,18 @@ def RuleBuilder.constructors : RuleBuilder :=
     return RuleBuilderResult.regular {
       builder := name
       tac := .constructors info.ctors.toArray
-      indexingMode := IndexingMode.unindexed -- TODO optimise as soon as we have OR for IndexingModes
+      indexingMode := ← getIndexingMode info
       mayUseBranchState := false
     }
   where
     name := BuilderName.constructors
+
+    getIndexingMode (info : InductiveVal) : MetaM IndexingMode := do
+      let mut imodes := Array.mkEmpty info.numCtors
+      for ctor in info.ctors do
+        let ctorInfo ← getConstInfo ctor
+        let imode ← IndexingMode.targetMatchingConclusion ctorInfo.type
+        imodes := imodes.push imode
+      return .or imodes
 
 end Aesop

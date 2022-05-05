@@ -49,7 +49,8 @@ instance : Append (RuleIndex α) :=
 partial def add (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
     RuleIndex α :=
   match imode with
-  | IndexingMode.unindexed => { ri with unindexed := ri.unindexed.insert r }
+  | IndexingMode.unindexed =>
+    { ri with unindexed := ri.unindexed.insert r }
   | IndexingMode.target keys =>
     { ri with byTarget := ri.byTarget.insertCore keys r }
   | IndexingMode.hyps keys =>

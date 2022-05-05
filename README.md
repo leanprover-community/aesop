@@ -65,6 +65,18 @@ instance : Append (MyList α) :=
   ⟨MyList.append⟩
 ```
 
+We also tell `simp` to unfold applications of `append`. `aesop` uses the default
+simp set when it normalises a goal, so it will automatically pick up these rules
+as well.
+
+```lean
+@[simp]
+theorem nil_append : nil ++ xs = xs := rfl
+
+@[simp]
+theorem cons_append : cons x xs ++ ys = cons x (xs ++ ys) := rfl
+```
+
 Now we define the `NonEmpty` predicate on `MyList`:
 
 ``` lean

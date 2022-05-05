@@ -24,6 +24,14 @@ protected def append : (_ _ : MyList α) → MyList α
 instance : Append (MyList α) :=
   ⟨MyList.append⟩
 
+-- TODO there should be a more convenient way to do this, similar to @[simps]
+-- in Lean 3.
+@[simp]
+theorem nil_append : nil ++ xs = xs := rfl
+
+@[simp]
+theorem cons_append : cons x xs ++ ys = cons x (xs ++ ys) := rfl
+
 declare_aesop_rule_sets [MyList.NonEmpty]
 
 @[aesop safe (rule_sets [MyList.NonEmpty]) [constructors, cases]]
@@ -35,19 +43,12 @@ theorem nonEmpty_append {xs : MyList α} ys :
     NonEmpty xs → NonEmpty (xs ++ ys) := by
   aesop (rule_sets [MyList.NonEmpty])
 
--- TODO error if we write `Type _` instead of `Type u`
-example {α : Type u} {xs : MyList α} ys zs :
+example {α : Type _} {xs : MyList α} ys zs :
     NonEmpty xs → NonEmpty (xs ++ ys ++ zs) := by
   aesop
 
 theorem nil_not_NonEmpty (xs : MyList α) : xs = nil → ¬ NonEmpty xs := by
   aesop (add 10% cases MyList, norm unfold Not) (rule_sets [MyList.NonEmpty])
-
-@[aesop norm]
-theorem nil_append (xs : MyList α) : nil ++ xs = xs := rfl
-
-@[aesop norm]
-theorem cons_append (x : α) xs ys : cons x xs ++ ys = cons x (xs ++ ys) := rfl
 
 @[aesop norm]
 theorem append_nil {xs : MyList α} :
