@@ -30,13 +30,11 @@ attribute [aesop 50%] EvenOrOdd.even EvenOrOdd.odd
 attribute [aesop safe] Even.zero Even.plus_two
 attribute [aesop 100%] Odd.one Odd.plus_two
 
+@[aesop norm unfold]
 def EvenOrOdd' (n : Nat) : Prop := EvenOrOdd n
 
-@[aesop norm tactic]
-def testNormTactic : TacticM Unit := do
-  evalTactic (← `(tactic|try simp only [EvenOrOdd']))
-
-example : EvenOrOdd' 3 := by aesop
+example : EvenOrOdd' 3 := by
+  aesop
 
 end EvenOdd
 

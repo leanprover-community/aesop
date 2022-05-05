@@ -38,7 +38,6 @@ theorem Seq_inv (h : BigStep [Com| c₁;c₂] s u) :
 
 end BigStep
 
--- FIXME test temporarily broken
--- theorem seq_assoc :
---     BigStep [Com| (c1;c2);c3] s s' ↔ BigStep [Com| c1;c2;c3] s s' := by
---   aesop
+theorem seq_assoc :
+    BigStep [Com| (c1;c2);c3] s s' ↔ BigStep [Com| c1;c2;c3] s s' := by
+  aesop

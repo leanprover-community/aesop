@@ -225,14 +225,15 @@ operates.
 A rule is a tactic plus some associated metadata. Rules come in three flavours:
 
 - **Normalisation rules** (keyword `norm`) must generate zero or one subgoal.
-  (Zero means that the rule closed the goal). They must not fail. Each
-  normalisation rule is associated with an integer **penalty** (default 1).
-  Normalisation rules are applied in order of penalty, lowest first. For rules
-  with equal penalties, the order is unspecified.
+  (Zero means that the rule closed the goal). Each normalisation rule is
+  associated with an integer **penalty** (default 1). Normalisation rules are
+  applied in a fixpoint loop in order of penalty, lowest first. For rules with
+  equal penalties, the order is unspecified. See below for details on
+  the normalisation algorithm.
 
   Normalisation rules can also be simp lemmas. These are constructed with the
   `unfold` or `simp` builder. They are used by a special `simp` call during
-  the normalisation process; see below.
+  the normalisation process.
 
 - **Safe rules** (keyword `safe`) are applied after normalisation but before any
   unsafe rules. When a safe rule is successfully applied to a goal, the goal
@@ -294,15 +295,18 @@ search depth.)
 - Pick the highest-priority active goal node `G`. Roughly speaking, a goal node
   is active if it is not proved and we haven't yet applied all possible rules to
   it.
-- If the goal of `G` has not been normalised yet, normalise it. That means:
+- If the goal of `G` has not been normalised yet, normalise it. That means we
+  run the following normalisation loop:
+  - Run the normalisation rules with negative penalty (lowest penalty first). If
+    any of these rules is successful, restart the normalisation loop with the
+    goal produced by the rule.
+  - Run `simp` on all hypotheses and the target, using the global simp set (i.e.
+    lemmas tagged `@[simp]`) plus Aesop's `simp` rules.
+  - Run the normalisation rules with positive penalty (lowest penalty first).
+    If any of these rules is successful, restart the normalisation loop.
 
-  - Run all normalisation rules with negative penalty (lowest penalty first).
-  - Run `simp` with the global simp set plus Aesop's normalisation simp rules.
-  - Run all normalisation rules with non-negative penalty (lowest penalty
-    first).
-
-  This process destructively updates the goal of `G`. (It may also prove it
-  outright.)
+  The loop ends when all normalisation rules fail. It destructively updates
+  the goal of `G` (and may prove it outright).
 - If we haven't tried to apply the safe rules to the goal of `G` yet, try to
   apply each safe rule (lowest penalty first). As soon as a rule succeeds, add
   the corresponding rapp and child goals to the tree and mark `G` as inactive.
@@ -435,6 +439,17 @@ an Aesop rule. Currently available builders are:
   The builder may be given an option `uses_branch_state := <boolean>` (default
   true). This indicates whether the given tactic uses the branch state; see
   below.
+  
+  Rule tactics should not be 'no-ops': if a rule tactic is not applicable to a
+  goal, it should fail rather than return the goal unchanged. All no-op rules
+  waste time and no-op `norm` rules will send normalisation into an infinite
+  loop.
+  
+  Normalisation rules may not assign metavariables (other than the goal
+  metavariable) or introduce new metavariables (other than the new goal
+  metavariable). This can be a problem because some Lean tactics, e.g. `cases`,
+  do so even in cases where you probably would not expect them to. I'm afraid
+  there is currently no good solution for this.
 - **`safe_default`**: default builder for safe rules. This is the builder used
   when you register a safe rule without specifying a builder, but you can also
   request it explicitly. It tries the following builders, using the first one
