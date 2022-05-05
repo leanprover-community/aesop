@@ -12,6 +12,11 @@ open Lean.Meta
 namespace Aesop
 def RuleBuilder.cases : RuleBuilder :=
   RuleBuilder.ofGlobalRuleBuilder BuilderName.cases λ phase decl => do
+    if let (.norm) := phase then throwError
+      "aesop: cases builder cannot currently be used for norm rules."
+      -- TODO `Meta.cases` may assign and introduce metavariables.
+      -- (Specifically, it can *replace* existing metavariables, which Aesop
+      -- counts as an assignment and an introduction.)
     let inductInfo ← RuleBuilder.checkConstIsInductive name decl
     return RuleBuilderResult.regular {
       builder := name
