@@ -8,6 +8,7 @@ Authors: Jannis Limperg
 -- these files are registered.
 import Aesop.BuiltinRules.Assumption
 import Aesop.BuiltinRules.ApplyHyps
+import Aesop.BuiltinRules.DestructProducts
 import Aesop.BuiltinRules.Reflexivity
 import Aesop.Frontend
 
@@ -35,28 +36,31 @@ def intros : RuleTac := λ input => do
       postBranchState? := none
     }
 
--- Products are
--- - split eagerly, directly after norm simp, since these splits may enable
---   other rules to fire;
--- - introduced lazily since the introduction rules are somewhat expensive:
---   those for products split into multiple goals; those for existentials
---   introduce a metavariable. We want to wait as long as possible with either.
---   We could even consider making these rules `unsafe`.
-attribute [aesop [norm 0 cases, safe 100 constructors]] And Prod PProd MProd
-attribute [aesop [safe 0 cases, safe 100 constructors]] Exists Subtype Sigma
+-- Products are introduced lazily since the introduction rules are somewhat
+-- expensive: those for products split into multiple goals; those for
+-- existentials introduce a metavariable. We want to wait as long as possible
+-- with either. We could even consider making these rules `unsafe`.
+--
+-- Hypothesis of product type are split by a separate builtin rule because the
+-- `cases` builder currently cannot be used for norm rules.
+attribute [aesop safe 100 constructors] And Prod PProd MProd
+attribute [aesop safe 100 constructors] Exists Subtype Sigma
   PSigma
-  -- TODO It should be possible to make the `cases` rule for Exists etc. a
-  -- norm rule rather than a safe rule. However, this currently fails when the
-  -- goal contains metavariables, since `cases` may replace the meta. Aesop
-  -- then considers the replacement a newly introduced meta, which norm rules
-  -- are not allowed to add.
 
 -- Sums are split and introduced lazily.
 attribute [aesop [safe 100 cases, 50% constructors]] Or Sum PSum
 
--- Iff is treated like a product.
-attribute [aesop [norm 0 cases, safe 100 constructors]] Iff
+-- Iff is treated as a product.
+attribute [aesop safe 100 constructors] Iff
 
-attribute [aesop norm 0 [cases, constructors]] ULift
+@[aesop [norm 0 elim]]
+theorem Iff_elim (h : α ↔ β) : (α → β) ∧ (β → α) :=
+  ⟨h.mp, h.mpr⟩
+
+attribute [aesop norm constructors] ULift
+
+@[aesop [norm 0 elim]]
+theorem ULift_elim (h : ULift α) : α :=
+  h.down
 
 end Aesop.BuiltinRules
