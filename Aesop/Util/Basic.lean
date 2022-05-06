@@ -213,9 +213,6 @@ instance : EmptyCollection (Subarray α) :=
 instance : Inhabited (Subarray α) :=
   ⟨{}⟩
 
-def size (as : Subarray α) : Nat :=
-  as.stop - as.start
-
 def isEmpty (as : Subarray α) : Bool :=
   as.start == as.stop
 
