@@ -132,8 +132,18 @@ def runFirstNormRule (goal : MVarId) (mvars : Array MVarId)
     | .succeeded goal bs => return result
   return .failed
 
+def normSimpCore (ctx : Simp.Context) (goal : MVarId) :
+    MetaM (Option MVarId) :=
+  withMVarContext goal do
+    let lctx ← getLCtx
+    let mut fvarIds := Array.mkEmpty lctx.decls.size
+    for ldecl in lctx do
+      unless ldecl.isAuxDecl do
+        fvarIds := fvarIds.push ldecl.fvarId
+    return (← simpGoal goal ctx (fvarIdsToSimp := fvarIds)).map (·.snd)
+
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def runNormalizationSimp (goal : MVarId) (rs : RuleSet) :
+def normSimp (goal : MVarId) (rs : RuleSet) :
     ProfileT MetaM (Option MVarId) :=
   profiling (go goal rs) λ _ elapsed =>
     recordAndTraceRuleProfile { rule := .normSimp, elapsed, successful := true }
@@ -143,18 +153,23 @@ def runNormalizationSimp (goal : MVarId) (rs : RuleSet) :
         { (← Simp.Context.mkDefault) with simpTheorems := #[rs.normSimpLemmas] }
         -- TODO This computation should be done once, not every time we normalise
         -- a goal.
-      let preMetaState ← saveState
-      let newGoal? ← simpAll goal simpCtx
-      if ← Check.rules.isEnabled then
-        let postMetaState ← saveState
-        let introduced :=
-          (← introducedExprMVars preMetaState postMetaState).filter (some · != newGoal?)
-        unless introduced.isEmpty do throwError
-          "{Check.rules.name}: norm simp introduced metas:{introduced.map (·.name)}"
-        let assigned :=
-          (← assignedExprMVars preMetaState postMetaState).filter (· != goal)
-        unless assigned.isEmpty do throwError
-          "{Check.rules.name}: norm simp assigned metas:{introduced.map (·.name)}"
+      let newGoal? ←
+        if ← Check.rules.isEnabled then
+          let preMetaState ← saveState
+          let newGoal? ← normSimpCore simpCtx goal
+          let postMetaState ← saveState
+          let introduced :=
+            (← introducedExprMVars preMetaState postMetaState).filter
+              (some · != newGoal?)
+          unless introduced.isEmpty do throwError
+            "{Check.rules.name}: norm simp introduced metas:{introduced.map (·.name)}"
+          let assigned :=
+            (← assignedExprMVars preMetaState postMetaState).filter (· != goal)
+          unless assigned.isEmpty do throwError
+            "{Check.rules.name}: norm simp assigned metas:{introduced.map (·.name)}"
+          pure newGoal?
+        else
+          normSimpCore simpCtx goal
       newGoal?.mapM λ goal => Prod.snd <$> intros goal
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
@@ -176,7 +191,7 @@ partial def normalizeGoalMVar (rs : RuleSet) (maxIterations : Nat)
       | .succeeded goal bs => go (iteration + 1) goal bs
       | .failed =>
         aesop_trace[stepsNormalization] "Running normalisation simp"
-        let (some goal) ← runNormalizationSimp goal rs
+        let (some goal) ← normSimp goal rs
           | return none
         aesop_trace[stepsNormalization] "Goal after normalisation simp:{indentD $ MessageData.ofGoal goal}"
         let postSimpResult ← runFirstNormRule goal mvars bs postSimpRules

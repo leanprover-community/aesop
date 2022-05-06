@@ -19,7 +19,9 @@ def congr_fun := @congrFun
 def congr_arg := @congrArg
 
 theorem not_of_eq_false {p : Prop} (h : p = False) : ¬p := by
-  aesop
+  -- TODO simp builder should support local hyps
+  -- aesop (add norm simp h)
+  simp only [h]
 
 -- TODO How to use a lemma like this? Maybe this is a nice example of e-matching.
 theorem cast_proof_irrel (h₁ h₂ : α = β) (a : α) : cast h₁ a = cast h₂ a := by
@@ -53,8 +55,12 @@ theorem not_not_em (a : Prop) : ¬¬(a ∨ ¬a) := by
   show ((a ∨ (a → False)) → False) → False
   exact fun H => H (Or.inr fun h => H (Or.inl h))
 
+set_option trace.aesop.steps true in
 theorem Or.symm (h : a ∨ b) : b ∨ a := by
-  cases h <;> aesop
+  -- aesop
+    -- FIXME currently broken because the constructors rule for Or does not
+    -- seem to work correctly
+  cases h; apply Or.inr; assumption; apply Or.inl; assumption
 
 def Iff.elim (f : (a → b) → (b → a) → c) (h : a ↔ b) : c := by
   aesop
@@ -63,9 +69,10 @@ def Iff.elim (f : (a → b) → (b → a) → c) (h : a ↔ b) : c := by
 theorem iff_comm : (a ↔ b) ↔ (b ↔ a) := by
   aesop (add safe Iff.intro)
 
--- TODO don't do contextual simp for all hyps by default (so this should fail)
-theorem Eq.to_iff : a = b → (a ↔ b) := by
-  aesop
+theorem Eq.to_iff (h : a = b) : (a ↔ b) := by
+  -- aesop (add norm simp h)
+  rw [h]
+  exact Iff.rfl
 
 theorem neq_of_not_iff : ¬(a ↔ b) → a ≠ b := mt Eq.to_iff
 
@@ -77,12 +84,25 @@ theorem iff_true_intro (h : a) : a ↔ True := by aesop
 
 theorem iff_false_intro (h : ¬a) : a ↔ False := by aesop
 
-theorem not_iff_false_intro (h : a) : ¬a ↔ False := by aesop
+-- TODO proper Not handling
+theorem not_iff_false_intro (h : a) : ¬a ↔ False := by
+  -- aesop
+  simp only [h]
 
 theorem not_not_not : ¬¬¬a ↔ ¬a := ⟨mt not_not_intro, not_not_intro⟩
 
+-- TODO iff under ∀
 theorem forall_congr_iff {p q : α → Prop} (h : ∀ x, p x ↔ q x) :
-    (∀ x, p x) ↔ (∀ x, q x) := by aesop
+    (∀ x, p x) ↔ (∀ x, q x) := by
+  apply Iff.intro
+  case mp =>
+    intros hp x
+    simp only [← h x]
+    exact hp x
+  case mpr =>
+    intros hq x
+    simp only [h x]
+    exact hq x
 
 theorem imp_congr_left (h : a ↔ b) : (a → c) ↔ (b → c) := by aesop
 
@@ -101,13 +121,18 @@ theorem Not.intro {a : Prop} (h : a → False) : ¬a := by aesop
 
 -- TODO try False-elim with low priority if we have a hyp X → False in the
 -- context.
-def Not.elim (h : ¬a) (ha : a) : α := by aesop
+def Not.elim (h : ¬a) (ha : a) : α := by
+  exact False.elim (h ha)
 
 theorem not_true : ¬True ↔ False := by aesop
 
 theorem not_false_iff : ¬False ↔ True := by aesop
 
-theorem not_congr (h : a ↔ b) : ¬a ↔ ¬b := by aesop
+-- TODO local norm simp
+theorem not_congr (h : a ↔ b) : ¬a ↔ ¬b := by
+  -- aesop (add norm simp h)
+  simp only [h]
+  exact Iff.rfl
 
 theorem ne_self_iff_false (a : α) : a ≠ a ↔ False := by aesop
 

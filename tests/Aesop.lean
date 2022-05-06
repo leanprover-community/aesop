@@ -62,3 +62,10 @@ end Loop
 example (Even : Nat → Prop) (zero : Even 0)
     (plusTwo : ∀ n, Even n → Even (n + 2)) : Even 20 := by
   aesop
+
+
+-- This example checks that norm simp does not use local hypotheses (unless
+-- instructed to).
+example {α : Prop} (h : α) : α := by
+  fail_if_success aesop (rule_sets [-builtin, -default])
+  exact h
