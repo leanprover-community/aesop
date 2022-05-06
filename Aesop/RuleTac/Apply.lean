@@ -24,15 +24,20 @@ def applyFVar (userName : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input =>
 -- Tries to apply each constant in `decls`. For each one that applies, a rule
 -- application is returned. If none applies, the tactic fails.
 def applyConsts (decls : Array Name) : RuleTac := λ input => do
-  let goal := input.goal
-  let apps ← decls.filterMapM λ decl => observing? do
-    let goals ← apply input.goal (← mkConstWithFreshMVarLevels decl)
-    let postState ← saveState
-    let (goals, introducedMVars) ← getProperGoalsAndNewMVars input.mvars goals
-    let assignedMVars ← getAssignedMVars input.mvars
-    return { postState, goals, introducedMVars, assignedMVars }
-  if apps.isEmpty then
-    throwError "failed to apply any of these declarations:{MessageData.node $ decls.map toMessageData}"
+  let initialState ← saveState
+  let apps ← decls.filterMapM λ decl => do
+    try
+      let goals ← apply input.goal (← mkConstWithFreshMVarLevels decl)
+      let postState ← saveState
+      let (goals, introducedMVars) ← getProperGoalsAndNewMVars input.mvars goals
+      let assignedMVars ← getAssignedMVars input.mvars
+      return some { postState, goals, introducedMVars, assignedMVars }
+    catch e =>
+      return none
+    finally
+      restoreState initialState
+  if apps.isEmpty then throwError
+    "failed to apply any of these declarations:{MessageData.node $ decls.map toMessageData}"
   return { applications := apps, postBranchState? := none }
 
 end RuleTac

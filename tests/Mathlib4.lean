@@ -55,12 +55,8 @@ theorem not_not_em (a : Prop) : ¬¬(a ∨ ¬a) := by
   show ((a ∨ (a → False)) → False) → False
   exact fun H => H (Or.inr fun h => H (Or.inl h))
 
-set_option trace.aesop.steps true in
 theorem Or.symm (h : a ∨ b) : b ∨ a := by
-  -- aesop
-    -- FIXME currently broken because the constructors rule for Or does not
-    -- seem to work correctly
-  cases h; apply Or.inr; assumption; apply Or.inl; assumption
+  aesop
 
 def Iff.elim (f : (a → b) → (b → a) → c) (h : a ↔ b) : c := by
   aesop
