@@ -11,15 +11,18 @@ open Lean.Meta
 
 namespace Aesop.RuleBuilder
 
--- TODO We currently don't process unfold theorems and smart unfolding equations
--- (whatever that is). See SimpLemmas.lean:mkSimpAttr.
 def normSimpUnfold : RuleBuilder :=
   ofGlobalRuleBuilder name λ phase decl => do
-    let info ← getConstInfo decl
-    unless info.hasValue do
-      throwError "aesop: unfold builder: expected {decl} to be a definition to unfold"
-    return RuleBuilderResult.simp
-      { builder := name, entries := #[SimpEntry.toUnfold decl] }
+    try {
+      let thms : SimpTheorems := {}
+      let thms ← thms.addDeclToUnfold decl
+      return RuleBuilderResult.simp {
+        builder := name
+        entries := thms.simpEntries
+      }
+    } catch e => {
+      throwError "aesop: unfold builder: exception while trying to add {decl} as declaration to unfold:{indentD e.toMessageData}"
+    }
   where
     name := BuilderName.unfold
 
