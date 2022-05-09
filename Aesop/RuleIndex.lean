@@ -42,9 +42,6 @@ def merge (ri₁ ri₂ : RuleIndex α) : RuleIndex α where
   byHyp := ri₁.byHyp.merge ri₂.byHyp
   unindexed := ri₁.unindexed.merge ri₂.unindexed
 
-instance : Append (RuleIndex α) :=
-  ⟨merge⟩
-
 @[specialize]
 partial def add (r : α) (imode : IndexingMode) (ri : RuleIndex α) :
     RuleIndex α :=
@@ -76,6 +73,7 @@ def size : RuleIndex α → Nat
     byHyp.size + byTarget.size + unindexed.size
 
 -- May return duplicate `IndexMatchLocation`s.
+@[inline]
 private def applicableByTargetRules (ri : RuleIndex α) (goal : MVarId)
     (include? : α → Bool) : MetaM (Array (α × Array IndexMatchLocation)) :=
   withMVarContext goal do
@@ -88,6 +86,7 @@ private def applicableByTargetRules (ri : RuleIndex α) (goal : MVarId)
     return rs
 
 -- May return duplicate `IndexMatchLocation`s.
+@[inline]
 private def applicableByHypRules (ri : RuleIndex α) (goal : MVarId)
     (include? : α → Bool) : MetaM (Array (α × Array IndexMatchLocation)) :=
   withMVarContext goal do
@@ -101,6 +100,7 @@ private def applicableByHypRules (ri : RuleIndex α) (goal : MVarId)
     return rs
 
 -- May return duplicate `IndexMatchLocation`s.
+@[inline]
 private def applicableUnindexedRules (ri : RuleIndex α) (include? : α → Bool) :
     Array (α × Array IndexMatchLocation) := Id.run do
   let mut rs := Array.mkEmpty ri.unindexed.size

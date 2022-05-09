@@ -56,9 +56,9 @@ end RuleNameFilter
 
 structure RuleSet where
   normRules : RuleIndex NormRule
-  normSimpLemmas : SimpTheorems
   unsafeRules : RuleIndex UnsafeRule
   safeRules : RuleIndex SafeRule
+  normSimpLemmas : SimpTheorems
   normSimpLemmaDescrs : HashMap RuleName (Array SimpEntry)
     -- A cache of the norm simp rules added to `normSimpLemmas`. Invariant: the
     -- simp entries in this map are a subset of those in `normSimpLemmas`. When
@@ -73,8 +73,11 @@ structure RuleSet where
   erased : HashSet RuleName
     -- A collection of erased rules. When we erase a rule -- or a family of
     -- rules, e.g. all rules associated with a certain declaration --, we do not
-    -- remove them from `normRules`, `normSimpLemmas` etc. Instead, we add them
+    -- remove them from `normRules`, `unsafeRules` etc. Instead, we add them
     -- to the `erased` set and remove them from `ruleNames`.
+    --
+    -- Exception: for simp theorems, when erasing a rule we remove it from
+    -- both `normSimpLemmas` and `normSimpLemmaDescrs`.
   deriving Inhabited
 
 namespace RuleSet
@@ -105,10 +108,10 @@ instance : EmptyCollection RuleSet :=
   ⟨empty⟩
 
 def merge (rs₁ rs₂ : RuleSet) : RuleSet where
-  normRules := rs₁.normRules ++ rs₂.normRules
+  normRules := rs₁.normRules.merge rs₂.normRules
   normSimpLemmas := rs₁.normSimpLemmas.merge rs₂.normSimpLemmas
-  unsafeRules := rs₁.unsafeRules ++ rs₂.unsafeRules
-  safeRules := rs₁.safeRules ++ rs₂.safeRules
+  unsafeRules := rs₁.unsafeRules.merge rs₂.unsafeRules
+  safeRules := rs₁.safeRules.merge rs₂.safeRules
   normSimpLemmaDescrs :=
     rs₁.normSimpLemmaDescrs.merge rs₂.normSimpLemmaDescrs λ _ nsd₁ nsd₂ => nsd₁
     -- We can merge left-biased here because `nsd₁` and `nsd₂` should be equal
@@ -126,9 +129,6 @@ def merge (rs₁ rs₂ : RuleSet) : RuleSet where
         | some ns =>
           if ns.contains n then x else x.insert n
     go rs₂ rs₁ $ go rs₁ rs₂ {}
-
-instance : Append RuleSet :=
-  ⟨merge⟩
 
 def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
   let n := r.name
@@ -397,7 +397,7 @@ def makeMergedRuleSet (rss : RuleSets)
       continue
     match rss.others.find? name with
     | none => continue
-    | some rs => result := result ++ rs
+    | some rs => result := result.merge rs
   return result
 
 def globalRules (rss : RuleSets) : Array (RuleSetName × RuleSetMember) :=
