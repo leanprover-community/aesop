@@ -10,7 +10,7 @@ import Aesop.RuleIndex
 
 open Lean
 open Lean.Meta
-open Std (HashMap HashSet)
+open Std (PHashMap HashSet)
 
 namespace Aesop
 
@@ -59,13 +59,13 @@ structure RuleSet where
   unsafeRules : RuleIndex UnsafeRule
   safeRules : RuleIndex SafeRule
   normSimpLemmas : SimpTheorems
-  normSimpLemmaDescrs : HashMap RuleName (Array SimpEntry)
+  normSimpLemmaDescrs : PHashMap RuleName (Array SimpEntry)
     -- A cache of the norm simp rules added to `normSimpLemmas`. Invariant: the
     -- simp entries in this map are a subset of those in `normSimpLemmas`. When
     -- a rule is erased, its entry is removed from this map. We use this map (a)
     -- to figure out which `SimpEntry`s to erase from `normSimpLemmas` when a
     -- rule is erased; (b) to serialise the norm simp rules.
-  ruleNames : HashMap RuleIdent (Array RuleName)
+  ruleNames : PHashMap RuleIdent (Array RuleName)
     -- A cache of (non-erased) rule names. Invariant: `ruleNames` contains
     -- exactly the names of the rules in `normRules`, `normSimpLemmaDescrs`,
     -- `unsafeRules` and `safeRules`, minus the rules in `erased`. We use this
@@ -216,10 +216,10 @@ def applicableSafeRules (rs : RuleSet) (goal : MVarId) :
 def foldM [Monad m] (rs : RuleSet) (f : σ → RuleSetMember → m σ) (init : σ) :
     m σ := do
   let mut s := init
-  s ← rs.normRules.foldM           (init := s) λ s r => go s (.normRule r)
-  s ← rs.safeRules.foldM           (init := s) λ s r => go s (.safeRule r)
-  s ← rs.unsafeRules.foldM         (init := s) λ s r => go s (.unsafeRule r)
-  s ← rs.normSimpLemmaDescrs.foldM (init := s) λ s n es =>
+  s ← rs.normRules.foldM            (init := s) λ s r => go s (.normRule r)
+  s ← rs.safeRules.foldM            (init := s) λ s r => go s (.safeRule r)
+  s ← rs.unsafeRules.foldM          (init := s) λ s r => go s (.unsafeRule r)
+  s ← rs.normSimpLemmaDescrs.foldlM (init := s) λ s n es =>
         f s (.normSimpRule { name := n, entries := es })
         -- Erased rules are removed from `normSimpLemmaDescrs`, so we do not
         -- need to filter here.

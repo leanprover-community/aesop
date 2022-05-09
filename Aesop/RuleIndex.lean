@@ -8,14 +8,14 @@ import Aesop.RuleIndex.Basic
 
 open Lean
 open Lean.Meta
-open Std (RBMap mkRBMap HashSet)
+open Std (RBMap mkRBMap PHashSet)
 
 namespace Aesop
 
 structure RuleIndex (α : Type) [BEq α] [Hashable α] where
   byTarget : DiscrTree α
   byHyp : DiscrTree α
-  unindexed : HashSet α
+  unindexed : PHashSet α
   deriving Inhabited
 
 namespace RuleIndex
@@ -102,13 +102,13 @@ private def applicableByHypRules (ri : RuleIndex α) (goal : MVarId)
 -- May return duplicate `IndexMatchLocation`s.
 @[inline]
 private def applicableUnindexedRules (ri : RuleIndex α) (include? : α → Bool) :
-    Array (α × Array IndexMatchLocation) := Id.run do
-  let mut rs := Array.mkEmpty ri.unindexed.size
-    -- Assumption: include? is true for most rules.
-  for r in ri.unindexed do
+    Array (α × Array IndexMatchLocation) :=
+  -- Assumption: include? is true for most rules.
+  ri.unindexed.fold (init := Array.mkEmpty ri.unindexed.size) λ acc r =>
     if include? r then
-      rs := rs.push (r, #[.none])
-  return rs
+      acc.push (r, #[.none])
+    else
+      acc
 
 -- Returns the rules in the order given by the `Ord α` instance.
 @[specialize]
