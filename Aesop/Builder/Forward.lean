@@ -75,8 +75,7 @@ def forward (opts : ForwardBuilderOptions) : RuleBuilder := λ input =>
     let imode ← getIndexingMode type immediate
     return RuleBuilderOutput.global $ mkResult tac imode
   | RuleBuilderKind.local fvarUserName goal => do
-    let (goal, #[newHyp]) ← copyRuleHypotheses goal #[fvarUserName]
-      | unreachable!
+    let (goal, newHyp) ← copyRuleHypothesis goal fvarUserName
     withMVarContext goal do
       let ldecl ← getLocalDecl newHyp
       let immediate ←

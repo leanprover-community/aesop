@@ -219,12 +219,18 @@ def copyRuleHypotheses (goal : MVarId) (userNames : Array Name) :
   let newHyps ← userNames.mapM λ n => do
     let decl ← getLocalDeclFromUserName n
     pure {
-      userName := `_local ++ n -- TODO potential for name clashes
+      userName := ← mkFreshUserName $ `_local ++ n
       value := mkFVar decl.fvarId
       type := decl.type
       binderInfo := BinderInfo.auxDecl
     }
   let (newHyps, goal) ← assertHypothesesWithBinderInfos goal newHyps
   return (goal, newHyps)
+
+def copyRuleHypothesis (goal : MVarId) (userName : Name) :
+    MetaM (MVarId × FVarId) := do
+  let (goal, #[hyp]) ← copyRuleHypotheses goal #[userName]
+    | unreachable!
+  return (goal, hyp)
 
 end Aesop
