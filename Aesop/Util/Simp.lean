@@ -77,10 +77,15 @@ def simpGoalWithCache (mvarId : MVarId) (ctx : Simp.Context)
     for fvarId in fvarIdsToSimp do
       let localDecl ← getLocalDecl fvarId
       let type ← instantiateMVars localDecl.type
-      let ctx ← match fvarIdToLemmaId.find? localDecl.fvarId with
-        | none => pure ctx
-        | some thmId => pure { ctx with simpTheorems := ctx.simpTheorems.eraseTheorem thmId }
-      let (r, cache') ← simpWithCache type ctx cache discharge?
+      let (r, cache') ←
+        match fvarIdToLemmaId.find? localDecl.fvarId with
+        | none =>
+          simpWithCache type ctx cache discharge?
+        | some thmId =>
+          let ctx :=
+            { ctx with simpTheorems := ctx.simpTheorems.eraseTheorem thmId }
+          let r ← simp type ctx discharge?
+          pure (r, cache)
       cache := cache'
       match r.proof? with
       | some proof => match (← applySimpResultToProp mvarId (mkFVar fvarId) type r) with
