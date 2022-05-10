@@ -12,6 +12,18 @@ open Std (RBMap)
 
 namespace Aesop
 
+-- We use default transparency when indexing values. This means that when a rule
+-- is added to a `DiscrTree` index, the index pattern is normalised with default
+-- transparency, and when a part of the goal (target or hyp) is matched against
+-- the index, it is also normalised with default transparency.
+--
+-- In Lean core, `DiscrTree`s are only used with `reducible` transparency. We
+-- want more computation to avoid weakening rules: if we work up to `reducible`
+-- computation, `apply` is weaker when indexed than when not indexed (and the
+-- same applies to many other rules). The tradeoff is obviously performance and
+-- there may be other unforeseen side effects.
+def indexingTransparency := TransparencyMode.default
+
 inductive IndexingMode : Type
   | unindexed
   | target (keys : Array DiscrTree.Key)
@@ -31,7 +43,7 @@ instance : ToFormat IndexingMode :=
   ⟨IndexingMode.format⟩
 
 def targetMatchingConclusion (type : Expr) : MetaM IndexingMode := do
-  let path ← DiscrTree.getConclusionKeys type
+  let path ← DiscrTree.getConclusionKeys type indexingTransparency
   return target path
 
 def hypsMatchingConst (decl : Name) : MetaM IndexingMode := do

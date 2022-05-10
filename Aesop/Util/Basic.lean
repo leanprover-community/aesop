@@ -813,27 +813,6 @@ instance : Ord Key where
 
 end Key
 
--- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
--- `n` stars).
-def getConclusionKeys (type : Expr) : MetaM (Array Key) :=
-  withoutModifyingState do
-    let (_, _, conclusion) ← forallMetaTelescope type
-    DiscrTree.mkPath conclusion
-    -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
-    -- turn into `Key.star`) but not fvars.
-
--- For a constant `d` with type `∀ (x₁, ..., xₙ), T`, returns keys that
--- match `d * ... *` (with `n` stars).
-def getConstKeys (decl : Name) : MetaM (Array Key) := do
-  let (some info) ← getConst? decl
-    | throwUnknownConstant decl
-  let arity := info.type.arity
-  let mut keys := Array.mkEmpty (arity + 1)
-  keys := keys.push $ .const decl arity
-  for i in [0:arity] do
-    keys := keys.push $ .star
-  return keys
-
 namespace Trie
 
 -- This is just a partial function, but Lean doesn't realise that its type is
@@ -920,6 +899,169 @@ def size (t : DiscrTree α) : Nat :=
 @[inline]
 def merge [BEq α] (t u : DiscrTree α) : DiscrTree α :=
   { root := t.root.merge u.root λ k trie₁ trie₂ => trie₁.merge trie₂ }
+
+private def getKeyArgs (e : Expr) (isMatch root : Bool) : MetaM (Key × Array Expr) := do
+  let e ← whnfDT e root
+  match e.getAppFn with
+  | Expr.lit v _       => return (Key.lit v, #[])
+  | Expr.const c _ _   =>
+    if (← getConfig).isDefEqStuckEx && e.hasExprMVar then
+      if (← isReducible c) then
+        /- `e` is a term `c ...` s.t. `c` is reducible and `e` has metavariables, but it was not unfolded.
+           This can happen if the metavariables in `e` are "blocking" smart unfolding.
+           If `isDefEqStuckEx` is enabled, then we must throw the `isDefEqStuck` exception to postpone TC resolution.
+           Here is an example. Suppose we have
+           ```
+            inductive Ty where
+              | bool | fn (a ty : Ty)
+
+
+            @[reducible] def Ty.interp : Ty → Type
+              | bool   => Bool
+              | fn a b => a.interp → b.interp
+           ```
+           and we are trying to synthesize `BEq (Ty.interp ?m)`
+        -/
+        Meta.throwIsDefEqStuck
+      else if let some matcherInfo := isMatcherAppCore? (← getEnv) e then
+        -- A matcher application is stuck is one of the discriminants has a metavariable
+        let args := e.getAppArgs
+        for arg in args[matcherInfo.getFirstDiscrPos: matcherInfo.getFirstDiscrPos + matcherInfo.numDiscrs] do
+          if arg.hasExprMVar then
+            Meta.throwIsDefEqStuck
+      else if (← isRec c) then
+        /- Similar to the previous case, but for `match` and recursor applications. It may be stuck (i.e., did not reduce)
+           because of metavariables. -/
+        Meta.throwIsDefEqStuck
+    let nargs := e.getAppNumArgs
+    return (Key.const c nargs, e.getAppRevArgs)
+  | Expr.fvar fvarId _ =>
+    let nargs := e.getAppNumArgs
+    return (Key.fvar fvarId nargs, e.getAppRevArgs)
+  | Expr.mvar mvarId _ =>
+    if isMatch then
+      return (Key.other, #[])
+    else do
+      let ctx ← read
+      if ctx.config.isDefEqStuckEx then
+        /-
+          When the configuration flag `isDefEqStuckEx` is set to true,
+          we want `isDefEq` to throw an exception whenever it tries to assign
+          a read-only metavariable.
+          This feature is useful for type class resolution where
+          we may want to notify the caller that the TC problem may be solveable
+          later after it assigns `?m`.
+          The method `DiscrTree.getUnify e` returns candidates `c` that may "unify" with `e`.
+          That is, `isDefEq c e` may return true. Now, consider `DiscrTree.getUnify d (Add ?m)`
+          where `?m` is a read-only metavariable, and the discrimination tree contains the keys
+          `HadAdd Nat` and `Add Int`. If `isDefEqStuckEx` is set to true, we must treat `?m` as
+          a regular metavariable here, otherwise we return the empty set of candidates.
+          This is incorrect because it is equivalent to saying that there is no solution even if
+          the caller assigns `?m` and try again. -/
+        return (Key.star, #[])
+      else if (← isReadOnlyOrSyntheticOpaqueExprMVar mvarId) then
+        return (Key.other, #[])
+      else
+        return (Key.star, #[])
+  | Expr.proj s i a .. =>
+    return (Key.proj s i, #[a])
+  | Expr.forallE _ d b _ =>
+    if b.hasLooseBVars then
+      return (Key.other, #[])
+    else
+      return (Key.arrow, #[d, b])
+  | _ =>
+    return (Key.other, #[])
+
+-- TODO copypasta from stdlib Meta/DiscrTree.lean
+private def initCapacity := 8
+
+def mkPathWithTransparency (e : Expr) (transparency : TransparencyMode) :
+    MetaM (Array Key) :=
+  withTransparency transparency do
+    let todo : Array Expr := Array.mkEmpty initCapacity
+    let keys : Array Key  := Array.mkEmpty initCapacity
+    mkPathAux (root := true) (todo.push e) keys
+
+private def getStarResult (d : DiscrTree α) : Array α :=
+  let result : Array α := Array.mkEmpty initCapacity
+  match d.root.find? Key.star with
+  | none                  => result
+  | some (Trie.node vs _) => result ++ vs
+
+private abbrev findKey (cs : Array (Key × Trie α)) (k : Key) : Option (Key × Trie α) :=
+  cs.binSearch (k, default) (fun a b => a.1 < b.1)
+
+private abbrev getUnifyKeyArgs (e : Expr) (root : Bool) : MetaM (Key × Array Expr) :=
+  getKeyArgs e (isMatch := false) (root := root)
+
+partial def getUnifyWithTransparency (d : DiscrTree α) (e : Expr)
+    (transparency : TransparencyMode) : MetaM (Array α) :=
+  withTransparency transparency do
+    let (k, args) ← getUnifyKeyArgs e (root := true)
+    match k with
+    | Key.star => d.root.foldlM (init := #[]) fun result k c => process k.arity #[] c result
+    | _ =>
+      let result := getStarResult d
+      match d.root.find? k with
+      | none   => return result
+      | some c => process 0 args c result
+where
+  process (skip : Nat) (todo : Array Expr) (c : Trie α) (result : Array α) : MetaM (Array α) := do
+    match skip, c with
+    | skip+1, Trie.node vs cs =>
+      if cs.isEmpty then
+        return result
+      else
+        cs.foldlM (init := result) fun result ⟨k, c⟩ => process (skip + k.arity) todo c result
+    | 0, Trie.node vs cs => do
+      if todo.isEmpty then
+        return result ++ vs
+      else if cs.isEmpty then
+        return result
+      else
+        let e     := todo.back
+        let todo  := todo.pop
+        let (k, args) ← getUnifyKeyArgs e (root := false)
+        let visitStar (result : Array α) : MetaM (Array α) :=
+          let first := cs[0]
+          if first.1 == Key.star then
+            process 0 todo first.2 result
+          else
+            return result
+        let visitNonStar (k : Key) (args : Array Expr) (result : Array α) : MetaM (Array α) :=
+          match findKey cs k with
+          | none   => return result
+          | some c => process 0 (todo ++ args) c.2 result
+        match k with
+        | Key.star  => cs.foldlM (init := result) fun result ⟨k, c⟩ => process k.arity todo c result
+        -- See comment a `getMatch` regarding non-dependent arrows vs dependent arrows
+        | Key.arrow => visitNonStar Key.other #[] (← visitNonStar k args (← visitStar result))
+        | _         => visitNonStar k args (← visitStar result)
+
+-- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
+-- `n` stars). The `transparency` is used when processing `T`, but no
+-- computation whatsoever is performed on `type`.
+def getConclusionKeys (type : Expr) (transparency : TransparencyMode) :
+    MetaM (Array Key) :=
+  withoutModifyingState do
+    let (_, _, conclusion) ← forallMetaTelescope type
+    mkPathWithTransparency conclusion transparency
+    -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
+    -- turn into `Key.star`) but not fvars.
+
+-- For a constant `d` with type `∀ (x₁, ..., xₙ), T`, returns keys that
+-- match `d * ... *` (with `n` stars).
+def getConstKeys (decl : Name) : MetaM (Array Key) := do
+  let (some info) ← getConst? decl
+    | throwUnknownConstant decl
+  let arity := info.type.arity
+  let mut keys := Array.mkEmpty (arity + 1)
+  keys := keys.push $ .const decl arity
+  for i in [0:arity] do
+    keys := keys.push $ .star
+  return keys
+
 
 end DiscrTree
 

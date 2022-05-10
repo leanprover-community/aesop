@@ -77,7 +77,9 @@ def size : RuleIndex α → Nat
 private def applicableByTargetRules (ri : RuleIndex α) (goal : MVarId)
     (include? : α → Bool) : MetaM (Array (α × Array IndexMatchLocation)) :=
   withMVarContext goal do
-    let rules ← ri.byTarget.getUnify (← getMVarType goal)
+    let rules ←
+      ri.byTarget.getUnifyWithTransparency (← getMVarType goal)
+        indexingTransparency
     let mut rs := Array.mkEmpty rules.size
       -- Assumption: include? is true for most rules.
     for r in rules do
@@ -93,7 +95,8 @@ private def applicableByHypRules (ri : RuleIndex α) (goal : MVarId)
     let mut rs := #[]
     for localDecl in ← getLCtx do
       if localDecl.isAuxDecl then continue
-      let rules ← ri.byHyp.getUnify localDecl.type
+      let rules ←
+        ri.byHyp.getUnifyWithTransparency localDecl.type indexingTransparency
       for r in rules do
         if include? r then
           rs := rs.push (r, #[.hyp localDecl])
