@@ -51,7 +51,7 @@ def parse : Syntax → TermElabM TacticConfig
     let init := {
       additionalRules := #[]
       erasedRules := #[]
-      enabledRuleSets := #[defaultRuleSetName, builtinRuleSetName]
+      enabledRuleSets := defaultEnabledRuleSets
       options := {}
     }
     clauses.foldlM addClause init

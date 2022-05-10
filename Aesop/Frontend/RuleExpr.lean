@@ -566,7 +566,8 @@ end RuleConfig
 namespace RuleExpr
 
 def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
-    (nameToIdent : Name → m RuleIdent) : m (Array (RuleConfig Id)) := do
+    (defaultRuleSet : RuleSetName) (nameToIdent : Name → m RuleIdent) :
+    m (Array (RuleConfig Id)) := do
   let cs ← e.foldBranchesM (init := init) go
   cs.mapM finish
   where
@@ -620,7 +621,7 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
       let builder := c.builder.getD Builder.dflt
       let ruleSets :=
         if c.ruleSets.ruleSets.isEmpty then
-          ⟨#[defaultRuleSetName]⟩
+          ⟨#[defaultRuleSet]⟩
         else
           c.ruleSets
       return { ident, phase, priority, builder, ruleSets }
@@ -636,7 +637,7 @@ def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
   }
   let nameToIdent n := throwError
     "aesop: rule name '{n}' not allowed in aesop attribute.\n(Perhaps you misspelled a builder or phase.)"
-  toAdditionalRules e init nameToIdent
+  toAdditionalRules e init defaultRuleSetName nameToIdent
 
 def buildAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
     MetaM (Array (RuleSetMember × Array RuleSetName)) := do
@@ -652,7 +653,7 @@ def toAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
     ruleSets := ⟨#[]⟩
   }
   let nameToIdent n := withMVarContext goal $ RuleIdent.ofName n
-  toAdditionalRules e init nameToIdent
+  toAdditionalRules e init localRuleSetName nameToIdent
 
 def buildAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
     MetaM (MVarId × Array (RuleSetMember × Array RuleSetName)) := do

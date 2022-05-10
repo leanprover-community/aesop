@@ -256,8 +256,13 @@ def defaultRuleSetName : RuleSetName := `default
 
 def builtinRuleSetName : RuleSetName := `builtin
 
+def localRuleSetName : RuleSetName := `local
+
 def defaultEnabledRuleSets : Array RuleSetName :=
-  #[defaultRuleSetName, builtinRuleSetName]
+  #[defaultRuleSetName, builtinRuleSetName, localRuleSetName]
+
+def RuleSetName.isReserved (n : RuleSetName) : Bool :=
+  n == defaultRuleSetName || n == builtinRuleSetName || n == localRuleSetName
 
 
 structure RuleSetNameFilter where
@@ -280,7 +285,10 @@ namespace RuleSets
 
 protected def empty : RuleSets where
   default := {}
-  others := Std.PersistentHashMap.empty.insert builtinRuleSetName {}
+  others :=
+    Std.PersistentHashMap.empty
+    |>.insert builtinRuleSetName {}
+    |>.insert localRuleSetName {}
 
 instance : EmptyCollection RuleSets :=
   ⟨RuleSets.empty⟩

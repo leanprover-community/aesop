@@ -105,8 +105,8 @@ def isRuleSetDeclared [MonadEnv m] (rsName : RuleSetName) : m Bool := do
   return rss.containsRuleSet rsName
 
 def declareRuleSet [MonadEnv m] (rsName : RuleSetName) : m Unit := do
-  if rsName == defaultRuleSetName then throwError
-    "aesop: rule set name '{rsName}' is reserved for the default rule set"
+  if rsName.isReserved then throwError
+    "aesop: rule set name '{rsName}' is reserved"
   let rss ← getAttributeRuleSets
   if rss.containsRuleSet rsName then throwError
     "aesop: rule set '{rsName}' already declared"
