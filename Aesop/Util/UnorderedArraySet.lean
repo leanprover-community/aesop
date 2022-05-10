@@ -26,6 +26,10 @@ protected def empty : UnorderedArraySet α :=
 instance : EmptyCollection (UnorderedArraySet α) :=
   ⟨UnorderedArraySet.empty⟩
 
+/-- O(1) -/
+protected def singleton (a : α) : UnorderedArraySet α :=
+  ⟨#[a]⟩
+
 /-- O(n) -/
 def insert (x : α) : UnorderedArraySet α → UnorderedArraySet α
   | ⟨rep⟩ => if rep.contains x then ⟨rep⟩ else ⟨rep.push x⟩
@@ -58,6 +62,13 @@ def erase (x : α) (s : UnorderedArraySet α) : UnorderedArraySet α :=
 def filter (p : α → Bool) (s : UnorderedArraySet α) : UnorderedArraySet α :=
   ⟨s.rep.filter p⟩
 
+/-- O(n*m) -/
+def merge (s t : UnorderedArraySet α) : UnorderedArraySet α :=
+  ⟨s.rep.mergeUnsortedFilteringDuplicates t.rep⟩
+
+instance : Append (UnorderedArraySet α) :=
+  ⟨merge⟩
+
 /-- O(n) -/
 def contains (x : α) (s : UnorderedArraySet α) : Bool :=
   s.rep.contains x
@@ -73,6 +84,11 @@ instance [Monad m] : ForIn m (UnorderedArraySet α) α where
 /-- O(n) -/
 def fold (f : σ → α → σ) (init : σ) (s : UnorderedArraySet α) : σ :=
   s.rep.foldl f init
+
+def partition (f : α → Bool) (s : UnorderedArraySet α) :
+    (UnorderedArraySet α × UnorderedArraySet α) :=
+  let (xs, ys) := s.rep.partition f
+  (⟨xs⟩, ⟨ys⟩)
 
 /-- O(1) -/
 def size (s : UnorderedArraySet α) : Nat :=

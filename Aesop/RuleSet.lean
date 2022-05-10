@@ -65,7 +65,7 @@ structure RuleSet where
     -- a rule is erased, its entry is removed from this map. We use this map (a)
     -- to figure out which `SimpEntry`s to erase from `normSimpLemmas` when a
     -- rule is erased; (b) to serialise the norm simp rules.
-  ruleNames : PHashMap RuleIdent (Array RuleName)
+  ruleNames : PHashMap RuleIdent (UnorderedArraySet RuleName)
     -- A cache of (non-erased) rule names. Invariant: `ruleNames` contains
     -- exactly the names of the rules in `normRules`, `normSimpLemmaDescrs`,
     -- `unsafeRules` and `safeRules`, minus the rules in `erased`. We use this
@@ -118,7 +118,7 @@ def merge (rs₁ rs₂ : RuleSet) : RuleSet where
     -- anyway.
   ruleNames :=
     rs₁.ruleNames.merge rs₂.ruleNames λ _ ns₁ ns₂ =>
-      ns₁.mergeUnsortedFilteringDuplicates ns₂
+      ns₁ ++ ns₂
   erased :=
     -- Add the erased rules from `rs₁` to `init`, except those rules which are
     -- present (and not erased) in `rs₂`.
@@ -133,8 +133,8 @@ def merge (rs₁ rs₂ : RuleSet) : RuleSet where
 def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
   let n := r.name
   let erased := rs.erased.erase n
-  let ruleNames := rs.ruleNames.insertWith n.toRuleIdent #[n] λ ns =>
-    if ns.contains n then ns else ns.push n
+  let ruleNames := rs.ruleNames.insertWith n.toRuleIdent (.singleton n) λ ns =>
+    if ns.contains n then ns else ns.insert n
   let rs := { rs with erased := erased, ruleNames := ruleNames }
   match r with
   | .normRule r =>
