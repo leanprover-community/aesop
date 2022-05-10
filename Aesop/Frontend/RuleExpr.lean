@@ -495,19 +495,24 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
     let penalty ← c.getPenalty phase
     let (goal, res) ← runBuilder goal phase c.builder
     match res with
-    | RuleBuilderResult.regular res =>
+    | .regular res =>
       let rule := RuleSetMember.normRule {
+        res with
         name := c.ident.toRuleName phase res.builder
-        tac := res.tac
-        indexingMode := res.indexingMode
         usesBranchState := res.mayUseBranchState
         extra := { penalty }
       }
       return (goal, rule, c.ruleSets.ruleSets)
-    | RuleBuilderResult.simp res =>
+    | .globalSimp res =>
       let rule := RuleSetMember.normSimpRule {
+        res with
         name := c.ident.toRuleName phase res.builder
-        entries := res.entries
+      }
+      return (goal, rule, c.ruleSets.ruleSets)
+    | .localSimp res =>
+      let rule := RuleSetMember.localNormSimpRule {
+        res with
+        name := c.ident.toRuleName phase res.builder
       }
       return (goal, rule, c.ruleSets.ruleSets)
   where
@@ -524,8 +529,8 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
             kind := RuleBuilderKind.local fvarUserName goal
           }
       match ← b.toRuleBuilder builderInput with
-      | RuleBuilderOutput.global r => return (goal, r)
-      | RuleBuilderOutput.local r goal => return (goal, r)
+      | .global r => return (goal, r)
+      | .«local» goal r => return (goal, r)
 
     runRegularBuilder (goal : MVarId) (phase : PhaseName) (b : Builder) :
         MetaM (MVarId × RegularRuleBuilderResult) := do

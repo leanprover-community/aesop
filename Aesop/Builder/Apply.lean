@@ -23,7 +23,7 @@ def apply : RuleBuilder := λ input =>
       let decl ← getLocalDecl newHyp
       let tac := RuleTacDescr.applyFVar decl.userName
       let result ← mkResult tac decl.type
-      return RuleBuilderOutput.local result goal
+      return RuleBuilderOutput.local goal result
   where
     mkResult (tac : RuleTacDescr) (type : Expr) : MetaM RuleBuilderResult :=
       return RuleBuilderResult.regular {

@@ -132,20 +132,46 @@ def runFirstNormRule (goal : MVarId) (mvars : Array MVarId)
     | .succeeded goal bs => return result
   return .failed
 
-def normSimpCore (ctx : Simp.Context) (cache : Simp.Cache) (goal : MVarId) :
-    MetaM (Option MVarId × Simp.Cache) :=
+def normSimpCore (ctx : Simp.Context) (localSimpRules : Array LocalNormSimpRule)
+    (cache : Simp.Cache) (goal : MVarId) : MetaM (Option MVarId × Simp.Cache) :=
   withMVarContext goal do
     let lctx ← getLCtx
+
+    -- Add local simp rules.
+    let mut simpTheorems := ctx.simpTheorems
+    let mut fvarIdToLemmaId := {}
+      -- A pair `(fvarId, lemmaId)` in this map indicates that while simplifying
+      -- `fvarId`, `lemmaId` should be temporarily removed from the simp set.
+      -- We use this to prevent `simp` from 'self-simplifying' the original
+      -- hypothesis of a local simp rule. The copied hypothesis is never
+      -- simplified (being an `auxDecl`), so we don't need to consider it.
+    for localRule in localSimpRules do
+      let (some ldecl) := lctx.findFromUserName? localRule.copiedFVarUserName
+        | continue
+      let id ← mkFreshUserName localRule.originalFVarUserName
+      let (some simpTheorems') ← observing? $
+        simpTheorems.addTheorem ldecl.toExpr (name? := id)
+        | continue
+      simpTheorems := simpTheorems'
+      let (some origLDecl) := lctx.findFromUserName? localRule.originalFVarUserName
+        | continue
+      fvarIdToLemmaId := fvarIdToLemmaId.insert origLDecl.fvarId id
+    let ctx := { ctx with simpTheorems }
+
+    -- Collect all hypotheses (except auxDecls).
     let mut fvarIds := Array.mkEmpty lctx.decls.size
     for ldecl in lctx do
       unless ldecl.isAuxDecl do
         fvarIds := fvarIds.push ldecl.fvarId
+
     let (result?, cache) ←
       simpGoalWithCache goal ctx cache (fvarIdsToSimp := fvarIds)
+        (fvarIdToLemmaId := fvarIdToLemmaId)
     return (result?.map (·.snd), cache)
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def normSimp (goal : MVarId) (ctx : Simp.Context) (cache : Simp.Cache) :
+def normSimp (goal : MVarId) (ctx : Simp.Context)
+    (localSimpRules : Array LocalNormSimpRule) (cache : Simp.Cache) :
     ProfileT MetaM (Option MVarId × Simp.Cache) :=
   profiling go λ _ elapsed =>
     recordAndTraceRuleProfile { rule := .normSimp, elapsed, successful := true }
@@ -153,7 +179,7 @@ def normSimp (goal : MVarId) (ctx : Simp.Context) (cache : Simp.Cache) :
     go : MetaM (Option MVarId × Simp.Cache) := do
       if ← Check.rules.isEnabled then
         let preMetaState ← saveState
-        let (newGoal?, cache) ← normSimpCore ctx cache goal
+        let (newGoal?, cache) ← normSimpCore ctx localSimpRules cache goal
         let postMetaState ← saveState
         let introduced :=
           (← introducedExprMVars preMetaState postMetaState).filter
@@ -166,7 +192,7 @@ def normSimp (goal : MVarId) (ctx : Simp.Context) (cache : Simp.Cache) :
           "{Check.rules.name}: norm simp assigned metas:{introduced.map (·.name)}"
         return (newGoal?, cache)
       else
-        normSimpCore ctx cache goal
+        normSimpCore ctx localSimpRules cache goal
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 partial def normalizeGoalMVar (rs : RuleSet) (ctx : Simp.Context)
@@ -189,7 +215,7 @@ partial def normalizeGoalMVar (rs : RuleSet) (ctx : Simp.Context)
       | .succeeded goal bs => go (iteration + 1) goal bs cache
       | .failed =>
         aesop_trace[stepsNormalization] "Running normalisation simp"
-        let (simpResult?, cache) ← normSimp goal ctx cache
+        let (simpResult?, cache) ← normSimp goal ctx rs.localNormSimpLemmas cache
         match simpResult? with
         | none => return (none, cache)
         | some goal =>

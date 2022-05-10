@@ -31,18 +31,24 @@ structure RegularRuleBuilderResult where
   mayUseBranchState : Bool
   deriving Inhabited
 
-structure SimpRuleBuilderResult where
+structure GlobalSimpRuleBuilderResult where
   builder : BuilderName
   entries : Array SimpEntry
 
+structure LocalSimpRuleBuilderResult where
+  builder : BuilderName
+  originalFVarUserName : Name
+  copiedFVarUserName : Name
+
 inductive RuleBuilderResult
   | regular (r : RegularRuleBuilderResult)
-  | simp (r : SimpRuleBuilderResult)
+  | globalSimp (r : GlobalSimpRuleBuilderResult)
+  | localSimp (r : LocalSimpRuleBuilderResult)
   deriving Inhabited
 
 inductive RuleBuilderOutput
   | global (r : RuleBuilderResult)
-  | «local» (r : RuleBuilderResult) (goal : MVarId)
+  | «local» (goal : MVarId) (r : RuleBuilderResult)
 
 /--
 Invariant: if the `RuleBuilderInput` contains a `RuleBuilderKind.local`,

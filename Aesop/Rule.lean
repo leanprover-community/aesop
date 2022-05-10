@@ -147,9 +147,13 @@ end RegularRule
 
 /-! ### Normalisation Simp Rules -/
 
+-- A global rule for the norm simplifier. Each `SimpEntry` represents a member
+-- of the simp set, e.g. a declaration whose type is an equality or a smart
+-- unfolding theorem for a declaration.
 structure NormSimpRule where
   name : RuleName
   entries : Array SimpEntry
+  deriving Inhabited
 
 namespace NormSimpRule
 
@@ -160,3 +164,29 @@ instance : Hashable NormSimpRule where
   hash r := hash r.name
 
 end NormSimpRule
+
+
+-- A local rule for the norm simplifier. This is a propositional hypothesis,
+-- represented by its user name. When we run the simplifier, we add this
+-- hypothesis to the simp set. This must be done for each goal individually
+-- since the `FVarId` of the hypothesis is not guaranteed to be stable.
+--
+-- When building a local rule, we copy the hypothesis (as usual). We record both
+-- the user name of the original hypothesis (which will not be added to the simp
+-- set but is needed anyway) and the user name of the copied hypothesis (which
+-- will be added to the simp set).
+structure LocalNormSimpRule where
+  name : RuleName
+  originalFVarUserName : Name
+  copiedFVarUserName : Name
+  deriving Inhabited
+
+namespace LocalNormSimpRule
+
+instance : BEq NormSimpRule where
+  beq r s := r.name == s.name
+
+instance : Hashable NormSimpRule where
+  hash r := hash r.name
+
+end LocalNormSimpRule

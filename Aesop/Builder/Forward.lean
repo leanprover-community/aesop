@@ -82,7 +82,7 @@ def forward (opts : ForwardBuilderOptions) : RuleBuilder := λ input =>
         getImmediatePremises ldecl.userName ldecl.type opts.immediateHyps
       let tac := .forwardFVar ldecl.userName immediate opts.clear
       let imode ← getIndexingMode ldecl.type immediate
-      return RuleBuilderOutput.local (mkResult tac imode) goal
+      return RuleBuilderOutput.local goal (mkResult tac imode)
   where
     mkResult (tac : RuleTacDescr) (indexingMode : IndexingMode) :
         RuleBuilderResult :=

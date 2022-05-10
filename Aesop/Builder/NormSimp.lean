@@ -12,33 +12,46 @@ open Lean.Meta
 namespace Aesop.RuleBuilder
 
 def normSimpUnfold : RuleBuilder :=
-  ofGlobalRuleBuilder name λ phase decl => do
+  ofGlobalRuleBuilder builderName λ phase decl => do
     try {
       let thms : SimpTheorems := {}
       let thms ← thms.addDeclToUnfold decl
-      return RuleBuilderResult.simp {
-        builder := name
+      return .globalSimp {
+        builder := builderName
         entries := thms.simpEntries
       }
     } catch e => {
       throwError "aesop: unfold builder: exception while trying to add {decl} as declaration to unfold:{indentD e.toMessageData}"
     }
   where
-    name := BuilderName.unfold
+    builderName := BuilderName.unfold
 
-def normSimpLemmas : RuleBuilder :=
-  ofGlobalRuleBuilder name λ phase decl => do
+def normSimpLemmas : RuleBuilder := λ input => do
+  match input.kind with
+  | .global decl =>
     try {
       let thms : SimpTheorems := {}
       let thms ← thms.addConst decl
-      return RuleBuilderResult.simp {
-        builder := name
+      return .global $ .globalSimp {
+        builder := builderName
         entries := thms.simpEntries
       }
     } catch e => {
-      throwError "aesop: simp builder: exception while trying to add {decl} as a simp lemma:{indentD e.toMessageData}"
+      throwError "aesop: simp builder: exception while trying to add {decl} as a simp theorem:{indentD e.toMessageData}"
     }
+  | .«local» originalFVarUserName goal =>
+    let (goal, hyp) ← copyRuleHypothesis goal originalFVarUserName
+    withMVarContext goal do
+      let ldecl ← getLocalDecl hyp
+      let type := ldecl.type
+      unless ← isProp type do
+        throwError "aesop: simp builder: simp rules must be propositions but {originalFVarUserName} has type{indentExpr type}"
+      return .«local» goal $ .localSimp {
+        builder := builderName
+        originalFVarUserName
+        copiedFVarUserName := (← getLocalDecl hyp).userName
+      }
   where
-    name := BuilderName.simp
+    builderName := BuilderName.simp
 
 end Aesop.RuleBuilder
