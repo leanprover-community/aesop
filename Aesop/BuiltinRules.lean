@@ -9,7 +9,6 @@ Authors: Jannis Limperg
 import Aesop.BuiltinRules.Assumption
 import Aesop.BuiltinRules.ApplyHyps
 import Aesop.BuiltinRules.DestructProducts
-import Aesop.BuiltinRules.Reflexivity
 import Aesop.Frontend
 
 open Lean
@@ -56,6 +55,8 @@ attribute [aesop safe 100 constructors] Iff
 @[aesop [norm 0 elim]]
 theorem Iff_elim (h : α ↔ β) : (α → β) ∧ (β → α) :=
   ⟨h.mp, h.mpr⟩
+
+attribute [aesop safe 0] Eq.refl HEq.refl
 
 attribute [aesop norm constructors] ULift
 
