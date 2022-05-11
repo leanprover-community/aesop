@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Frontend.ParseT
+import Aesop.Frontend.ElabM
 import Aesop.Percent
 import Aesop.Rule.Name
 import Aesop.Builder
@@ -12,10 +12,13 @@ import Aesop.RuleSet
 
 open Lean
 open Lean.Meta
+open Lean.Elab
 
-namespace Aesop.Frontend
 
 variable [Monad m] [MonadError m]
+
+
+namespace Aesop.Frontend
 
 namespace Parser
 
@@ -33,7 +36,7 @@ inductive Priority
 
 namespace Priority
 
-def parse (stx : Syntax) : ParseT m Priority :=
+def «elab» (stx : Syntax) : ElabM Priority :=
   withRef stx do
     unless (← read).parsePriorities do throwError
       "aesop: unexpected priority."
@@ -47,7 +50,7 @@ def parse (stx : Syntax) : ParseT m Priority :=
       return int $ - i.toNat
     | `(priority| $i:num) =>
       return int i.toNat
-    | _ => unreachable!
+    | _ => throwUnsupportedSyntax
 
 instance : ToString Priority where
   toString
@@ -65,6 +68,7 @@ def toPercent? : Priority → Option Percent
 end Priority
 
 
+
 namespace Parser
 
 declare_syntax_cat Aesop.phase (behavior := symbol)
@@ -75,11 +79,12 @@ syntax &"unsafe" : Aesop.phase
 
 end Parser
 
-def parsePhaseName : Syntax → PhaseName
-  | `(phase| safe) => PhaseName.safe
-  | `(phase| norm) => PhaseName.norm
-  | `(phase| unsafe) => PhaseName.unsafe
-  | _ => unreachable!
+def PhaseName.«elab» (stx : Syntax) : ElabM PhaseName :=
+  withRefThen stx λ
+    | `(phase| safe) => return .safe
+    | `(phase| norm) => return .norm
+    | `(phase| unsafe) => return .«unsafe»
+    | _ => throwUnsupportedSyntax
 
 
 namespace Parser
@@ -91,10 +96,11 @@ syntax &"false" : Aesop.bool_lit
 
 end Parser
 
-def parseBoolLit : Syntax → Bool
-  | `(bool_lit| true) => true
-  | `(bool_lit| false) => false
-  | _ => unreachable!
+def elabBoolLit (stx : Syntax) : ElabM Bool :=
+  withRefThen stx λ
+    | `(bool_lit| true) => return true
+    | `(bool_lit| false) => return false
+    | _ => throwUnsupportedSyntax
 
 
 namespace Parser
@@ -120,17 +126,18 @@ inductive DBuilderName
 
 namespace DBuilderName
 
-def parse : Syntax → DBuilderName
-  | `(builder_name| apply) => regular $ BuilderName.apply
-  | `(builder_name| simp) => regular $ BuilderName.simp
-  | `(builder_name| unfold) => regular $ BuilderName.unfold
-  | `(builder_name| tactic) => regular $ BuilderName.tactic
-  | `(builder_name| constructors) => regular $ BuilderName.constructors
-  | `(builder_name| forward) => regular $ BuilderName.forward
-  | `(builder_name| elim) => regular $ BuilderName.elim
-  | `(builder_name| cases) => regular $ BuilderName.cases
-  | `(builder_name| default) => dflt
-  | _ => unreachable!
+def «elab» (stx : Syntax) : ElabM DBuilderName :=
+  withRefThen stx λ
+    | `(builder_name| apply) => return regular .apply
+    | `(builder_name| simp) => return regular .simp
+    | `(builder_name| unfold) => return regular .unfold
+    | `(builder_name| tactic) => return regular .tactic
+    | `(builder_name| constructors) => return regular .constructors
+    | `(builder_name| forward) => return regular .forward
+    | `(builder_name| elim) => return regular .elim
+    | `(builder_name| cases) => return regular .cases
+    | `(builder_name| default) => return dflt
+    | _ => throwUnsupportedSyntax
 
 instance : ToString DBuilderName where
   toString
@@ -155,36 +162,39 @@ syntax builderOptions := Aesop.builder_option*
 
 end Parser
 
-structure BuilderOptions (m : Type _ → Type _) (α : Type _) where
-  parseOption : Syntax → m α -- parse a single `Aesop.builder_option`
+structure BuilderOptions (α : Type _) where
+  elabOption : Syntax → ElabM α -- parse a single `Aesop.builder_option`
   empty : α
   combine : α → α → α
 
 namespace BuilderOptions
 
-def parse [Inhabited α] (bo : BuilderOptions m α) : Syntax → m α
-  | `(Parser.builderOptions| $opts:Aesop.builder_option*) =>
-    opts.foldlM (init := bo.empty) λ o stx =>
-      return bo.combine o (← bo.parseOption stx)
-  | _ => unreachable!
+def «elab» [Inhabited α] (bo : BuilderOptions α) (stx : Syntax) : ElabM α :=
+  withRefThen stx λ
+    | `(Parser.builderOptions| $opts:Aesop.builder_option*) =>
+      opts.foldlM (init := bo.empty) λ o stx =>
+        return bo.combine o (← bo.elabOption stx)
+    | _ => throwUnsupportedSyntax
 
-protected def none (builder : DBuilderName) : BuilderOptions m Unit where
-  parseOption _ :=
-    throwError "aesop: builder {builder} does not accept any options"
+protected def none (builder : DBuilderName) : BuilderOptions Unit where
+  elabOption stx :=
+    withRef stx do
+      throwError "aesop: builder {builder} does not accept any options"
   empty := ()
   combine := λ _ _ => ()
 
-def tactic : BuilderOptions m TacticBuilderOptions where
-  parseOption
-    | `(builder_option| (uses_branch_state := $b:Aesop.bool_lit)) =>
-      return { usesBranchState := parseBoolLit b }
-    | _ => throwError "aesop: invalid option for builder {BuilderName.tactic}"
+def tactic : BuilderOptions TacticBuilderOptions where
+  elabOption stx :=
+    withRefThen stx λ
+      | `(builder_option| (uses_branch_state := $b:Aesop.bool_lit)) =>
+        return { usesBranchState := ← elabBoolLit b }
+      | _ => throwError "aesop: invalid option for builder {BuilderName.tactic}"
   empty := { usesBranchState := true }
   combine o p := { usesBranchState := p.usesBranchState }
 
 private def forwardCore (clear : Bool) :
-    BuilderOptions m ForwardBuilderOptions where
-  parseOption
+    BuilderOptions ForwardBuilderOptions where
+  elabOption
     | `(builder_option| (immediate := [$ns:ident,*])) => return {
         immediateHyps := some $ (ns : Array Syntax).map (·.getId)
         clear := clear
@@ -193,10 +203,10 @@ private def forwardCore (clear : Bool) :
   empty := { immediateHyps := none, clear := clear }
   combine o p := { immediateHyps := p.immediateHyps, clear := clear }
 
-def forward : BuilderOptions m ForwardBuilderOptions :=
+def forward : BuilderOptions ForwardBuilderOptions :=
   forwardCore (clear := false)
 
-def elim : BuilderOptions m ForwardBuilderOptions :=
+def elim : BuilderOptions ForwardBuilderOptions :=
   forwardCore (clear := true)
 
 end BuilderOptions
@@ -247,29 +257,30 @@ instance : ToString Builder where
     | dflt => "default"
 
 open DBuilderName in
-def parseOptions (b : DBuilderName) (opts : Syntax) : m Builder := do
+def elabOptions (b : DBuilderName) (opts : Syntax) : ElabM Builder := do
   match b with
   | regular BuilderName.apply => checkNoOptions; return apply
   | regular BuilderName.simp => checkNoOptions; return simp
   | regular BuilderName.unfold => checkNoOptions; return unfold
   | regular BuilderName.tactic =>
-    return tactic $ ← BuilderOptions.tactic.parse opts
+    return tactic $ ← BuilderOptions.tactic.elab opts
   | regular BuilderName.constructors => checkNoOptions; return constructors
   | regular BuilderName.forward =>
-    return forward $ ← BuilderOptions.forward.parse opts
+    return forward $ ← BuilderOptions.forward.elab opts
   | regular BuilderName.elim =>
-    return forward $ ← BuilderOptions.elim.parse opts
+    return forward $ ← BuilderOptions.elim.elab opts
   | regular BuilderName.cases => checkNoOptions; return cases
   | DBuilderName.dflt => checkNoOptions; return default
   where
-    checkNoOptions := BuilderOptions.none b |>.parse opts
+    checkNoOptions := BuilderOptions.none b |>.«elab» opts
 
-def parse : Syntax → m Builder
-  | `(builder| $b:Aesop.builder_name) =>
-    parseOptions (DBuilderName.parse b) (mkNode ``Parser.builderOptions #[])
-  | `(builder| ($b:Aesop.builder_name $opts:builderOptions)) =>
-    parseOptions (DBuilderName.parse b) opts
-  | _ => unreachable!
+def «elab» (stx : Syntax) : ElabM Builder :=
+  withRefThen stx λ
+    | `(builder| $b:Aesop.builder_name) => do
+      elabOptions (← DBuilderName.elab b) (mkNode ``Parser.builderOptions #[])
+    | `(builder| ($b:Aesop.builder_name $opts:builderOptions)) => do
+      elabOptions (← DBuilderName.elab b) opts
+    | _ => throwUnsupportedSyntax
 
 def toRuleBuilder : Builder → RuleBuilder
   | apply => RuleBuilder.apply
@@ -283,14 +294,14 @@ def toRuleBuilder : Builder → RuleBuilder
 
 open DBuilderName in
 def toDBuilderName : Builder → DBuilderName
-  | apply => regular BuilderName.apply
-  | simp => regular BuilderName.simp
-  | unfold => regular BuilderName.unfold
-  | tactic .. => regular BuilderName.tactic
-  | constructors => regular BuilderName.constructors
-  | forward .. => regular BuilderName.forward
-  | cases => regular BuilderName.cases
-  | dflt => DBuilderName.dflt
+  | apply => regular .apply
+  | simp => regular .simp
+  | unfold => regular .unfold
+  | tactic .. => regular .tactic
+  | constructors => regular .constructors
+  | forward .. => regular .forward
+  | cases => regular .cases
+  | dflt => .dflt
 
 end Builder
 
@@ -309,10 +320,11 @@ namespace RuleSets
 instance : ToString RuleSets where
   toString rs := s!"(rule_sets [{String.joinSep ", " $ rs.ruleSets.map toString}])"
 
-def parse : Syntax → RuleSets
-  | `(Parser.ruleSetsFeature| (rule_sets [$ns:ident,*])) =>
-    ⟨(ns : Array Syntax).map (·.getId)⟩
-  | _ => unreachable!
+def «elab» (stx : Syntax) : ElabM RuleSets :=
+  withRefThen stx λ
+    | `(Parser.ruleSetsFeature| (rule_sets [$ns:ident,*])) =>
+      return ⟨(ns : Array Syntax).map (·.getId)⟩
+    | _ => throwUnsupportedSyntax
 
 end RuleSets
 
@@ -352,22 +364,23 @@ instance : ToString Feature where
     | name n => toString n
     | ruleSets rs => toString rs
 
-partial def parse : Syntax → ParseT m Feature
-  | `(feature| $p:Aesop.priority) => priority <$> Priority.parse p
-  | `(feature| $p:Aesop.phase) => return phase $ parsePhaseName p
-  | `(feature| $b:Aesop.builder) => builder <$> Builder.parse b
-  | `(feature| $rs:ruleSetsFeature) => return ruleSets $ RuleSets.parse rs
-  | `(feature| $i:ident) => return name i.getId
-  | stx =>
-    if stx.isOfKind choiceKind then
-      let nonIdentAlts :=
-        stx.getArgs.filter λ stx => ! stx.isOfKind ``Parser.featIdent
-      if nonIdentAlts.size != 1 then
-        panic! "expected choice node with exactly one non-ident child"
+partial def «elab» (stx : Syntax) : ElabM Feature :=
+  withRefThen stx λ
+    | `(feature| $p:Aesop.priority) => priority <$> Priority.elab p
+    | `(feature| $p:Aesop.phase) => phase <$> PhaseName.elab p
+    | `(feature| $b:Aesop.builder) => builder <$> Builder.elab b
+    | `(feature| $rs:ruleSetsFeature) => ruleSets <$> RuleSets.elab rs
+    | `(feature| $i:ident) => return name i.getId
+    | stx =>
+      if stx.isOfKind choiceKind then
+        let nonIdentAlts :=
+          stx.getArgs.filter λ stx => ! stx.isOfKind ``Parser.featIdent
+        if nonIdentAlts.size != 1 then
+          panic! "expected choice node with exactly one non-ident child"
+        else
+          «elab» nonIdentAlts[0]
       else
-        parse nonIdentAlts[0]
-    else
-      unreachable!
+        throwUnsupportedSyntax
 
 end Feature
 
@@ -403,14 +416,15 @@ protected partial def toString : RuleExpr → String
 instance : ToString RuleExpr :=
   ⟨RuleExpr.toString⟩
 
-partial def parse : Syntax → ParseT m RuleExpr
-  | `(rule_expr| $f:Aesop.feature $e:Aesop.rule_expr) => do
-    return node (← Feature.parse f) #[← parse e]
-  | `(rule_expr| $f:Aesop.feature [ $es:Aesop.rule_expr,* ]) => do
-    return node (← Feature.parse f) (← (es : Array Syntax).mapM parse)
-  | `(rule_expr| $f:Aesop.feature) => do
-    return node (← Feature.parse f) #[]
-  | _ => unreachable!
+partial def «elab» (stx : Syntax) : ElabM RuleExpr :=
+  withRefThen stx λ
+    | `(rule_expr| $f:Aesop.feature $e:Aesop.rule_expr) => do
+      return node (← Feature.elab f) #[← «elab» e]
+    | `(rule_expr| $f:Aesop.feature [ $es:Aesop.rule_expr,* ]) => do
+      return node (← Feature.elab f) (← (es : Array Syntax).mapM «elab»)
+    | `(rule_expr| $f:Aesop.feature) => do
+      return node (← Feature.elab f) #[]
+    | _ => throwUnsupportedSyntax
 
 -- Fold the branches of a `RuleExpr`. We treat each branch as a list of features
 -- which we fold over. The result is an array containing one result per branch.

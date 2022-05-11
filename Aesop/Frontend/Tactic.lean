@@ -10,11 +10,10 @@ import Aesop.Options
 
 open Lean
 open Lean.Meta
+open Lean.Elab
 open Lean.Elab.Term
 
 namespace Aesop.Frontend
-
-variable [Monad m] [MonadError m]
 
 namespace Parser
 
@@ -46,47 +45,49 @@ instance : EmptyCollection TacticConfig :=
      enabledRuleSets := #[]
      options := {} }⟩
 
-def parse : Syntax → TermElabM TacticConfig
-  | `(tactic| aesop $clauses:Aesop.tactic_clause*) =>
-    let init := {
-      additionalRules := #[]
-      erasedRules := #[]
-      enabledRuleSets := defaultEnabledRuleSets
-      options := {}
-    }
-    clauses.foldlM addClause init
-  | _ => unreachable!
+def parse (stx : Syntax) : TermElabM TacticConfig :=
+  withRefThen stx λ
+    | `(tactic| aesop $clauses:Aesop.tactic_clause*) =>
+      let init := {
+        additionalRules := #[]
+        erasedRules := #[]
+        enabledRuleSets := defaultEnabledRuleSets
+        options := {}
+      }
+      clauses.foldlM addClause init
+    | _ => throwUnsupportedSyntax
   where
-    addClause (c : TacticConfig) : Syntax → TermElabM TacticConfig
-      | `(tactic_clause| (add $es:Aesop.rule_expr,*)) => do
-        let rs ← (es : Array Syntax).mapM λ e =>
-          RuleExpr.parse e |>.run ParseOptions.forAdditionalRules
-        return { c with additionalRules := c.additionalRules ++ rs }
-      | `(tactic_clause| (erase $es:Aesop.rule_expr,*)) => do
-        let rs ← (es : Array Syntax).mapM λ e =>
-          RuleExpr.parse e |>.run ParseOptions.forErasing
-        return { c with erasedRules := c.erasedRules ++ rs }
-      | `(tactic_clause| (rule_sets [ $specs:ruleSetSpec,* ])) => do
-        let mut enabledRuleSets := c.enabledRuleSets
-        for spec in (specs : Array Syntax) do
-          match spec with
-          | `(Parser.ruleSetSpec| - $rsName:ident) => do
-            let rsName := rsName.getId
-            unless enabledRuleSets.contains rsName do throwError
-              "aesop: trying to deactivate rule set '{rsName}', but it is not active"
-            enabledRuleSets := enabledRuleSets.erase rsName
-          | `(Parser.ruleSetSpec| $rsName:ident) => do
-            let rsName := rsName.getId
-            if enabledRuleSets.contains rsName then throwError
-              "aesop: rule set '{rsName}' is already active"
-            enabledRuleSets := enabledRuleSets.push rsName
-          | _ => unreachable!
-        return { c with enabledRuleSets }
-      | `(tactic_clause| (options := $t:term)) => do
-        let t ← elabTermAndSynthesize t (some (mkConst ``Aesop.Options))
-        let opts ← evalOptionsExpr t
-        return { c with options := opts }
-      | _ => unreachable!
+    addClause (c : TacticConfig) (stx : Syntax) : TermElabM TacticConfig :=
+      withRefThen stx λ
+        | `(tactic_clause| (add $es:Aesop.rule_expr,*)) => do
+          let rs ← (es : Array Syntax).mapM λ e =>
+            RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
+          return { c with additionalRules := c.additionalRules ++ rs }
+        | `(tactic_clause| (erase $es:Aesop.rule_expr,*)) => do
+          let rs ← (es : Array Syntax).mapM λ e =>
+            RuleExpr.elab e |>.run ElabOptions.forErasing
+          return { c with erasedRules := c.erasedRules ++ rs }
+        | `(tactic_clause| (rule_sets [ $specs:ruleSetSpec,* ])) => do
+          let mut enabledRuleSets := c.enabledRuleSets
+          for spec in (specs : Array Syntax) do
+            match spec with
+            | `(Parser.ruleSetSpec| - $rsName:ident) => do
+              let rsName := rsName.getId
+              unless enabledRuleSets.contains rsName do throwError
+                "aesop: trying to deactivate rule set '{rsName}', but it is not active"
+              enabledRuleSets := enabledRuleSets.erase rsName
+            | `(Parser.ruleSetSpec| $rsName:ident) => do
+              let rsName := rsName.getId
+              if enabledRuleSets.contains rsName then throwError
+                "aesop: rule set '{rsName}' is already active"
+              enabledRuleSets := enabledRuleSets.push rsName
+            | _ => throwUnsupportedSyntax
+          return { c with enabledRuleSets }
+        | `(tactic_clause| (options := $t:term)) => do
+          let t ← elabTermAndSynthesize t (some (mkConst ``Aesop.Options))
+          let opts ← evalOptionsExpr t
+          return { c with options := opts }
+        | _ => throwUnsupportedSyntax
 
 def updateRuleSets (goal : MVarId) (rss : Aesop.RuleSets) (c : TacticConfig) :
     MetaM (MVarId × Aesop.RuleSets) := do

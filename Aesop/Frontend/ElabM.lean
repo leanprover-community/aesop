@@ -7,29 +7,32 @@ Authors: Jannis Limperg
 import Aesop.Util
 
 open Lean
+open Lean.Elab
 
 namespace Aesop.Frontend
 
-structure ParseOptions where
+structure ElabOptions where
   parsePriorities : Bool
   parseBuilderOptions : Bool
 
-namespace ParseOptions
+namespace ElabOptions
 
-def forAdditionalRules : ParseOptions where
+def forAdditionalRules : ElabOptions where
   parsePriorities := true
   parseBuilderOptions := true
 
-def forErasing : ParseOptions where
+def forErasing : ElabOptions where
   parsePriorities := false
   parseBuilderOptions := false
 
-end ParseOptions
+end ElabOptions
 
 
-abbrev ParseT := ReaderT ParseOptions
+abbrev ElabM := ReaderT ElabOptions TermElabM
 
-instance [AddErrorMessageContext m] : AddErrorMessageContext (ParseT m) where
-  add stx msg := AddErrorMessageContext.add (m := m) stx msg
+-- Generate specialized pure/bind implementations so we don't need to optimise
+-- them on the fly at each use site.
+instance : Monad ElabM :=
+  { inferInstanceAs (Monad ElabM) with }
 
 end Aesop.Frontend

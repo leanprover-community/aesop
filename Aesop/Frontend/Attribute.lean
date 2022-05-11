@@ -8,10 +8,9 @@ import Aesop.Frontend.RuleExpr
 import Aesop.RuleSet
 
 open Lean
+open Lean.Elab
 
 namespace Aesop.Frontend
-
-variable [Monad m] [MonadError m]
 
 namespace Parser
 
@@ -30,15 +29,16 @@ structure AttrConfig where
 
 namespace AttrConfig
 
-def parse [Monad m] [MonadError m] : Syntax → m AttrConfig
-  | `(attr| aesop $e:Aesop.rule_expr) => do
-    let r ← RuleExpr.parse e |>.run ParseOptions.forAdditionalRules
-    return { rules := #[r] }
-  | `(attr| aesop [ $es:Aesop.rule_expr,* ]) => do
-    let rs ← (es : Array Syntax).mapM λ e =>
-      RuleExpr.parse e |>.run ParseOptions.forAdditionalRules
-    return { rules := rs }
-  | _ => unreachable!
+def «elab» (stx : Syntax) : TermElabM AttrConfig :=
+  withRefThen stx λ
+    | `(attr| aesop $e:Aesop.rule_expr) => do
+      let r ← RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
+      return { rules := #[r] }
+    | `(attr| aesop [ $es:Aesop.rule_expr,* ]) => do
+      let rs ← (es : Array Syntax).mapM λ e =>
+        RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
+      return { rules := rs }
+    | _ => throwUnsupportedSyntax
 
 end AttrConfig
 
@@ -67,7 +67,7 @@ initialize extension :
       match attrKind with
       | AttributeKind.global => pure ()
       | _ => throwError "aesop: local and scoped Aesop rules are not supported."
-      let config ← AttrConfig.parse stx
+      let config ← runTermElabMAsCoreM $ AttrConfig.elab stx
       let rules ← runMetaMAsCoreM $
         config.rules.concatMapM (·.buildAdditionalGlobalRules decl)
       let mut rss := ext.getState (← getEnv)
@@ -91,20 +91,22 @@ initialize extension :
   registerBuiltinAttribute impl
   return ext
 
-def getAttributeRuleSets [MonadEnv m] : m Aesop.RuleSets :=
+variable [Monad m] [MonadEnv m]
+
+def getAttributeRuleSets : m Aesop.RuleSets :=
   return extension.getState (← getEnv)
 
-def modifyAttributeRuleSets [MonadEnv m]
+def modifyAttributeRuleSets
     (f : Aesop.RuleSets → m Aesop.RuleSets) : m Unit := do
   let env ← getEnv
   let rss ← f $ extension.getState env
   setEnv $ extension.setState env rss
 
-def isRuleSetDeclared [MonadEnv m] (rsName : RuleSetName) : m Bool := do
+def isRuleSetDeclared (rsName : RuleSetName) : m Bool := do
   let rss ← getAttributeRuleSets
   return rss.containsRuleSet rsName
 
-def declareRuleSet [MonadEnv m] (rsName : RuleSetName) : m Unit := do
+def declareRuleSet [MonadError m] (rsName : RuleSetName) : m Unit := do
   if rsName.isReserved then throwError
     "aesop: rule set name '{rsName}' is reserved"
   let rss ← getAttributeRuleSets

@@ -1408,6 +1408,12 @@ namespace Lean
 open Lean.Elab
 open Lean.Elab.Tactic
 
+@[inline]
+def withRefThen [Monad m] [MonadRef m] (stx : Syntax) (cont : Syntax → m α) :
+    m α :=
+  withRef stx $ cont stx
+
+@[inline]
 def runTacticMAsMetaM (tac : TacticM Unit) (goal : MVarId) :
     MetaM (List MVarId) :=
   run goal tac |>.run'
@@ -1420,11 +1426,17 @@ def runMetaMAsImportM (x : MetaM α) : ImportM α := do
   | Except.ok ((a, _), _) => pure a
   | Except.error e => throw $ IO.userError (← e.toMessageData.toString)
 
+@[inline]
 def runMetaMAsCoreM (x : MetaM α) : CoreM α :=
   Prod.fst <$> x.run {} {}
 
+@[inline]
 def runTermElabMAsMetaM (x : TermElabM α) : MetaM α :=
   x.run'
+
+@[inline]
+def runTermElabMAsCoreM (x : TermElabM α) : CoreM α :=
+  runMetaMAsCoreM $ runTermElabMAsMetaM x
 
 end Lean
 
