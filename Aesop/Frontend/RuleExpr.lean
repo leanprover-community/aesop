@@ -40,13 +40,13 @@ namespace Priority
 def «elab» (stx : Syntax) : ElabM Priority :=
   withRef stx do
     unless (← read).parsePriorities do throwError
-      "aesop: unexpected priority."
+      "unexpected priority."
     match stx with
     | `(priority| $p:num %) =>
       let p := p.toNat
       match Percent.ofNat p with
       | some p => return percent p
-      | none => throwError "aesop: percentage '{p}%' is not between 0 and 100."
+      | none => throwError "percentage '{p}%' is not between 0 and 100."
     | `(priority| - $i:num) =>
       return int $ - i.toNat
     | `(priority| $i:num) =>
@@ -498,12 +498,12 @@ def toStringId (c : RuleConfig Id) : String :=
 
 def getPenalty (phase : PhaseName) (c : RuleConfig Id) : m Int := do
   let (some penalty) := c.priority.toInt? | throwError
-    "aesop: {phase} rules must specify an integer penalty (not a success probability)"
+    "{phase} rules must specify an integer penalty (not a success probability)"
   return penalty
 
 def getSuccessProbability (c : RuleConfig Id) : m Percent := do
   let (some prob) := c.priority.toPercent? | throwError
-    "aesop: unsafe rules must specify a success probability (not an integer penalty)"
+    "unsafe rules must specify a success probability (not an integer penalty)"
   return prob
 
 def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
@@ -576,7 +576,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
     runRegularBuilder (goal : MVarId) (phase : PhaseName) (b : Builder) :
         MetaM (MVarId × RegularRuleBuilderResult) := do
       let (goal, RuleBuilderResult.regular r) ← runBuilder goal phase b
-        | throwError "aesop: builder {b} cannot be used for {phase} rules"
+        | throwError "builder {b} cannot be used for {phase} rules"
       return (goal, r)
 
 -- Precondition: `c.ident = RuleIdent.const _`.
@@ -589,13 +589,13 @@ def buildGlobalRule (c : RuleConfig Id) :
 def toRuleNameFilter (c : RuleConfig Option) :
     m (RuleSetNameFilter × RuleNameFilter) := do
   let (some ident) := c.ident | throwError
-    "aesop: rule name not specified"
+    "rule name not specified"
   let builders ←
     match c.builder with
     | none => pure #[]
     | some b => do
       let (some builder) := b.toDBuilderName.toBuilderName? | throwError
-        "aesop: {b.toDBuilderName} cannot be used when erasing rules.\nUse the corresponding non-default builder (e.g. 'apply' or 'constructors') instead."
+        "{b.toDBuilderName} cannot be used when erasing rules.\nUse the corresponding non-default builder (e.g. 'apply' or 'constructors') instead."
         -- We could instead look for the correct non-default builder ourselves
         -- by re-running the logic that determines which builder to use.
       pure #[builder]
@@ -620,19 +620,19 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
     go (r : RuleConfig Option) : Feature → m (RuleConfig Option)
       | Feature.phase p => do
         if let (some previous) := r.phase then throwError
-          "aesop: duplicate phase declaration: '{p}'\n(previous declaration: '{previous}')"
+          "duplicate phase declaration: '{p}'\n(previous declaration: '{previous}')"
         return { r with phase := some p }
       | Feature.priority p => do
         if let (some previous) := r.priority then throwError
-          "aesop: duplicate priority declaration: '{p}'\n(previous declaration: '{previous}')"
+          "duplicate priority declaration: '{p}'\n(previous declaration: '{previous}')"
         return { r with priority := some p }
       | Feature.builder b => do
         if let (some previous) := r.builder then throwError
-          "aesop: duplicate builder declaration: '{b}'\n(previous declaration: '{previous}')"
+          "duplicate builder declaration: '{b}'\n(previous declaration: '{previous}')"
         return { r with builder := some b }
       | Feature.name n => do
         if let (some previous) := r.ident then throwError
-          "aesop: duplicate rule name: '{n}'\n(previous rule name: '{previous}')"
+          "duplicate rule name: '{n}'\n(previous rule name: '{previous}')"
         let ident ← nameToIdent n
         return { r with ident }
       | Feature.ruleSets newRuleSets =>
@@ -646,9 +646,9 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
         m (PhaseName × Priority) :=
       match c.phase, c.priority with
       | none, none =>
-        throwError "aesop: phase (safe/unsafe/norm) not specified."
+        throwError "phase (safe/unsafe/norm) not specified."
       | some PhaseName.unsafe, none =>
-        throwError "aesop: unsafe rules must specify a success probability ('x%')."
+        throwError "unsafe rules must specify a success probability ('x%')."
       | some phase@PhaseName.safe, none =>
         return (phase, Priority.int defaultSafePenalty)
       | some phase@PhaseName.norm, none =>
@@ -658,11 +658,11 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
       | none, some prio@(Priority.percent prob) =>
         return (PhaseName.unsafe, prio)
       | none, some _ =>
-        throwError "aesop: phase (safe/unsafe/norm) not specified."
+        throwError "phase (safe/unsafe/norm) not specified."
 
     finish (c : RuleConfig Option) : m (RuleConfig Id) := do
       let (some ident) := c.ident | throwError
-        "aesop: rule name not specified"
+        "rule name not specified"
       let (phase, priority) ← getPhaseAndPriority c
       let builder := c.builder.getD Builder.dflt
       let ruleSets :=
@@ -682,7 +682,7 @@ def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
     ruleSets := ⟨#[]⟩
   }
   let nameToIdent n := throwError
-    "aesop: rule name '{n}' not allowed in aesop attribute.\n(Perhaps you misspelled a builder or phase.)"
+    "rule name '{n}' not allowed in aesop attribute.\n(Perhaps you misspelled a builder or phase.)"
   toAdditionalRules e init defaultRuleSetName nameToIdent
 
 def buildAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
@@ -727,17 +727,17 @@ def toRuleNameFilters (e : RuleExpr) (nameToIdent : Name → m RuleIdent) :
     go (r : RuleConfig Option) : Feature → m (RuleConfig Option)
       | Feature.phase p => do
         if let (some previous) := r.phase then throwError
-          "aesop: duplicate phase declaration: '{p}'\n(previous declaration: '{previous}')"
+          "duplicate phase declaration: '{p}'\n(previous declaration: '{previous}')"
         return { r with phase := some p }
       | Feature.priority prio =>
-        throwError "aesop: unexpected priority '{prio}'"
+        throwError "unexpected priority '{prio}'"
       | Feature.name n => do
         if let (some previous) := r.ident then throwError
-          "aesop: duplicate rule name: '{n}'\n(previous rule name: '{previous}')"
+          "duplicate rule name: '{n}'\n(previous rule name: '{previous}')"
         return { r with ident := (← nameToIdent n) }
       | Feature.builder b => do
         if let (some previous) := r.builder then throwError
-          "aesop: duplicate builder declaration: '{b}'\n(previous declaration: '{previous}')"
+          "duplicate builder declaration: '{b}'\n(previous declaration: '{previous}')"
         return { r with builder := some b }
       | Feature.ruleSets newRuleSets =>
         have ord : Ord RuleSetName := ⟨Name.quickCmp⟩

@@ -63,10 +63,10 @@ initialize extension :
   let impl : AttributeImpl := {
     name := `aesop
     descr := "Register a declaration as an Aesop rule."
-    add := λ decl stx attrKind => do
+    add := λ decl stx attrKind => withRef stx do
       match attrKind with
       | AttributeKind.global => pure ()
-      | _ => throwError "aesop: local and scoped Aesop rules are not supported."
+      | _ => throwError "local and scoped Aesop rules are not supported."
       let config ← runTermElabMAsCoreM $ AttrConfig.elab stx
       let rules ← runMetaMAsCoreM $
         config.rules.concatMapM (·.buildAdditionalGlobalRules decl)
@@ -74,9 +74,9 @@ initialize extension :
       for (rule, rsNames) in rules do
         for rsName in rsNames do
           if ! rss.containsRuleSet rsName then throwError
-            "aesop: no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.)"
+            "no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.)"
           if rss.containsRule rsName rule.name then throwError
-            "aesop: '{rule.name.name}' is already registered in rule set '{rsName}'."
+            "'{rule.name.name}' is already registered in rule set '{rsName}'."
           rss := rss.addRule rsName rule
       setEnv $ ext.setState (← getEnv) rss
     erase := λ decl => do
@@ -108,10 +108,10 @@ def isRuleSetDeclared (rsName : RuleSetName) : m Bool := do
 
 def declareRuleSet [MonadError m] (rsName : RuleSetName) : m Unit := do
   if rsName.isReserved then throwError
-    "aesop: rule set name '{rsName}' is reserved"
+    "rule set name '{rsName}' is reserved"
   let rss ← getAttributeRuleSets
   if rss.containsRuleSet rsName then throwError
-    "aesop: rule set '{rsName}' already declared"
+    "rule set '{rsName}' already declared"
   setEnv $ extension.setState (← getEnv) $ rss.addEmptyRuleSet rsName
 
 end Aesop.Frontend
