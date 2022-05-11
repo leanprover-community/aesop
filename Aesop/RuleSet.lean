@@ -5,8 +5,8 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Builder
+import Aesop.Index
 import Aesop.Rule
-import Aesop.RuleIndex
 
 open Lean
 open Lean.Meta
@@ -54,9 +54,9 @@ end RuleNameFilter
 
 
 structure RuleSet where
-  normRules : RuleIndex NormRule
-  unsafeRules : RuleIndex UnsafeRule
-  safeRules : RuleIndex SafeRule
+  normRules : Index NormRule
+  unsafeRules : Index UnsafeRule
+  safeRules : Index SafeRule
   normSimpLemmas : SimpTheorems
   normSimpLemmaDescrs : PHashMap RuleName (Array SimpEntry)
     -- A cache of the norm simp rules added to `normSimpLemmas`. Invariant: the

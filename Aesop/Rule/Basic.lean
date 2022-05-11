@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Index.Basic
 import Aesop.Rule.Name
-import Aesop.RuleIndex.Basic
 import Aesop.RuleTac.Basic
 
 open Lean
