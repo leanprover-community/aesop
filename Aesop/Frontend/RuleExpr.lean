@@ -13,6 +13,7 @@ import Aesop.RuleSet
 open Lean
 open Lean.Meta
 open Lean.Elab
+open Std (HashSet)
 
 
 variable [Monad m] [MonadError m]
@@ -162,46 +163,72 @@ syntax builderOptions := Aesop.builder_option*
 
 end Parser
 
-structure BuilderOptions (α : Type _) where
-  elabOption : Syntax → ElabM α -- parse a single `Aesop.builder_option`
-  empty : α
-  combine : α → α → α
+inductive BuilderOption
+  | usesBranchState (b : Bool)
+  | immediate (names : Array Name)
+
+namespace BuilderOption
+
+def «elab» (stx : Syntax) : ElabM BuilderOption :=
+  withRefThen stx λ
+    | `(builder_option| (uses_branch_state := $b:Aesop.bool_lit)) =>
+      return usesBranchState $ ← elabBoolLit b
+    | `(builder_option| (immediate := [$ns:ident,*])) =>
+      return immediate $ (ns : Array Syntax).map (·.getId)
+    | _ => throwUnsupportedSyntax
+
+protected def name : BuilderOption → String
+  | usesBranchState .. => "uses_branch_state"
+  | immediate .. => "immediate"
+
+end BuilderOption
+
+
+structure BuilderOptions (σ : Type _) where
+  builderName : DBuilderName
+  init : σ
+  add : σ → BuilderOption → Option σ
 
 namespace BuilderOptions
 
-def «elab» [Inhabited α] (bo : BuilderOptions α) (stx : Syntax) : ElabM α :=
+def «elab» (bo : BuilderOptions α) (stx : Syntax) : ElabM α :=
   withRefThen stx λ
-    | `(Parser.builderOptions| $opts:Aesop.builder_option*) =>
-      opts.foldlM (init := bo.empty) λ o stx =>
-        return bo.combine o (← bo.elabOption stx)
+    | `(Parser.builderOptions| $stxs:Aesop.builder_option*) => do
+      let mut opts := bo.init
+      let mut seen : HashSet String := {}
+      for stx in stxs do
+        let opt ← BuilderOption.elab stx
+        let optName := opt.name
+        if seen.contains optName then withRef stx $ throwError
+          "duplicate builder option '{optName}'"
+        seen := seen.insert optName
+        match bo.add opts opt with
+        | some opts' => opts := opts'
+        | none => withRef stx $ throwError
+          "builder '{bo.builderName}' does not accept option '{optName}'"
+      return opts
     | _ => throwUnsupportedSyntax
 
-protected def none (builder : DBuilderName) : BuilderOptions Unit where
-  elabOption stx :=
-    withRef stx do
-      throwError "aesop: builder {builder} does not accept any options"
-  empty := ()
-  combine := λ _ _ => ()
+protected def none (builderName : DBuilderName) : BuilderOptions Unit where
+  builderName := builderName
+  init := ()
+  add := λ _ _ => none
 
 def tactic : BuilderOptions TacticBuilderOptions where
-  elabOption stx :=
-    withRefThen stx λ
-      | `(builder_option| (uses_branch_state := $b:Aesop.bool_lit)) =>
-        return { usesBranchState := ← elabBoolLit b }
-      | _ => throwError "aesop: invalid option for builder {BuilderName.tactic}"
-  empty := { usesBranchState := true }
-  combine o p := { usesBranchState := p.usesBranchState }
+  builderName := .regular .tactic
+  init := { usesBranchState := true }
+  add
+    | opts, .usesBranchState b => some { opts with usesBranchState := b }
+    | opts, _ => none
 
+@[inline]
 private def forwardCore (clear : Bool) :
     BuilderOptions ForwardBuilderOptions where
-  elabOption
-    | `(builder_option| (immediate := [$ns:ident,*])) => return {
-        immediateHyps := some $ (ns : Array Syntax).map (·.getId)
-        clear := clear
-      }
-    | _ => throwError "aesop: invalid option for builder {BuilderName.forward}"
-  empty := { immediateHyps := none, clear := clear }
-  combine o p := { immediateHyps := p.immediateHyps, clear := clear }
+  builderName := .regular $ if clear then .elim else .forward
+  init := { immediateHyps := none, clear := clear }
+  add
+    | opts, .immediate ns => some { opts with immediateHyps := ns }
+    | opts, _ => none
 
 def forward : BuilderOptions ForwardBuilderOptions :=
   forwardCore (clear := false)
