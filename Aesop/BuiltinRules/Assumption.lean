@@ -8,33 +8,57 @@ import Aesop.Frontend
 
 open Lean
 open Lean.Meta
+open Std (HashSet)
 
 namespace Aesop.BuiltinRules
 
-def findLocalDeclWithMVarFreeType? (goal : MVarId) (type : Expr) :
-    MetaM (Option FVarId) :=
-  withMVarContext goal do
-    (← getLCtx).findDeclRevM? λ localDecl => do
-        if localDecl.isAuxDecl then
-          return none
-        let localType ← instantiateMVarsInLocalDeclType goal localDecl.fvarId
-        if ← pure ! localType.hasMVar <&&> isDefEq type localType then
-          return some localDecl.fvarId
-        else
-          return none
-
 @[aesop safe -50 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
-def safeAssumption : SimpleRuleTac := λ { goal, .. } =>
+def assumption : RuleTac := λ input => do
+  let goal := input.goal
   withMVarContext goal do
-    checkNotAssigned goal `Aesop.BuiltinRules.safeAssumption
+    checkNotAssigned goal `Aesop.BuiltinRules.assumption
     let tgt ← instantiateMVarsInMVarType goal
-    if tgt.hasMVar then
-      throwTacticEx `Aesop.BuiltinRules.safeAssumption goal "target contains metavariables"
-    let hyp? ← findLocalDeclWithMVarFreeType? goal tgt
-    match hyp? with
-    | none => throwTacticEx `Aesop.BuiltinRules.safeAsumption goal "no matching assumption found"
-    | some hyp => do
-      assignExprMVar goal (mkFVar hyp)
-      return []
+    let tgtHasMVar := tgt.hasMVar
+    let initialState ← saveState
+    let mut applications := #[]
+    for ldecl in ← getLCtx do
+      if ldecl.isAuxDecl then
+        continue
+      restoreState initialState
+      let (some (application, proofHasMVar)) ←
+        tryHyp goal input.mvars tgt tgtHasMVar ldecl
+        | continue
+      if ! tgtHasMVar && ! proofHasMVar then
+        applications := #[application]
+        break
+      else
+        applications := applications.push application
+    if applications.isEmpty then
+      throwTacticEx `Aesop.BuiltinRules.assumption goal "no matching assumption found"
+    return {
+      applications
+      postBranchState? := none
+    }
+  where
+    tryHyp (goal : MVarId) (goalMVars : Array MVarId) (tgt : Expr)
+        (tgtHasMVar : Bool) (ldecl : LocalDecl) :
+        MetaM (Option (RuleApplication × Bool)) := do
+      if ! (← isDefEq ldecl.type tgt) then
+        return none
+      let proof ← instantiateMVars ldecl.toExpr
+      assignExprMVar goal proof
+      let proofHasMVar := proof.hasMVar
+      let assignedMVars ←
+        if ! tgtHasMVar && ! proofHasMVar then
+          pure {}
+        else
+          getAssignedMVars goalMVars
+      let postState ← saveState
+      let app := {
+        goals := #[]
+        introducedMVars := {}
+        postState, assignedMVars
+      }
+      return some (app, proofHasMVar)
 
 end Aesop.BuiltinRules

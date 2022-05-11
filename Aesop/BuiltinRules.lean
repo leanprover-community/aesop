@@ -41,7 +41,7 @@ def intros : RuleTac := λ input => do
 -- existentials introduce a metavariable. We want to wait as long as possible
 -- with either. We could even consider making these rules `unsafe`.
 --
--- Hypothesis of product type are split by a separate builtin rule because the
+-- Hypotheses of product type are split by a separate builtin rule because the
 -- `cases` builder currently cannot be used for norm rules.
 attribute [aesop safe 100 constructors] And Prod PProd MProd
 attribute [aesop safe 100 constructors] Exists Subtype Sigma
@@ -59,8 +59,6 @@ theorem Iff_elim (h : α ↔ β) : (α → β) ∧ (β → α) :=
 
 attribute [aesop norm constructors] ULift
 
-@[aesop [norm 0 elim]]
-theorem ULift_elim (h : ULift α) : α :=
-  h.down
+attribute [aesop [norm 0 elim]] ULift.down
 
 end Aesop.BuiltinRules
