@@ -13,6 +13,7 @@ import Aesop.RuleSet
 open Lean
 open Lean.Meta
 open Lean.Elab
+open Lean.Elab.Term
 open Std (HashSet)
 
 
@@ -154,10 +155,49 @@ end DBuilderName
 
 namespace Parser
 
+declare_syntax_cat Aesop.indexing_mode (behavior := symbol)
+
+syntax &"target " term : Aesop.indexing_mode
+syntax &"hyp " term : Aesop.indexing_mode
+syntax &"unindexed " : Aesop.indexing_mode
+
+end Parser
+
+def elabSingleIndexingMode (stx : Syntax) : ElabM IndexingMode :=
+  withRefThen stx λ
+    | `(indexing_mode| target $t:term) => .target <$> elabKeys t
+    | `(indexing_mode| hyp $t:term) => .hyps <$> elabKeys t
+    | `(indexing_mode| unindexed) => return .unindexed
+    | _ => throwUnsupportedSyntax
+  where
+    elabKeys (stx : Syntax) : ElabM (Array DiscrTree.Key) := do
+      let adjustCtx oldCtx := {
+        oldCtx with
+        mayPostpone := false
+        errToSorry := false
+        autoBoundImplicit := false
+        sectionVars := {}
+        sectionFVars := {}
+        inPattern := true
+      }
+      show TermElabM _ from
+        withoutModifyingState do
+          let u ← mkFreshLevelMVar
+          let e ← withReader adjustCtx $ withSynthesize $
+            elabTermEnsuringType stx (mkSort u)
+          DiscrTree.mkPathWithTransparency e indexingTransparency
+
+def IndexingMode.elab (stxs : Array Syntax) : ElabM IndexingMode :=
+  .or <$> stxs.mapM elabSingleIndexingMode
+
+
+namespace Parser
+
 declare_syntax_cat Aesop.builder_option
 
 syntax "(" &"uses_branch_state" ":=" Aesop.bool_lit ")" : Aesop.builder_option
 syntax "(" &"immediate" ":=" "[" ident,+,? "]" ")" : Aesop.builder_option
+syntax "(" &"index" ":=" "[" Aesop.indexing_mode,+,? "]" ")" : Aesop.builder_option
 
 syntax builderOptions := Aesop.builder_option*
 
@@ -166,20 +206,29 @@ end Parser
 inductive BuilderOption
   | usesBranchState (b : Bool)
   | immediate (names : Array Name)
+  | index (imode : IndexingMode)
 
 namespace BuilderOption
 
 def «elab» (stx : Syntax) : ElabM BuilderOption :=
   withRefThen stx λ
     | `(builder_option| (uses_branch_state := $b:Aesop.bool_lit)) =>
-      return usesBranchState $ ← elabBoolLit b
+      usesBranchState <$> elabBoolLit b
     | `(builder_option| (immediate := [$ns:ident,*])) =>
       return immediate $ (ns : Array Syntax).map (·.getId)
+    | `(builder_option| (index := [$imodes,*])) =>
+      index <$> IndexingMode.elab imodes
     | _ => throwUnsupportedSyntax
 
 protected def name : BuilderOption → String
   | usesBranchState .. => "uses_branch_state"
   | immediate .. => "immediate"
+  | index .. => "index"
+
+protected def toCtorIdx : BuilderOption → Nat
+  | usesBranchState .. => 0
+  | immediate .. => 1
+  | index .. => 2
 
 end BuilderOption
 
@@ -195,17 +244,16 @@ def «elab» (bo : BuilderOptions α) (stx : Syntax) : ElabM α :=
   withRefThen stx λ
     | `(Parser.builderOptions| $stxs:Aesop.builder_option*) => do
       let mut opts := bo.init
-      let mut seen : HashSet String := {}
+      let mut seen : HashSet Nat := {}
       for stx in stxs do
         let opt ← BuilderOption.elab stx
-        let optName := opt.name
-        if seen.contains optName then withRef stx $ throwError
-          "duplicate builder option '{optName}'"
-        seen := seen.insert optName
+        if seen.contains opt.toCtorIdx then withRef stx $ throwError
+          "duplicate builder option '{opt.name}'"
+        seen := seen.insert opt.toCtorIdx
         match bo.add opts opt with
         | some opts' => opts := opts'
         | none => withRef stx $ throwError
-          "builder '{bo.builderName}' does not accept option '{optName}'"
+          "builder '{bo.builderName}' does not accept option '{opt.name}'"
       return opts
     | _ => throwUnsupportedSyntax
 
@@ -214,20 +262,30 @@ protected def none (builderName : DBuilderName) : BuilderOptions Unit where
   init := ()
   add := λ _ _ => none
 
+def regular (builderName : BuilderName) :
+    BuilderOptions RegularBuilderOptions where
+  builderName := .regular builderName
+  init := .default
+  add
+    | opts, .index imode => some { opts with indexingMode? := imode }
+    | opts, _ => none
+
 def tactic : BuilderOptions TacticBuilderOptions where
   builderName := .regular .tactic
-  init := { usesBranchState := true }
+  init := .default
   add
     | opts, .usesBranchState b => some { opts with usesBranchState := b }
+    | opts, .index imode => some { opts with indexingMode? := imode }
     | opts, _ => none
 
 @[inline]
 private def forwardCore (clear : Bool) :
     BuilderOptions ForwardBuilderOptions where
   builderName := .regular $ if clear then .elim else .forward
-  init := { immediateHyps := none, clear := clear }
+  init := .default clear
   add
     | opts, .immediate ns => some { opts with immediateHyps := ns }
+    | opts, .index imode => some { opts with indexingMode? := imode }
     | opts, _ => none
 
 def forward : BuilderOptions ForwardBuilderOptions :=
@@ -249,13 +307,13 @@ syntax "(" Aesop.builder_name builderOptions ")" : Aesop.builder
 end Parser
 
 inductive Builder
-  | apply
+  | apply (opts : RegularBuilderOptions)
   | simp
   | unfold
   | tactic (opts : TacticBuilderOptions)
-  | constructors
+  | constructors (opts : RegularBuilderOptions)
   | forward (opts : ForwardBuilderOptions)
-  | cases
+  | cases (opts : RegularBuilderOptions)
   | dflt
   deriving Inhabited
 
@@ -272,34 +330,32 @@ private def forwardBuilderOptionsToString (opts : ForwardBuilderOptions) : Strin
 
 instance : ToString Builder where
   toString
-    | apply => "apply"
+    | apply .. => "apply"
     | simp => "simp"
     | unfold => "unfold"
     | tactic opts =>
       "(" ++ String.joinSep " " #["tactic", tacticBuilderOptionsToString opts] ++ ")"
-    | constructors => "constructors"
+    | constructors .. => "constructors"
     | forward opts =>
       "(" ++ String.joinSep " " #["forward", forwardBuilderOptionsToString opts] ++ ")"
-    | cases => "cases"
+    | cases .. => "cases"
     | dflt => "default"
 
-open DBuilderName in
 def elabOptions (b : DBuilderName) (opts : Syntax) : ElabM Builder := do
   match b with
-  | regular BuilderName.apply => checkNoOptions; return apply
-  | regular BuilderName.simp => checkNoOptions; return simp
-  | regular BuilderName.unfold => checkNoOptions; return unfold
-  | regular BuilderName.tactic =>
-    return tactic $ ← BuilderOptions.tactic.elab opts
-  | regular BuilderName.constructors => checkNoOptions; return constructors
-  | regular BuilderName.forward =>
-    return forward $ ← BuilderOptions.forward.elab opts
-  | regular BuilderName.elim =>
-    return forward $ ← BuilderOptions.elim.elab opts
-  | regular BuilderName.cases => checkNoOptions; return cases
-  | DBuilderName.dflt => checkNoOptions; return default
+  | .regular .apply => apply <$> getRegularOptions .apply
+  | .regular .simp => checkNoOptions; return simp
+  | .regular .unfold => checkNoOptions; return unfold
+  | .regular .tactic => tactic <$> BuilderOptions.tactic.elab opts
+  | .regular .constructors => constructors <$> getRegularOptions .constructors
+  | .regular .forward => forward <$> BuilderOptions.forward.elab opts
+  | .regular .elim => forward <$> BuilderOptions.elim.elab opts
+  | .regular .cases => «cases» <$> getRegularOptions .cases
+  | .dflt => checkNoOptions; return default
   where
     checkNoOptions := BuilderOptions.none b |>.«elab» opts
+    getRegularOptions builderName :=
+      BuilderOptions.regular builderName |>.«elab» opts
 
 def «elab» (stx : Syntax) : ElabM Builder :=
   withRefThen stx λ
@@ -310,24 +366,24 @@ def «elab» (stx : Syntax) : ElabM Builder :=
     | _ => throwUnsupportedSyntax
 
 def toRuleBuilder : Builder → RuleBuilder
-  | apply => RuleBuilder.apply
+  | apply opts  => RuleBuilder.apply opts
   | simp => RuleBuilder.normSimpLemmas
   | unfold => RuleBuilder.normSimpUnfold
   | tactic opts => RuleBuilder.tactic opts
-  | constructors => RuleBuilder.constructors
+  | constructors opts => RuleBuilder.constructors opts
   | forward opts => RuleBuilder.forward opts
-  | cases => RuleBuilder.cases
+  | cases opts => RuleBuilder.cases opts
   | dflt => RuleBuilder.default
 
 open DBuilderName in
 def toDBuilderName : Builder → DBuilderName
-  | apply => regular .apply
+  | apply .. => regular .apply
   | simp => regular .simp
   | unfold => regular .unfold
   | tactic .. => regular .tactic
-  | constructors => regular .constructors
+  | constructors .. => regular .constructors
   | forward .. => regular .forward
-  | cases => regular .cases
+  | cases .. => regular .cases
   | dflt => .dflt
 
 end Builder

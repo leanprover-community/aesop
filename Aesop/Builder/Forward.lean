@@ -12,10 +12,16 @@ open Std (HashSet)
 
 namespace Aesop
 
-structure ForwardBuilderOptions where
+structure ForwardBuilderOptions extends RegularBuilderOptions where
   immediateHyps : Option (Array Name)
   clear : Bool
   deriving Inhabited
+
+protected def ForwardBuilderOptions.default (clear : Bool) :
+    ForwardBuilderOptions where
+  toRegularBuilderOptions := .default
+  immediateHyps := none
+  clear := clear
 
 namespace RuleBuilder
 
@@ -68,28 +74,27 @@ private def getIndexingMode (type : Expr) (immediate : UnorderedArraySet Nat) :
 
 def forward (opts : ForwardBuilderOptions) : RuleBuilder := λ input =>
   match input.kind with
-  | RuleBuilderKind.global decl => do
+  | .global decl => do
     let type := (← getConstInfo decl).type
     let immediate ← getImmediatePremises decl type opts.immediateHyps
     let tac := .forwardConst decl immediate opts.clear
-    let imode ← getIndexingMode type immediate
-    return RuleBuilderOutput.global $ mkResult tac imode
-  | RuleBuilderKind.local fvarUserName goal => do
+    .global <$> mkResult tac type immediate
+  | .«local» fvarUserName goal => do
     let (goal, newHyp) ← copyRuleHypothesis goal fvarUserName
     withMVarContext goal do
       let ldecl ← getLocalDecl newHyp
       let immediate ←
         getImmediatePremises ldecl.userName ldecl.type opts.immediateHyps
       let tac := .forwardFVar ldecl.userName immediate opts.clear
-      let imode ← getIndexingMode ldecl.type immediate
-      return RuleBuilderOutput.local goal (mkResult tac imode)
+      .«local» goal <$> mkResult tac ldecl.type immediate
   where
-    mkResult (tac : RuleTacDescr) (indexingMode : IndexingMode) :
-        RuleBuilderResult :=
-      RuleBuilderResult.regular {
-        builder := BuilderName.forward
+    mkResult (tac : RuleTacDescr) (type : Expr)
+        (immediate : UnorderedArraySet Nat) : MetaM RuleBuilderResult :=
+      return .regular {
+        builder := .forward
         mayUseBranchState := true
-        tac, indexingMode
+        indexingMode := ← opts.getIndexingModeM $ getIndexingMode type immediate
+        tac
       }
 
 end Aesop.RuleBuilder

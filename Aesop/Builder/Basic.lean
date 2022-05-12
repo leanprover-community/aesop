@@ -77,3 +77,21 @@ def ofGlobalRuleBuilder (name : BuilderName)
     RuleBuilderOutput.global <$> globalBuilder input.phase decl
 
 end RuleBuilder
+
+-- Options shared by all regular (meaning non-simp) builders.
+structure RegularBuilderOptions where
+  indexingMode? : Option IndexingMode
+  deriving Inhabited
+
+namespace RegularBuilderOptions
+
+protected def default : RegularBuilderOptions where
+  indexingMode? := none
+
+def getIndexingModeM [Monad m] (dflt : m IndexingMode)
+    (opts : RegularBuilderOptions) : m IndexingMode :=
+  match opts.indexingMode? with
+  | none => dflt
+  | some imode => return imode
+
+end RegularBuilderOptions

@@ -1,6 +1,7 @@
 import Aesop
 
-set_option aesop.check.all true
+-- set_option aesop.check.all true
+-- With this option, the test becomes unbearably slow.
 
 abbrev State := String → Int
 
@@ -23,20 +24,10 @@ macro_rules
 | `([Com| ( $x:com )]) => `([Com| $x])
 | `([Com| $x:term ]) => `($x)
 
-@[aesop safe]
+@[aesop safe [constructors, -100 (cases (index := [hyp BigStep Com.Skip _ _, hyp BigStep [Com| _;_] _ _]))]]
 inductive BigStep : Com → State → State → Prop where
 | Skip : BigStep Com.Skip s s
 | Seq (h1 : BigStep c₁ s t) (h2 : BigStep c₂ t u) : BigStep [Com| c₁;c₂] s u
-
-namespace BigStep
-
-@[aesop norm elim]
-theorem Seq_inv (h : BigStep [Com| c₁;c₂] s u) :
-    ∃ t, BigStep c₁ s t ∧ BigStep c₂ t u :=
-  match h with
-  | Seq (t := t) h₁ h₂ => ⟨t, h₁, h₂⟩
-
-end BigStep
 
 theorem seq_assoc :
     BigStep [Com| (c1;c2);c3] s s' ↔ BigStep [Com| c1;c2;c3] s s' := by

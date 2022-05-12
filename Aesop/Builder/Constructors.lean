@@ -11,13 +11,13 @@ open Lean.Meta
 
 namespace Aesop
 
-def RuleBuilder.constructors : RuleBuilder :=
+def RuleBuilder.constructors (opts : RegularBuilderOptions) : RuleBuilder :=
   ofGlobalRuleBuilder name λ phase decl => do
     let info ← RuleBuilder.checkConstIsInductive name decl
     return RuleBuilderResult.regular {
       builder := name
       tac := .constructors info.ctors.toArray
-      indexingMode := ← getIndexingMode info
+      indexingMode := ← opts.getIndexingModeM $ getIndexingMode info
       mayUseBranchState := false
     }
   where

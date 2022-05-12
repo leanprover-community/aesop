@@ -12,34 +12,35 @@ open Lean.Elab.Tactic (TacticM)
 
 namespace Aesop
 
-structure TacticBuilderOptions where
+structure TacticBuilderOptions extends RegularBuilderOptions where
   usesBranchState : Bool
   deriving Inhabited
 
-def TacticBuilderOptions.default : TacticBuilderOptions where
+protected def TacticBuilderOptions.default : TacticBuilderOptions where
+  toRegularBuilderOptions := RegularBuilderOptions.default
   usesBranchState := true
 
 def RuleBuilder.tactic (opts : TacticBuilderOptions) : RuleBuilder :=
   ofGlobalRuleBuilder builderName λ phase decl => do
     let type := (← getConstInfo decl).type
     if ← isDefEq (mkApp (mkConst ``TacticM) (mkConst ``Unit)) type then
-      return mkResult $ .tacticM decl
+      mkResult $ .tacticM decl
     else if ← isDefEq (mkConst ``SimpleRuleTac) type then
-      return mkResult $ .simpleRuleTac decl
+      mkResult $ .simpleRuleTac decl
     else if ← isDefEq (mkConst ``RuleTac) type then
-      return mkResult $ .ruleTac decl
+      mkResult $ .ruleTac decl
     else
       throwError "aesop: {decl} was expected to be a tactic, i.e. to have one of these types:\n  TacticM Unit\n  SimpleRuleTac\n  RuleTac\nHowever, it has type{indentExpr type}"
   where
     builderName : BuilderName :=
       .tactic
 
-    mkResult (tac : RuleTacDescr) : RuleBuilderResult :=
-      .regular {
+    mkResult (tac : RuleTacDescr) : MetaM RuleBuilderResult :=
+      return .regular {
         builder := builderName
-        tac
-        indexingMode := IndexingMode.unindexed
+        indexingMode := ← opts.getIndexingModeM $ pure IndexingMode.unindexed
         mayUseBranchState := opts.usesBranchState
+        tac
       }
 
 end Aesop

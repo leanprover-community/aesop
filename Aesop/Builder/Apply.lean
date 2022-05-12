@@ -11,7 +11,7 @@ open Lean.Meta
 
 namespace Aesop.RuleBuilder
 
-def apply : RuleBuilder := λ input =>
+def apply (opts : RegularBuilderOptions) : RuleBuilder := λ input =>
   match input.kind with
   | RuleBuilderKind.global decl => do
     let tac := .applyConst decl
@@ -29,7 +29,8 @@ def apply : RuleBuilder := λ input =>
       return RuleBuilderResult.regular {
         builder := BuilderName.apply
         tac := tac
-        indexingMode := ← IndexingMode.targetMatchingConclusion type
+        indexingMode := ← opts.getIndexingModeM $
+          IndexingMode.targetMatchingConclusion type
         mayUseBranchState := false
       }
 

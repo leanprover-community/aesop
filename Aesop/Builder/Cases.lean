@@ -10,7 +10,8 @@ open Lean
 open Lean.Meta
 
 namespace Aesop
-def RuleBuilder.cases : RuleBuilder :=
+
+def RuleBuilder.cases (opts : RegularBuilderOptions) : RuleBuilder :=
   RuleBuilder.ofGlobalRuleBuilder BuilderName.cases λ phase decl => do
     if let (.norm) := phase then throwError
       "aesop: cases builder cannot currently be used for norm rules."
@@ -21,7 +22,8 @@ def RuleBuilder.cases : RuleBuilder :=
     return RuleBuilderResult.regular {
       builder := name
       tac := .cases decl (isRecursiveType := inductInfo.isRec)
-      indexingMode := ← IndexingMode.hypsMatchingConst decl
+      indexingMode := ← opts.getIndexingModeM $
+        IndexingMode.hypsMatchingConst decl
       mayUseBranchState := false
     }
   where

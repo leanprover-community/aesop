@@ -29,22 +29,24 @@ private def err (ruleType : String) : RuleBuilder := λ input =>
 def default : RuleBuilder := λ input =>
   match input.phase with
   | PhaseName.safe =>
-    constructors input <|>
-    tactic' input <|>
-    apply input <|>
+    constructorsDef input <|>
+    tacticDef input <|>
+    applyDef input <|>
     err "an unsafe" input
   | PhaseName.unsafe =>
-    constructors input <|>
-    tactic' input <|>
-    apply input <|>
+    constructorsDef input <|>
+    tacticDef input <|>
+    applyDef input <|>
     err "an unsafe" input
   | PhaseName.norm =>
-    tactic' input <|>
+    tacticDef input <|>
     normSimpLemmas input <|>
-    apply input <|>
+    applyDef input <|>
     err "a norm" input
   where
-    tactic' := tactic TacticBuilderOptions.default
+    tacticDef := tactic TacticBuilderOptions.default
+    applyDef := apply RegularBuilderOptions.default
+    constructorsDef := constructors RegularBuilderOptions.default
 
 end RuleBuilder
 
