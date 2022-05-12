@@ -47,7 +47,10 @@ partial def cases (decl : Name) (isRecursiveType : Bool) : RuleTac :=
                 match g.subst.find? fvarId with
                 | some (Expr.fvar fvarId' ..) => fvarId'
                 | _ => fvarId
-              excluded ++ g.fields.map (·.fvarId!)
+              let fields := g.fields.filterMap λ
+                | (Expr.fvar fvarId' ..) => some fvarId'
+                | _ => none
+              excluded ++ fields
           let newGoals? ← go newGoals excluded g.mvarId
           match newGoals? with
           | some newGoals' => newGoals := newGoals'
