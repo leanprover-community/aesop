@@ -80,7 +80,10 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
 -- `MProd`, `Exists`, `Subtype`, `Sigma` and `PSigma`. It's a restricted version
 -- of `cases`. We have this separate tactic because `cases` interacts badly with
 -- metavariables and therefore can't be used for norm rules.
-@[aesop norm 0 (tactic (uses_branch_state := false))]
+@[aesop norm 0
+  (tactic (uses_branch_state := false)
+    (index := [hyp And _ _, hyp Prod _ _, hyp PProd _ _, hyp MProd _ _,
+               hyp Exists _, hyp Subtype _, hyp Sigma _, hyp PSigma _]))]
 partial def destructProducts : RuleTac := λ input => do
   let goal ← destructProductsCore input.goal
   let mvars ← getGoalMVarsNoDelayed goal
