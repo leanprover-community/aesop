@@ -630,7 +630,7 @@ aesop
   (add safe foo, 10% cases Or, safe cases Empty)
   (erase A [cases, constructors], baz)
   (rule_sets [A, B])
-  (options { maxRuleApplicationDepth := 10 })
+  (options := { maxRuleApplicationDepth := 10 })
 ```
 
 Here we add some rules with an `add` clause, erase other rules with an `erase`
