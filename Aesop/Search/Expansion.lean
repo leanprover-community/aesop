@@ -133,7 +133,8 @@ def runFirstNormRule (goal : MVarId) (mvars : Array MVarId)
   return .failed
 
 def normSimpCore (ctx : Simp.Context) (localSimpRules : Array LocalNormSimpRule)
-    (cache : Simp.Cache) (goal : MVarId) : MetaM (Option MVarId × Simp.Cache) :=
+    (cache : Simp.Cache) (goal : MVarId) :
+    MetaM (SimpResult × Simp.Cache) :=
   withMVarContext goal do
     let lctx ← getLCtx
 
@@ -164,33 +165,32 @@ def normSimpCore (ctx : Simp.Context) (localSimpRules : Array LocalNormSimpRule)
       unless ldecl.isAuxDecl do
         fvarIds := fvarIds.push ldecl.fvarId
 
-    let (result?, cache) ←
-      simpGoalWithCache goal ctx cache (fvarIdsToSimp := fvarIds)
-        (fvarIdToLemmaId := fvarIdToLemmaId)
-    return (result?.map (·.snd), cache)
+    -- Simp the goal.
+    simpGoalWithCache goal ctx cache (fvarIdsToSimp := fvarIds)
+      (fvarIdToLemmaId := fvarIdToLemmaId)
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def normSimp (goal : MVarId) (ctx : Simp.Context)
     (localSimpRules : Array LocalNormSimpRule) (cache : Simp.Cache) :
-    ProfileT MetaM (Option MVarId × Simp.Cache) :=
+    ProfileT MetaM (SimpResult × Simp.Cache) :=
   profiling go λ _ elapsed =>
     recordAndTraceRuleProfile { rule := .normSimp, elapsed, successful := true }
   where
-    go : MetaM (Option MVarId × Simp.Cache) := do
+    go : MetaM (SimpResult × Simp.Cache) := do
       if ← Check.rules.isEnabled then
         let preMetaState ← saveState
-        let (newGoal?, cache) ← normSimpCore ctx localSimpRules cache goal
+        let (result, cache) ← normSimpCore ctx localSimpRules cache goal
         let postMetaState ← saveState
         let introduced :=
           (← introducedExprMVars preMetaState postMetaState).filter
-            (some · != newGoal?)
+            (some · != result.newGoal?)
         unless introduced.isEmpty do throwError
           "{Check.rules.name}: norm simp introduced metas:{introduced.map (·.name)}"
         let assigned :=
           (← assignedExprMVars preMetaState postMetaState).filter (· != goal)
         unless assigned.isEmpty do throwError
           "{Check.rules.name}: norm simp assigned metas:{introduced.map (·.name)}"
-        return (newGoal?, cache)
+        return (result, cache)
       else
         normSimpCore ctx localSimpRules cache goal
 
@@ -217,9 +217,12 @@ partial def normalizeGoalMVar (rs : RuleSet) (ctx : Simp.Context)
         aesop_trace[stepsNormalization] "Running normalisation simp"
         let (simpResult?, cache) ← normSimp goal ctx rs.localNormSimpLemmas cache
         match simpResult? with
-        | none => return (none, cache)
-        | some goal =>
+        | .solved => return (none, cache)
+        | .simplified goal =>
           aesop_trace[stepsNormalization] "Goal after normalisation simp:{indentD $ MessageData.ofGoal goal}"
+          go (iteration + 1) goal bs cache
+        | .unchanged goal =>
+          aesop_trace[stepsNormalization] "Goal unchanged after normalisation simp."
           let postSimpResult ← runFirstNormRule goal mvars bs postSimpRules
           match postSimpResult with
           | .proven => return (none, cache)
