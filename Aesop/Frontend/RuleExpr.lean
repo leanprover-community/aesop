@@ -421,10 +421,10 @@ declare_syntax_cat Aesop.feature (behavior := symbol)
 -- parses, a `choice` node with two children is created; one being a
 -- `featPhase` or `featBuilder` node and the second being a `featIdent` node.
 -- When we process these `choice` nodes, we select the non-`ident` one.
-syntax (name := featPhase) Aesop.phase : Aesop.feature
-syntax (name := featPriority) Aesop.priority : Aesop.feature
-syntax (name := featBuilder) Aesop.builder : Aesop.feature
-syntax (name := featRuleSets) ruleSetsFeature : Aesop.feature
+syntax Aesop.phase : Aesop.feature
+syntax Aesop.priority : Aesop.feature
+syntax Aesop.builder : Aesop.feature
+syntax ruleSetsFeature : Aesop.feature
 syntax (name := featIdent) ident : Aesop.feature
 
 end Parser
@@ -433,7 +433,7 @@ inductive Feature
   | phase (p : PhaseName)
   | priority (p : Priority)
   | builder (b : Builder)
-  | name (n : Name)
+  | ident (i : RuleIdent)
   | ruleSets (rs : RuleSets)
   deriving Inhabited
 
@@ -444,8 +444,21 @@ instance : ToString Feature where
     | phase p => toString p
     | priority p => toString p
     | builder b => toString b
-    | name n => toString n
+    | ident i => toString i
     | ruleSets rs => toString rs
+
+private def elabRuleIdent (stx : Syntax) : ElabM RuleIdent :=
+  resolveLocal <|> resolveGlobal <|> throwError
+    "unknown rule name: {stx.getId}"
+  where
+    resolveLocal : ElabM RuleIdent := do
+      let n := stx.getId.eraseMacroScopes
+      match (← getLCtx).findFromUserName? n with
+      | some ldecl => if ! ldecl.isAuxDecl then return .fvar n else throwError ""
+      | none => throwError ""
+
+    resolveGlobal : ElabM RuleIdent := do
+      .const <$> resolveGlobalConstNoOverload stx
 
 partial def «elab» (stx : Syntax) : ElabM Feature :=
   withRefThen stx λ
@@ -453,7 +466,7 @@ partial def «elab» (stx : Syntax) : ElabM Feature :=
     | `(feature| $p:Aesop.phase) => phase <$> PhaseName.elab p
     | `(feature| $b:Aesop.builder) => builder <$> Builder.elab b
     | `(feature| $rs:ruleSetsFeature) => ruleSets <$> RuleSets.elab rs
-    | `(feature| $i:ident) => return name i.getId
+    | `(feature| $i:ident) => ident <$> elabRuleIdent i
     | stx =>
       if stx.isOfKind choiceKind then
         let nonIdentAlts :=
@@ -668,30 +681,28 @@ end RuleConfig
 namespace RuleExpr
 
 def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
-    (defaultRuleSet : RuleSetName) (nameToIdent : Name → m RuleIdent) :
-    m (Array (RuleConfig Id)) := do
+    (defaultRuleSet : RuleSetName) : m (Array (RuleConfig Id)) := do
   let cs ← e.foldBranchesM (init := init) go
   cs.mapM finish
   where
     go (r : RuleConfig Option) : Feature → m (RuleConfig Option)
-      | Feature.phase p => do
+      | .phase p => do
         if let (some previous) := r.phase then throwError
           "duplicate phase declaration: '{p}'\n(previous declaration: '{previous}')"
         return { r with phase := some p }
-      | Feature.priority p => do
+      | .priority p => do
         if let (some previous) := r.priority then throwError
           "duplicate priority declaration: '{p}'\n(previous declaration: '{previous}')"
         return { r with priority := some p }
-      | Feature.builder b => do
+      | .builder b => do
         if let (some previous) := r.builder then throwError
           "duplicate builder declaration: '{b}'\n(previous declaration: '{previous}')"
         return { r with builder := some b }
-      | Feature.name n => do
+      | .ident ident => do
         if let (some previous) := r.ident then throwError
-          "duplicate rule name: '{n}'\n(previous rule name: '{previous}')"
-        let ident ← nameToIdent n
+          "duplicate rule name: '{ident}'\n(previous rule name: '{previous}')"
         return { r with ident }
-      | Feature.ruleSets newRuleSets =>
+      | .ruleSets newRuleSets =>
         have ord : Ord RuleSetName := ⟨Name.quickCmp⟩
         let ruleSets :=
           ⟨Array.mergeSortedFilteringDuplicates r.ruleSets.ruleSets $
@@ -737,9 +748,7 @@ def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
     builder := none
     ruleSets := ⟨#[]⟩
   }
-  let nameToIdent n := throwError
-    "rule name '{n}' not allowed in aesop attribute.\n(Perhaps you misspelled a builder or phase.)"
-  toAdditionalRules e init defaultRuleSetName nameToIdent
+  toAdditionalRules e init defaultRuleSetName
 
 def buildAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
     MetaM (Array (RuleSetMember × Array RuleSetName)) := do
@@ -747,15 +756,15 @@ def buildAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
 
 def toAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
     MetaM (Array (RuleConfig Id)) :=
-  let init := {
-    ident := none
-    phase := none
-    priority := none
-    builder := none
-    ruleSets := ⟨#[]⟩
-  }
-  let nameToIdent n := withMVarContext goal $ RuleIdent.ofName n
-  toAdditionalRules e init localRuleSetName nameToIdent
+  withMVarContext goal do
+    let init := {
+      ident := none
+      phase := none
+      priority := none
+      builder := none
+      ruleSets := ⟨#[]⟩
+    }
+    toAdditionalRules e init localRuleSetName
 
 def buildAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
     MetaM (MVarId × Array (RuleSetMember × Array RuleSetName)) := do
@@ -768,7 +777,7 @@ def buildAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
     rs := rs.push rule
   return (goal, rs)
 
-def toRuleNameFilters (e : RuleExpr) (nameToIdent : Name → m RuleIdent) :
+def toRuleNameFilters (e : RuleExpr) :
     m (Array (RuleSetNameFilter × RuleNameFilter)) := do
   let initialConfig := {
       ident := none
@@ -781,21 +790,21 @@ def toRuleNameFilters (e : RuleExpr) (nameToIdent : Name → m RuleIdent) :
   configs.mapM (·.toRuleNameFilter)
   where
     go (r : RuleConfig Option) : Feature → m (RuleConfig Option)
-      | Feature.phase p => do
+      | .phase p => do
         if let (some previous) := r.phase then throwError
           "duplicate phase declaration: '{p}'\n(previous declaration: '{previous}')"
         return { r with phase := some p }
-      | Feature.priority prio =>
+      | .priority prio =>
         throwError "unexpected priority '{prio}'"
-      | Feature.name n => do
+      | .ident ident => do
         if let (some previous) := r.ident then throwError
-          "duplicate rule name: '{n}'\n(previous rule name: '{previous}')"
-        return { r with ident := (← nameToIdent n) }
-      | Feature.builder b => do
+          "duplicate rule name: '{ident}'\n(previous rule name: '{previous}')"
+        return { r with ident }
+      | .builder b => do
         if let (some previous) := r.builder then throwError
           "duplicate builder declaration: '{b}'\n(previous declaration: '{previous}')"
         return { r with builder := some b }
-      | Feature.ruleSets newRuleSets =>
+      | .ruleSets newRuleSets =>
         have ord : Ord RuleSetName := ⟨Name.quickCmp⟩
         let ruleSets :=
           ⟨Array.mergeSortedFilteringDuplicates r.ruleSets.ruleSets $
@@ -804,10 +813,10 @@ def toRuleNameFilters (e : RuleExpr) (nameToIdent : Name → m RuleIdent) :
 
 def toGlobalRuleNameFilters (e : RuleExpr) :
     m (Array (RuleSetNameFilter × RuleNameFilter)) :=
-  e.toRuleNameFilters λ n => return RuleIdent.const n
+  e.toRuleNameFilters
 
 def toLocalRuleNameFilters (goal : MVarId) (e : RuleExpr) :
     MetaM (Array (RuleSetNameFilter × RuleNameFilter)) :=
-  e.toRuleNameFilters λ n => withMVarContext goal $ RuleIdent.ofName n
+  withMVarContext goal $ e.toRuleNameFilters
 
 end Aesop.Frontend.RuleExpr
