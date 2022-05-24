@@ -32,7 +32,7 @@ def default : RuleBuilder := λ input =>
     constructorsDef input <|>
     tacticDef input <|>
     applyDef input <|>
-    err "an unsafe" input
+    err "a safe" input
   | PhaseName.unsafe =>
     constructorsDef input <|>
     tacticDef input <|>
