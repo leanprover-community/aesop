@@ -52,7 +52,7 @@ def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
     (indexMatchLocations : UnorderedArraySet IndexMatchLocation)
     (branchState : Option RuleBranchState) :
     MetaM (Sum Exception RuleTacOutput) := do
-  let some (postNormGoal, postNormState) := goal.postNormGoalAndState? | throwError
+  let some (postNormGoal, postNormState) := goal.postNormGoalAndMetaState? | throwError
     "aesop: internal error: expected goal {goal.id} to be normalised (but not proven by normalisation)."
   let input := {
     goal := postNormGoal
@@ -296,7 +296,7 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
     go (postBranchState : BranchState) (successProbability : Percent)
         (rapps : Array RuleApplication) : SearchM Q (Array RappRef) := do
       let parent ← parentRef.get
-      let (some (parentGoal, parentMetaState)) := parent.postNormGoalAndState? | throwError
+      let (some (parentGoal, parentMetaState)) := parent.postNormGoalAndMetaState? | throwError
         "aesop: internal error while adding new rapp: expected goal {parent.id} to be normalised (but not proven by normalisation)."
       let rrefs ← rapps.mapM λ rapp => do
         let rref ← addRapp {

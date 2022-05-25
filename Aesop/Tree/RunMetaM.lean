@@ -47,7 +47,7 @@ def RappRef.runMetaMModifying (x : MetaM α) (rref : RappRef) : MetaM α := do
 
 def Goal.runMetaMInPostNormState (x : MVarId → MetaM α) (g : Goal) :
     MetaM (α × Meta.SavedState) := do
-  let some (postGoal, postState) := g.postNormGoalAndState? | throwError
+  let some (postGoal, postState) := g.postNormGoalAndMetaState? | throwError
     "aesop: internal error: expected goal {g.id} to be normalised (but not proven by normalisation)."
   postState.runMetaM $ x postGoal
 

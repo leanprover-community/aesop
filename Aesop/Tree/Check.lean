@@ -138,7 +138,7 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit := do
 
   where
     getParentInfo (r : Rapp) : CoreM (MVarId × Meta.SavedState) := do
-      let some res := (← r.parent.get).postNormGoalAndState? | throwError
+      let some res := (← r.parent.get).postNormGoalAndMetaState? | throwError
         "{Check.tree.name}: expected parent goal of rapp {r.id} to be normalised (but not proven by normalisation)."
       return res
 
@@ -163,7 +163,7 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit := do
     checkGoalMVars (g : Goal) : MetaM Unit := do
       let actualPreNormMVars ←
         g.runMetaMInParentState' $ getGoalMVarsNoDelayed g.preNormGoal
-      if let (some (postNormGoal, postNormState)) := g.postNormGoalAndState? then
+      if let (some (postNormGoal, postNormState)) := g.postNormGoalAndMetaState? then
         let actualPostNormMVars ←
           postNormState.runMetaM' $ getGoalMVarsNoDelayed postNormGoal
         if ! actualPreNormMVars == actualPostNormMVars then throwError

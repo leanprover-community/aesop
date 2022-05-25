@@ -753,13 +753,13 @@ end Rapp
 namespace Goal
 
 @[inline]
-def postNormGoalAndState? (g : Goal) : Option (MVarId × Meta.SavedState) :=
+def postNormGoalAndMetaState? (g : Goal) : Option (MVarId × Meta.SavedState) :=
   match g.normalizationState with
   | NormalizationState.normal postGoal postState => some (postGoal, postState)
   | _ => none
 
 def postNormGoal? (g : Goal) : Option MVarId :=
-  g.postNormGoalAndState?.map (·.fst)
+  g.postNormGoalAndMetaState?.map (·.fst)
 
 def currentGoal (g : Goal) : MVarId :=
   g.postNormGoal?.getD g.preNormGoal

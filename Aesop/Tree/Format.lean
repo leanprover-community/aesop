@@ -12,7 +12,7 @@ private def toYesNo : Bool → String
 
 protected def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
     MetaM MessageData := do
-  match g.postNormGoalAndState? with
+  match g.postNormGoalAndMetaState? with
   | some (_, postNormMetaState) =>
     postNormMetaState.runMetaM' (addMessageContext (← go))
   | none =>
