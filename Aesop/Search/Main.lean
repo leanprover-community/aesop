@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Check
+import Aesop.Frontend.Attribute
 import Aesop.Options
 import Aesop.RuleSet
 import Aesop.Search.Expansion
@@ -90,11 +91,20 @@ partial def searchLoop : SearchM Q Unit := do
   incrementIteration
   searchLoop
 
-def search' (Q) [Queue Q] (rs : RuleSet) (options : Aesop.Options)
-    (goal : MVarId) (profile : Profile) : MetaM Profile := do
+def search (Q) [Queue Q] (goal : MVarId) (ruleSet? : Option RuleSet := none)
+     (options : Aesop.Options := {}) (profile : Profile := {}) :
+     MetaM Profile := do
   checkNotAssigned goal `aesop
   let go : SearchM Q Unit := try searchLoop finally freeTree
-  let (_, state, _) ← SearchM.run rs options goal profile go
+  let ruleSet ← do
+    match ruleSet? with
+    | none => Frontend.getDefaultAttributeRuleSet
+    | some ruleSet => pure ruleSet
+  let (_, state, _) ← SearchM.run ruleSet options goal profile go
   return state.profile
+
+def bestFirst (goal : MVarId) (ruleSet? : Option RuleSet := none)
+    (options : Aesop.Options := {}) (profile : Profile := {}) : MetaM Profile :=
+  search BestFirstQueue goal ruleSet? options profile
 
 end Aesop

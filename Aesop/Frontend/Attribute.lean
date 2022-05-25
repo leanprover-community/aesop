@@ -96,6 +96,9 @@ variable [Monad m] [MonadEnv m]
 def getAttributeRuleSets : m Aesop.RuleSets :=
   return extension.getState (← getEnv)
 
+def getDefaultAttributeRuleSet : m Aesop.RuleSet :=
+  return (← getAttributeRuleSets).makeMergedRuleSet defaultEnabledRuleSets
+
 def modifyAttributeRuleSets
     (f : Aesop.RuleSets → m Aesop.RuleSets) : m Unit := do
   let env ← getEnv

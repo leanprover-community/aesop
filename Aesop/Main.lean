@@ -14,14 +14,6 @@ open Lean.Elab.Tactic
 
 namespace Aesop
 
-def search (Q) [Queue Q] (config : Frontend.TacticConfig) (goal : MVarId)
-    (profile : Profile) : MetaM Profile := do
-  let ((goal, ruleSet), ruleSetConstructionTime) ← IO.time $
-    config.getRuleSet goal
-  let profile := { profile with ruleSetConstruction := ruleSetConstructionTime }
-  aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
-  search' BestFirstQueue ruleSet config.options goal profile
-
 @[tactic Frontend.Parser.aesopTactic]
 def evalAesop : Tactic := λ stx =>
   withMainContext do
@@ -30,7 +22,11 @@ def evalAesop : Tactic := λ stx =>
       let profile := { Profile.empty with configParsing := configParseTime }
       let (profile, searchTime) ← IO.time $
         liftMetaTacticAux λ goal => do
-          let profile ← search BestFirstQueue config goal profile
+          let ((goal, ruleSet), ruleSetConstructionTime) ← IO.time $
+            config.getRuleSet goal
+          let profile := { profile with ruleSetConstruction := ruleSetConstructionTime }
+          aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
+          let profile ← bestFirst goal ruleSet config.options profile
           return (profile, [])
       pure { profile with search := searchTime }
     let profile := { profile with total := totalTime }
