@@ -376,7 +376,7 @@ an Aesop rule. Currently available builders are:
   Aesop applies a forward rule with explicit immediate names, it only matches
   the corresponding arguments to hypotheses. (Here, `even_or_odd` has only one
   argument, so there is no difference.)
-  
+
   When no immediate names are given, Aesop considers every argument immediate,
   except for instance arguments and dependent arguments (i.e. those that can be
   inferred from the types of later arguments).
@@ -439,26 +439,23 @@ an Aesop rule. Currently available builders are:
   The builder may be given an option `uses_branch_state := <boolean>` (default
   true). This indicates whether the given tactic uses the branch state; see
   below.
-  
+
   Rule tactics should not be 'no-ops': if a rule tactic is not applicable to a
   goal, it should fail rather than return the goal unchanged. All no-op rules
   waste time and no-op `norm` rules will send normalisation into an infinite
   loop.
-  
+
   Normalisation rules may not assign metavariables (other than the goal
   metavariable) or introduce new metavariables (other than the new goal
   metavariable). This can be a problem because some Lean tactics, e.g. `cases`,
   do so even in cases where you probably would not expect them to. I'm afraid
   there is currently no good solution for this.
-- **`safe_default`**: default builder for safe rules. This is the builder used
-  when you register a safe rule without specifying a builder, but you can also
-  request it explicitly. It tries the following builders, using the first one
-  that works for the given declaration or hypothesis: `constructors`, `tactic`,
-  `apply`.
-- **`unsafe_default`**: default builder for unsafe rules. Uses the same builders
-  as `safe_default`.
-- **`norm_default`**: default builder for normalisation rules. Uses the builders
-  `tactic`, `simp`, `apply`.
+- **`default`**: The default builder. This is the builder used when you
+  register a rule without specifying a builder, but you can also use it
+  explicitly. Depending on the rule's phase, the default builder tries
+  different builders, using the first one that works. These builders are:
+  - For `safe` and `unsafe` rules: `constructors`, `tactic`, `apply`.
+  - For `norm` rules: `constructors`, `tactic`, `simp`, `apply`.
 
 #### Rule Sets
 
