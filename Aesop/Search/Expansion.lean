@@ -310,8 +310,11 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
             { goal, mvars, branchState := postBranchState }
         }
         (← rref.get).children.forM λ cref => do enqueueGoals (← cref.get).goals
-        rref.markProven -- no-op if the rapp is not, in fact, proven
         return rref
+      rrefs.forM (·.markProven)
+        -- `markProven` is a no-op if the rapp is not, in fact, proven. We must
+        -- perform this computation after all rapps have been added to ensure
+        -- that if one is proven, the others are all marked as irrelevant.
       aesop_trace[steps] do traceNewRapps rrefs
       return rrefs
 
