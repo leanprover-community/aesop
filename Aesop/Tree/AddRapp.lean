@@ -125,6 +125,30 @@ private unsafe def copyGoals (assignedMVars : HashSet MVarId)
       failedRapps := #[]
     }
 
+private def makeInitialGoal (g : AddGoal)
+    (parent : MVarClusterRef) (depth : Nat) (successProbability : Percent) :
+    TreeM Goal :=
+  return Goal.mk {
+    id := ← getAndIncrementNextGoalId
+    parent
+    children := #[]
+    originalGoalId? := none
+    depth
+    state := GoalState.unknown
+    isIrrelevant := false
+    isForcedUnprovable := false
+    preNormGoal := g.goal
+    normalizationState := NormalizationState.notNormal
+    mvars := g.mvars.toArray
+    successProbability
+    addedInIteration := (← read).currentIteration
+    lastExpandedInIteration := Iteration.none
+    unsafeRulesSelected := false
+    unsafeQueue := {}
+    branchState := g.branchState
+    failedRapps := #[]
+  }
+
 private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   -- Construct the new rapp
   let rref : RappRef ← IO.mkRef $ Rapp.mk {
@@ -140,27 +164,12 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     assignedMVars := r.assignedMVars.toArray
   }
 
-  -- Construct the new goals
-  let newGoals : Array Goal ← r.children.mapM λ g => return Goal.mk {
-    id := ← getAndIncrementNextGoalId
-    parent := unsafeCast () -- will be filled in later
-    children := #[]
-    originalGoalId? := none
-    depth := (← r.parent.get).depth + 1
-    state := GoalState.unknown
-    isIrrelevant := false
-    isForcedUnprovable := false
-    preNormGoal := g.goal
-    normalizationState := NormalizationState.notNormal
-    mvars := g.mvars.toArray
-    successProbability := r.successProbability
-    addedInIteration := (← read).currentIteration
-    lastExpandedInIteration := Iteration.none
-    unsafeRulesSelected := false
-    unsafeQueue := {}
-    branchState := g.branchState
-    failedRapps := #[]
-  }
+  -- Construct the subgoals
+  let parentGoal ← r.parent.get
+  let goalDepth := parentGoal.depth + 1
+  let subgoals : Array Goal ← r.children.mapM
+    (makeInitialGoal · (unsafeCast ()) goalDepth r.successProbability)
+    -- The parent (`unsafeCast ()`) will be patched up later.
 
   -- If the rapp assigned any mvars, copy the related goals.
   let copiedGoals : Array Goal ←
@@ -169,9 +178,31 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     else
       copyGoals r.assignedMVars rref
 
+  -- If the rapp 'dropped' mvars, add one goal for each dropped mvar. A
+  -- dropped mvar is one that appears in the parent of the rapp but not in any
+  -- of its subgoals.
+  let mut subgoalMVars : HashSet MVarId := {}
+  for g in subgoals do
+    for m in g.mvars do
+      subgoalMVars := subgoalMVars.insert m
+  for g in copiedGoals do
+    for m in g.mvars do
+      subgoalMVars := subgoalMVars.insert m
+  let droppedMVars := parentGoal.mvars.filter λ m =>
+    ! subgoalMVars.contains m && ! r.assignedMVars.contains m
+  let droppedMVarGoals : Array Goal ← droppedMVars.mapM λ goal => do
+      let g : AddGoal := {
+        goal
+        mvars := ← (← rref.get).runMetaM' $ getGoalMVarsNoDelayed goal
+        branchState := parentGoal.branchState
+      }
+      makeInitialGoal g (unsafeCast ()) goalDepth r.successProbability
+
+  let newGoals := subgoals ++ copiedGoals ++ droppedMVarGoals
+
   -- Construct the new mvar clusters.
   let crefs : Array MVarClusterRef ←
-    clusterGoals (newGoals ++ copiedGoals) |>.mapM λ gs => do
+    clusterGoals newGoals |>.mapM λ gs => do
       let grefs ← gs.mapM (IO.mkRef ·)
       let cref ← IO.mkRef $ MVarCluster.mk {
         parent? := some rref
@@ -179,15 +210,16 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
         isIrrelevant := false
         state := NodeState.unknown
       }
+      -- Patch up information we left out earlier (to break cyclic dependencies).
       grefs.forM λ gref => gref.modify λ g => g.setParent cref
       return cref
 
-  -- Patch up information we left out earlier (to break cyclic dependencies).
+  -- Patch up information we left out earlier.
   rref.modify λ r => r.setChildren crefs
   r.parent.modify λ g => g.setChildren $ g.children.push rref
 
   -- Increment goal and rapp counters.
-  incrementNumGoals (newGoals.size + copiedGoals.size)
+  incrementNumGoals newGoals.size
   incrementNumRapps
   return rref
 

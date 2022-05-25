@@ -118,12 +118,6 @@ def check (input : RuleTacInput) (r : RuleApplication)
       let actualMVars ← getGoalMVarsNoDelayed goal
       if ! actualMVars == mvars then
         return some m!"rule reported wrong metavariables for goal {goal.name}.\nReported: {mvars.toArray.map (·.name)}\nActual: {actualMVars.toArray.map (·.name)}"
-    let goalMVars : HashSet MVarId :=
-      r.goals.foldl (init := {}) λ goalMVars (_, mvars) => goalMVars.merge mvars
-    let droppedMVar? := input.mvars.find? λ m =>
-      ! goalMVars.contains m && ! r.assignedMVars.contains m
-    if let (some m) := droppedMVar? then
-      return some m!"rule dropped metavariable {m.name}: it was neither assigned nor does it appear in one of the rule's subgoals"
     return none
 
 end RuleApplication
