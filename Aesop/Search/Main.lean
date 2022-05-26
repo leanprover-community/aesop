@@ -91,17 +91,37 @@ partial def searchLoop : SearchM Q Unit := do
   incrementIteration
   searchLoop
 
+
 def search (Q) [Queue Q] (goal : MVarId) (ruleSet? : Option RuleSet := none)
      (options : Aesop.Options := {}) (profile : Profile := {}) :
      MetaM Profile := do
   checkNotAssigned goal `aesop
-  let go : SearchM Q Unit := try searchLoop finally freeTree
   let ruleSet ← do
     match ruleSet? with
     | none => Frontend.getDefaultAttributeRuleSet
     | some ruleSet => pure ruleSet
+  let go : SearchM Q Unit :=
+    try searchLoop catch e => onError e finally freeTree
   let (_, state, _) ← SearchM.run ruleSet options goal profile go
   return state.profile
+  where
+    onError : Exception → SearchM Q Unit
+      | e@(.error ref msg) => do
+        if ! (← TraceOption.goalsAfterSafe.isEnabled) then
+          throw e
+        else
+          let safePrefixes ← extractSafePrefixes (← getRootGoal)
+          let safePrefixesMsg ← safePrefixes.toMessageData
+          let header :=
+            if safePrefixes.size ≤ 1 then
+              m!"After applying safe rules, Aesop tried to solve these goals:"
+            else
+              m!"After applying safe rules, Aesop tried to solve any of these {safePrefixes.size} sets of goals:"
+          let msg := msg ++ "\n\n" ++ header ++ "\n\n" ++ safePrefixesMsg ++ "\n"
+            -- The final "\n" seems to be necessary to ensure that the last goal
+            -- is displayed correctly.
+          throw $ .error ref msg
+      | e => throw e
 
 def bestFirst (goal : MVarId) (ruleSet? : Option RuleSet := none)
     (options : Aesop.Options := {}) (profile : Profile := {}) : MetaM Profile :=

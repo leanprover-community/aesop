@@ -9,6 +9,7 @@ import Aesop.Tree.BranchState
 import Aesop.Tree.Check
 import Aesop.Tree.Data
 import Aesop.Tree.ExtractProof
+import Aesop.Tree.ExtractSafePrefixes
 import Aesop.Tree.Format
 import Aesop.Tree.Free
 import Aesop.Tree.RunMetaM

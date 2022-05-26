@@ -772,6 +772,11 @@ def parentMetaState (g : Goal) : MetaM Meta.SavedState := do
   | none => saveState
   | some parent => return (← parent.get).metaState
 
+def currentGoalAndMetaState (g : Goal) : MetaM (MVarId × Meta.SavedState) :=
+  match g.postNormGoalAndMetaState? with
+  | some x => return x
+  | none => return (g.preNormGoal, ← g.parentMetaState)
+
 def isUnsafeExhausted (g : Goal) : Bool :=
   g.unsafeRulesSelected && g.unsafeQueue.isEmpty
 
