@@ -163,6 +163,20 @@ syntax &"unindexed " : Aesop.indexing_mode
 
 end Parser
 
+def elabPattern (stx : Syntax) : TermElabM Expr :=
+  withRef stx $ withReader adjustCtx $ withSynthesize do
+    instantiateMVars (← elabTerm stx none)
+  where
+    adjustCtx (old : Term.Context) : Term.Context := {
+      old with
+      mayPostpone := false
+      errToSorry := false
+      autoBoundImplicit := false
+      sectionVars := {}
+      sectionFVars := {}
+      inPattern := true
+    }
+
 def elabSingleIndexingMode (stx : Syntax) : ElabM IndexingMode :=
   withRefThen stx λ
     | `(indexing_mode| target $t:term) => .target <$> elabKeys t
@@ -170,25 +184,16 @@ def elabSingleIndexingMode (stx : Syntax) : ElabM IndexingMode :=
     | `(indexing_mode| unindexed) => return .unindexed
     | _ => throwUnsupportedSyntax
   where
-    elabKeys (stx : Syntax) : ElabM (Array DiscrTree.Key) := do
-      let adjustCtx oldCtx := {
-        oldCtx with
-        mayPostpone := false
-        errToSorry := false
-        autoBoundImplicit := false
-        sectionVars := {}
-        sectionFVars := {}
-        inPattern := true
-      }
-      show TermElabM _ from
-        withoutModifyingState do
-          let u ← mkFreshLevelMVar
-          let e ← withReader adjustCtx $ withSynthesize $
-            elabTermEnsuringType stx (mkSort u)
-          DiscrTree.mkPathWithTransparency e indexingTransparency
+    elabKeys (stx : Syntax) : ElabM (Array DiscrTree.Key) :=
+      show TermElabM _ from withoutModifyingState do
+        let e ← elabPattern stx
+        DiscrTree.mkPathWithTransparency e indexingTransparency
 
 def IndexingMode.elab (stxs : Array Syntax) : ElabM IndexingMode :=
   .or <$> stxs.mapM elabSingleIndexingMode
+
+def CasesPattern.elab (stx : Syntax) : TermElabM CasesPattern := do
+  abstractMVars (← elabPattern stx)
 
 
 namespace Parser
@@ -198,6 +203,7 @@ declare_syntax_cat Aesop.builder_option
 syntax "(" &"uses_branch_state" ":=" Aesop.bool_lit ")" : Aesop.builder_option
 syntax "(" &"immediate" ":=" "[" ident,+,? "]" ")" : Aesop.builder_option
 syntax "(" &"index" ":=" "[" Aesop.indexing_mode,+,? "]" ")" : Aesop.builder_option
+syntax "(" &"patterns" ":=" "[" term,+,? "]" ")" : Aesop.builder_option
 
 syntax builderOptions := Aesop.builder_option*
 
@@ -207,6 +213,7 @@ inductive BuilderOption
   | usesBranchState (b : Bool)
   | immediate (names : Array Name)
   | index (imode : IndexingMode)
+  | patterns (pats : Array CasesPattern)
 
 namespace BuilderOption
 
@@ -216,19 +223,23 @@ def «elab» (stx : Syntax) : ElabM BuilderOption :=
       usesBranchState <$> elabBoolLit b
     | `(builder_option| (immediate := [$ns:ident,*])) =>
       return immediate $ (ns : Array Syntax).map (·.getId)
-    | `(builder_option| (index := [$imodes,*])) =>
+    | `(builder_option| (index := [$imodes:Aesop.indexing_mode,*])) =>
       index <$> IndexingMode.elab imodes
+    | `(builder_option| (patterns := [$pats:term,*])) =>
+      patterns <$> (pats : Array Syntax).mapM (CasesPattern.elab ·)
     | _ => throwUnsupportedSyntax
 
 protected def name : BuilderOption → String
   | usesBranchState .. => "uses_branch_state"
   | immediate .. => "immediate"
   | index .. => "index"
+  | patterns .. => "patterns"
 
 protected def toCtorIdx : BuilderOption → Nat
   | usesBranchState .. => 0
   | immediate .. => 1
   | index .. => 2
+  | patterns .. => 3
 
 end BuilderOption
 
@@ -260,7 +271,7 @@ def «elab» (bo : BuilderOptions α) (stx : Syntax) : ElabM α :=
 protected def none (builderName : DBuilderName) : BuilderOptions Unit where
   builderName := builderName
   init := ()
-  add := λ _ _ => none
+  add _ _ := none
 
 def regular (builderName : BuilderName) :
     BuilderOptions RegularBuilderOptions where
@@ -294,6 +305,14 @@ def forward : BuilderOptions ForwardBuilderOptions :=
 def elim : BuilderOptions ForwardBuilderOptions :=
   forwardCore (clear := true)
 
+def cases : BuilderOptions CasesBuilderOptions where
+  builderName := .regular .cases
+  init := .default
+  add
+    | opts, .patterns patterns => some { opts with patterns }
+    | opts, .index imode => some { opts with indexingMode? := imode }
+    | opts, _ => none
+
 end BuilderOptions
 
 
@@ -313,7 +332,7 @@ inductive Builder
   | tactic (opts : TacticBuilderOptions)
   | constructors (opts : RegularBuilderOptions)
   | forward (opts : ForwardBuilderOptions)
-  | cases (opts : RegularBuilderOptions)
+  | cases (opts : CasesBuilderOptions)
   | dflt
   deriving Inhabited
 
@@ -328,6 +347,7 @@ private def forwardBuilderOptionsToString (opts : ForwardBuilderOptions) : Strin
   else
     ""
 
+-- FIXME does not display some options
 instance : ToString Builder where
   toString
     | apply .. => "apply"
@@ -350,7 +370,7 @@ def elabOptions (b : DBuilderName) (opts : Syntax) : ElabM Builder := do
   | .regular .constructors => constructors <$> getRegularOptions .constructors
   | .regular .forward => forward <$> BuilderOptions.forward.elab opts
   | .regular .elim => forward <$> BuilderOptions.elim.elab opts
-  | .regular .cases => «cases» <$> getRegularOptions .cases
+  | .regular .cases => «cases» <$> BuilderOptions.cases.elab opts
   | .dflt => checkNoOptions; return default
   where
     checkNoOptions := BuilderOptions.none b |>.«elab» opts

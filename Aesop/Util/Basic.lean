@@ -459,6 +459,12 @@ def arity : Expr → Nat
   | forallE _ _ body _ => 1 + arity body
   | _ => 0
 
+def isAppOf' : Expr → Name → Bool
+  | mdata _ b _, d => isAppOf' b d
+  | const c _ _, d => c == d
+  | app f _ _,   d => isAppOf' f d
+  | _,           _ => false
+
 end Lean.Expr
 
 
@@ -1352,6 +1358,15 @@ def sortFVarsByReverseContextOrder (goal : MVarId) (hyps : Array FVarId) :
 
 def tryClearMany' (goal : MVarId) (hyps : Array FVarId) : MetaM MVarId := do
   tryClearMany goal (← sortFVarsByReverseContextOrder goal hyps)
+
+def matchAppOf (f : Expr) (e : Expr) : MetaM (Option (Array Expr)) := do
+  let type ← inferType f
+  let (mvars, _, concl) ← forallMetaTelescope type
+  let app := mkAppN f mvars
+  if ← isDefEq app e then
+    some <$> mvars.mapM instantiateMVars
+  else
+    return none
 
 end Lean.Meta
 

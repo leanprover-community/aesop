@@ -178,13 +178,21 @@ end RuleTac
 
 /-! # Rule Tactic Descriptions -/
 
+def CasesPattern := AbstractMVarsResult
+  deriving Inhabited
+
+inductive CasesTarget
+  | decl (decl : Name)
+  | patterns (patterns : Array CasesPattern)
+  deriving Inhabited
+
 inductive RuleTacDescr
   | applyConst (decl     : Name)
   | applyFVar  (userName : Name)
   | constructors (constructorNames : Array Name)
   | forwardConst (decl     : Name) (immediate : UnorderedArraySet Nat) (clear : Bool)
   | forwardFVar  (userName : Name) (immediate : UnorderedArraySet Nat) (clear : Bool)
-  | cases (decl : Name) (isRecursiveType : Bool)
+  | cases (target : CasesTarget) (isRecursiveType : Bool)
   | tacticM (decl : Name)
   | ruleTac (decl : Name)
   | simpleRuleTac (decl : Name)

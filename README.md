@@ -423,6 +423,13 @@ an Aesop rule. Currently available builders are:
   applied to a goal with hypotheses `h₁ : A ∨ B ∨ C` and `h₂ : D ∨ E`. However,
   if `T` is a recursive type (e.g. `List`), we only perform case analysis once
   on each hypothesis. Otherwise we would loop infinitely.
+
+  The `patterns` option can be used to apply the rule only on hypotheses of a
+  certain shape. E.g. the rule `(cases (patterns := [Fin 0])) Fin` will perform
+  case analysis only on hypotheses of type `Fin 0`. Patterns can contain
+  underscores, e.g. `0 ≤ _`. Multiple patterns can be given (separated by
+  commas); the rule is then applied whenever at least one of the patterns
+  matches a hypothesis.
 - **`simp`**: when applied to an equation `eq : A₁ → ... Aₙ → x = y`, registers
   `eq` as a simp lemma for the builtin simp pass during normalisation. As such,
   this builder can only build normalisation rules.

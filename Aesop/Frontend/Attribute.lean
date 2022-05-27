@@ -63,6 +63,7 @@ initialize extension :
   let impl : AttributeImpl := {
     name := `aesop
     descr := "Register a declaration as an Aesop rule."
+    applicationTime := .afterCompilation
     add := λ decl stx attrKind => withRef stx do
       match attrKind with
       | AttributeKind.global => pure ()
