@@ -555,10 +555,11 @@ namespace Std.HashMap
 
 variable [BEq α] [Hashable α]
 
-def insertWith (m : HashMap α β) (a : α) (b : β) (f : β → β) : HashMap α β :=
+def insertWith (m : HashMap α β) (a : α) (b : Unit → β) (f : β → β) :
+    HashMap α β :=
   let b :=
     match m.find? a with
-    | none => b
+    | none => b ()
     | some b' => f b'
   m.insert a b
 
@@ -577,7 +578,8 @@ def merge (m n : HashMap α β) (combine : α → β → β → β) : HashMap α
   where
     @[inline]
     loop m n :=
-      m.fold (init := n) λ m a b => m.insertWith a b (λ b' => combine a b b')
+      m.fold (init := n) λ m a b =>
+        m.insertWith a (λ _ => b) (λ b' => combine a b b')
 
 instance : ForIn m (HashMap α β) (α × β) where
   forIn m init f := do
