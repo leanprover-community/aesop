@@ -54,7 +54,7 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
         (goal : MVarId) : MetaM (Option (Array MVarId)) := do
       let (some hyp) ← findFirstApplicableHyp excluded goal
         | return none
-      let goals ← try Meta.cases goal hyp catch _ => return none
+      let goals ← try commitIfNoEx $ Meta.cases goal hyp catch _ => return none
       let mut newGoals := newGoals
       for g in goals do
         let excluded :=
