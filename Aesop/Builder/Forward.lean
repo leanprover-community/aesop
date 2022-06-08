@@ -85,10 +85,11 @@ def forward (opts : ForwardBuilderOptions) : RuleBuilder := λ input =>
     let (goal, newHyp) ← copyRuleHypothesis goal fvarUserName
     withMVarContext goal do
       let ldecl ← getLocalDecl newHyp
+      let type ← instantiateMVars ldecl.type
       let immediate ←
-        getImmediatePremises ldecl.userName ldecl.type opts.immediateHyps
+        getImmediatePremises ldecl.userName type opts.immediateHyps
       let tac := .forwardFVar ldecl.userName immediate opts.clear
-      .«local» goal <$> mkResult tac ldecl.type immediate
+      .«local» goal <$> mkResult tac type immediate
   where
     mkResult (tac : RuleTacDescr) (type : Expr)
         (immediate : UnorderedArraySet Nat) : MetaM RuleBuilderResult :=
