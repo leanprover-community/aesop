@@ -30,7 +30,7 @@ def getImmediatePremises (name : Name) (type : Expr) : Option (Array Name) →
   | none => do
     -- If no immediate names are given, every argument becomes immediate,
     -- except instance args and dependent args.
-    forallTelescope type λ args _ => do
+    forallTelescopeReducing type λ args _ => do
       if args.isEmpty then
         throwError "aesop: while registering '{name}' as a forward rule: not a function"
       let mut result := #[]
@@ -46,7 +46,7 @@ def getImmediatePremises (name : Name) (type : Expr) : Option (Array Name) →
   | some immediate => do
     -- If immediate names are given, we check that corresponding arguments
     -- exists and record these arguments' positions.
-    forallTelescope type λ args _ => do
+    forallTelescopeReducing type λ args _ => do
       let mut unseen := immediate.deduplicate (ord := ⟨Name.quickCmp⟩)
       let mut result := #[]
       for i in [0:args.size] do
@@ -64,7 +64,7 @@ private def getIndexingMode (type : Expr) (immediate : UnorderedArraySet Nat) :
   match immediate.max? with
   | some i =>
     withoutModifyingState do
-      let (args, _, _) ← forallMetaTelescope type
+      let (args, _, _) ← forallMetaTelescopeReducing type
       match args.get? i with
       | some arg =>
         let argT ← inferType arg
