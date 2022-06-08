@@ -31,6 +31,8 @@ def getImmediatePremises (name : Name) (type : Expr) : Option (Array Name) →
     -- If no immediate names are given, every argument becomes immediate,
     -- except instance args and dependent args.
     forallTelescope type λ args _ => do
+      if args.isEmpty then
+        throwError "aesop: while registering '{name}' as a forward rule: not a function"
       let mut result := #[]
       for i in [0:args.size] do
         let fvarId := args[i].fvarId!
