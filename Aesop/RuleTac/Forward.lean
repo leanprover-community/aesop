@@ -16,7 +16,7 @@ private partial def makeForwardHyps (e : Expr)
     MetaM (Array Expr × Array FVarId) := do
   let type ← inferType e
   withNewMCtxDepth do
-    let (argMVars, binderInfos, _) ← forallMetaTelescope type
+    let (argMVars, binderInfos, _) ← forallMetaTelescopeReducing type
 
     let app := mkAppN e argMVars
     let mut instMVars := Array.mkEmpty argMVars.size
