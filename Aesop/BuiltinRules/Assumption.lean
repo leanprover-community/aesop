@@ -43,11 +43,10 @@ def assumption : RuleTac := λ input => do
     tryHyp (goal : MVarId) (goalMVars : Array MVarId) (tgt : Expr)
         (tgtHasMVar : Bool) (ldecl : LocalDecl) :
         MetaM (Option (RuleApplication × Bool)) := do
+      let proofHasMVar := ldecl.type.hasMVar
       if ! (← isDefEq ldecl.type tgt) then
         return none
-      let proof ← instantiateMVars ldecl.toExpr
-      assignExprMVar goal proof
-      let proofHasMVar := proof.hasMVar
+      assignExprMVar goal ldecl.toExpr
       let assignedMVars ←
         if ! tgtHasMVar && ! proofHasMVar then
           pure {}
