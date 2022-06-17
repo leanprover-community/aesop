@@ -1268,12 +1268,15 @@ def isDeclaredMVar (mvarId : MVarId) : MetaM Bool := do
   | some _ => pure true
   | none => pure false
 
+-- Note: includes mvars in auxDecls.
 def getHypMVarsNoDelayed (goal : MVarId) : MetaM (HashSet MVarId) := do
   instantiateMVarsInGoal goal
   withMVarContext goal do
     let mut mvars := HashSet.empty
-    for hyp in (← getLCtx) do
-      mvars := mvars.insertMany (← getMVarsNoDelayed (mkFVar hyp.fvarId))
+    for ldecl in (← getLCtx) do
+      mvars := mvars.insertMany (← getMVarsNoDelayed ldecl.type)
+      if let (some val) := ldecl.value? then
+        mvars := mvars.insertMany (← getMVarsNoDelayed val)
     return mvars
 
 def getTargetMVarsNoDelayed (goal : MVarId) : MetaM (Array MVarId) := do
