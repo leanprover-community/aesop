@@ -32,12 +32,89 @@ When we assign a metavariable `m`, we must take some care:
   also cannot assume that these are the *only* metavariables occurring in the
   assignments, since they may additionally contain delayed-assigned
   metavariables which depend on the unassigned metavariables.
+
+We also replay env modifications in a similar fashion. We assume that rules only
+add declarations to the environment.
 -/
 
 namespace Aesop
 
 local macro "throwPRError " s:interpolatedStr(term) : term =>
   `(throwError m!"aesop: internal error during proof reconstruction: " ++ m!$s)
+
+
+-- ## Copying Declarations
+
+private def getNewConsts (oldEnv : Environment) (newEnv : Environment) :
+    Array ConstantInfo := Id.run do
+  let oldMap₂ := oldEnv.constants.map₂
+  let newMap₂ := newEnv.constants.map₂
+  if oldMap₂.size == newMap₂.size then
+    #[]
+  else
+    newMap₂.foldl (init := #[]) λ cs n c =>
+      if oldMap₂.contains n then cs else cs.push c
+
+private def constantInfoDependencies (candidates : HashMap Name ConstantInfo) :
+    ConstantInfo → Array ConstantInfo
+  | .axiomInfo v => addConsts v.type {}
+  | .recInfo _ => {}
+  | .ctorInfo _ => {}
+  | .inductInfo v => {}
+  | .quotInfo _ => {}
+  | .opaqueInfo v => addConsts v.value $ addConsts v.type {}
+  | .thmInfo v => addConsts v.value $ addConsts v.type {}
+  | .defnInfo v => addConsts v.value $ addConsts v.type {}
+  where
+    addConsts (e : Expr) (acc : Array ConstantInfo) : Array ConstantInfo :=
+      e.foldConsts (init := acc) λ n ns =>
+        match candidates.find? n with
+        | none => ns
+        | some n => ns.push n
+
+private def topSortConstantInfos (cs : Array ConstantInfo) :
+    Array (ConstantInfo × Array ConstantInfo) :=
+  let nameToConst := cs.foldl (init := {}) λ m c => m.insert c.name c
+  have : BEq ConstantInfo := ⟨λ n m => n.name == m.name⟩
+  have : Hashable ConstantInfo := ⟨λ n => hash n.name⟩
+  cs.topSort (constantInfoDependencies nameToConst)
+
+private def declareConstant (ruleName : RuleName) : ConstantInfo → CoreM Unit
+  | .axiomInfo v => addDecl $ .axiomDecl v
+  | .recInfo _ => return
+  | .ctorInfo _ => return
+  | .inductInfo _ => throwError
+    "aesop: rule {ruleName} defined a new inductive type, which is currently not supported."
+  | .quotInfo _ => throwError
+    "aesop: rule {ruleName} generated quotient declarations, which should never happen."
+  | .opaqueInfo v => addDecl $ .opaqueDecl v
+  | .thmInfo v => addDecl $ .thmDecl v
+  | .defnInfo v => addAndCompile $ .defnDecl v
+
+
+-- For each declaration `d` that appears in `newState` but not in
+-- `oldState`, add `d` to the environment. We assume that the environment in
+-- `newState` is a local extension of the environment in `oldState`, meaning
+--
+-- 1. The declarations in `newState` are a superset of the declarations in
+--    `oldState`.
+-- 2. The `map₁`s of the environments in `newState` and `oldState` are
+--    identical. (These contain imported decls.)
+--
+-- Limitations:
+-- - Declarations of inductive types are not copied.
+-- - Mutual definitions and inductives will lead to a kernel error.
+--
+-- TODO lift these limitations.
+private def copyNewDeclarations (ruleName : RuleName) (oldEnv : Environment)
+    (newEnv : Environment) : CoreM Unit := do
+  let env ← getEnv
+  let newConsts := getNewConsts oldEnv newEnv
+  let newConsts := topSortConstantInfos newConsts
+  newConsts.forM λ (c, _) => declareConstant ruleName c
+
+
+-- ## Copying Metavariables
 
 private def copyMVarDecl (s : Meta.SavedState) (mvarId : MVarId) :
     MetaM Unit := do
@@ -68,8 +145,12 @@ private partial def copyExprMVarAssignment (s : Meta.SavedState)
       copyExprMVarAssignment s mvarId
   | none => return
 
+
+-- ## Main Function
+
 mutual
-  private partial def extractProofGoal (g : Goal) : MetaM Unit := do
+  private partial def extractProofGoal (parentEnv : Environment) (g : Goal) :
+      MetaM Unit := do
     match g.normalizationState with
     | NormalizationState.notNormal => throwPRError
       "goal {g.id} was not normalised."
@@ -78,27 +159,29 @@ mutual
       let rref? ← g.children.findM? λ rref => return (← rref.get).state.isProven
       let (some rref) := rref? | throwPRError
         "goal {g.id} does not have a proven rapp."
-      extractProofRapp postNormGoal (← rref.get)
+      extractProofRapp parentEnv postNormGoal (← rref.get)
     | NormalizationState.provenByNormalization postState =>
       copyExprMVarAssignment postState g.preNormGoal
 
-  private partial def extractProofRapp (parentGoal : MVarId) (r : Rapp) :
-      MetaM Unit := do
+  private partial def extractProofRapp (parentEnv : Environment)
+      (parentGoal : MVarId) (r : Rapp) : MetaM Unit := do
+    let newEnv := r.metaState.core.env
+    copyNewDeclarations r.appliedRule.name parentEnv newEnv
     copyExprMVarAssignment r.metaState parentGoal
     for m in r.assignedMVars do
       copyExprMVarAssignment r.metaState m
-    r.children.forM λ cref => do extractProofMVarCluster (← cref.get)
+    r.children.forM λ cref => do extractProofMVarCluster newEnv (← cref.get)
 
-  private partial def extractProofMVarCluster (c : MVarCluster) :
-      MetaM Unit := do
+  private partial def extractProofMVarCluster (parentEnv : Environment)
+      (c : MVarCluster) : MetaM Unit := do
     let gref? ← c.goals.findM? λ gref => return (← gref.get).state.isProven
     let (some gref) := gref? | throwPRError
       "an mvar cluster does not contain a proven goal (candidate goals: {← c.goals.mapM λ gref => return (← gref.get).id})."
-    extractProofGoal (← gref.get)
+    extractProofGoal parentEnv (← gref.get)
 end
 
-def Goal.extractProof (root : Goal) : MetaM Unit :=
-  extractProofGoal root
+def Goal.extractProof (root : Goal) : MetaM Unit := do
+  extractProofGoal (← getEnv) root
 
 def extractProof : TreeM Unit := do
   (← (← getRootGoal).get).extractProof
