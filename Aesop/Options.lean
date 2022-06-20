@@ -39,6 +39,6 @@ unsafe def evalOptionsExprImpl (e : Expr) : TermElabM Aesop.Options := do
   evalExpr Aesop.Options ``Aesop.Options e
 
 @[implementedBy evalOptionsExprImpl]
-constant evalOptionsExpr (e : Expr) : TermElabM Aesop.Options
+opaque evalOptionsExpr (e : Expr) : TermElabM Aesop.Options
 
 end Aesop

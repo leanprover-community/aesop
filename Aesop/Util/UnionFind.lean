@@ -51,7 +51,7 @@ private unsafe def findRepUnsafe (i : USize) (u : UnionFind α) :
     (parent, { u with parents := u.parents.uset i parent lcProof })
 
 @[implementedBy findRepUnsafe]
-private constant findRep : USize → UnionFind α → USize × UnionFind α
+private opaque findRep : USize → UnionFind α → USize × UnionFind α
 
 partial def find? (x : α) (u : UnionFind α) : Option USize × UnionFind α :=
   match u.toRep.find? x with
@@ -83,7 +83,7 @@ private unsafe def mergeUnsafe (x y : α) (u : UnionFind α) :
       }
 
 @[implementedBy mergeUnsafe]
-constant merge (x y : α) : UnionFind α → UnionFind α
+opaque merge (x y : α) : UnionFind α → UnionFind α
 
 def sets (u : UnionFind α) : Array (Array α) × UnionFind α :=
   let (sets, u) := u.toRep.fold (init := (HashMap.empty, u)) λ (sets, u) x rep =>
