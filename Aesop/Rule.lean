@@ -114,7 +114,7 @@ instance : ToFormat RegularRule where
     | «unsafe» r => format r
 
 def successProbability : RegularRule → Percent
-  | safe r => Percent.hundred
+  | safe _ => Percent.hundred
   | «unsafe» r => r.extra.successProbability
 
 def isSafe : RegularRule → Bool

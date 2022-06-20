@@ -46,7 +46,7 @@ protected def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
           m!"Failed rule applications:{node $ g.failedRapps.map toMessageData}"
       ]
 
-protected def Rapp.toMessageData (traceMods : TraceModifiers) (r : Rapp) :
+protected def Rapp.toMessageData (r : Rapp) :
     MetaM MessageData := do
   Prod.fst <$> r.runMetaM (addMessageContext (← go))
   where
@@ -76,7 +76,7 @@ mutual
 
   private partial def rappTreeToMessageData (traceMods : TraceModifiers)
       (rapp : Rapp) : MetaM MessageData := do
-    let rappMsg ← rapp.toMessageData traceMods
+    let rappMsg ← rapp.toMessageData
     let childrenMsgs ←
       rapp.children.concatMapM λ cref => do
         (← cref.get).goals.mapM λ gref => do

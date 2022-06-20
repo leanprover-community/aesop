@@ -12,7 +12,7 @@ open Lean.Meta
 namespace Aesop
 
 def RuleBuilder.constructors (opts : RegularBuilderOptions) : RuleBuilder :=
-  ofGlobalRuleBuilder name λ phase decl => do
+  ofGlobalRuleBuilder name λ _ decl => do
     let info ← RuleBuilder.checkConstIsInductive name decl
     return RuleBuilderResult.regular {
       builder := name

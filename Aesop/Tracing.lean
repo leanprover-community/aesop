@@ -48,7 +48,7 @@ macro "aesop_trace[" opt:ident "]"
         `(($s : MessageData))
     `(doElem| do
       if ← Aesop.TraceOption.isEnabled $optFull then
-        aesop_trace![$opt] $s)
+        aesop_trace![$opt] $msg)
 
 -- The following slightly weird setup with the `Init.*` TraceOptions is
 -- necessary because when we define something via `initialize`, we can't

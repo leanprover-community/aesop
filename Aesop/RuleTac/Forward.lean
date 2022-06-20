@@ -16,14 +16,13 @@ private partial def makeForwardHyps (e : Expr)
     MetaM (Array Expr × Array FVarId) := do
   let type ← inferType e
   withNewMCtxDepth do
-    let (argMVars, binderInfos, conclusion) ← forallMetaTelescope type
+    let (argMVars, binderInfos, _) ← forallMetaTelescope type
 
     let app := mkAppN e argMVars
     let mut instMVars := Array.mkEmpty argMVars.size
     let mut immediateMVars := Array.mkEmpty argMVars.size
     for i in [0:argMVars.size] do
       let mvarId := argMVars[i].mvarId!
-      let argName := (← getMVarDecl mvarId).userName
       if immediate.contains i then
         immediateMVars := immediateMVars.push mvarId
       else if binderInfos[i].isInstImplicit then

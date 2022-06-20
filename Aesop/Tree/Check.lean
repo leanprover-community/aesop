@@ -31,7 +31,7 @@ def checkIds (root : MVarClusterRef) : CoreM Unit := do
         throwError "{Check.tree.name}: duplicate rapp id: {id}"
       visitedRappIds.modify λ s => s.insert id
       return true)
-    (λ cref => return true)
+    (λ _ => return true)
     (TreeRef.mvarCluster root)
 
 def checkAcyclic (root : MVarClusterRef) : CoreM Unit := do
@@ -126,14 +126,16 @@ def checkIrrelevance (root : MVarClusterRef) : CoreM Unit :=
 def checkMVars (root : MVarClusterRef) : MetaM Unit := do
   preTraverseDown
     (λ gref => do
-      checkGoalMVars (← gref.get)
+      let g ← gref.get
+      checkGoalMVars g
+      checkNormMVars g
       return true)
     (λ rref => do
       let r ← rref.get
       checkIntroducedMVars r
       checkAssignedMVars r
       return true)
-    (λ cref => return true)
+    (λ _ => return true)
     (TreeRef.mvarCluster root)
 
   where
@@ -143,7 +145,7 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit := do
       return res
 
     checkIntroducedMVars (r : Rapp) : MetaM Unit := do
-      let (parentPostNormGoal, parentPostNormState) ← getParentInfo r
+      let (_, parentPostNormState) ← getParentInfo r
       let subgoalMVars ← r.foldSubgoalsM (init := #[]) λ mvars gref =>
         return mvars.push (← gref.get).preNormGoal
       let actualIntroduced :=

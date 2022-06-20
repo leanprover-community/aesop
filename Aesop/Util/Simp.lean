@@ -104,7 +104,7 @@ def simpGoalWithCache (mvarId : MVarId) (ctx : Simp.Context)
       cache := cache'
       progress := progress || type != r.expr
       match r.proof? with
-      | some proof =>
+      | some _ =>
         match (← applySimpResultToProp mvarId (mkFVar fvarId) type r) with
         | none => return (.solved, cache)
         | some (value, type) => toAssert := toAssert.push { userName := localDecl.userName, type := type, value := value }

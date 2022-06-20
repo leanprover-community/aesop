@@ -64,7 +64,7 @@ private def findPathForAssignedMVars (assignedMVars : HashSet MVarId)
         return false
       else
         return true)
-    (λ cref =>
+    (λ _ =>
       return true)
     (TreeRef.goal start)
   if ! (← done.get) then

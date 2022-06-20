@@ -12,7 +12,7 @@ open Lean.Meta
 namespace Aesop.RuleBuilder
 
 def normSimpUnfold : RuleBuilder :=
-  ofGlobalRuleBuilder builderName λ phase decl => do
+  ofGlobalRuleBuilder builderName λ _ decl => do
     try {
       let thms : SimpTheorems := {}
       let thms ← thms.addDeclToUnfold decl

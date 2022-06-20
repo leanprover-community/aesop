@@ -60,7 +60,7 @@ private def constantInfoDependencies (candidates : HashMap Name ConstantInfo) :
   | .axiomInfo v => addConsts v.type {}
   | .recInfo _ => {}
   | .ctorInfo _ => {}
-  | .inductInfo v => {}
+  | .inductInfo _ => {}
   | .quotInfo _ => {}
   | .opaqueInfo v => addConsts v.value $ addConsts v.type {}
   | .thmInfo v => addConsts v.value $ addConsts v.type {}
@@ -108,7 +108,6 @@ private def declareConstant (ruleName : RuleName) : ConstantInfo → CoreM Unit
 -- TODO lift these limitations.
 private def copyNewDeclarations (ruleName : RuleName) (oldEnv : Environment)
     (newEnv : Environment) : CoreM Unit := do
-  let env ← getEnv
   let newConsts := getNewConsts oldEnv newEnv
   let newConsts := topSortConstantInfos newConsts
   newConsts.forM λ (c, _) => declareConstant ruleName c

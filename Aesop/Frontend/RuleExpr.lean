@@ -279,7 +279,7 @@ def regular (builderName : BuilderName) :
   init := .default
   add
     | opts, .index imode => some { opts with indexingMode? := imode }
-    | opts, _ => none
+    | _, _ => none
 
 def tactic : BuilderOptions TacticBuilderOptions where
   builderName := .regular .tactic
@@ -287,7 +287,7 @@ def tactic : BuilderOptions TacticBuilderOptions where
   add
     | opts, .usesBranchState b => some { opts with usesBranchState := b }
     | opts, .index imode => some { opts with indexingMode? := imode }
-    | opts, _ => none
+    | _, _ => none
 
 @[inline]
 private def forwardCore (clear : Bool) :
@@ -297,7 +297,7 @@ private def forwardCore (clear : Bool) :
   add
     | opts, .immediate ns => some { opts with immediateHyps := ns }
     | opts, .index imode => some { opts with indexingMode? := imode }
-    | opts, _ => none
+    | _, _ => none
 
 def forward : BuilderOptions ForwardBuilderOptions :=
   forwardCore (clear := false)
@@ -311,7 +311,7 @@ def cases : BuilderOptions CasesBuilderOptions where
   add
     | opts, .patterns patterns => some { opts with patterns }
     | opts, .index imode => some { opts with indexingMode? := imode }
-    | opts, _ => none
+    | _, _ => none
 
 end BuilderOptions
 
@@ -742,7 +742,7 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
         return (phase, Priority.int defaultNormPenalty)
       | some phase, some prio =>
         return (phase, prio)
-      | none, some prio@(Priority.percent prob) =>
+      | none, some prio@(Priority.percent _) =>
         return (PhaseName.unsafe, prio)
       | none, some _ =>
         throwError "phase (safe/unsafe/norm) not specified."

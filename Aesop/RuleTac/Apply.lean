@@ -32,7 +32,7 @@ def applyConsts (decls : Array Name) : RuleTac := λ input => do
       let (goals, introducedMVars) ← getProperGoalsAndNewMVars input.mvars goals
       let assignedMVars ← getAssignedMVars input.mvars
       return some { postState, goals, introducedMVars, assignedMVars }
-    catch e =>
+    catch _ =>
       return none
     finally
       restoreState initialState

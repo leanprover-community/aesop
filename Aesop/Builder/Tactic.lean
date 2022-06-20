@@ -21,7 +21,7 @@ protected def TacticBuilderOptions.default : TacticBuilderOptions where
   usesBranchState := true
 
 def RuleBuilder.tactic (opts : TacticBuilderOptions) : RuleBuilder :=
-  ofGlobalRuleBuilder builderName λ phase decl => do
+  ofGlobalRuleBuilder builderName λ _ decl => do
     let type := (← getConstInfo decl).type
     if ← isDefEq (mkApp (mkConst ``TacticM) (mkConst ``Unit)) type then
       mkResult $ .tacticM decl

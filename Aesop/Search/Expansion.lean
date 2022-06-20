@@ -78,7 +78,7 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
     if rapp.goals.isEmpty then
       aesop_trace[stepsNormalization] "Rule proved the goal."
       return .proven
-    let (#[(g, mvars)]) := rapp.goals
+    let (#[(g, _)]) := rapp.goals
       | err m!"rule produced more than one subgoal."
     unless rapp.introducedMVars.isEmpty do
       err m!"rule introduced additional metavariables"
@@ -129,7 +129,7 @@ def runFirstNormRule (goal : MVarId) (mvars : Array MVarId)
     match result with
     | .proven => return result
     | .failed => continue
-    | .succeeded goal bs => return result
+    | .succeeded _ _ => return result
   return .failed
 
 def normSimpCore (ctx : Simp.Context) (localSimpRules : Array LocalNormSimpRule)
@@ -275,7 +275,7 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
   let successProbability := parent.successProbability * rule.successProbability
   let rrefs ← go postBranchState successProbability rapps
   let provenRref? ← rrefs.findM? λ rref => return (← rref.get).state.isProven
-  if let (some provenRref) := provenRref? then
+  if let (some _) := provenRref? then
     aesop_trace[steps] "One of the rule applications has no subgoals. Goal is proven."
     return RuleResult.proven
   else
@@ -287,7 +287,7 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
       let traceMods ← TraceModifiers.get
       let rappMsgs ← rrefs.mapM λ rref => do
         let r ← rref.get
-        let rappMsg ← r.toMessageData traceMods
+        let rappMsg ← r.toMessageData
         let subgoalMsgs ← r.foldSubgoalsM (init := #[]) λ msgs gref =>
           return msgs.push (← (← gref.get).toMessageData traceMods)
         return rappMsg ++ MessageData.node subgoalMsgs
@@ -295,9 +295,6 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
 
     go (postBranchState : BranchState) (successProbability : Percent)
         (rapps : Array RuleApplication) : SearchM Q (Array RappRef) := do
-      let parent ← parentRef.get
-      let (some (parentGoal, parentMetaState)) := parent.postNormGoalAndMetaState? | throwError
-        "aesop: internal error while adding new rapp: expected goal {parent.id} to be normalised (but not proven by normalisation)."
       let rrefs ← rapps.mapM λ rapp => do
         let rref ← addRapp {
           parent := parentRef
@@ -386,7 +383,7 @@ partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
     (parentRef : GoalRef) : SearchM Q Unit := do
   let queue ← selectUnsafeRules postponedSafeRules parentRef
   aesop_trace[steps] "Trying unsafe rules"
-  let (remainingQueue, result) ← loop queue
+  let (remainingQueue, _) ← loop queue
   parentRef.modify λ g => g.setUnsafeQueue remainingQueue
   aesop_trace[steps] "Remaining unsafe rules:{MessageData.node remainingQueue.entriesToMessageData}"
   if remainingQueue.isEmpty then
