@@ -49,7 +49,9 @@ theorem mem_filter : a ∈ filter p as ↔ a ∈ as ∧ p a := by
     | nil => cases h
     | cons a' as ih =>
       -- TODO the simp_all should not be necessary
-      by_cases ha' : p a' <;> simp_all <;> aesop (add safe forward ih)
+      by_cases ha' : p a' <;> simp_all
+      case inl => aesop (add safe forward ih)
+      case inr => aesop
   case mpr =>
     intro h
     induction as with
