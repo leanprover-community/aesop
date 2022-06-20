@@ -29,6 +29,6 @@ elab "erase_aesop_rules" "[" es:Aesop.rule_expr,* "]" : command => do
     return rss
 
 elab "#aesop_rules" : command => do
-  Elab.logInfo $ toMessageData (← getAttributeRuleSets)
+  logInfo $ toMessageData (← getAttributeRuleSets)
 
 end Aesop.Frontend.Parser

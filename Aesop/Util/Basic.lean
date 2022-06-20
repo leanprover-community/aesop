@@ -672,11 +672,11 @@ mutual
 end
 
 @[implementedBy mapMEntryImpl]
-constant mapMEntry [Monad m] {β γ : Type u} (f : β → m γ) {α : Type u} :
+opaque mapMEntry [Monad m] {β γ : Type u} (f : β → m γ) {α : Type u} :
     Entry α β (Node α β) → m (Entry α γ (Node α γ))
 
 @[implementedBy mapMNodeImpl]
-constant mapMNode [Monad m] {β γ : Type u} (f : β → m γ) {α : Type u} :
+opaque mapMNode [Monad m] {β γ : Type u} (f : β → m γ) {α : Type u} :
     Node α β → m (Node α γ)
 
 @[inline]
@@ -740,7 +740,7 @@ unsafe def forInImpl [BEq α] [Hashable α] {m : Type u → Type v} [Monad m]
 
 -- Inhabited inference is being stupid here, so we can't use `partial`.
 @[implementedBy forInImpl]
-constant forIn [BEq α] [Hashable α] {m : Type u → Type v} [Monad m]
+opaque forIn [BEq α] [Hashable α] {m : Type u → Type v} [Monad m]
     (map : PersistentHashMap α β) (init : σ) (f : α × β → σ → m (ForInStep σ)) :
     m σ :=
   pure init
@@ -833,7 +833,7 @@ unsafe def foldMUnsafe [Monad m] (initialKeys : Array Key)
       t.foldMUnsafe (initialKeys.push k) f s
 
 @[implementedBy foldMUnsafe]
-constant foldM [Monad m] (initalKeys : Array Key)
+opaque foldM [Monad m] (initalKeys : Array Key)
     (f : σ → Array Key → α → m σ) (init : σ) (t : Trie α) : m σ :=
   pure init
 
@@ -851,7 +851,7 @@ unsafe def foldValuesMUnsafe [Monad m] (f : σ → α → m σ) (init : σ) :
   children.foldlM (init := s) λ s (k, c) => c.foldValuesMUnsafe (init := s) f
 
 @[implementedBy foldValuesMUnsafe]
-constant foldValuesM [Monad m] (f : σ → α → m σ) (init : σ) (t : Trie α) :
+opaque foldValuesM [Monad m] (f : σ → α → m σ) (init : σ) (t : Trie α) :
     m σ :=
   pure init
 
@@ -1439,7 +1439,7 @@ def runTacticMAsMetaM (tac : TacticM Unit) (goal : MVarId) :
   run goal tac |>.run'
 
 def runMetaMAsImportM (x : MetaM α) : ImportM α := do
-  let ctx : Core.Context := { options := (← read).opts }
+  let ctx : Core.Context := { options := (← read).opts, fileName := "<runMetaMAsImportM>", fileMap := default }
   let state : Core.State := { env := (← read).env }
   let r ← x |>.run {} {} |>.run ctx state |>.toIO'
   match r with

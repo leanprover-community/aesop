@@ -20,7 +20,7 @@ unsafe def tacticMImpl (decl : Name) : RuleTac :=
 
 -- Precondition: `decl` has type `TacticM Unit`.
 @[implementedBy tacticMImpl]
-constant tacticM (decl : Name) : RuleTac
+opaque tacticM (decl : Name) : RuleTac
 
 -- Precondition: `decl` has type `RuleTac`.
 unsafe def ruleTacImpl (decl : Name) : RuleTac := λ input => do
@@ -29,7 +29,7 @@ unsafe def ruleTacImpl (decl : Name) : RuleTac := λ input => do
 
 -- Precondition: `decl` has type `RuleTac`.
 @[implementedBy ruleTacImpl]
-constant ruleTac (decl : Name) : RuleTac
+opaque ruleTac (decl : Name) : RuleTac
 
 -- Precondition: `decl` has type `SimpleRuleTac`.
 unsafe def simpleRuleTacImpl (decl : Name) : RuleTac :=
@@ -39,6 +39,6 @@ unsafe def simpleRuleTacImpl (decl : Name) : RuleTac :=
 
 -- Precondition: `decl` has type `SimpleRuleTac`.
 @[implementedBy simpleRuleTacImpl]
-constant simpleRuleTac (decl : Name) : RuleTac
+opaque simpleRuleTac (decl : Name) : RuleTac
 
 end Aesop.RuleTac
