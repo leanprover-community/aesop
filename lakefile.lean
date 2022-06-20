@@ -2,5 +2,7 @@ import Lake
 
 open Lake DSL
 
-package aesop where
-  defaultFacet := PackageFacet.oleans
+package aesop {}
+
+@[defaultTarget]
+lean_lib Aesop {}
