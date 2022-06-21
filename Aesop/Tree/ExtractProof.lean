@@ -99,6 +99,14 @@ private partial def copyExprMVarAssignment (s : Meta.SavedState)
       copyExprMVarAssignment s mvarId
   | none => return
 
+open Match in
+private def copyMatchEqnsExtState (oldEnv newEnv : Environment) : CoreM Unit := do
+  let oldState := matchEqnsExt.getState oldEnv
+  let newState := matchEqnsExt.getState newEnv
+  if newState.map.size > oldState.map.size then
+    for (n, eqns) in newState.map do
+      if !oldState.map.contains n then
+        registerMatchEqns n eqns
 
 -- ## Main Function
 
@@ -121,6 +129,7 @@ mutual
       (parentGoal : MVarId) (r : Rapp) : MetaM Unit := do
     let newEnv := r.metaState.core.env
     copyNewDeclarations parentEnv newEnv
+    copyMatchEqnsExtState parentEnv newEnv
     copyExprMVarAssignment r.metaState parentGoal
     for m in r.assignedMVars do
       copyExprMVarAssignment r.metaState m
