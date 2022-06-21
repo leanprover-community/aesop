@@ -6,6 +6,5 @@ Authors: Jannis Limperg
 
 import Aesop.Util.Basic
 import Aesop.Util.Simp
-import Aesop.Util.TopSort
 import Aesop.Util.UnionFind
 import Aesop.Util.UnorderedArraySet
