@@ -26,7 +26,7 @@ inductive EvenOrOdd : Nat → Prop
 | even {n} : Even n → EvenOrOdd n
 | odd {n} : Odd n → EvenOrOdd n
 
-attribute [aesop 50%] EvenOrOdd.even EvenOrOdd.odd
+attribute [aesop unsafe] EvenOrOdd.even EvenOrOdd.odd
 attribute [aesop safe] Even.zero Even.plus_two
 attribute [aesop 100%] Odd.one Odd.plus_two
 

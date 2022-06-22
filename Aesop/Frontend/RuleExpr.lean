@@ -734,12 +734,12 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
       match c.phase, c.priority with
       | none, none =>
         throwError "phase (safe/unsafe/norm) not specified."
-      | some PhaseName.unsafe, none =>
-        throwError "unsafe rules must specify a success probability ('x%')."
-      | some phase@PhaseName.safe, none =>
-        return (phase, Priority.int defaultSafePenalty)
-      | some phase@PhaseName.norm, none =>
-        return (phase, Priority.int defaultNormPenalty)
+      | some .unsafe, none =>
+        return (.unsafe, Priority.percent defaultSuccessProbability)
+      | some .safe, none =>
+        return (.safe, Priority.int defaultSafePenalty)
+      | some .norm, none =>
+        return (.norm, Priority.int defaultNormPenalty)
       | some phase, some prio =>
         return (phase, prio)
       | none, some prio@(Priority.percent _) =>

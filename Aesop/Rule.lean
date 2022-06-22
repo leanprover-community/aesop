@@ -98,6 +98,8 @@ abbrev UnsafeRule := Rule UnsafeRuleInfo
 instance : ToFormat UnsafeRule where
   format r := f!"[{r.extra.successProbability.toHumanString}] {r.name}"
 
+def defaultSuccessProbability : Percent := .fifty
+
 
 /-! ### Regular Rules -/
 

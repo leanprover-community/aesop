@@ -57,6 +57,9 @@ instance : HPow Percent Nat Percent where
 def hundred : Percent :=
   ⟨1⟩
 
+def fifty : Percent :=
+  ⟨0.5⟩
+
 def toHumanString (p : Percent) : String :=
   let str := toString (p.toFloat * 100)
   match str.split λ c => c == '.' with
