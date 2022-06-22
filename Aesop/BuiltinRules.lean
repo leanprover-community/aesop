@@ -28,24 +28,24 @@ namespace Aesop.BuiltinRules
 --
 -- Hypotheses of product type are split by a separate builtin rule because the
 -- `cases` builder currently cannot be used for norm rules.
-attribute [aesop unsafe 30% constructors] And Prod PProd MProd
-attribute [aesop unsafe 30% constructors] Exists Subtype Sigma
-  PSigma
+attribute [aesop (rule_sets [builtin]) unsafe 30% constructors]
+  And Prod PProd MProd Exists Subtype Sigma PSigma
 
 -- Sums are split and introduced lazily.
-attribute [aesop [safe 100 cases, 50% constructors]] Or Sum PSum
+attribute [aesop (rule_sets [builtin]) [safe 100 cases, 50% constructors]]
+  Or Sum PSum
 
 -- Iff is treated as a product.
-attribute [aesop safe 100 constructors] Iff
+attribute [aesop (rule_sets [builtin]) safe 100 constructors] Iff
 
-@[aesop [norm 0 elim]]
+@[aesop [norm (rule_sets [builtin]) 0 elim]]
 theorem Iff_elim (h : α ↔ β) : (α → β) ∧ (β → α) :=
   ⟨h.mp, h.mpr⟩
 
-attribute [aesop safe 0] Eq.refl HEq.refl
+attribute [aesop (rule_sets [builtin]) safe 0] Eq.refl HEq.refl
 
-attribute [aesop norm constructors] ULift
+attribute [aesop (rule_sets [builtin]) norm constructors] ULift
 
-attribute [aesop norm 0 elim] ULift.down
+attribute [aesop (rule_sets [builtin]) norm 0 elim] ULift.down
 
 end Aesop.BuiltinRules
