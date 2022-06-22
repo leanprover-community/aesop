@@ -10,6 +10,7 @@ import Aesop.BuiltinRules.Assumption
 import Aesop.BuiltinRules.ApplyHyps
 import Aesop.BuiltinRules.DestructProducts
 import Aesop.BuiltinRules.Intros
+import Aesop.BuiltinRules.Subst
 import Aesop.Frontend
 
 open Lean
