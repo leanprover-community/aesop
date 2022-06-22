@@ -27,6 +27,7 @@ structure State (Q) [Aesop.Queue Q] where
   queue : Q
   profile : Profile
   normSimpCache : Simp.Cache
+  maxRuleApplicationDepthReached : Bool
   deriving Inhabited
 
 end SearchM
@@ -89,6 +90,7 @@ def run (ruleSet : RuleSet) (options : Aesop.Options) (goal : MVarId)
     iteration := Iteration.one
     profile
     normSimpCache := {}
+    maxRuleApplicationDepthReached := false
   }
   let ((a, state), tree) ← ReaderT.run x ctx |>.run state |>.run t
   return (a, state, tree)
@@ -123,5 +125,11 @@ def enqueueGoals (gs : Array GoalRef) : SearchM Q Unit := do
 
 def formatQueue : SearchM Q MessageData := do
   Queue.format (← get).queue
+
+def setMaxRuleApplicationDepthReached : SearchM Q Unit :=
+  modify λ s => { s with maxRuleApplicationDepthReached := true }
+
+def wasMaxRuleApplicationDepthReached : SearchM Q Bool :=
+  return (← get).maxRuleApplicationDepthReached
 
 end Aesop

@@ -36,6 +36,7 @@ def expandNextGoal : SearchM Q Unit := do
   if maxRappDepth != 0 && (← gref.get).depth >= maxRappDepth then
     aesop_trace[steps] "Skipping goal since it is beyond the maximum rule application depth ({maxRappDepth})."
     gref.markForcedUnprovable
+    setMaxRuleApplicationDepthReached
     return
   expandGoal gref
   let currentIteration ← getIteration
@@ -79,7 +80,12 @@ partial def searchLoop : SearchM Q Unit := do
   aesop_trace[steps] "=== Search loop iteration {← getIteration}"
   let root := (← getTree).root
   if (← root.get).state.isUnprovable then
-    throwError "aesop: failed to prove the goal after exhaustive search"
+    let msg :=
+      if ← wasMaxRuleApplicationDepthReached then
+        m!"failed to prove the goal. Some goals were not explored because the maximum rule application depth ({(← read).options.maxRuleApplicationDepth}) was reached. Set option 'maxRuleApplicationDepth' to increase the limit."
+      else
+        m!"failed to prove the goal after exhaustive search."
+    throwError "aesop: {msg}"
   if ← finishIfProven then
     return
   checkGoalLimit
