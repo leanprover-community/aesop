@@ -258,16 +258,43 @@ def isProvenByNormalization : NormalizationState → Bool
 end NormalizationState
 
 
+/--
+A goal `G` can be added to the tree for three reasons:
+
+1. `G` was produced by its parent rule as a subgoal. This is the most common
+   reason.
+2. `G` was copied because it contains some metavariables which were assigned by
+   its parent rule. In this case, we record goal of which `G` is a copy. We also
+   record the representative of the equivalence class of goals which are copies
+   of each other. E.g. if goal `1` is copied to goal `2` and goal `2` is copied
+   to goal `3`, they are all part of the equivalence class with representative
+   `1`.
+-/
+inductive GoalOrigin
+  | subgoal
+  | copied («from» : GoalId) (rep : GoalId)
+  | droppedMVar
+  deriving Inhabited
+
+namespace GoalOrigin
+
+def originalGoalId? : GoalOrigin → Option GoalId
+  | copied _ rep => some rep
+  | _ => none
+
+protected def toString : GoalOrigin → String
+  | subgoal => "subgoal"
+  | copied «from» rep => s!"copy of {«from»}, originally {«rep»}"
+  | droppedMVar => "dropped mvar"
+
+end GoalOrigin
+
+
 structure GoalData (Rapp MVarCluster : Type) : Type where
   id : GoalId
   parent : IO.Ref MVarCluster
   children : Array (IO.Ref Rapp)
-  originalGoalId? : Option GoalId
-    -- If this goal (call it `g₁`) is a copy of another goal `g₂`, this field is
-    -- `some g₂.id`. If `g₁` is copied again, the copied goal's `originalGoalId`
-    -- is `some g₂.id` as well. This means `originalGoalId` is a representative
-    -- of the equivalence class of goals which contains `g₂` and all of `g₂`'s
-    -- copies.
+  origin : GoalOrigin
   depth : Nat
   state : GoalState
   isIrrelevant : Bool
@@ -297,7 +324,7 @@ instance [Nonempty MVarCluster] : Nonempty (GoalData Rapp MVarCluster) :=
   ⟨{ id := default
      parent := Classical.ofNonempty
      children := default
-     originalGoalId? := default
+     origin := default
      depth := default
      state := default
      isIrrelevant := default
@@ -491,8 +518,8 @@ def children (g : Goal) : Array RappRef :=
   g.elim.children
 
 @[inline]
-def originalGoalId? (g : Goal) : Option GoalId :=
-  g.elim.originalGoalId?
+def origin (g : Goal) : GoalOrigin :=
+  g.elim.origin
 
 @[inline]
 def depth (g : Goal) : Nat :=
@@ -567,8 +594,8 @@ def setChildren (children : Array RappRef) (g : Goal) : Goal :=
   g.modify λ g => { g with children }
 
 @[inline]
-def setOriginalGoalId (originalGoalId? : Option GoalId) (g : Goal) : Goal :=
-  g.modify λ g => { g with originalGoalId? }
+def setOrigin (origin : GoalOrigin) (g : Goal) : Goal :=
+  g.modify λ g => { g with origin }
 
 @[inline]
 def setDepth (depth : Nat) (g : Goal) : Goal :=
@@ -805,7 +832,7 @@ def isNormal (g : Goal) : Bool :=
   g.normalizationState.isNormal
 
 def originalGoalId (g : Goal) : GoalId :=
-  g.originalGoalId?.getD g.id
+  g.origin.originalGoalId?.getD g.id
 
 end Goal
 

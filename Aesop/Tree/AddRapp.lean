@@ -106,7 +106,7 @@ private unsafe def copyGoals (assignedMVars : HashSet MVarId)
       id := ← getAndIncrementNextGoalId
       parent := unsafeCast () -- will be filled in later
       children := #[]
-      originalGoalId? := some g.originalGoalId
+      origin := .copied g.id g.originalGoalId
       depth := (← parent.depth) + 1
       state := GoalState.unknown
       isIrrelevant := false
@@ -126,13 +126,14 @@ private unsafe def copyGoals (assignedMVars : HashSet MVarId)
     }
 
 private def makeInitialGoal (g : AddGoal)
-    (parent : MVarClusterRef) (depth : Nat) (successProbability : Percent) :
+    (parent : MVarClusterRef) (depth : Nat) (successProbability : Percent)
+    (origin : GoalOrigin) :
     TreeM Goal :=
   return Goal.mk {
     id := ← getAndIncrementNextGoalId
     parent
     children := #[]
-    originalGoalId? := none
+    origin
     depth
     state := GoalState.unknown
     isIrrelevant := false
@@ -168,7 +169,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   let parentGoal ← r.parent.get
   let goalDepth := parentGoal.depth + 1
   let subgoals : Array Goal ← r.children.mapM
-    (makeInitialGoal · (unsafeCast ()) goalDepth r.successProbability)
+    (makeInitialGoal · (unsafeCast ()) goalDepth r.successProbability .subgoal)
     -- The parent (`unsafeCast ()`) will be patched up later.
 
   -- If the rapp assigned any mvars, copy the related goals.
@@ -197,6 +198,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
         branchState := parentGoal.branchState
       }
       makeInitialGoal g (unsafeCast ()) goalDepth r.successProbability
+        .droppedMVar
 
   let newGoals := subgoals ++ copiedGoals ++ droppedMVarGoals
 

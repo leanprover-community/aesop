@@ -23,10 +23,6 @@ protected def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
         if ¬ g.unsafeRulesSelected
           then f!"<not selected>"
           else format g.unsafeQueue.size
-      let originalGoalId :=
-        match g.originalGoalId? with
-        | none => "<none>"
-        | some gid => toString gid
       let postNormGoal :=
         match g.postNormGoal? with
         | none => "<none>"
@@ -34,7 +30,7 @@ protected def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
       return m!"Goal {g.id} [{g.priority.toHumanString} / {g.successProbability.toHumanString}]" ++ nodeFiltering #[
         m!"Unsafe rules in queue: {unsafeQueueLength}, failed: {g.failedRapps.size}",
         m!"state: {g.state} | irrelevant: {toYesNo g.isIrrelevant} | normal: {toYesNo g.isNormal} | depth: {g.depth}",
-        m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration} | copy of goal: {originalGoalId}",
+        m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration} | origin: {g.origin.toString}",
         -- TODO hide mvar info (at least by default)
         m!"Pre-norm goal mvar: {g.preNormGoal.name} | Post-norm goal mvar: {postNormGoal}",
         m!"Unassigned mvars: {g.mvars.map (·.name)}",
