@@ -26,7 +26,6 @@ structure State (Q) [Aesop.Queue Q] where
   iteration : Iteration
   queue : Q
   profile : Profile
-  normSimpCache : Simp.Cache
   maxRuleApplicationDepthReached : Bool
   deriving Inhabited
 
@@ -89,7 +88,6 @@ def run (ruleSet : RuleSet) (options : Aesop.Options) (goal : MVarId)
     queue := ← Queue.init' #[rootGoal]
     iteration := Iteration.one
     profile
-    normSimpCache := {}
     maxRuleApplicationDepthReached := false
   }
   let ((a, state), tree) ← ReaderT.run x ctx |>.run state |>.run t

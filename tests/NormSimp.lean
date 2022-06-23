@@ -10,7 +10,6 @@ set_option aesop.check.all true
 
 -- A basic test for local simp rules.
 example {α : Prop} (h : α) : α := by
-  fail_if_success aesop (rule_sets [-builtin,-default])
   aesop (rule_sets [-builtin,-default]) (add h norm simp)
 
 -- This test checks that we don't 'self-simplify' hypotheses: `h` should not

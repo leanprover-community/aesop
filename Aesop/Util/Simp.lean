@@ -1,138 +1,149 @@
 /-
 Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Jannis Limperg
+Authors: Leonardo de Moura, Jannis Limperg
 -/
 
 import Lean
 
 open Lean
 open Lean.Meta
+open Std (HashMap)
 
 namespace Aesop
 
--- Largely copy pasta, originally from Lean/Meta/Simp/Main.lean.
+-- Largely copy pasta, originally from Lean/Meta/Simp/SimpAll.lean.
 
 inductive SimpResult
   | solved
   | unchanged (newGoal : MVarId)
   | simplified (newGoal : MVarId)
 
-def SimpResult.newGoal? : SimpResult → Option MVarId
+namespace SimpResult
+
+def newGoal? : SimpResult → Option MVarId
   | solved => none
   | unchanged g => some g
   | simplified g => some g
 
-def simpMainWithCache (e : Expr) (ctx : Simp.Context) (cache : Simp.Cache)
-    (methods : Simp.Methods := {}) : MetaM (Simp.Result × Simp.Cache) := do
-  let ctx := { ctx with config := (← ctx.config.updateArith) }
-  withConfig (fun c => { c with etaStruct := ctx.config.etaStruct }) <| withReducible do
-    try
-      let (result, state) ← Simp.simp e methods ctx |>.run { cache := cache}
-      return (result, state.cache)
-    catch ex =>
-      if ex.isMaxHeartbeat then throwNestedTacticEx `simp ex else throw ex
+end SimpResult
 
-def simpWithCache (e : Expr) (ctx : Simp.Context) (cache : Simp.Cache)
-    (discharge? : Option Simp.Discharge := none) :
-    MetaM (Simp.Result × Simp.Cache) := do
-  profileitM Exception "simp" (← getOptions) do
-    match discharge? with
-    | none   =>
-      simpMainWithCache e ctx cache (methods := Simp.DefaultMethods.methods)
-    | some d =>
-      simpMainWithCache e ctx cache
-        (methods := {
-          pre := (Simp.preDefault · d)
-          post := (Simp.postDefault · d)
-          discharge? := d
-        })
+namespace SimpAll
 
-/-- See `simpTarget`. This method assumes `mvarId` is not assigned, and we are already using `mvarId`s local context. -/
-def simpTargetWithCacheCore (mvarId : MVarId) (ctx : Simp.Context)
-    (cache : Simp.Cache) (discharge? : Option Simp.Discharge := none)
-    (mayCloseGoal := true) : MetaM (SimpResult × Simp.Cache) := do
-  let target ← instantiateMVars (← getMVarType mvarId)
-  let (r, cache) ← simpWithCache target ctx cache discharge?
-  if mayCloseGoal && r.expr.isConstOf ``True then
-    match r.proof? with
-    | some proof => assignExprMVar mvarId  (← mkOfEqTrue proof)
-    | none => assignExprMVar mvarId (mkConst ``True.intro)
-    return (.solved, cache)
+structure Entry where
+  fvarId : FVarId -- original fvarId
+  userName : Name
+  id : Name   -- id of the theorem at `SimpTheorems`
+  type : Expr
+  proof : Expr
+  deriving Inhabited
+
+structure State where
+  modified : Bool := false
+  anyModified : Bool := false
+    -- Indicates whether any hypothesis or the target was modified. This is
+    -- different from `modified` since `modified` is reset on every iteration of
+    -- the main loop.
+  mvarId  : MVarId
+  entries : Array Entry := #[]
+  ctx : Simp.Context
+  disabledTheorems : HashMap FVarId Name
+    -- If `fvarId` is mapped to `id` in this map, the simp theorem with name
+    -- `id` is disabled while simplifying the hypothesis `fvarId`.
+    --
+    -- This should really be `HashMap FVarId (Array Name)`, but for the purposes
+    -- of Aesop we only need a single disabled entry per FVarId.
+
+abbrev M := StateRefT State MetaM
+
+private def initEntries : M Unit := do
+  let hs ← withMVarContext (← get).mvarId do getPropHyps
+  let hsNonDeps ← getNondepPropHyps (← get).mvarId
+  let mut simpThms := (← get).ctx.simpTheorems
+  for h in hs do
+    let localDecl ← getLocalDecl h
+    unless simpThms.isErased localDecl.userName do
+      let fvarId := localDecl.fvarId
+      let proof  := localDecl.toExpr
+      let id     ← mkFreshUserName `h
+      simpThms ← simpThms.addTheorem proof (name? := id)
+      modify fun s => { s with ctx.simpTheorems := simpThms }
+      if hsNonDeps.contains h then
+        -- We only simplify nondependent hypotheses
+        let entry : Entry := { fvarId := fvarId, userName := localDecl.userName, id := id, type := (← instantiateMVars localDecl.type), proof := proof }
+        modify fun s => { s with entries := s.entries.push entry }
+
+private abbrev getSimpTheorems : M SimpTheoremsArray :=
+  return (← get).ctx.simpTheorems
+
+private partial def loop : M Bool := do
+  modify fun s => { s with modified := false }
+  -- simplify entries
+  for i in [:(← get).entries.size] do
+    let entry := (← get).entries[i]
+    let ctx := (← get).ctx
+    -- We disable the current entry to prevent it to be simplified to `True`
+    let mut simpThmsWithoutEntry := (← getSimpTheorems).eraseTheorem entry.id
+    -- Ditto for explicitly disabled entries.
+    if let (some disabledEntry) := (← get).disabledTheorems.find? entry.fvarId then
+      simpThmsWithoutEntry := simpThmsWithoutEntry.eraseTheorem disabledEntry
+    let ctx := { ctx with simpTheorems := simpThmsWithoutEntry }
+    match (← simpStep (← get).mvarId entry.proof entry.type ctx) with
+    | none => return true -- closed the goal
+    | some (proofNew, typeNew) =>
+      unless typeNew == entry.type do
+        /- The theorem for the simplified entry must use the same `id` of the theorem before simplification. Otherwise,
+           the previous versions can be used to self-simplify the new version. For example, suppose we have
+           ```
+            x : Nat
+            h : x ≠ 0
+            ⊢ Unit
+           ```
+           In the first round, `h : x ≠ 0` is simplified to `h : ¬ x = 0`. If we don't use the same `id`, in the next round
+           the first version would simplify it to `h : True`.
+
+           We must use `mkExpectedTypeHint` because `inferType proofNew` may not be equal to `typeNew` when
+           we have theorems marked with `rfl`.
+        -/
+        let simpThmsNew ← (← getSimpTheorems).addTheorem (← mkExpectedTypeHint proofNew typeNew) (name? := entry.id)
+        modify fun s => { s with
+          modified         := true
+          anyModified      := true
+          ctx.simpTheorems := simpThmsNew
+          entries[i]       := { entry with type := typeNew, proof := proofNew, id := entry.id }
+        }
+  -- simplify target
+  let mvarId := (← get).mvarId
+  match (← simpTarget mvarId (← get).ctx) with
+  | none => return true
+  | some mvarIdNew =>
+    unless mvarId == mvarIdNew do
+      modify fun s => { s with
+        modified := true
+        anyModified := true
+        mvarId   := mvarIdNew
+      }
+  if (← get).modified then
+    loop
   else
-    let newMVarId ← applySimpResultToTarget mvarId target r
-    if target == r.expr then
-      return (.unchanged newMVarId, cache)
-    else
-      return (.simplified newMVarId, cache)
+    return false
 
-/--
-  Simplify the given goal target (aka type). Return `none` if the goal was closed. Return `some mvarId'` otherwise,
-  where `mvarId'` is the simplified new goal. The returned boolean is true iff `simp` made progress, i.e. the target
-  was really simplified. -/
-def simpTargetWithCache (mvarId : MVarId) (ctx : Simp.Context)
-    (cache : Simp.Cache) (discharge? : Option Simp.Discharge := none)
-    (mayCloseGoal := true) : MetaM (SimpResult × Simp.Cache) :=
+private def main : M SimpResult := do
+  initEntries
+  if (← loop) then
+    return .solved -- close the goal
+  else if ! (← get).anyModified then
+    return .unchanged (← get).mvarId
+  else
+    let mvarId := (← get).mvarId
+    let entries := (← get).entries
+    let (_, mvarId) ← assertHypotheses mvarId (entries.map fun e => { userName := e.userName, type := e.type, value := e.proof })
+    let mvarId ← tryClearMany mvarId (entries.map fun e => e.fvarId)
+    return .simplified mvarId
+
+end SimpAll
+
+def simpAll (mvarId : MVarId) (ctx : Simp.Context)
+    (disabledTheorems : HashMap FVarId Name) : MetaM SimpResult := do
   withMVarContext mvarId do
-    checkNotAssigned mvarId `simp
-    simpTargetWithCacheCore mvarId ctx cache discharge? mayCloseGoal
-
-def simpGoalWithCache (mvarId : MVarId) (ctx : Simp.Context)
-    (cache : Simp.Cache) (discharge? : Option Simp.Discharge := none)
-    (simplifyTarget : Bool := true) (fvarIdsToSimp : Array FVarId := #[])
-    (fvarIdToLemmaId : FVarIdToLemmaId := {}) :
-    MetaM (SimpResult × Simp.Cache) := do
-  withMVarContext mvarId do
-    checkNotAssigned mvarId `simp
-    let mut mvarId := mvarId
-    let mut toAssert := #[]
-    let mut replaced := #[]
-    let mut cache := cache
-    let mut progress := false
-    for fvarId in fvarIdsToSimp do
-      let localDecl ← getLocalDecl fvarId
-      let type ← instantiateMVars localDecl.type
-      let (r, cache') ←
-        match fvarIdToLemmaId.find? localDecl.fvarId with
-        | none =>
-          simpWithCache type ctx cache discharge?
-        | some thmId =>
-          let ctx :=
-            { ctx with simpTheorems := ctx.simpTheorems.eraseTheorem thmId }
-          let r ← simp type ctx discharge?
-          pure (r, cache)
-      cache := cache'
-      progress := progress || type != r.expr
-      match r.proof? with
-      | some _ =>
-        match (← applySimpResultToProp mvarId (mkFVar fvarId) type r) with
-        | none => return (.solved, cache)
-        | some (value, type) => toAssert := toAssert.push { userName := localDecl.userName, type := type, value := value }
-      | none =>
-        if r.expr.isConstOf ``False then
-          assignExprMVar mvarId (← mkFalseElim (← getMVarType mvarId) (mkFVar fvarId))
-          return (.solved, cache)
-        -- TODO: if there are no forwards dependencies we may consider using the same approach we used when `r.proof?` is a `some ...`
-        -- Reason: it introduces a `mkExpectedTypeHint`
-        mvarId ← replaceLocalDeclDefEq mvarId fvarId r.expr
-        replaced := replaced.push fvarId
-    if simplifyTarget then
-      let (targetSimpResult?, cache') ←
-        simpTargetWithCache mvarId ctx cache discharge?
-      cache := cache'
-      match targetSimpResult? with
-      | .solved => return (.solved, cache)
-      | .unchanged mvarIdNew =>
-        mvarId := mvarIdNew
-      | .simplified mvarIdNew =>
-        mvarId := mvarIdNew
-        progress := true
-    if ! progress then
-      return (.unchanged mvarId, cache)
-    else
-      let (_, mvarIdNew) ← assertHypotheses mvarId toAssert
-      let toClear := fvarIdsToSimp.filter fun fvarId => !replaced.contains fvarId
-      let mvarIdNew ← tryClearMany mvarIdNew toClear
-      return (.simplified mvarIdNew, cache)
-
-end Aesop
+    Aesop.SimpAll.main.run' { mvarId, ctx, disabledTheorems }

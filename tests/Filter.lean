@@ -1,10 +1,8 @@
 /-
 Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Jannis Limperg
+Authors: Sebastian Ullrich, Jannis Limperg
 -/
-
--- Thanks to Sebastian Ullrich for providing this test case.
 
 import Aesop
 
@@ -47,11 +45,7 @@ theorem mem_filter : a ∈ filter p as ↔ a ∈ as ∧ p a := by
     intro h
     induction as with
     | nil => cases h
-    | cons a' as ih =>
-      -- TODO the simp_all should not be necessary
-      by_cases ha' : p a' <;> simp_all
-      case inl => aesop (add safe forward ih)
-      case inr => aesop
+    | cons a' as ih => by_cases ha' : p a' <;> aesop
   case mpr =>
     intro h
     induction as with

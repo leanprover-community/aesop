@@ -133,14 +133,13 @@ def runFirstNormRule (goal : MVarId) (mvars : Array MVarId)
   return .failed
 
 def normSimpCore (ctx : Simp.Context) (localSimpRules : Array LocalNormSimpRule)
-    (cache : Simp.Cache) (goal : MVarId) (mvars : Array MVarId) :
-    MetaM (SimpResult × Simp.Cache) :=
+    (goal : MVarId) (mvars : Array MVarId) : MetaM SimpResult :=
   withMVarContext goal do
     let lctx ← getLCtx
 
     -- Add local simp rules.
     let mut simpTheorems := ctx.simpTheorems
-    let mut fvarIdToLemmaId := {}
+    let mut disabledTheorems := {}
       -- A pair `(fvarId, lemmaId)` in this map indicates that while simplifying
       -- `fvarId`, `lemmaId` should be temporarily removed from the simp set.
       -- We use this to prevent `simp` from 'self-simplifying' the original
@@ -156,18 +155,11 @@ def normSimpCore (ctx : Simp.Context) (localSimpRules : Array LocalNormSimpRule)
       simpTheorems := simpTheorems'
       let (some origLDecl) := lctx.findFromUserName? localRule.originalFVarUserName
         | continue
-      fvarIdToLemmaId := fvarIdToLemmaId.insert origLDecl.fvarId id
+      disabledTheorems := disabledTheorems.insert origLDecl.fvarId id
     let ctx := { ctx with simpTheorems }
 
-    -- Collect all hypotheses (except auxDecls).
-    let mut fvarIds := Array.mkEmpty lctx.decls.size
-    for ldecl in lctx do
-      unless ldecl.isAuxDecl do
-        fvarIds := fvarIds.push ldecl.fvarId
-
     -- Simp the goal.
-    let (result, cache) ← simpGoalWithCache goal ctx cache (fvarIdsToSimp := fvarIds)
-      (fvarIdToLemmaId := fvarIdToLemmaId)
+    let result ← Aesop.simpAll goal ctx disabledTheorems
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
     -- unassigned. In this case, we treat the goal as unchanged.
@@ -184,19 +176,19 @@ def normSimpCore (ctx : Simp.Context) (localSimpRules : Array LocalNormSimpRule)
           pure result
       | _ => pure result
 
-    return (result, cache)
+    return result
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def normSimp (goal : MVarId) (mvars : Array MVarId) (ctx : Simp.Context)
-    (localSimpRules : Array LocalNormSimpRule) (cache : Simp.Cache) :
-    ProfileT MetaM (SimpResult × Simp.Cache) :=
+    (localSimpRules : Array LocalNormSimpRule) :
+    ProfileT MetaM SimpResult :=
   profiling go λ _ elapsed =>
     recordAndTraceRuleProfile { rule := .normSimp, elapsed, successful := true }
   where
-    go : MetaM (SimpResult × Simp.Cache) := do
+    go : MetaM SimpResult := do
       if ← Check.rules.isEnabled then
         let preMetaState ← saveState
-        let (result, cache) ← normSimpCore ctx localSimpRules cache goal mvars
+        let result ← normSimpCore ctx localSimpRules goal mvars
         let postMetaState ← saveState
         let introduced :=
           (← introducedExprMVars preMetaState postMetaState).filter
@@ -207,20 +199,18 @@ def normSimp (goal : MVarId) (mvars : Array MVarId) (ctx : Simp.Context)
           (← assignedExprMVars preMetaState postMetaState).filter (· != goal)
         unless assigned.isEmpty do throwError
           "{Check.rules.name}: norm simp assigned metas:{introduced.map (·.name)}"
-        return (result, cache)
+        return result
       else
-        normSimpCore ctx localSimpRules cache goal mvars
+        normSimpCore ctx localSimpRules goal mvars
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 partial def normalizeGoalMVar (rs : RuleSet) (ctx : Simp.Context)
-    (cache : Simp.Cache) (maxIterations : Nat) (goal : MVarId)
-    (mvars : Array MVarId) (bs : BranchState) :
-    ProfileT MetaM (Option (MVarId × BranchState) × Simp.Cache) :=
-  go 0 goal bs cache
+    (maxIterations : Nat) (goal : MVarId) (mvars : Array MVarId)
+    (bs : BranchState) : ProfileT MetaM (Option (MVarId × BranchState)) :=
+  go 0 goal bs
   where
-    go (iteration : Nat) (goal : MVarId) (bs : BranchState)
-        (cache : Simp.Cache) :
-        ProfileT MetaM (Option (MVarId × BranchState) × Simp.Cache) := do
+    go (iteration : Nat) (goal : MVarId) (bs : BranchState) :
+        ProfileT MetaM (Option (MVarId × BranchState)) := do
       if maxIterations > 0 && iteration > maxIterations then throwError
         "aesop: exceeded maximum number of normalisation iterations ({maxIterations}). This means normalisation probably got stuck in an infinite loop."
       let rules ← selectNormRules rs goal
@@ -228,24 +218,23 @@ partial def normalizeGoalMVar (rs : RuleSet) (ctx : Simp.Context)
         rules.partition λ r => r.rule.extra.penalty < (0 : Int)
       let preSimpResult ← runFirstNormRule goal mvars bs preSimpRules
       match preSimpResult with
-      | .proven => return (none, cache)
-      | .succeeded goal bs => go (iteration + 1) goal bs cache
+      | .proven => return none
+      | .succeeded goal bs => go (iteration + 1) goal bs
       | .failed =>
         aesop_trace[stepsNormalization] "Running normalisation simp"
-        let (simpResult, cache) ←
-          normSimp goal mvars ctx rs.localNormSimpLemmas cache
+        let simpResult ← normSimp goal mvars ctx rs.localNormSimpLemmas
         match simpResult with
-        | .solved => return (none, cache)
+        | .solved => return none
         | .simplified goal =>
           aesop_trace[stepsNormalization] "Goal after normalisation simp:{indentD $ MessageData.ofGoal goal}"
-          go (iteration + 1) goal bs cache
+          go (iteration + 1) goal bs
         | .unchanged goal =>
           aesop_trace[stepsNormalization] "Goal unchanged after normalisation simp."
           let postSimpResult ← runFirstNormRule goal mvars bs postSimpRules
           match postSimpResult with
-          | .proven => return (none, cache)
-          | .succeeded goal bs => go (iteration + 1) goal bs cache
-          | .failed => return (some (goal, bs), cache)
+          | .proven => return none
+          | .succeeded goal bs => go (iteration + 1) goal bs
+          | .failed => return some (goal, bs)
 
 -- Returns true if the goal was solved by normalisation.
 def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Q Bool := do
@@ -256,20 +245,19 @@ def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Q Bool := do
   let ctx ← read
   let profilingEnabled ← isProfilingEnabled
   let profile ← getThe Profile
-  let normSimpCache := (← get).normSimpCache
-  let ((postGoal?, normSimpCache, profile), postState) ←
+  let ((postGoal?, profile), postState) ←
     (← gref.get).runMetaMInParentState do
       aesop_trace[steps] "Goal before normalisation:{indentD $ MessageData.ofGoal g.preNormGoal}"
-      let ((postGoal?, normSimpCache), profile) ←
-        normalizeGoalMVar ctx.ruleSet ctx.normSimpContext normSimpCache
+      let (postGoal?, profile) ←
+        normalizeGoalMVar ctx.ruleSet ctx.normSimpContext
           ctx.options.maxNormIterations g.preNormGoal g.mvars g.branchState
         |>.run profilingEnabled profile
       if let (some (postGoal, _)) := postGoal? then
         aesop_trace[steps] "Goal after normalisation ({postGoal.name}):{indentD $ toMessageData postGoal}"
         -- This trace needs to happen within the `runMetaMInParentState` to make
         -- sure that the goal is printed correctly.
-      return (postGoal?, normSimpCache, profile)
-  modify λ s => { s with profile, normSimpCache }
+      return (postGoal?, profile)
+  modify λ s => { s with profile }
   match postGoal? with
   | some (postGoal, postBranchState) =>
     gref.modify λ g =>
