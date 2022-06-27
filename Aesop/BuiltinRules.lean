@@ -14,11 +14,6 @@ import Aesop.BuiltinRules.Split
 import Aesop.BuiltinRules.Subst
 import Aesop.Frontend
 
-open Lean
-open Lean.Elab
-open Lean.Elab.Tactic
-open Lean.Meta
-
 namespace Aesop.BuiltinRules
 
 -- Product introduction is considered unsafe. This is to support situations like
