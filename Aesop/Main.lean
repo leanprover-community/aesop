@@ -26,7 +26,8 @@ def evalAesop : Tactic := λ stx =>
             config.getRuleSet goal
           let profile := { profile with ruleSetConstruction := ruleSetConstructionTime }
           aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
-          let profile ← bestFirst goal ruleSet config.options profile
+          let profile ←
+            bestFirst goal ruleSet config.options config.simpConfig profile
           return (profile, [])
       pure { profile with search := searchTime }
     let profile := { profile with total := totalTime }

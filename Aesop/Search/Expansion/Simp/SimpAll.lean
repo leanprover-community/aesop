@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura, Jannis Limperg
 -/
 
-import Lean
+import Aesop.Search.Expansion.Simp.Basic
 
 open Lean
 open Lean.Meta
@@ -14,23 +14,7 @@ namespace Aesop
 
 -- Largely copy pasta, originally from Lean/Meta/Simp/SimpAll.lean.
 
-inductive SimpResult
-  | solved
-  | unchanged (newGoal : MVarId)
-  | simplified (newGoal : MVarId)
-
-namespace SimpResult
-
-def newGoal? : SimpResult → Option MVarId
-  | solved => none
-  | unchanged g => some g
-  | simplified g => some g
-
-end SimpResult
-
-namespace SimpAll
-
-structure Entry where
+private structure Entry where
   fvarId : FVarId -- original fvarId
   userName : Name
   id : Name   -- id of the theorem at `SimpTheorems`
@@ -38,7 +22,7 @@ structure Entry where
   proof : Expr
   deriving Inhabited
 
-structure State where
+private structure State where
   modified : Bool := false
   anyModified : Bool := false
     -- Indicates whether any hypothesis or the target was modified. This is
@@ -54,7 +38,7 @@ structure State where
     -- This should really be `HashMap FVarId (Array Name)`, but for the purposes
     -- of Aesop we only need a single disabled entry per FVarId.
 
-abbrev M := StateRefT State MetaM
+private abbrev M := StateRefT State MetaM
 
 private def initEntries : M Unit := do
   let hs ← withMVarContext (← get).mvarId do getPropHyps
@@ -131,7 +115,7 @@ private partial def loop : M Bool := do
 private def main : M SimpResult := do
   initEntries
   if (← loop) then
-    return .solved -- close the goal
+    return .solved
   else if ! (← get).anyModified then
     return .unchanged (← get).mvarId
   else
@@ -141,9 +125,9 @@ private def main : M SimpResult := do
     let mvarId ← tryClearMany mvarId (entries.map fun e => e.fvarId)
     return .simplified mvarId
 
-end SimpAll
-
 def simpAll (mvarId : MVarId) (ctx : Simp.Context)
     (disabledTheorems : HashMap FVarId Name) : MetaM SimpResult := do
   withMVarContext mvarId do
-    Aesop.SimpAll.main.run' { mvarId, ctx, disabledTheorems }
+    main.run' { mvarId, ctx, disabledTheorems }
+
+end Aesop

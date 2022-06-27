@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Frontend.Attribute
 import Aesop.Frontend.RuleExpr
 import Aesop.Options
+import Aesop.Search.Expansion.Simp.Basic
 
 open Lean
 open Lean.Meta
@@ -25,25 +26,41 @@ syntax "(" &"add" Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
 syntax "(" &"erase" Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
 syntax "(" &"rule_sets" "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
 syntax "(" &"options" ":=" term ")" : Aesop.tactic_clause
+syntax "(" &"simp_options" ":=" term ")" : Aesop.tactic_clause
 
 syntax (name := aesopTactic) &"aesop" Aesop.tactic_clause* : tactic
 
 end Parser
+
+-- Inspired by declare_config_elab
+unsafe def elabConfigUnsafe (type : Name) (stx : Syntax) : TermElabM α :=
+  withRef stx do
+    let e ← withoutModifyingState <| withLCtx {} {} <| withSaveInfoContext <| Term.withSynthesize do
+      let e ← Term.elabTermEnsuringType stx (Lean.mkConst type)
+      Term.synthesizeSyntheticMVarsNoPostponing
+      instantiateMVars e
+    evalExpr α type e
+
+unsafe def elabOptionsUnsafe : Syntax → TermElabM Aesop.Options :=
+  elabConfigUnsafe ``Aesop.Options
+
+@[implementedBy elabOptionsUnsafe]
+opaque elabOptions : Syntax → TermElabM Aesop.Options
+
+unsafe def elabSimpConfigUnsafe : Syntax → TermElabM Aesop.SimpConfig :=
+  elabConfigUnsafe ``Aesop.SimpConfig
+
+@[implementedBy elabSimpConfigUnsafe]
+opaque elabSimpConfig : Syntax → TermElabM Aesop.SimpConfig
 
 structure TacticConfig where
   additionalRules : Array RuleExpr
   erasedRules : Array RuleExpr
   enabledRuleSets : Array RuleSetName
   options : Aesop.Options
-  deriving Inhabited
+  simpConfig : Aesop.SimpConfig
 
 namespace TacticConfig
-
-instance : EmptyCollection TacticConfig :=
-  ⟨{ additionalRules := #[]
-     erasedRules := #[]
-     enabledRuleSets := #[]
-     options := {} }⟩
 
 def parse (stx : Syntax) : TermElabM TacticConfig :=
   withRefThen stx λ
@@ -53,6 +70,7 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
         erasedRules := #[]
         enabledRuleSets := defaultEnabledRuleSets
         options := {}
+        simpConfig := {}
       }
       clauses.foldlM addClause init
     | _ => throwUnsupportedSyntax
@@ -83,10 +101,10 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
               enabledRuleSets := enabledRuleSets.push rsName
             | _ => throwUnsupportedSyntax
           return { c with enabledRuleSets }
-        | `(tactic_clause| (options := $t:term)) => do
-          let t ← elabTermAndSynthesize t (some (mkConst ``Aesop.Options))
-          let opts ← evalOptionsExpr t
-          return { c with options := opts }
+        | `(tactic_clause| (options := $t:term)) =>
+          return { c with options := ← elabOptions t }
+        | `(tactic_clause| (simp_options := $t:term)) =>
+          return { c with simpConfig := ← elabSimpConfig t }
         | _ => throwUnsupportedSyntax
 
 def updateRuleSets (goal : MVarId) (rss : Aesop.RuleSets) (c : TacticConfig) :

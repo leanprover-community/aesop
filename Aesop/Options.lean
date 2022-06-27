@@ -28,17 +28,4 @@ structure Options where
   maxNormIterations := 100
   deriving Inhabited, BEq, Repr
 
-unsafe def evalOptionsExprImpl (e : Expr) : TermElabM Aesop.Options := do
-  let e ← instantiateMVars e
-  if e.hasFVar || e.hasMVar then throwError
-    "error while evaluating expression '{e}': it may not contain metavariables or local hypotheses"
-  check e
-  let t ← inferType e
-  let (true) ← isDefEq t (mkConst ``Aesop.Options) | throwError
-    "expected '{e}' to have type{indentD "Aesop.Options"}\nbut it has type{indentExpr t}"
-  evalExpr Aesop.Options ``Aesop.Options e
-
-@[implementedBy evalOptionsExprImpl]
-opaque evalOptionsExpr (e : Expr) : TermElabM Aesop.Options
-
 end Aesop

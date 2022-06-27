@@ -99,16 +99,16 @@ partial def searchLoop : SearchM Q Unit := do
 
 
 def search (Q) [Queue Q] (goal : MVarId) (ruleSet? : Option RuleSet := none)
-     (options : Aesop.Options := {}) (profile : Profile := {}) :
+     (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
+     (profile : Profile := {}) :
      MetaM Profile := do
   checkNotAssigned goal `aesop
   let ruleSet ← do
     match ruleSet? with
     | none => Frontend.getDefaultAttributeRuleSet
     | some ruleSet => pure ruleSet
-  let go : SearchM Q Unit :=
+  let (_, state, _) ← SearchM.run ruleSet options simpConfig goal profile do
     try searchLoop catch e => onError e finally freeTree
-  let (_, state, _) ← SearchM.run ruleSet options goal profile go
   return state.profile
   where
     onError : Exception → SearchM Q Unit
@@ -130,7 +130,8 @@ def search (Q) [Queue Q] (goal : MVarId) (ruleSet? : Option RuleSet := none)
       | e => throw e
 
 def bestFirst (goal : MVarId) (ruleSet? : Option RuleSet := none)
-    (options : Aesop.Options := {}) (profile : Profile := {}) : MetaM Profile :=
-  search BestFirstQueue goal ruleSet? options profile
+    (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
+    (profile : Profile := {}) : MetaM Profile :=
+  search BestFirstQueue goal ruleSet? options simpConfig profile
 
 end Aesop

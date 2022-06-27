@@ -693,11 +693,19 @@ be disabled with `rule_sets [-default, -builtin]`.
 Various options can be set with an `options` clause, whose syntax is:
 
 ``` text
-(options <term>)
+(options := <term>)
 ```
 
 The term is an arbitrary Lean expression of type `Aesop.Options`; see there for
 details.
+
+Similarly, options for the builtin norm simp call can be set with
+
+``` text
+(simp_options := <term>)
+```
+
+The term has type `Aesop.Simp.Config`; see there for details.
 
 #### Builtin Rules
 
