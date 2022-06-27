@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleTac
+import Aesop.Search.Expansion.Simp
 import Aesop.Search.RuleSelection
 
 open Lean
