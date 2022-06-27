@@ -6,3 +6,4 @@ Authors: Jannis Limperg
 
 import Aesop.Search.Expansion.Simp.Basic
 import Aesop.Search.Expansion.Simp.SimpAll
+import Aesop.Search.Expansion.Simp.SimpGoal

@@ -705,7 +705,10 @@ Similarly, options for the builtin norm simp call can be set with
 (simp_options := <term>)
 ```
 
-The term has type `Aesop.Simp.Config`; see there for details.
+The term has type `Aesop.Simp.Config`; see there for details. The `useHyps`
+option may be particularly useful: when `true` (the default), norm simp behaves
+like the `simp_all` tactic; when `false`, norm simp behaves like
+`simp (config := { contextual := true }) at *`.
 
 #### Builtin Rules
 

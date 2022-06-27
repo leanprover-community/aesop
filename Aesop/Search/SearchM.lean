@@ -18,6 +18,7 @@ namespace Aesop.SearchM
 structure Context where
   ruleSet : RuleSet
   normSimpContext : Simp.Context
+  normSimpUseHyps : Bool
   options : Aesop.Options
   rootGoalMVar : MVarId -- TODO this is now the root goal's `preNormGoal`
   profilingEnabled : Bool
@@ -84,7 +85,9 @@ def run (ruleSet : RuleSet) (options : Aesop.Options)
     config := simpConfig.toConfig
   }
   let ctx := {
-    ruleSet, options, rootGoalMVar := goal, profilingEnabled, normSimpContext
+    rootGoalMVar := goal
+    normSimpUseHyps := simpConfig.useHyps
+    ruleSet, options, profilingEnabled, normSimpContext
   }
   let #[rootGoal] := (← t.root.get).goals
     | throwError "aesop: internal error: root mvar cluster does not contain exactly one goal."
