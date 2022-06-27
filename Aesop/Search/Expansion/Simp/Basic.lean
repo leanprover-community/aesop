@@ -26,5 +26,6 @@ end SimpResult
 
 structure SimpConfig extends Simp.ConfigCtx where
   maxDischargeDepth := 1
+  useHyps := true
 
 end Aesop
