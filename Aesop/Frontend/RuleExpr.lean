@@ -44,14 +44,14 @@ def «elab» (stx : Syntax) : ElabM Priority :=
       "unexpected priority."
     match stx with
     | `(priority| $p:num %) =>
-      let p := p.toNat
+      let p := p.raw.toNat
       match Percent.ofNat p with
       | some p => return percent p
       | none => throwError "percentage '{p}%' is not between 0 and 100."
     | `(priority| - $i:num) =>
-      return int $ - i.toNat
+      return int $ - i.raw.toNat
     | `(priority| $i:num) =>
-      return int i.toNat
+      return int i.raw.toNat
     | _ => throwUnsupportedSyntax
 
 instance : ToString Priority where
@@ -217,7 +217,7 @@ inductive BuilderOption
 
 namespace BuilderOption
 
-def «elab» (stx : Syntax) : ElabM BuilderOption :=
+def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
   withRefThen stx λ
     | `(builder_option| (uses_branch_state := $b:Aesop.bool_lit)) =>
       usesBranchState <$> elabBoolLit b

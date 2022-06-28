@@ -25,11 +25,12 @@ def isEnabled (opt : TraceOption) : m Bool :=
 macro "aesop_trace![" opt:ident "]"
     s:(interpolatedStr(term) <|> term) : doElem => do
   let opt := mkIdentFrom opt $ `Aesop.TraceOption ++ opt.getId
-  let msg ←
+  let msg ← do
+    let s := s.raw
     if s.getKind == interpolatedStrKind then
-      `(m! $s)
+      `(m! $(⟨s⟩))
     else
-      `(($s : MessageData))
+      `(($(⟨s⟩) : MessageData))
   `(doElem| do Lean.addTrace (Aesop.TraceOption.traceName $opt) $msg)
 
 macro "aesop_trace[" opt:ident "]"
@@ -41,11 +42,12 @@ macro "aesop_trace[" opt:ident "]"
       if ← Aesop.TraceOption.isEnabled $optFull then
         $action)
   | _ =>
-    let msg ←
+    let msg ← do
+      let s := s.raw
       if s.getKind == interpolatedStrKind then
-        `(m! $s)
+        `(m! $(⟨s⟩))
       else
-        `(($s : MessageData))
+        `(($(⟨s⟩) : MessageData))
     `(doElem| do
       if ← Aesop.TraceOption.isEnabled $optFull then
         aesop_trace![$opt] $msg)
