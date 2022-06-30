@@ -59,7 +59,7 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
       return newGoal
   where
     go (i : Nat) (goal : MVarId) : MetaM MVarId := do
-      withMVarContext goal do
+      withMVarContext goal $ withIncRecDepth do
         let lctx ← getLCtx
         if i < lctx.decls.size then
           match lctx.decls[i] with

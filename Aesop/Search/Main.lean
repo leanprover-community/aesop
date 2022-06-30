@@ -76,27 +76,27 @@ def finishIfProven : SearchM Q Bool := do
     aesop_trace[proof] "Final proof:{indentExpr proof}"
     return true
 
-partial def searchLoop : SearchM Q Unit := do
-  aesop_trace[steps] "=== Search loop iteration {← getIteration}"
-  let root := (← getTree).root
-  if (← root.get).state.isUnprovable then
-    let msg :=
-      if ← wasMaxRuleApplicationDepthReached then
-        m!"failed to prove the goal. Some goals were not explored because the maximum rule application depth ({(← read).options.maxRuleApplicationDepth}) was reached. Set option 'maxRuleApplicationDepth' to increase the limit."
-      else
-        m!"failed to prove the goal after exhaustive search."
-    throwError "aesop: {msg}"
-  if ← finishIfProven then
-    return
-  checkGoalLimit
-  checkRappLimit
-  expandNextGoal
-  aesop_trace[stepsTree] "Current search tree:{indentD $ ← (← (← getRootGoal).get).treeToMessageData (← TraceModifiers.get)}"
-  aesop_trace[stepsActiveGoalQueue] "Current active goals:{← formatQueue}"
-  checkInvariantsIfEnabled
-  incrementIteration
-  searchLoop
-
+partial def searchLoop : SearchM Q Unit :=
+  withIncRecDepth do
+    aesop_trace[steps] "=== Search loop iteration {← getIteration}"
+    let root := (← getTree).root
+    if (← root.get).state.isUnprovable then
+      let msg :=
+        if ← wasMaxRuleApplicationDepthReached then
+          m!"failed to prove the goal. Some goals were not explored because the maximum rule application depth ({(← read).options.maxRuleApplicationDepth}) was reached. Set option 'maxRuleApplicationDepth' to increase the limit."
+        else
+          m!"failed to prove the goal after exhaustive search."
+      throwError "aesop: {msg}"
+    if ← finishIfProven then
+      return
+    checkGoalLimit
+    checkRappLimit
+    expandNextGoal
+    aesop_trace[stepsTree] "Current search tree:{indentD $ ← (← (← getRootGoal).get).treeToMessageData (← TraceModifiers.get)}"
+    aesop_trace[stepsActiveGoalQueue] "Current active goals:{← formatQueue}"
+    checkInvariantsIfEnabled
+    incrementIteration
+    searchLoop
 
 def search (Q) [Queue Q] (goal : MVarId) (ruleSet? : Option RuleSet := none)
      (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
