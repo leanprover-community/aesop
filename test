@@ -10,6 +10,8 @@
 GREEN="\e[0;92m"
 RESET="\e[0m"
 
+LEAN_OPTS="-D linter.unusedVariables=false"
+
 lake build
 [ "$?" -eq 0 ] || exit 1
 
@@ -23,7 +25,7 @@ fi
 failed=0
 
 function run_run_test {
-  lake env lean "$file"
+  lake env lean $LEAN_OPTS "$file"
   return "$?"
 }
 
@@ -31,7 +33,7 @@ function run_golden_test {
   file="$1"
   expected="${file}.expected"
   produced="${file}.produced"
-  lake env lean "$file" &> "$produced"
+  lake env lean $LEAN_OPTS "$file" &> "$produced"
   if [ -f "$expected" ]; then
     diff "$expected" "$produced"
     return "$?"
