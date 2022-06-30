@@ -755,7 +755,7 @@ def setMetaState (metaState : Meta.SavedState) (r : Rapp) : Rapp :=
   r.modify λ r => { r with metaState }
 
 @[inline]
-def setIntroducetMVars (introducedMVars : Array MVarId)
+def setIntroducedMVars (introducedMVars : Array MVarId)
     (r : Rapp) : Rapp :=
   r.modify λ r => { r with introducedMVars }
 
