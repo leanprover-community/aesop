@@ -3,7 +3,7 @@
 # Usage:
 #
 # `./test` to build tests/*.lean
-# `./test tests/A.lean tests/B.lean ...` to build the specified files
+# `./test tests/run/A.lean tests/golden/B.lean ...` to build the specified files
 #
 # This script must be called from the directory it is located in.
 
@@ -14,17 +14,51 @@ lake build
 [ "$?" -eq 0 ] || exit 1
 
 if [ -z "$1" ]; then
-  files="tests/*.lean"
+  files=(tests/run/*.lean)
+  files+=(tests/golden/*.lean)
 else
   files="$@"
 fi
 
 failed=0
 
+function run_run_test {
+  lake env lean "$file"
+  return "$?"
+}
+
+function run_golden_test {
+  file="$1"
+  expected="${file}.expected"
+  produced="${file}.produced"
+  lake env lean "$file" &> "$produced"
+  if [ -f "$expected" ]; then
+    diff "$expected" "$produced"
+    return "$?"
+  else
+    echo "$expected not found, copying produced output"
+    cp "$produced" "$expected"
+    return 0
+  fi
+}
+
 for file in ${files[@]}; do
   echo -e "$GREEN$file$RESET"
-  lake env lean $file
-  [ "$?" -eq 0 ] || failed=1
+  dir="$(dirname "$file")"
+  case $dir in
+    "tests/run")
+      run_run_test "$file"
+      [ "$?" -eq 0 ] || failed=1
+      ;;
+    "tests/golden")
+      run_golden_test "$file"
+      [ "$?" -eq 0 ] || failed=1
+      ;;
+    *)
+      echo "Unexpected test file. Valid files are 'tests/run/*.lean' and 'tests/golden/*.lean'"
+      exit 1
+      ;;
+  esac
 done
 
 exit $failed
