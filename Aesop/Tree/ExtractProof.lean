@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Tracing
+import Aesop.Tree.Format
 import Aesop.Tree.TreeM
 
 open Lean
@@ -67,12 +69,23 @@ private def copyNewDeclarations (oldEnv newEnv : Environment) : CoreM Unit := do
   let newConsts := getNewConsts oldEnv newEnv
   setEnv $ newConsts.foldl (init := ← getEnv) λ env c => env.add c
 
+open Match in
+private def copyMatchEqnsExtState (oldEnv newEnv : Environment) : CoreM Unit := do
+  let oldState := matchEqnsExt.getState oldEnv
+  let newState := matchEqnsExt.getState newEnv
+  if newState.map.size > oldState.map.size then
+    for (n, eqns) in newState.map do
+      if !oldState.map.contains n then
+        registerMatchEqns n eqns
 
 -- ## Copying Metavariables
 
 private def copyMVarDecl (s : Meta.SavedState) (mvarId : MVarId) :
     MetaM Unit := do
-  let decl ← s.runMetaM' $ getMVarDecl mvarId
+  let decl ← s.runMetaM' $ do
+    let decl ← getMVarDecl mvarId
+    aesop_trace[extraction] "declare ?{mvarId.name} : {decl.type}"
+    pure decl
   modifyMCtx λ mctx => { mctx with decls := mctx.decls.insert mvarId decl }
 
 private partial def copyExprMVarAssignment (s : Meta.SavedState)
@@ -90,29 +103,23 @@ private partial def copyExprMVarAssignment (s : Meta.SavedState)
       return none
   match assignment? with
   | some (Sum.inl e) =>
-    assignExprMVar mvarId e
     for mvarId in ← getMVars e do
       copyExprMVarAssignment s mvarId
+    aesop_trace[extraction] "assign  ?{mvarId.name} := {toString e}"
+    assignExprMVar mvarId e
   | some (Sum.inr d) =>
-    delayedAssignMVar mvarId d
     for mvarId in ← getMVars d.val do
       copyExprMVarAssignment s mvarId
+    aesop_trace[extraction] "dassign ?{mvarId.name} := {d.fvars} => {toString d.val}"
+    delayedAssignMVar mvarId d
   | none => return
-
-open Match in
-private def copyMatchEqnsExtState (oldEnv newEnv : Environment) : CoreM Unit := do
-  let oldState := matchEqnsExt.getState oldEnv
-  let newState := matchEqnsExt.getState newEnv
-  if newState.map.size > oldState.map.size then
-    for (n, eqns) in newState.map do
-      if !oldState.map.contains n then
-        registerMatchEqns n eqns
 
 -- ## Main Function
 
 mutual
   private partial def extractProofGoal (parentEnv : Environment) (g : Goal) :
       MetaM Unit := do
+    aesop_trace[extraction] "visiting {← g.toMessageData (← TraceModifiers.get)}"
     match g.normalizationState with
     | NormalizationState.notNormal => throwPRError
       "goal {g.id} was not normalised."
@@ -127,6 +134,7 @@ mutual
 
   private partial def extractProofRapp (parentEnv : Environment)
       (parentGoal : MVarId) (r : Rapp) : MetaM Unit := do
+    aesop_trace[extraction] "visiting {← r.toMessageData}"
     let newEnv := r.metaState.core.env
     copyNewDeclarations parentEnv newEnv
     copyMatchEqnsExtState parentEnv newEnv

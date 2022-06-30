@@ -46,6 +46,10 @@ initialize goalsAfterSafe : TraceOption ←
   registerTraceOption `goalsAfterSafe true
     "(aesop) If Aesop fails, print the goals it tried to solve after applying all safe rules."
 
+initialize extraction : TraceOption ←
+  registerTraceOption `extraction false
+    "(aesop) If Aesop finds a proof, print a trace of the proof extraction procedure."
+
 initialize steps : TraceOption ←
   registerTraceOption `steps false
     "(aesop) Print actions taken by Aesop during the proof search. Set the trace.aesop.steps.* options to choose which actions are printed."
