@@ -76,13 +76,13 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
     let #[rapp] := result.applications
       | err m!"rule did not produce exactly one rule application."
     restoreState rapp.postState
+    unless rapp.introducedMVars.isEmpty do
+      err m!"rule introduced metavariables {rapp.introducedMVars.toArray.map (·.name)}"
     if rapp.goals.isEmpty then
       aesop_trace[stepsNormalization] "Rule proved the goal."
       return .proven
     let (#[(g, _)]) := rapp.goals
       | err m!"rule produced more than one subgoal."
-    unless rapp.introducedMVars.isEmpty do
-      err m!"rule introduced additional metavariables"
     let postBranchState := bs.update rule result.postBranchState?
     aesop_trace[stepsNormalization] do
       aesop_trace![stepsNormalization] "Rule succeeded. New goal:{indentD $ .ofGoal g}"
@@ -312,19 +312,27 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
 
     go (postBranchState : BranchState) (successProbability : Percent)
         (rapps : Array RuleApplication) : SearchM Q (Array RappRef) := do
-      let rrefs ← rapps.mapM λ rapp => do
-        let rref ← addRapp {
+      let mut rrefs := Array.mkEmpty rapps.size
+      for h : i in [0:rapps.size] do
+        have h : i < rapps.size := by simp_all [Membership.mem]
+        let rapp := rapps.get ⟨i, h⟩
+        let rapp := {
           parent := parentRef
           appliedRule := rule
           successProbability
-          metaState := rapp.postState
+          goals := rapp.goals.map λ (goal, mvars) => (goal, mvars.toArray)
           introducedMVars := rapp.introducedMVars
+          metaState := rapp.postState
+          branchState := postBranchState
           assignedMVars := rapp.assignedMVars
-          children := rapp.goals.map λ (goal, mvars) =>
-            { goal, mvars, branchState := postBranchState }
         }
-        (← rref.get).children.forM λ cref => do enqueueGoals (← cref.get).goals
-        return rref
+        match ← addRapp rapp with
+        | none =>
+          aesop_trace[steps] "Rule application {i + 1} dropped metavariables; skipping it."
+        | some rref =>
+          (← rref.get).children.forM λ cref => do
+            enqueueGoals (← cref.get).goals
+          rrefs := rrefs.push rref
       rrefs.forM (·.markProven)
         -- `markProven` is a no-op if the rapp is not, in fact, proven. We must
         -- perform this computation after all rapps have been added to ensure

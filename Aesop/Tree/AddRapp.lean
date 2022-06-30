@@ -13,19 +13,14 @@ open Std (HashMap HashSet)
 
 namespace Aesop
 
-structure AddGoal where
-  goal : MVarId
-  mvars : HashSet MVarId
-  branchState : BranchState
-  deriving Inhabited
-
 structure AddRapp where
   parent : GoalRef
   appliedRule : RegularRule
   successProbability : Percent
-  children : Array AddGoal
-  metaState : Meta.SavedState
+  goals : Array (MVarId × Array MVarId)
   introducedMVars : HashSet MVarId
+  metaState : Meta.SavedState
+  branchState : BranchState
   assignedMVars : HashSet MVarId
 
 private def clusterGoals (goals : Array Goal) : Array (Array Goal) := Id.run do
@@ -68,7 +63,7 @@ private def findPathForAssignedMVars (assignedMVars : HashSet MVarId)
       return true)
     (TreeRef.goal start)
   if ! (← done.get) then
-    throwError "aesop: internal error: introducing rapps not found for these mvars: {(← unseen.get).toArray}"
+    throwError "aesop: internal error: introducing rapps not found for these mvars: {(← unseen.get).toArray.map (·.name)}"
   return (← pathRapps.get, ← pathGoals.get)
 
 private def getGoalsToCopy (assignedMVars : HashSet MVarId) (start : GoalRef) :
@@ -94,27 +89,27 @@ private def getGoalsToCopy (assignedMVars : HashSet MVarId) (start : GoalRef) :
   return toCopy
 
 private unsafe def copyGoals (assignedMVars : HashSet MVarId)
-    (parentRef : RappRef) : TreeM (Array Goal) := do
-  let parent ← parentRef.get
-  let startGoalRef := parent.parent
-  let toCopy ← getGoalsToCopy assignedMVars startGoalRef
+    (start : GoalRef) (parentMetaState : Meta.SavedState)
+    (parentSuccessProbability : Percent) (depth : Nat) :
+    TreeM (Array Goal) := do
+  let toCopy ← getGoalsToCopy assignedMVars start
   toCopy.mapM λ gref => do
     let g ← gref.get
-    let mvars ← parent.runMetaM' $
+    let mvars ← parentMetaState.runMetaM' $
       g.mvars.concatMapM (getMVarsNoDelayed ∘ mkMVar)
     return Goal.mk {
       id := ← getAndIncrementNextGoalId
       parent := unsafeCast () -- will be filled in later
       children := #[]
       origin := .copied g.id g.originalGoalId
-      depth := (← parent.depth) + 1
+      depth
       state := GoalState.unknown
       isIrrelevant := false
       isForcedUnprovable := false
       preNormGoal := g.preNormGoal
       normalizationState := NormalizationState.notNormal
       mvars
-      successProbability := parent.successProbability
+      successProbability := parentSuccessProbability
       addedInIteration := (← read).currentIteration
       lastExpandedInIteration := Iteration.none
       unsafeRulesSelected := false
@@ -125,32 +120,27 @@ private unsafe def copyGoals (assignedMVars : HashSet MVarId)
       failedRapps := #[]
     }
 
-private def makeInitialGoal (g : AddGoal)
+private def makeInitialGoal (goal : MVarId) (mvars : Array MVarId)
     (parent : MVarClusterRef) (depth : Nat) (successProbability : Percent)
-    (origin : GoalOrigin) :
+    (branchState : BranchState) (origin : GoalOrigin):
     TreeM Goal :=
   return Goal.mk {
     id := ← getAndIncrementNextGoalId
-    parent
     children := #[]
-    origin
-    depth
     state := GoalState.unknown
     isIrrelevant := false
     isForcedUnprovable := false
-    preNormGoal := g.goal
+    preNormGoal := goal
     normalizationState := NormalizationState.notNormal
-    mvars := g.mvars.toArray
-    successProbability
     addedInIteration := (← read).currentIteration
     lastExpandedInIteration := Iteration.none
     unsafeRulesSelected := false
     unsafeQueue := {}
-    branchState := g.branchState
     failedRapps := #[]
+    parent, branchState, origin, depth, mvars, successProbability
   }
 
-private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
+private unsafe def addRappUnsafe (r : AddRapp) : TreeM (Option RappRef) := do
   -- Construct the new rapp
   let rref : RappRef ← IO.mkRef $ Rapp.mk {
     id := ← getAndIncrementNextRappId
@@ -161,46 +151,53 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     appliedRule := r.appliedRule
     successProbability := r.successProbability
     metaState := r.metaState
-    introducedMVars := r.introducedMVars.toArray
+    introducedMVars := #[] -- will be filled in later
     assignedMVars := r.assignedMVars.toArray
   }
 
-  -- Construct the subgoals
-  let parentGoal ← r.parent.get
-  let goalDepth := parentGoal.depth + 1
-  let subgoals : Array Goal ← r.children.mapM
-    (makeInitialGoal · (unsafeCast ()) goalDepth r.successProbability .subgoal)
-    -- The parent (`unsafeCast ()`) will be patched up later.
+  let mut mvarsInSubgoals : HashSet MVarId := {}
 
   -- If the rapp assigned any mvars, copy the related goals.
+  let parentGoal ← r.parent.get
+  let goalDepth := parentGoal.depth + 1
   let copiedGoals : Array Goal ←
     if r.assignedMVars.isEmpty then
       pure #[]
     else
-      copyGoals r.assignedMVars rref
-
-  -- If the rapp 'dropped' mvars, add one goal for each dropped mvar. A
-  -- dropped mvar is one that appears in the parent of the rapp but not in any
-  -- of its subgoals.
-  let mut subgoalMVars : HashSet MVarId := {}
-  for g in subgoals do
-    for m in g.mvars do
-      subgoalMVars := subgoalMVars.insert m
+      copyGoals r.assignedMVars r.parent r.metaState r.successProbability
+        goalDepth
   for g in copiedGoals do
-    for m in g.mvars do
-      subgoalMVars := subgoalMVars.insert m
-  let droppedMVars := parentGoal.mvars.filter λ m =>
-    ! subgoalMVars.contains m && ! r.assignedMVars.contains m
-  let droppedMVarGoals : Array Goal ← droppedMVars.mapM λ goal => do
-      let g : AddGoal := {
-        goal
-        mvars := ← (← rref.get).runMetaM' $ getGoalMVarsNoDelayed goal
-        branchState := parentGoal.branchState
-      }
-      makeInitialGoal g (unsafeCast ()) goalDepth r.successProbability
-        .droppedMVar
+    mvarsInSubgoals := mvarsInSubgoals.insertMany g.mvars
 
-  let newGoals := subgoals ++ copiedGoals ++ droppedMVarGoals
+  -- Check if the rapp 'dropped' mvars. A dropped mvar is one that appears in
+  -- the parent of the rapp but not in any of its subgoals.
+  let mut subgoalMVars : HashSet MVarId := {}
+  for (_, mvars) in r.goals do
+    subgoalMVars := subgoalMVars.insertMany mvars
+  for g in copiedGoals do
+    subgoalMVars := subgoalMVars.insertMany g.mvars
+  let hasDroppedMVar := parentGoal.mvars.any λ m =>
+    ! subgoalMVars.contains m && ! r.assignedMVars.contains m
+  if hasDroppedMVar then
+    return none
+
+  -- Turns proper goals into proper mvars if they appear in any of the copied
+  -- subgoals.
+  let mut properGoals := Array.mkEmpty r.goals.size
+  let mut properMVars := r.introducedMVars.toArray
+  for (g, mvars) in r.goals do
+    if subgoalMVars.contains g then
+      properMVars := properMVars.push g
+    else
+      properGoals := properGoals.push (g, mvars)
+
+  -- Construct the subgoals
+  let subgoals : Array Goal ← properGoals.mapM λ (goal, mvars) =>
+    makeInitialGoal goal mvars (unsafeCast ()) goalDepth
+      r.successProbability r.branchState .subgoal
+    -- The parent (`unsafeCast ()`) will be patched up later.
+
+  let newGoals := subgoals ++ copiedGoals
 
   -- Construct the new mvar clusters.
   let crefs : Array MVarClusterRef ←
@@ -217,7 +214,8 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
       return cref
 
   -- Patch up information we left out earlier.
-  rref.modify λ r => r.setChildren crefs
+  rref.modify λ r =>
+    r.setChildren crefs |>.setIntroducedMVars properMVars
   r.parent.modify λ g => g.setChildren $ g.children.push rref
 
   -- Increment goal and rapp counters.
@@ -230,7 +228,9 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
 -- that adding a rapp may prove the parent goal, but this function does not make
 -- the necessary changes. So after calling it, you should check whether the
 -- rapp's parent goal is proven and mark it accordingly.
+--
+-- If the rapp dropped mvars, it cannot be added and `none` is returned.
 @[implementedBy addRappUnsafe]
-opaque addRapp : AddRapp → TreeM RappRef
+opaque addRapp : AddRapp → TreeM (Option RappRef)
 
 end Aesop

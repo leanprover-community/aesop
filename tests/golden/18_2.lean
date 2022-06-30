@@ -5,6 +5,9 @@ Authors: Asta H. From, Jannis Limperg
 -/
 import Aesop
 
+set_option aesop.check.all false
+set_option trace.aesop.goalsAfterSafe false
+
 attribute [aesop safe (cases (patterns := [List.Mem _ []]))] List.Mem
 attribute [aesop unsafe 50% (cases (patterns := [List.Mem _ (_ :: _)]))] List.Mem
 
@@ -17,10 +20,7 @@ theorem Mem.split [DecidableEq α] (xs : List α) (v : α) (h : v ∈ xs)
     have dec : Decidable (x = v) := inferInstance
     cases dec
     case isFalse no =>
-      set_option trace.aesop.goalsAfterSafe false in
-      aesop
+      aesop (add unsafe [cases List])
+        (options := { maxRuleApplications := 150 })
     case isTrue yes =>
-      apply Exists.intro []
-      apply Exists.intro xs
-      rw [yes]
-      rfl
+      sorry
