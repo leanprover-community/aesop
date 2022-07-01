@@ -140,7 +140,7 @@ private def makeInitialGoal (goal : MVarId) (mvars : Array MVarId)
     parent, branchState, origin, depth, mvars, successProbability
   }
 
-private unsafe def addRappUnsafe (r : AddRapp) : TreeM (Option RappRef) := do
+private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   -- Construct the new rapp
   let rref : RappRef ← IO.mkRef $ Rapp.mk {
     id := ← getAndIncrementNextRappId
@@ -155,45 +155,62 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM (Option RappRef) := do
     assignedMVars := r.assignedMVars.toArray
   }
 
-  -- If the rapp assigned any mvars, copy the related goals.
   let parentGoal ← r.parent.get
   let goalDepth := parentGoal.depth + 1
+
+  -- Collect the mvars which occur in the reported subgoals.
+  let subgoalMVars := r.goals.foldl (init := HashSet.empty)
+    λ subgoalMVars (_, mvars) => subgoalMVars.insertMany mvars
+
+  -- Check if the rapp dropped mvars. A dropped mvar is one that appears in the
+  -- parent of the rapp but not in any of its subgoals. A dropped mvar is
+  -- treated like an assigned mvar for the purposes of copying.
+  let droppedMVars := parentGoal.mvars.filter λ m =>
+    ! subgoalMVars.contains m && ! r.assignedMVars.contains m
+
+  -- If the rapp assigned or dropped any mvars, copy the related goals.
+  let quasiAssignedMVars := r.assignedMVars.insertMany droppedMVars
   let copiedGoals : Array Goal ←
-    if r.assignedMVars.isEmpty then
+    if quasiAssignedMVars.isEmpty then
       pure #[]
     else
-      copyGoals r.assignedMVars r.parent r.metaState r.successProbability
-        goalDepth
+      copyGoals quasiAssignedMVars r.parent r.metaState
+        r.successProbability goalDepth
 
-  -- Check if the rapp 'dropped' mvars. A dropped mvar is one that appears in
-  -- the parent of the rapp but not in any of its subgoals.
-  let mut subgoalMVars : HashSet MVarId := {}
-  for (_, mvars) in r.goals do
-    subgoalMVars := subgoalMVars.insertMany mvars
-  for g in copiedGoals do
-    subgoalMVars := subgoalMVars.insertMany g.mvars
-  let hasDroppedMVar := parentGoal.mvars.any λ m =>
-    ! subgoalMVars.contains m && ! r.assignedMVars.contains m
-  if hasDroppedMVar then
-    return none
+  -- Collect the mvars which occur in the copied goals.
+  let copiedGoalMVars := copiedGoals.foldl (init := HashSet.empty)
+    λ copiedGoalMVars g => copiedGoalMVars.insertMany g.mvars
 
-  -- Turns proper goals into proper mvars if they appear in any of the copied
-  -- subgoals.
+  -- If a dropped mvar does not occur in the copied goals, turn it into a
+  -- regular subgoal.
+  let droppedGoals ← droppedMVars.filterMapM λ m => do
+    if copiedGoalMVars.contains m then
+      return none
+    else
+      let mvars ← r.metaState.runMetaM' $
+        return (← getGoalMVarsNoDelayed m).toArray
+      let g ← makeInitialGoal m mvars (unsafeCast ()) goalDepth
+        r.successProbability r.branchState .droppedMVar
+        -- The parent (`unsafeCast ()`) will be patched up later.
+      return some g
+
+  -- Turn proper goals into proper mvars if they appear in any of the copied
+  -- goals.
   let mut properGoals := Array.mkEmpty r.goals.size
   let mut properMVars := r.introducedMVars.toArray
   for (g, mvars) in r.goals do
-    if subgoalMVars.contains g then
+    if copiedGoalMVars.contains g then
       properMVars := properMVars.push g
     else
       properGoals := properGoals.push (g, mvars)
 
   -- Construct the subgoals
-  let subgoals : Array Goal ← properGoals.mapM λ (goal, mvars) =>
+  let subgoals ← properGoals.mapM λ (goal, mvars) =>
     makeInitialGoal goal mvars (unsafeCast ()) goalDepth
       r.successProbability r.branchState .subgoal
-    -- The parent (`unsafeCast ()`) will be patched up later.
+      -- The parent (`unsafeCast ()`) will be patched up later.
 
-  let newGoals := subgoals ++ copiedGoals
+  let newGoals := subgoals ++ copiedGoals ++ droppedGoals
 
   -- Construct the new mvar clusters.
   let crefs : Array MVarClusterRef ←
@@ -209,7 +226,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM (Option RappRef) := do
       grefs.forM λ gref => gref.modify λ g => g.setParent cref
       return cref
 
-  -- Patch up information we left out earlier.
+  -- Patch up more information we left out earlier.
   rref.modify λ r =>
     r.setChildren crefs |>.setIntroducedMVars properMVars
   r.parent.modify λ g => g.setChildren $ g.children.push rref
@@ -220,13 +237,14 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM (Option RappRef) := do
   return rref
 
 -- Adds a new rapp and its subgoals. If the rapp assigns mvars, all relevant
--- goals containing these mvars are copied as children of the rapp as well. Note
--- that adding a rapp may prove the parent goal, but this function does not make
--- the necessary changes. So after calling it, you should check whether the
--- rapp's parent goal is proven and mark it accordingly.
+-- goals containing these mvars are copied as children of the rapp as well. If
+-- the rapp drops mvars, these are treated as assigned mvars, in the sense that
+-- the same goals are copied as if the dropped mvar had been assigned.
 --
--- If the rapp dropped mvars, it cannot be added and `none` is returned.
+-- Note that adding a rapp may prove the parent goal, but this function does not
+-- make the necessary changes. So after calling it, you should check whether the
+-- rapp's parent goal is proven and mark it accordingly.
 @[implementedBy addRappUnsafe]
-opaque addRapp : AddRapp → TreeM (Option RappRef)
+opaque addRapp : AddRapp → TreeM RappRef
 
 end Aesop

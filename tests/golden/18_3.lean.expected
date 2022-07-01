@@ -1,1 +1,0 @@
-tests/golden/18_3.lean:23:6: error: maximum recursion depth has been reached (use `set_option maxRecDepth <num>` to increase limit)

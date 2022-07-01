@@ -316,7 +316,7 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
       for h : i in [0:rapps.size] do
         have h : i < rapps.size := by simp_all [Membership.mem]
         let rapp := rapps.get ⟨i, h⟩
-        let rapp := {
+        let rref ← addRapp {
           parent := parentRef
           appliedRule := rule
           successProbability
@@ -326,13 +326,9 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
           branchState := postBranchState
           assignedMVars := rapp.assignedMVars
         }
-        match ← addRapp rapp with
-        | none =>
-          aesop_trace[steps] "Rule application {i + 1} dropped metavariables; skipping it."
-        | some rref =>
-          (← rref.get).children.forM λ cref => do
-            enqueueGoals (← cref.get).goals
-          rrefs := rrefs.push rref
+        rrefs := rrefs.push rref
+        (← rref.get).children.forM λ cref => do
+          enqueueGoals (← cref.get).goals
       rrefs.forM (·.markProven)
         -- `markProven` is a no-op if the rapp is not, in fact, proven. We must
         -- perform this computation after all rapps have been added to ensure

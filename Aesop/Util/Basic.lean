@@ -1337,8 +1337,7 @@ end SavedState
 def introducedExprMVars (preState postState : SavedState) :
     MetaM (Array MVarId) := do
   let unassignedPost ← postState.runMetaM' unassignedExprMVarsNoDelayed
-  preState.runMetaM' do
-    unassignedPost.filterM (notM ∘ isExprMVarDeclared)
+  preState.runMetaM' do unassignedPost.filterM (notM ∘ isExprMVarDeclared)
 
 -- Returns the mvars that are declared but unassigned in `preState`, and
 -- assigned in `postState`. Delayed-assigned mvars are considered assigned.
