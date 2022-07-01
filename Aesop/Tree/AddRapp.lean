@@ -155,8 +155,6 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM (Option RappRef) := do
     assignedMVars := r.assignedMVars.toArray
   }
 
-  let mut mvarsInSubgoals : HashSet MVarId := {}
-
   -- If the rapp assigned any mvars, copy the related goals.
   let parentGoal ← r.parent.get
   let goalDepth := parentGoal.depth + 1
@@ -166,8 +164,6 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM (Option RappRef) := do
     else
       copyGoals r.assignedMVars r.parent r.metaState r.successProbability
         goalDepth
-  for g in copiedGoals do
-    mvarsInSubgoals := mvarsInSubgoals.insertMany g.mvars
 
   -- Check if the rapp 'dropped' mvars. A dropped mvar is one that appears in
   -- the parent of the rapp but not in any of its subgoals.
