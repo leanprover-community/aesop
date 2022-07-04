@@ -34,8 +34,9 @@ def getImmediatePremises (name : Name) (type : Expr) : Option (Array Name) →
       if args.isEmpty then
         throwError "aesop: while registering '{name}' as a forward rule: not a function"
       let mut result := #[]
-      for i in [0:args.size] do
-        let fvarId := args[i].fvarId!
+      for h : i in [:args.size] do
+        have h : i < args.size := by simp_all [Membership.mem]
+        let fvarId := args[⟨i, h⟩].fvarId!
         let ldecl ← getLocalDecl fvarId
         let isNondep : MetaM Bool :=
           args.allM (start := i + 1) λ arg =>
@@ -49,8 +50,9 @@ def getImmediatePremises (name : Name) (type : Expr) : Option (Array Name) →
     forallTelescopeReducing type λ args _ => do
       let mut unseen := immediate.deduplicate (ord := ⟨Name.quickCmp⟩)
       let mut result := #[]
-      for i in [0:args.size] do
-        let argName := (← getLocalDecl args[i].fvarId!).userName
+      for h : i in [:args.size] do
+        have h : i < args.size := by simp_all [Membership.mem]
+        let argName := (← getLocalDecl args[⟨i, h⟩].fvarId!).userName
         if immediate.contains argName then
           result := result.push i
           unseen := unseen.erase argName

@@ -494,7 +494,7 @@ partial def «elab» (stx : Syntax) : ElabM Feature :=
         if nonIdentAlts.size != 1 then
           panic! "expected choice node with exactly one non-ident child"
         else
-          «elab» nonIdentAlts[0]
+          «elab» nonIdentAlts[0]!
       else
         throwUnsupportedSyntax
 
@@ -523,8 +523,8 @@ protected partial def toString : RuleExpr → String
     let cont :=
       if children.isEmpty then
         ""
-      else if children.size = 1 then
-        RuleExpr.toString children[0]
+      else if h : children.size = 1 then
+        RuleExpr.toString children[⟨0, by simp [h]⟩]
       else
         "[" ++ String.joinSep ", " (children.map RuleExpr.toString) ++ "]"
     String.joinSep " " #[toString f, cont]

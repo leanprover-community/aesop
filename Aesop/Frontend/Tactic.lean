@@ -39,7 +39,7 @@ unsafe def elabConfigUnsafe (type : Name) (stx : Syntax) : TermElabM α :=
       let e ← Term.elabTermEnsuringType stx (Lean.mkConst type)
       Term.synthesizeSyntheticMVarsNoPostponing
       instantiateMVars e
-    evalExpr α type e
+    evalExpr' α type e
 
 unsafe def elabOptionsUnsafe : Syntax → TermElabM Aesop.Options :=
   elabConfigUnsafe ``Aesop.Options

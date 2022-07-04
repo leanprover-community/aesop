@@ -63,8 +63,10 @@ private abbrev getSimpTheorems : M SimpTheoremsArray :=
 private partial def loop : M Bool := do
   modify fun s => { s with modified := false }
   -- simplify entries
-  for i in [:(← get).entries.size] do
-    let entry := (← get).entries[i]
+  let entries := (← get).entries
+  for h : i in [:entries.size] do
+    let h : i < entries.size := by simp_all [Membership.mem]
+    let entry := entries[⟨i, h⟩]
     let ctx := (← get).ctx
     -- We disable the current entry to prevent it to be simplified to `True`
     let mut simpThmsWithoutEntry := (← getSimpTheorems).eraseTheorem entry.id

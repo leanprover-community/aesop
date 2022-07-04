@@ -21,11 +21,11 @@ private partial def makeForwardHyps (e : Expr)
     let app := mkAppN e argMVars
     let mut instMVars := Array.mkEmpty argMVars.size
     let mut immediateMVars := Array.mkEmpty argMVars.size
-    for i in [0:argMVars.size] do
-      let mvarId := argMVars[i].mvarId!
+    for i in [:argMVars.size] do
+      let mvarId := argMVars[i]!.mvarId!
       if immediate.contains i then
         immediateMVars := immediateMVars.push mvarId
-      else if binderInfos[i].isInstImplicit then
+      else if binderInfos[i]!.isInstImplicit then
         instMVars := instMVars.push mvarId
 
     loop app instMVars immediateMVars 0 #[] #[] #[]
@@ -72,7 +72,7 @@ def applyForwardRule (goal : MVarId) (e : Expr)
     let userNames ← getUnusedUserNames newHyps.size `fwd
     let (_, goal) ← assertHypotheses goal $ ← newHyps.mapIdxM λ i val =>
       return {
-        userName := userNames[i]
+        userName := userNames[i]!
         value := val
         type := ← inferType val
       }

@@ -121,7 +121,7 @@ def joinSep (sep : String) (ss : Array String) : String :=
   match firstNonempty? with
   | none => ""
   | some firstNonempty =>
-    ss.foldl (start := firstNonempty + 1) (init := ss[firstNonempty]) λ res s =>
+    ss.foldl (start := firstNonempty + 1) (init := ss[firstNonempty]!) λ res s =>
       if s.isEmpty then res else res ++ sep ++ s
 
 end String
@@ -487,11 +487,12 @@ def joinSepArray (ms : Array MessageData) (sep : MessageData) :
     MessageData := Id.run do
   let mut result := nil
   let last := ms.size - 1
-  for i in [0:ms.size] do
+  for h : i in [0:ms.size] do
+    have h : i < ms.size := by simp_all [Membership.mem]
     if i ≥ last then
-      result := result ++ ms[i]
+      result := result ++ ms[⟨i, h⟩]
     else
-      result := result ++ ms[i] ++ sep
+      result := result ++ ms[⟨i, h⟩] ++ sep
   return result
 
 @[inline]
@@ -1025,14 +1026,12 @@ where
     | 0, Trie.node vs cs => do
       if todo.isEmpty then
         return result ++ vs
-      else if cs.isEmpty then
-        return result
-      else
+      else if h : 0 < cs.size then
         let e     := todo.back
         let todo  := todo.pop
         let (k, args) ← getUnifyKeyArgs e (root := false)
         let visitStar (result : Array α) : MetaM (Array α) :=
-          let first := cs[0]
+          let first := cs[⟨0, h⟩]
           if first.1 == Key.star then
             process 0 todo first.2 result
           else
@@ -1046,6 +1045,8 @@ where
         -- See comment a `getMatch` regarding non-dependent arrows vs dependent arrows
         | Key.arrow => visitNonStar Key.other #[] (← visitNonStar k args (← visitStar result))
         | _         => visitNonStar k args (← visitStar result)
+      else
+        return result
 
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
 -- `n` stars). The `transparency` is used when processing `T`, but no
