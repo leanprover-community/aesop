@@ -5,6 +5,8 @@ Authors: Asta H. From, Jannis Limperg
 -/
 import Aesop
 
+set_option aesop.check.all true
+
 attribute [aesop safe (cases (patterns := [List.Mem _ []]))] List.Mem
 attribute [aesop unsafe 50% constructors] List.Mem
 attribute [aesop unsafe 50% (cases (patterns := [List.Mem _ (_ :: _)]))] List.Mem

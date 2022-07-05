@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 -- These test cases test the builtin subst tactic.
 
 example (h₁ : x = 5) (h₂ : y = 5) : x = y := by
