@@ -56,6 +56,7 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
       | some mvarIdNew =>
         let postSimpTarget ← instantiateMVars (← getMVarType mvarIdNew)
         progress := progress || preSimpTarget != postSimpTarget
+        mvarId := mvarIdNew
     if ! progress then
       return .unchanged mvarId
     else
