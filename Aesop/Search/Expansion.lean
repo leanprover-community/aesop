@@ -177,7 +177,7 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
       | .solved =>
         let anyMVarDropped ← mvars.anyM λ mvarId =>
           return ! (← isExprMVarAssigned mvarId) &&
-                 ! (← isDelayedAssigned mvarId)
+                 ! (← isMVarDelayedAssigned mvarId)
         if anyMVarDropped then
           aesop_trace[stepsNormalization] "Normalisation simp solved the goal but dropped some metavariables. Skipping normalisation simp."
           pure $ .unchanged goal

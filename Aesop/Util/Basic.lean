@@ -1214,12 +1214,10 @@ def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
   return type
 
 def instantiateMVarsInGoal (mvarId : MVarId) : MetaM Unit := do
-  let mctx := (← get).mctx
   discard $ getMVarDecl mvarId
     -- The line above throws an error if the `mvarId` is not declared. The line
     -- below panics.
-  let mctx := mctx.instantiateMVarDeclMVars mvarId
-  modify λ s => { s with mctx := mctx }
+  instantiateMVarDeclMVars mvarId
 
 def setMVarLCtx (mvarId : MVarId) (lctx : LocalContext) : MetaM Unit := do
   let newDecl := { ← getMVarDecl mvarId with lctx := lctx }
@@ -1308,7 +1306,7 @@ def unassignedExprMVarsNoDelayed : MetaM (Array MVarId) := do
   let mctx ← getMCtx
   let mut result := #[]
   for (mvarId, _) in mctx.decls do
-    if ← notM (isExprMVarAssigned mvarId) <&&> notM (isDelayedAssigned mvarId) then
+    if ← notM (isExprMVarAssigned mvarId) <&&> notM (isMVarDelayedAssigned mvarId) then
       result := result.push mvarId
   return result
 
@@ -1346,7 +1344,8 @@ def assignedExprMVars (preState postState : SavedState) :
     MetaM (Array MVarId) := do
   let unassignedPre ← preState.runMetaM' unassignedExprMVarsNoDelayed
   postState.runMetaM' do
-    unassignedPre.filterM λ m => isExprMVarAssigned m <||> isDelayedAssigned m
+    unassignedPre.filterM λ m =>
+      isExprMVarAssigned m <||> isMVarDelayedAssigned m
 
 def sortFVarsByReverseContextOrder (goal : MVarId) (hyps : Array FVarId) :
     MetaM (Array FVarId) :=

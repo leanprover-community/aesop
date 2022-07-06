@@ -48,7 +48,7 @@ def getAssignedMVars (previousMVars : Array MVarId) :
     MetaM (HashSet MVarId) := do
   let mut result := {}
   for m in previousMVars do
-    if ← isExprMVarAssigned m <||> isDelayedAssigned m then
+    if ← isExprMVarAssigned m <||> isMVarDelayedAssigned m then
       result := result.insert m
   return result
 
@@ -113,7 +113,7 @@ def check (input : RuleTacInput) (r : RuleApplication)
     if ! actualAssigned.equalSet reportedAssigned then
       return some m!"rule reported wrong assigned metavariables.\nReported: {reportedAssigned.map (·.name)}\nActual: {actualAssigned.map (·.name)}"
     for (goal, mvars) in r.goals do
-      if ← isExprMVarAssigned goal <||> isDelayedAssigned goal then
+      if ← isExprMVarAssigned goal <||> isMVarDelayedAssigned goal then
         return some m!"subgoal metavariable {goal.name} is already assigned."
       let actualMVars ← getGoalMVarsNoDelayed goal
       if ! actualMVars == mvars then

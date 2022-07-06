@@ -90,14 +90,14 @@ private def copyMVarDecl (s : Meta.SavedState) (mvarId : MVarId) :
 
 private partial def copyExprMVarAssignment (s : Meta.SavedState)
     (mvarId : MVarId) : MetaM Unit := do
-  if ← isExprMVarAssigned mvarId <||> isDelayedAssigned mvarId then
+  if ← isExprMVarAssigned mvarId <||> isMVarDelayedAssigned mvarId then
     return
   unless ← isExprMVarDeclared mvarId do
     copyMVarDecl s mvarId
   let assignment? ← s.runMetaM' do
     if let (some e) ← getExprMVarAssignment? mvarId then
       return some $ Sum.inl (← instantiateMVars e)
-    else if let (some d) ← getDelayedAssignment? mvarId then
+    else if let (some d) ← getDelayedMVarAssignment? mvarId then
       return some $ Sum.inr d
     else
       return none
