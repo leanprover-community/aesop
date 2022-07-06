@@ -26,14 +26,14 @@ inductive D : Prop where
 | intro
 
 example : A := by
-  fail_if_success aesop
+  fail_if_success aesop (options := { terminal := true })
   aesop (rule_sets [A])
 
 example : B := by
   aesop (rule_sets [A, B])
 
 example : C := by
-  fail_if_success aesop (rule_sets [-default])
+  fail_if_success aesop (rule_sets [-default]) (options := { terminal := true })
   aesop
 
 attribute [aesop safe (rule_sets [C])] C
@@ -43,7 +43,7 @@ attribute [aesop safe (rule_sets [C])] C
 attribute [-aesop] C
 
 example : C := by
-  fail_if_success aesop (rule_sets [C])
+  fail_if_success aesop (rule_sets [C]) (options := { terminal := true })
   aesop (add safe C)
 
 @[aesop norm simp]
@@ -56,5 +56,5 @@ example : D := by
 attribute [-aesop] ad
 
 example : D := by
-  fail_if_success aesop (rule_sets [A])
+  fail_if_success aesop (rule_sets [A]) (options := { terminal := true })
   aesop (add norm ad) (rule_sets [A])

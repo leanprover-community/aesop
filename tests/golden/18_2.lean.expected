@@ -1,1 +1,1 @@
-tests/golden/18_2.lean:23:6: error: aesop: maximum number of rule applications (150) reached. Set the 'maxRuleApplications' option to increase the limit.
+tests/golden/18_2.lean:22:6: error: aesop: maximum number of rule applications (150) reached. Set the 'maxRuleApplications' option to increase the limit.

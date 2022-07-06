@@ -21,6 +21,7 @@ example (h : (α ∧ β) ∨ γ) : α ∨ γ := by
 example {α β : Prop} (ha : α) (h : α → β) : β := by
   fail_if_success aesop (rule_sets [-builtin,-default])
     (simp_options := { maxDischargeDepth := 0 })
+    (options := { terminal := true })
   aesop (rule_sets [-builtin,-default])
 
 -- We can use the `useHyps` config option to switch between `simp_all` and
@@ -28,6 +29,7 @@ example {α β : Prop} (ha : α) (h : α → β) : β := by
 example {α : Prop} (ha : α) : α := by
   fail_if_success aesop (rule_sets [-builtin,-default])
     (simp_options := { useHyps := false })
+    (options := { terminal := true })
   aesop (rule_sets [-builtin,-default])
 
 -- This test checks that the norm fixpoint loop is correctly reset when norm

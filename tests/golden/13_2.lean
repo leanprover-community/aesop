@@ -6,7 +6,6 @@ Authors: Asta H. From, Jannis Limperg
 import Aesop
 
 set_option aesop.check.all true
-set_option trace.aesop.goalsAfterSafe false
 
 inductive Perm : (xs ys : List α) → Type where
   | prep {xs} x : Perm (x :: xs) (x :: xs)
@@ -19,6 +18,6 @@ theorem weaken (Γ Δ : List Φ) (prf : Proof Γ Δ) (δ : Φ) : Proof Γ (δ ::
   induction prf
   case basic Γ Δ n =>
     aesop (add unsafe [constructors Proof, constructors Perm])
-      (options := { maxRuleApplications := 50 })
+      (options := { maxRuleApplications := 50, terminal := true })
   case per_l Γ Γ' Δ _ perm ih =>
     apply Proof.per_l Γ Γ' (δ :: Δ) ih perm

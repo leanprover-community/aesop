@@ -250,8 +250,10 @@ partial def normalizeGoalMVar (rs : RuleSet) (normSimpUseHyps : Bool)
 -- Returns true if the goal was solved by normalisation.
 def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Q Bool := do
   let g ← gref.get
-  if g.isNormal then
-    return false
+  match g.normalizationState with
+  | .provenByNormalization .. => return true
+  | .normal .. => return false
+  | .notNormal => pure ()
   aesop_trace[steps] "Normalising the goal"
   let ctx ← read
   let profilingEnabled ← isProfilingEnabled
@@ -377,6 +379,7 @@ def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
       let rule := RuleProfileName.rule rule.name
       recordAndTraceRuleProfile { rule, elapsed, successful }
 
+-- Never returns `RuleResult.postponed`.
 def runFirstSafeRule (gref : GoalRef) :
     SearchM Q (RuleResult × Array PostponedSafeRule) := do
   let g ← gref.get

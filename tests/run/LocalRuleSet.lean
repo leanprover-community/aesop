@@ -13,7 +13,8 @@ set_option aesop.check.all true
 -- a separate `local` rule set.
 example : Unit := by
   fail_if_success
-    aesop (rule_sets [-default, -builtin])
+    aesop (rule_sets [-default, -builtin]) (options := { terminal := true })
   fail_if_success
     aesop (add safe PUnit.unit) (rule_sets [-default, -builtin, -«local»])
+      (options := { terminal := true })
   aesop (add safe PUnit.unit) (rule_sets [-default, -builtin])

@@ -20,12 +20,18 @@ Options that modify Aesop's behaviour. Available options are:
 - `maxNormIterations`: maximum number of norm rules applied to a *single* goal.
   When this limit is exceeded, normalisation is likely stuck in an infinite loop
   so Aesop fails. 0 means no limit.
+- `terminal`: if `true`, Aesop succeeds only if it proves the goal. If `false`,
+  Aesop always succeeds and reports the goals remaining after safe rules were
+  applied.
+- `warnOnNonterminal`: print a warning when Aesop does not prove the goal.
 -/
 structure Options where
   maxRuleApplicationDepth := 30
   maxRuleApplications := 200
   maxGoals := 0
   maxNormIterations := 100
+  terminal := false
+  warnOnNonterminal := true
   deriving Inhabited, BEq, Repr
 
 end Aesop

@@ -6,7 +6,6 @@ Authors: Asta H. From, Jannis Limperg
 import Aesop
 
 set_option aesop.check.all true
-set_option trace.aesop.goalsAfterSafe false
 
 inductive Any (P : α → Prop) : List α → Prop where
   | here (x xs) : P x → Any P (x :: xs)
@@ -21,10 +20,10 @@ theorem Perm.any {xs ys : List α} (perm : Perm xs ys) (P : α → Prop)
 
 theorem error (P : Nat → Prop) (Δ : List Nat) : Any P Δ := by
   aesop (add 50% [constructors Perm, constructors Any, Perm.any])
-    (options := { maxRuleApplications := 100 })
+    (options := { maxRuleApplications := 100, terminal := true })
   sorry
 
 theorem fine (P : α → Prop) (Δ : List α) : Any P Δ := by
   aesop (add unsafe [50% constructors Perm, 50% constructors Any, apply 50% Perm.any])
-    (options := { maxRuleApplications := 10 })
+    (options := { maxRuleApplications := 10, terminal := true })
   sorry

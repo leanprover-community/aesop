@@ -42,10 +42,6 @@ initialize profile : TraceOption ←
   registerTraceOption `profile false
     "(aesop) Print a summary of execution times after the tactic has finished. See also trace.aesop.steps.profile."
 
-initialize goalsAfterSafe : TraceOption ←
-  registerTraceOption `goalsAfterSafe true
-    "(aesop) If Aesop fails, print the goals it tried to solve after applying all safe rules."
-
 initialize extraction : TraceOption ←
   registerTraceOption `extraction false
     "(aesop) If Aesop finds a proof, print a trace of the proof extraction procedure."

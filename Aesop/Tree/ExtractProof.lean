@@ -37,6 +37,11 @@ When we assign a metavariable `m`, we must take some care:
 
 We also replay env modifications in a similar fashion. We assume that rules only
 add declarations to the environment.
+
+If the root goal is not proven, we extract the goals after safe rule
+applications. This means we proceed as above, but stop as soon as we reach the
+first non-safe rule application. If a goal has multiple safe rule applications,
+we arbitrarily choose the first one. (This should happen rarely in practice.)
 -/
 
 namespace Aesop
@@ -114,34 +119,46 @@ private partial def copyExprMVarAssignment (s : Meta.SavedState)
     delayedAssignMVar mvarId d
   | none => return
 
--- ## Main Function
+-- ## Main Functions
+
+private def visitGoal (g : Goal) : MetaM (Option (MVarId × Array RappRef)) := do
+  aesop_trace[extraction] "visiting {← g.toMessageData (← TraceModifiers.get)}"
+  match g.normalizationState with
+  | NormalizationState.notNormal => throwPRError
+    "goal {g.id} was not normalised."
+  | NormalizationState.normal postNormGoal postState =>
+    copyExprMVarAssignment postState g.preNormGoal
+    return (postNormGoal, g.children)
+  | NormalizationState.provenByNormalization postState =>
+    copyExprMVarAssignment postState g.preNormGoal
+    return none
+
+private def visitRapp (parentEnv : Environment) (parentGoal : MVarId) (r : Rapp) :
+    MetaM (Array MVarClusterRef × Environment) := do
+  aesop_trace[extraction] "visiting {← r.toMessageData}"
+  let newEnv := r.metaState.core.env
+  copyNewDeclarations parentEnv newEnv
+  copyMatchEqnsExtState parentEnv newEnv
+  copyExprMVarAssignment r.metaState parentGoal
+  for m in r.assignedMVars do
+    copyExprMVarAssignment r.metaState m
+  return (r.children, newEnv)
 
 mutual
   private partial def extractProofGoal (parentEnv : Environment) (g : Goal) :
       MetaM Unit := do
-    aesop_trace[extraction] "visiting {← g.toMessageData (← TraceModifiers.get)}"
-    match g.normalizationState with
-    | NormalizationState.notNormal => throwPRError
-      "goal {g.id} was not normalised."
-    | NormalizationState.normal postNormGoal postState =>
-      copyExprMVarAssignment postState g.preNormGoal
-      let rref? ← g.children.findM? λ rref => return (← rref.get).state.isProven
+    match ← visitGoal g with
+    | some (postNormGoal, children) => do
+      let rref? ← children.findM? λ rref => return (← rref.get).state.isProven
       let (some rref) := rref? | throwPRError
         "goal {g.id} does not have a proven rapp."
       extractProofRapp parentEnv postNormGoal (← rref.get)
-    | NormalizationState.provenByNormalization postState =>
-      copyExprMVarAssignment postState g.preNormGoal
+    | none => return
 
   private partial def extractProofRapp (parentEnv : Environment)
       (parentGoal : MVarId) (r : Rapp) : MetaM Unit := do
-    aesop_trace[extraction] "visiting {← r.toMessageData}"
-    let newEnv := r.metaState.core.env
-    copyNewDeclarations parentEnv newEnv
-    copyMatchEqnsExtState parentEnv newEnv
-    copyExprMVarAssignment r.metaState parentGoal
-    for m in r.assignedMVars do
-      copyExprMVarAssignment r.metaState m
-    r.children.forM λ cref => do extractProofMVarCluster newEnv (← cref.get)
+    let (children, newEnv) ← visitRapp parentEnv parentGoal r
+    children.forM λ cref => do extractProofMVarCluster newEnv (← cref.get)
 
   private partial def extractProofMVarCluster (parentEnv : Environment)
       (c : MVarCluster) : MetaM Unit := do
@@ -151,10 +168,52 @@ mutual
     extractProofGoal parentEnv (← gref.get)
 end
 
+private structure SafePrefixState where
+  goals : Array MVarId := #[]
+  hasMultiplePrefixes := false
+    -- True if a goal had multiple safe rapps. This can happen with safe
+    -- multi-rules.
+
+private abbrev SafePrefixM := StateRefT SafePrefixState MetaM
+
+mutual
+  private partial def extractFirstSafePrefixGoal
+      (parentEnv : Environment) (g : Goal) : SafePrefixM Unit := do
+    match ← visitGoal g with
+    | none => return
+    | some (postNormGoal, _) =>
+      let safeRapps ← g.safeRapps
+      if h : 0 < safeRapps.size then
+        extractFirstSafePrefixRapp parentEnv postNormGoal
+          (← safeRapps[⟨0, h⟩].get)
+        if safeRapps.size > 1 then
+          modify λ s => { s with hasMultiplePrefixes := true }
+      else
+        modify λ s => { s with goals := s.goals.push postNormGoal }
+
+  private partial def extractFirstSafePrefixRapp
+      (parentEnv : Environment) (parentGoal : MVarId) (r : Rapp) :
+      SafePrefixM Unit := do
+    let (children, env) ← visitRapp parentEnv parentGoal r
+    children.forM λ cref => do
+      extractFirstSafePrefixMVarCluster env (← cref.get)
+
+  private partial def extractFirstSafePrefixMVarCluster
+      (parentEnv : Environment) (c : MVarCluster) : SafePrefixM Unit :=
+    c.goals.forM λ gref => do extractFirstSafePrefixGoal parentEnv (← gref.get)
+end
+
+def Goal.extractFirstSafePrefix (root : Goal) : MetaM (Array MVarId × Bool) := do
+  let (_, state) ← extractFirstSafePrefixGoal (← getEnv) root |>.run {}
+  return (state.goals, state.hasMultiplePrefixes)
+
 def Goal.extractProof (root : Goal) : MetaM Unit := do
   extractProofGoal (← getEnv) root
 
 def extractProof : TreeM Unit := do
   (← (← getRootGoal).get).extractProof
+
+def extractFirstSafePrefix : TreeM (Array MVarId × Bool) := do
+  (← (← getRootGoal).get).extractFirstSafePrefix
 
 end Aesop

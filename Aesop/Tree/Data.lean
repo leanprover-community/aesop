@@ -822,6 +822,14 @@ def firstProvenRapp? (g : Goal) : BaseIO (Option RappRef) :=
   g.children.findSomeM? λ rref =>
     return if (← rref.get).state.isProven then some rref else none
 
+def safeRapps (g : Goal) : BaseIO (Array RappRef) :=
+  g.children.filterM λ rref =>
+    return (← rref.get).appliedRule.isSafe
+
+def hasSafeRapp (g : Goal) : BaseIO Bool :=
+  g.children.anyM λ rref =>
+    return (← rref.get).appliedRule.isSafe
+
 def hasMVar (g : Goal) : Bool :=
   ! g.mvars.isEmpty
 

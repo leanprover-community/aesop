@@ -1,1 +1,1 @@
-tests/golden/18.lean:21:6: error: aesop: failed to prove the goal after exhaustive search.
+tests/golden/18.lean:20:6: error: aesop: failed to prove the goal after exhaustive search.

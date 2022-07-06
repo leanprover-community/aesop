@@ -22,5 +22,6 @@ example : Even 4 := by
   aesop (add safe limitedEvenPlusTwo)
 
 example : Even 6 := by
-  fail_if_success aesop (add safe limitedEvenPlusTwo)
+  fail_if_success
+    aesop (add safe limitedEvenPlusTwo) (options := { terminal := true })
   aesop (add safe (tactic (uses_branch_state := false)) limitedEvenPlusTwo)
