@@ -44,17 +44,30 @@ def expandNextGoal : SearchM Q Unit := do
   if ← (← gref.get).isActive then
     enqueueGoals #[gref]
 
-def checkGoalLimit : SearchM Q Unit := do
+def checkGoalLimit : SearchM Q (Option MessageData) := do
   let maxGoals := (← read).options.maxGoals
   let currentGoals := (← getTree).numGoals
-  if maxGoals != 0 && currentGoals >= maxGoals then throwError
-    "aesop: maximum number of goals ({maxGoals}) reached. Set the 'maxGoals' option to increase the limit."
+  if maxGoals != 0 && currentGoals >= maxGoals then
+    return m!"maximum number of goals ({maxGoals}) reached. Set the 'maxGoals' option to increase the limit."
+  return none
 
-def checkRappLimit : SearchM Q Unit := do
+def checkRappLimit : SearchM Q (Option MessageData) := do
   let maxRapps := (← read).options.maxRuleApplications
   let currentRapps := (← getTree).numRapps
-  if maxRapps != 0 && currentRapps >= maxRapps then throwError
-    "aesop: maximum number of rule applications ({maxRapps}) reached. Set the 'maxRuleApplications' option to increase the limit."
+  if maxRapps != 0 && currentRapps >= maxRapps then
+    return m!"maximum number of rule applications ({maxRapps}) reached. Set the 'maxRuleApplications' option to increase the limit."
+  return none
+
+def checkRootUnprovable : SearchM Q (Option MessageData) := do
+  let root := (← getTree).root
+  if (← root.get).state.isUnprovable then
+    let msg :=
+      if ← wasMaxRuleApplicationDepthReached then
+        m!"failed to prove the goal. Some goals were not explored because the maximum rule application depth ({(← read).options.maxRuleApplicationDepth}) was reached. Set option 'maxRuleApplicationDepth' to increase the limit."
+      else
+        m!"failed to prove the goal after exhaustive search."
+    return msg
+  return none
 
 def finishIfProven : SearchM Q Bool := do
   let root ← getRootMVarCluster
@@ -76,21 +89,23 @@ def finishIfProven : SearchM Q Bool := do
     aesop_trace[proof] "Final proof:{indentExpr proof}"
     return true
 
+def handleError (err : MessageData) : SearchM Q Unit :=
+  throwError "aesop: {err}"
+
 partial def searchLoop : SearchM Q Unit :=
   withIncRecDepth do
     aesop_trace[steps] "=== Search loop iteration {← getIteration}"
-    let root := (← getTree).root
-    if (← root.get).state.isUnprovable then
-      let msg :=
-        if ← wasMaxRuleApplicationDepthReached then
-          m!"failed to prove the goal. Some goals were not explored because the maximum rule application depth ({(← read).options.maxRuleApplicationDepth}) was reached. Set option 'maxRuleApplicationDepth' to increase the limit."
-        else
-          m!"failed to prove the goal after exhaustive search."
-      throwError "aesop: {msg}"
+    if let (some err) ← checkRootUnprovable then
+      handleError err
+      return
     if ← finishIfProven then
       return
-    checkGoalLimit
-    checkRappLimit
+    if let (some err) ← checkGoalLimit then
+      handleError err
+      return
+    if let (some err) ← checkRappLimit then
+      handleError err
+      return
     expandNextGoal
     aesop_trace[stepsTree] "Current search tree:{indentD $ ← (← (← getRootGoal).get).treeToMessageData (← TraceModifiers.get)}"
     aesop_trace[stepsActiveGoalQueue] "Current active goals:{← formatQueue}"
