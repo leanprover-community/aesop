@@ -8,15 +8,16 @@ import Aesop.RuleTac.Basic
 
 open Lean
 open Lean.Meta
+open Std (HashSet)
 
 namespace Aesop.RuleTac
 
 private partial def makeForwardHyps (e : Expr)
     (immediate : UnorderedArraySet Nat) (collectUsedHyps : Bool) :
-    MetaM (Array Expr × Array FVarId) := do
-  let type ← inferType e
+    MetaM (Array Expr × Array FVarId) :=
+
   withNewMCtxDepth do
-    let (argMVars, binderInfos, _) ← forallMetaTelescopeReducing type
+    let (argMVars, binderInfos, _) ← forallMetaTelescopeReducing (← inferType e)
 
     let app := mkAppN e argMVars
     let mut instMVars := Array.mkEmpty argMVars.size
@@ -62,24 +63,70 @@ private partial def makeForwardHyps (e : Expr)
         let usedHypsAcc := usedHypsAcc ++ currentUsedHyps
         return (proofsAcc, usedHypsAcc)
 
+/-
+Forward rules must only succeed once for each combination of immediate
+hypotheses; otherwise any forward rule could be applied infinitely often (if
+it can be applied at all). We use the following scheme to ensure this:
+
+- Whenever we add a hypothesis `h : T` as an instance of a forward rule, we also
+  add an aux decl `h' : T`.
+- Before we add a hypothesis `h : T`, we check whether there is already an aux
+  decl `h' : T`. If so, `h` is not added.
+
+This scheme ensures that forward rules never add more than one hypothesis of
+any given type. `h'` is added as an aux decl, rather than as a regular
+hypothesis, to ensure that future rule applications do not change its type.
+-/
+
+def forwardHypPrefix := `_fwd
+
+def mkFreshForwardHypName : MetaM Name :=
+  mkFreshIdWithPrefix forwardHypPrefix
+
+def isForwardHypName (n : Name) : Bool :=
+  forwardHypPrefix.isPrefixOf n
+
+def getForwardHypTypes : MetaM (HashSet Expr) := do
+  let mut result := {}
+  for ldecl in (← getLCtx) do
+    if ldecl.isAuxDecl && isForwardHypName ldecl.userName then
+      result := result.insert ldecl.type
+  return result
+
 def applyForwardRule (goal : MVarId) (e : Expr)
     (immediate : UnorderedArraySet Nat) (clear : Bool) : MetaM MVarId :=
   withMVarContext goal do
-    let (newHyps, usedHyps) ←
+    let (newHypProofs, usedHyps) ←
       makeForwardHyps e immediate (collectUsedHyps := clear)
-    if newHyps.isEmpty then
-      throwError "while trying to apply {e} as a forward rule: found no viable instantiations for the immediate arguments"
-    let userNames ← getUnusedUserNames newHyps.size `fwd
-    let (_, goal) ← assertHypotheses goal $ ← newHyps.mapIdxM λ i val =>
-      return {
-        userName := userNames[i]!
-        value := val
-        type := ← inferType val
+    if newHypProofs.isEmpty then
+      err
+    let forwardHypTypes ← getForwardHypTypes
+    let mut newHyps := Array.mkEmpty newHypProofs.size
+    let mut newHypTypes : HashSet Expr := {}
+    for proof in newHypProofs do
+      let type ← inferType proof
+      if forwardHypTypes.contains type || newHypTypes.contains type then
+        continue
+      newHypTypes := newHypTypes.insert type
+      newHyps := newHyps.push {
+        userName := ← mkFreshForwardHypName
+        value := proof
+        type
       }
+    if newHyps.isEmpty then
+      err
+    let (_, goal) ← assertHypotheses goal newHyps
+    let auxDecls ← newHyps.mapM λ hyp =>
+      return { hyp with userName := ← mkFreshForwardHypName }
+    let (auxDecls, goal) ← assertHypotheses goal auxDecls
+    setFVarBinderInfos goal auxDecls .auxDecl
     if clear then
       tryClearMany' goal usedHyps
     else
       return goal
+  where
+    err {α} : MetaM α := throwError
+      "found no instances of {e} (other than possibly those which had been previously added by forward rules)"
 
 @[inline]
 def forwardExpr (e : Expr) (immediate : UnorderedArraySet Nat)
@@ -91,21 +138,12 @@ def forwardExpr (e : Expr) (immediate : UnorderedArraySet Nat)
 
 def forwardConst (decl : Name) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac :=
-  let tac := forwardExpr (mkConst decl) immediate clear
-  if clear then
-    tac
-  else
-    withApplicationLimit 1 tac
-    -- TODO this is very crude
+  forwardExpr (mkConst decl) immediate clear
 
 def forwardFVar (userName : Name) (immediate : UnorderedArraySet Nat)
-    (clear : Bool) : RuleTac :=
-  let tac := λ input => withMVarContext input.goal do
+    (clear : Bool) : RuleTac := λ input =>
+  withMVarContext input.goal do
     let ldecl ← getLocalDeclFromUserName userName
     forwardExpr (mkFVar ldecl.fvarId) immediate clear input
-  if clear then
-    tac
-  else
-    withApplicationLimit 1 tac
 
 end Aesop.RuleTac

@@ -1563,4 +1563,11 @@ def getUnusedUserNames [Monad m] [MonadLCtx m] (n : Nat) (suggestion : Name) :
     m (Array Name) :=
   return (← getLCtx).getUnusedUserNames n suggestion
 
+def mkFreshIdWithPrefix [Monad m] [MonadNameGenerator m] («prefix» : Name) :
+    m Name := do
+  let ngen ← getNGen
+  let r := { ngen with namePrefix := «prefix» }.curr
+  setNGen ngen.next
+  pure r
+
 end Lean
