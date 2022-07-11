@@ -66,7 +66,7 @@ private partial def loop : M Bool := do
   let entries := (← get).entries
   for h : i in [:entries.size] do
     let h : i < entries.size := by simp_all [Membership.mem]
-    let entry := entries[⟨i, h⟩]
+    let entry := entries[i]
     let ctx := (← get).ctx
     -- We disable the current entry to prevent it to be simplified to `True`
     let mut simpThmsWithoutEntry := (← getSimpTheorems).eraseTheorem entry.id

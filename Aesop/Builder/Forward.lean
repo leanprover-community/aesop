@@ -36,7 +36,7 @@ def getImmediatePremises (name : Name) (type : Expr) : Option (Array Name) →
       let mut result := #[]
       for h : i in [:args.size] do
         have h : i < args.size := by simp_all [Membership.mem]
-        let fvarId := args[⟨i, h⟩].fvarId!
+        let fvarId := args[i].fvarId!
         let ldecl ← getLocalDecl fvarId
         let isNondep : MetaM Bool :=
           args.allM (start := i + 1) λ arg =>
@@ -52,7 +52,7 @@ def getImmediatePremises (name : Name) (type : Expr) : Option (Array Name) →
       let mut result := #[]
       for h : i in [:args.size] do
         have h : i < args.size := by simp_all [Membership.mem]
-        let argName := (← getLocalDecl args[⟨i, h⟩].fvarId!).userName
+        let argName := (← getLocalDecl args[i].fvarId!).userName
         if immediate.contains argName then
           result := result.push i
           unseen := unseen.erase argName
