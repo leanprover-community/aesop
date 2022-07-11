@@ -490,9 +490,9 @@ def joinSepArray (ms : Array MessageData) (sep : MessageData) :
   for h : i in [0:ms.size] do
     have h : i < ms.size := by simp_all [Membership.mem]
     if i ≥ last then
-      result := result ++ ms[⟨i, h⟩]
+      result := result ++ ms[i]
     else
-      result := result ++ ms[⟨i, h⟩] ++ sep
+      result := result ++ ms[i] ++ sep
   return result
 
 @[inline]
@@ -1031,7 +1031,7 @@ where
         let todo  := todo.pop
         let (k, args) ← getUnifyKeyArgs e (root := false)
         let visitStar (result : Array α) : MetaM (Array α) :=
-          let first := cs[⟨0, h⟩]
+          let first := cs[0]
           if first.1 == Key.star then
             process 0 todo first.2 result
           else

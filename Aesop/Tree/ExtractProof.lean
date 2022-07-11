@@ -113,9 +113,9 @@ private partial def copyExprMVarAssignment (s : Meta.SavedState)
     aesop_trace[extraction] "assign  ?{mvarId.name} := {toString e}"
     assignExprMVar mvarId e
   | some (Sum.inr d) =>
-    for mvarId in ← getMVars d.val do
+    for mvarId in ← getMVars (mkMVar d.mvarIdPending) do
       copyExprMVarAssignment s mvarId
-    aesop_trace[extraction] "dassign ?{mvarId.name} := {d.fvars} => {toString d.val}"
+    aesop_trace[extraction] "dassign ?{mvarId.name} := {d.fvars} => {toString (mkMVar d.mvarIdPending)}"
     delayedAssignMVar mvarId d
   | none => return
 
@@ -185,7 +185,7 @@ mutual
       let safeRapps ← g.safeRapps
       if h : 0 < safeRapps.size then
         extractFirstSafePrefixRapp parentEnv postNormGoal
-          (← safeRapps[⟨0, h⟩].get)
+          (← safeRapps[0].get)
         if safeRapps.size > 1 then
           modify λ s => { s with hasMultiplePrefixes := true }
       else

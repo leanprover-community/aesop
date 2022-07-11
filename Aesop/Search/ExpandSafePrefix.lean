@@ -40,7 +40,7 @@ mutual
           if safeRapps.size > 1 then
             let rappIds ← safeRapps.mapM λ rref => return (← rref.get).id
             aesop_trace![steps] "Goal has multiple safe rapps ({rappIds}). Expanding only the first one."
-        expandFirstSafePrefixRapp safeRapps[⟨0, h₁⟩]
+        expandFirstSafePrefixRapp safeRapps[0]
 
   private partial def expandFirstSafePrefixRapp (rref : RappRef) :
       SearchM Q Unit := do
