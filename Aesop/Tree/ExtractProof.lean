@@ -115,7 +115,7 @@ private partial def copyExprMVarAssignment (s : Meta.SavedState)
   | some (Sum.inr d) =>
     for mvarId in ← getMVars (mkMVar d.mvarIdPending) do
       copyExprMVarAssignment s mvarId
-    aesop_trace[extraction] "dassign ?{mvarId.name} := {d.fvars} => {toString (mkMVar d.mvarIdPending)}"
+    aesop_trace[extraction] "dassign ?{mvarId.name} := {d.fvars} => {d.mvarIdPending.name}"
     delayedAssignMVar mvarId d
   | none => return
 
