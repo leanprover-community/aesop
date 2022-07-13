@@ -45,12 +45,7 @@ def subst : RuleTac := λ input => do
     "no suitable hypothesis found"
   let postState ← saveState
   return {
-    applications := #[{
-      goals := #[(goal, HashSet.ofArray input.mvars)]
-      postState
-      introducedMVars := {}
-      assignedMVars := {}
-    }],
+    applications := #[{ goals := #[goal], postState }],
     postBranchState? := none
   }
 end Aesop.BuiltinRules

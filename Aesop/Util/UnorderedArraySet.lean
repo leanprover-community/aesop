@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Util.Basic
 
 open Lean
+open Std (HashSet PersistentHashSet)
 
 namespace Aesop
 
@@ -50,6 +51,12 @@ protected def ofArray [ord : Ord α] [Inhabited α] (xs : Array α) :
 /-- O(n^2) -/
 protected def ofArraySlow (xs : Array α) : UnorderedArraySet α :=
   xs.foldl (init := {}) λ s x => s.insert x
+
+protected def ofHashSet [Hashable α] (xs : HashSet α) : UnorderedArraySet α :=
+  ⟨xs.toArray⟩
+
+protected def ofPersistentHashSet [Hashable α] (xs : PersistentHashSet α) : UnorderedArraySet α :=
+  ⟨xs.toArray⟩
 
 protected def toArray (s : UnorderedArraySet α) : Array α :=
   s.rep

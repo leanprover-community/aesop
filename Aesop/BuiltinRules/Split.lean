@@ -16,14 +16,8 @@ def splitTarget : RuleTac := λ input => do
   let (some goals) ← splitTarget? input.goal | throwError
     "nothing to split in target"
   let postState ← saveState
-  let goals ← goals.foldlM (init := #[]) λ gs g =>
-    return gs.push (g, ← getGoalMVarsNoDelayed g)
   return {
-    applications := #[{
-      introducedMVars := {}
-      assignedMVars := {}
-      goals, postState
-    }]
+    applications := #[{ goals := goals.toArray, postState }]
     postBranchState? := none
   }
 
@@ -42,13 +36,8 @@ def splitHypotheses : RuleTac := λ input => do
   let (some goals) ← splitHypothesesCore input.goal | throwError
     "no splittable hypothesis found"
   let postState ← saveState
-  let goals ← goals.mapM λ g => return (g, ← getGoalMVarsNoDelayed g)
   return {
-    applications := #[{
-      introducedMVars := {}
-      assignedMVars := {}
-      goals, postState
-    }]
+    applications := #[{ goals, postState }]
     postBranchState? := none
   }
 

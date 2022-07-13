@@ -86,15 +86,9 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
                hyp Exists _, hyp Subtype _, hyp Sigma _, hyp PSigma _]))]
 partial def destructProducts : RuleTac := λ input => do
   let goal ← destructProductsCore input.goal
-  let mvars ← getGoalMVarsNoDelayed goal
   let postState ← saveState
   return {
-    applications := #[{
-      goals := #[(goal, mvars)]
-      postState
-      introducedMVars := {}
-      assignedMVars := {}
-    }]
+    applications := #[{ goals := #[goal], postState }]
     postBranchState? := none
   }
 

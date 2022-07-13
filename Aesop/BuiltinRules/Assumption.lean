@@ -18,7 +18,6 @@ def assumption : RuleTac := λ input => do
   withMVarContext goal do
     checkNotAssigned goal `Aesop.BuiltinRules.assumption
     let tgt ← instantiateMVarsInMVarType goal
-    let tgtHasMVar := tgt.hasMVar
     let initialState ← saveState
     let mut applications := #[]
     for ldecl in ← getLCtx do
@@ -26,9 +25,9 @@ def assumption : RuleTac := λ input => do
         continue
       restoreState initialState
       let (some (application, proofHasMVar)) ←
-        tryHyp goal input.mvars tgt tgtHasMVar ldecl
+        tryHyp goal tgt ldecl
         | continue
-      if ! tgtHasMVar && ! proofHasMVar then
+      if ! tgt.hasMVar && ! proofHasMVar then
         applications := #[application]
         break
       else
@@ -40,23 +39,16 @@ def assumption : RuleTac := λ input => do
       postBranchState? := none
     }
   where
-    tryHyp (goal : MVarId) (goalMVars : Array MVarId) (tgt : Expr)
-        (tgtHasMVar : Bool) (ldecl : LocalDecl) :
+    tryHyp (goal : MVarId) (tgt : Expr) (ldecl : LocalDecl) :
         MetaM (Option (RuleApplication × Bool)) := do
       let proofHasMVar := ldecl.type.hasMVar
       if ! (← isDefEq ldecl.type tgt) then
         return none
       assignExprMVar goal ldecl.toExpr
-      let assignedMVars ←
-        if ! tgtHasMVar && ! proofHasMVar then
-          pure {}
-        else
-          getAssignedMVars goalMVars
       let postState ← saveState
       let app := {
         goals := #[]
-        introducedMVars := {}
-        postState, assignedMVars
+        postState
       }
       return some (app, proofHasMVar)
 

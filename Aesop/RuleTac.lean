@@ -8,6 +8,7 @@ import Aesop.RuleTac.Apply
 import Aesop.RuleTac.Basic
 import Aesop.RuleTac.Cases
 import Aesop.RuleTac.Forward
+import Aesop.RuleTac.RuleApplicationWithMVarInfo
 import Aesop.RuleTac.Tactic
 
 open Lean

@@ -13,13 +13,11 @@ namespace Aesop.RuleTac
 
 def applyConst (decl : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input => do
   apply input.goal (← mkConstWithFreshMVarLevels decl)
-  -- TODO optimise mvar analysis
 
 def applyFVar (userName : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input =>
   withMVarContext input.goal do
     let decl ← getLocalDeclFromUserName userName
     apply input.goal (mkFVar decl.fvarId)
-    -- TODO optimise mvar analysis
 
 -- Tries to apply each constant in `decls`. For each one that applies, a rule
 -- application is returned. If none applies, the tactic fails.
@@ -29,9 +27,7 @@ def applyConsts (decls : Array Name) : RuleTac := λ input => do
     try
       let goals ← apply input.goal (← mkConstWithFreshMVarLevels decl)
       let postState ← saveState
-      let (goals, introducedMVars) ← getProperGoalsAndNewMVars input.mvars goals
-      let assignedMVars ← getAssignedMVars input.mvars
-      return some { postState, goals, introducedMVars, assignedMVars }
+      return some { postState, goals := goals.toArray }
     catch _ =>
       return none
     finally
