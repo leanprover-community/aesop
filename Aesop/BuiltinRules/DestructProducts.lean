@@ -16,21 +16,21 @@ private def destructProductHyp (goal : MVarId) (hyp : FVarId) :
   withMVarContext goal do
     let hypType ← instantiateMVars (← getLocalDecl hyp).type
     match hypType with
-    | (.app (.app (.const ``And _ _) α _) β _) =>
+    | (.app (.app (.const ``And _) α) β) =>
       go hypType (mkApp2 (mkConst ``And.casesOn [← mkFreshLevelMVar]) α β)
-    | (.app (.app (.const ``Prod lvls _) α _) β _) =>
+    | (.app (.app (.const ``Prod lvls) α) β) =>
       go hypType (mkApp2 (mkConst ``Prod.casesOn  ((← mkFreshLevelMVar) :: lvls)) α β)
-    | (.app (.app (.const ``PProd lvls _) α _) β _) =>
+    | (.app (.app (.const ``PProd lvls) α) β) =>
       go hypType (mkApp2 (mkConst ``PProd.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
-    | (.app (.app (.const ``MProd lvls _) α _) β _) =>
+    | (.app (.app (.const ``MProd lvls) α) β) =>
       go hypType (mkApp2 (mkConst ``MProd.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
-    | (.app (.app (.const ``Exists lvls _) α _) β _) => do
+    | (.app (.app (.const ``Exists lvls) α) β) => do
       go hypType (mkApp2 (mkConst ``Exists.casesOn lvls) α β)
-    | (.app (.app (.const ``Subtype lvls _) α _) β _) =>
+    | (.app (.app (.const ``Subtype lvls) α) β) =>
       go hypType (mkApp2 (mkConst ``Subtype.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
-    | (.app (.app (.const ``Sigma lvls _) α _) β _) =>
+    | (.app (.app (.const ``Sigma lvls) α) β) =>
       go hypType (mkApp2 (mkConst ``Sigma.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
-    | (.app (.app (.const ``PSigma lvls _) α _) β _) =>
+    | (.app (.app (.const ``PSigma lvls) α) β) =>
       go hypType (mkApp2 (mkConst ``PSigma.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
     | _ => return goal
   where

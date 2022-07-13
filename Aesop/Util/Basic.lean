@@ -460,10 +460,10 @@ def arity : Expr → Nat
   | _ => 0
 
 def isAppOf' : Expr → Name → Bool
-  | mdata _ b _, d => isAppOf' b d
-  | const c _ _, d => c == d
-  | app f _ _,   d => isAppOf' f d
-  | _,           _ => false
+  | mdata _ b, d => isAppOf' b d
+  | const c _, d => c == d
+  | app f _,   d => isAppOf' f d
+  | _,         _ => false
 
 end Lean.Expr
 
@@ -912,8 +912,8 @@ def merge [BEq α] (t u : DiscrTree α) : DiscrTree α :=
 private def getKeyArgs (e : Expr) (isMatch root : Bool) : MetaM (Key × Array Expr) := do
   let e ← whnfDT e root
   match e.getAppFn with
-  | Expr.lit v _       => return (Key.lit v, #[])
-  | Expr.const c _ _   =>
+  | Expr.lit v       => return (Key.lit v, #[])
+  | Expr.const c _   =>
     if (← getConfig).isDefEqStuckEx && e.hasExprMVar then
       if (← isReducible c) then
         /- `e` is a term `c ...` s.t. `c` is reducible and `e` has metavariables, but it was not unfolded.
@@ -944,10 +944,10 @@ private def getKeyArgs (e : Expr) (isMatch root : Bool) : MetaM (Key × Array Ex
         Meta.throwIsDefEqStuck
     let nargs := e.getAppNumArgs
     return (Key.const c nargs, e.getAppRevArgs)
-  | Expr.fvar fvarId _ =>
+  | Expr.fvar fvarId =>
     let nargs := e.getAppNumArgs
     return (Key.fvar fvarId nargs, e.getAppRevArgs)
-  | Expr.mvar mvarId _ =>
+  | Expr.mvar mvarId =>
     if isMatch then
       return (Key.other, #[])
     else do
@@ -1495,7 +1495,7 @@ private inductive MatchUpToIndexSuffix
 private def matchUpToIndexSuffix (n : Name) (query : Name) :
     MatchUpToIndexSuffix :=
   match n, query with
-  | Name.str _ s₁ _, Name.str _ s₂ _ =>
+  | Name.str _ s₁, Name.str _ s₂ =>
     match s₁.dropPrefix s₂ with
     | none => MatchUpToIndexSuffix.noMatch
     | some suffix =>
