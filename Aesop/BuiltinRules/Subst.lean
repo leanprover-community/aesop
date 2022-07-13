@@ -21,7 +21,7 @@ partial def substFVars (goal : MVarId) (fvarIds : Array FVarId) :
         MetaM (MVarId × Bool × FVarSubst) :=
       withMVarContext goal do
         if h : i < fvarIds.size then
-          let (.fvar fvarId _) := fvarSubst.get $ fvarIds.get ⟨i, h⟩ | throwError
+          let (.fvar fvarId) := fvarSubst.get $ fvarIds.get ⟨i, h⟩ | throwError
             "unexpected expr in FVarSubst"
           let type ← instantiateMVars (← getLocalDecl fvarId).type
           let (some (_, lhs, _)) ← matchEq? type
