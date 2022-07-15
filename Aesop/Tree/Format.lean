@@ -33,7 +33,7 @@ protected def Goal.toMessageData (traceMods : TraceModifiers) (g : Goal) :
         m!"Iteration added: {g.addedInIteration} | last expanded: {g.lastExpandedInIteration} | origin: {g.origin.toString}",
         -- TODO hide mvar info (at least by default)
         m!"Pre-norm goal mvar: {g.preNormGoal.name} | Post-norm goal mvar: {postNormGoal}",
-        m!"Unassigned mvars: {g.mvars.map (·.name)}",
+        m!"Unassigned mvars: {g.mvars.toArray.map (·.name)}",
         if ! traceMods.goals then none else
           m!"Goal:{indentD $ ofGoal g.currentGoal}",
         if ! traceMods.unsafeQueues || ! g.unsafeRulesSelected then none else
@@ -54,8 +54,8 @@ protected def Rapp.toMessageData (r : Rapp) :
           toMessageData r.appliedRule,
           m!"state: {r.state} | irrelevant: {toYesNo r.isIrrelevant}",
           -- TODO hide mvars by default
-          m!"introduced mvars: {r.introducedMVars.map (·.name)}",
-          m!"assigned mvars: {r.assignedMVars.map (·.name)}",
+          m!"introduced mvars: {r.introducedMVars.toArray.map (·.name)}",
+          m!"assigned mvars: {r.assignedMVars.toArray.map (·.name)}",
           m!"mvar clusters: {mvarClusters}"
         ]
 

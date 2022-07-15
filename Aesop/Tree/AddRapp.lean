@@ -35,11 +35,11 @@ private def clusterGoals (goals : Array Goal) : Array (Array Goal) := Id.run do
         mvarOccs := mvarOccs.insert m #[g]
   return clusters.sets.fst
 
-private def findPathForAssignedMVars (assignedMVars : Array MVarId)
+private def findPathForAssignedMVars (assignedMVars : UnorderedArraySet MVarId)
     (start : GoalRef) : TreeM (Array RappRef × HashSet GoalId) := do
   if assignedMVars.isEmpty then
     return (#[], {})
-  let unseen : IO.Ref (Array MVarId) ← IO.mkRef assignedMVars
+  let unseen : IO.Ref (UnorderedArraySet MVarId) ← IO.mkRef assignedMVars
   let pathRapps : IO.Ref (Array RappRef) ← IO.mkRef #[]
   let pathGoals : IO.Ref (HashSet GoalId) ← IO.mkRef {}
   let done ← IO.mkRef false
@@ -61,11 +61,11 @@ private def findPathForAssignedMVars (assignedMVars : Array MVarId)
       return true)
     (TreeRef.goal start)
   if ! (← done.get) then
-    throwError "aesop: internal error: introducing rapps not found for these mvars: {(← unseen.get).map (·.name)}"
+    throwError "aesop: internal error: introducing rapps not found for these mvars: {(← unseen.get).toArray.map (·.name)}"
   return (← pathRapps.get, ← pathGoals.get)
 
-private def getGoalsToCopy (assignedMVars : Array MVarId) (start : GoalRef) :
-    TreeM (Array GoalRef) := do
+private def getGoalsToCopy (assignedMVars : UnorderedArraySet MVarId)
+    (start : GoalRef) : TreeM (Array GoalRef) := do
   let (pathRapps, pathGoals) ← findPathForAssignedMVars assignedMVars start
   let mut toCopy := #[]
   let mut toCopyIds := HashSet.empty
@@ -86,15 +86,16 @@ private def getGoalsToCopy (assignedMVars : Array MVarId) (start : GoalRef) :
           toCopyIds := toCopyIds.insert id
   return toCopy
 
-private unsafe def copyGoals (assignedMVars : Array MVarId)
+private unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
     (start : GoalRef) (parentMetaState : Meta.SavedState)
     (parentSuccessProbability : Percent) (depth : Nat) :
     TreeM (Array Goal) := do
   let toCopy ← getGoalsToCopy assignedMVars start
   toCopy.mapM λ gref => do
     let g ← gref.get
-    let mvars ← parentMetaState.runMetaM' $
-      g.mvars.concatMapM (getMVarsNoDelayed ∘ mkMVar)
+    have : Ord MVarId := ⟨λ m₁ m₂ => m₁.name.quickCmp m₂.name⟩
+    let mvars ← parentMetaState.runMetaM' $ UnorderedArraySet.ofArray <$>
+      g.mvars.toArray.concatMapM (getMVarsNoDelayed ∘ mkMVar)
     return Goal.mk {
       id := ← getAndIncrementNextGoalId
       parent := unsafeCast () -- will be filled in later
@@ -118,7 +119,7 @@ private unsafe def copyGoals (assignedMVars : Array MVarId)
       failedRapps := #[]
     }
 
-private def makeInitialGoal (goal : MVarId) (mvars : Array MVarId)
+private def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (parent : MVarClusterRef) (depth : Nat) (successProbability : Percent)
     (branchState : BranchState) (origin : GoalOrigin):
     TreeM Goal :=
@@ -154,7 +155,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     appliedRule := r.appliedRule
     successProbability := r.successProbability
     metaState := r.postState
-    introducedMVars := #[] -- will be filled in later
+    introducedMVars := {} -- will be filled in later
     assignedMVars := r.assignedMVars
   }
 
@@ -182,12 +183,12 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
 
   -- If a dropped mvar does not occur in the copied goals, turn it into a
   -- regular subgoal.
-  let droppedGoals ← droppedMVars.filterMapM λ m => do
+  let droppedGoals ← droppedMVars.toArray.filterMapM λ m => do
     if copiedGoalMVars.contains m then
       return none
     else
       let mvars ← r.postState.runMetaM' $
-        return (← getGoalMVarsNoDelayed m).toArray
+        UnorderedArraySet.ofHashSet <$> getGoalMVarsNoDelayed m
       let g ← makeInitialGoal m mvars (unsafeCast ()) goalDepth
         r.successProbability r.branchState .droppedMVar
         -- The parent (`unsafeCast ()`) will be patched up later.
@@ -196,16 +197,16 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   -- Turn proper goals into proper mvars if they appear in any of the copied
   -- goals.
   let mut goals := Array.mkEmpty r.goals.size
-  let mut introducedMVars := r.introducedMVars.toArray
+  let mut introducedMVars := r.introducedMVars
   for (g, mvars) in r.goals do
     if copiedGoalMVars.contains g then
-      introducedMVars := introducedMVars.push g
+      introducedMVars := introducedMVars.insert g
     else
       goals := goals.push (g, mvars)
 
   -- Construct the subgoals
   let subgoals ← goals.mapM λ (goal, mvars) =>
-    makeInitialGoal goal mvars.toArray (unsafeCast ()) goalDepth
+    makeInitialGoal goal mvars (unsafeCast ()) goalDepth
       r.successProbability r.branchState .subgoal
       -- The parent (`unsafeCast ()`) will be patched up later.
 

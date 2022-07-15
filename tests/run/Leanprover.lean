@@ -422,7 +422,7 @@ theorem weaken (Γ Δ : List (Form Φ)) (prf : Proof Γ Δ) (δ : Form Φ)
   case fls_l Γ Δ =>
     aesop
   case imp_l Γ Δ φ ψ _ _ ih₁ ih₂ =>
-    aesop
+    aesop (options := { maxRuleApplications := 250 })
   case imp_r Γ Δ φ ψ _ ih =>
     have ih' : Proof (φ :: Γ) (ψ :: δ :: Δ) := by aesop
     aesop

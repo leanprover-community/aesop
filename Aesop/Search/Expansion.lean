@@ -91,8 +91,8 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
       "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal input.goal}"
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def runNormRuleCore (goal : MVarId) (mvars : Array MVarId) (bs : BranchState)
-    (rule : IndexMatchResult NormRule) :
+def runNormRuleCore (goal : MVarId) (mvars : UnorderedArraySet MVarId)
+    (bs : BranchState) (rule : IndexMatchResult NormRule) :
     MetaM NormRuleResult := do
   let branchState? := bs.find? rule.rule
   aesop_trace[stepsNormalization] do
@@ -106,8 +106,8 @@ def runNormRuleCore (goal : MVarId) (mvars : Array MVarId) (bs : BranchState)
   runNormRuleTac bs rule.rule ruleInput
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def runNormRule (goal : MVarId) (mvars : Array MVarId) (bs : BranchState)
-    (rule : IndexMatchResult NormRule) :
+def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
+    (bs : BranchState) (rule : IndexMatchResult NormRule) :
     ProfileT MetaM NormRuleResult :=
   profiling (runNormRuleCore goal mvars bs rule) λ result elapsed => do
     let successful :=
@@ -120,7 +120,7 @@ def runNormRule (goal : MVarId) (mvars : Array MVarId) (bs : BranchState)
     recordAndTraceRuleProfile ruleProfile
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def runFirstNormRule (goal : MVarId) (mvars : Array MVarId)
+def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (branchState : BranchState) (rules : Array (IndexMatchResult NormRule)):
     ProfileT MetaM NormRuleResult := do
   for rule in rules do
@@ -133,7 +133,7 @@ def runFirstNormRule (goal : MVarId) (mvars : Array MVarId)
 
 def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
     (localSimpRules : Array LocalNormSimpRule) (goal : MVarId)
-    (mvars : Array MVarId) : MetaM SimpResult := do
+    (mvars : UnorderedArraySet MVarId) : MetaM SimpResult := do
   withMVarContext goal do
     let lctx ← getLCtx
     let mut simpTheorems := ctx.simpTheorems
@@ -186,7 +186,7 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
     return result
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def normSimp (goal : MVarId) (mvars : Array MVarId) (useHyps : Bool)
+def normSimp (goal : MVarId) (mvars : UnorderedArraySet MVarId) (useHyps : Bool)
     (ctx : Simp.Context) (localSimpRules : Array LocalNormSimpRule) :
     ProfileT MetaM SimpResult :=
   profiling go λ _ elapsed =>
@@ -213,7 +213,7 @@ def normSimp (goal : MVarId) (mvars : Array MVarId) (useHyps : Bool)
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 partial def normalizeGoalMVar (rs : RuleSet) (normSimpUseHyps : Bool)
     (ctx : Simp.Context) (maxIterations : Nat) (goal : MVarId)
-    (mvars : Array MVarId) (bs : BranchState) :
+    (mvars : UnorderedArraySet MVarId) (bs : BranchState) :
     ProfileT MetaM (Option (MVarId × BranchState)) :=
   go 0 goal bs
   where

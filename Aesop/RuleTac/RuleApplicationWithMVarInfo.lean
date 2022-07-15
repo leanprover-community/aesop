@@ -33,7 +33,7 @@ structure RuleApplicationWithMVarInfo where
   goals : Array (MVarId × UnorderedArraySet MVarId)
   mvars : UnorderedArraySet MVarId
   introducedMVars : UnorderedArraySet MVarId
-  assignedMVars : Array MVarId
+  assignedMVars : UnorderedArraySet MVarId
 
 namespace RuleApplicationWithMVarInfo
 
@@ -54,14 +54,15 @@ protected def check (preState : Meta.SavedState) (parentGoal : MVarId)
   -- Check assigned mvars
   let actualAssignedMVars :=
     (← assignedExprMVars preState r.postState).erase parentGoal
-  unless actualAssignedMVars.equalSet r.assignedMVars do
-    return m!"rule reported wrong assigned mvars.\n  reported: {r.assignedMVars.map (·.name)}\n  actual: {actualAssignedMVars.map (·.name)}"
+  unless actualAssignedMVars.equalSet r.assignedMVars.toArray do
+    return m!"rule reported wrong assigned mvars.\n  reported: {r.assignedMVars.toArray.map (·.name)}\n  actual: {actualAssignedMVars.map (·.name)}"
   return none
 
 end RuleApplicationWithMVarInfo
 
-def RuleApplication.toRuleApplicationWithMVarInfo (parentMVars : Array MVarId)
-    (r : RuleApplication) : MetaM RuleApplicationWithMVarInfo :=
+def RuleApplication.toRuleApplicationWithMVarInfo
+    (parentMVars : UnorderedArraySet MVarId) (r : RuleApplication) :
+    MetaM RuleApplicationWithMVarInfo :=
   r.postState.runMetaM' do
     -- Get assigned mvars
     r.postState.runMetaM' do

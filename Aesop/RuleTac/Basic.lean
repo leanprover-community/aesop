@@ -18,9 +18,10 @@ namespace Aesop
 
 /-! # Rule Tactic Types -/
 
+-- TODO doc
 structure RuleTacInput where
   goal : MVarId
-  mvars : Array MVarId
+  mvars : UnorderedArraySet MVarId
   indexMatchLocations : UnorderedArraySet IndexMatchLocation
   branchState? : Option RuleBranchState
   deriving Inhabited

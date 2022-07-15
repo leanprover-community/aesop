@@ -150,20 +150,21 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit :=
       let actualIntroduced :=
         (← introducedExprMVars parentPostNormState r.metaState).filter
           (! subgoalMVars.contains ·)
-      unless actualIntroduced.equalSet r.introducedMVars do throwError
-        "{Check.tree.name}: rapp {r.id} reports incorrect introduced mvars.\n  reported: {r.introducedMVars.map (·.name)}\n  actual: {actualIntroduced.map (·.name)}"
+      unless actualIntroduced.equalSet r.introducedMVars.toArray do throwError
+        "{Check.tree.name}: rapp {r.id} reports incorrect introduced mvars.\n  reported: {r.introducedMVars.toArray.map (·.name)}\n  actual: {actualIntroduced.map (·.name)}"
 
     checkAssignedMVars (r : Rapp) : MetaM Unit := do
       let (parentPostNormGoal, parentPostNormState) ← getParentInfo r
       let actualAssigned :=
         (← assignedExprMVars parentPostNormState r.metaState).erase
           parentPostNormGoal
-      unless actualAssigned.equalSet r.assignedMVars do throwError
-        "{Check.tree.name}: rapp {r.id} reports incorrect assigned mvars.\n  reported: {r.assignedMVars.map (·.name)}\n  actual: {actualAssigned.map (·.name)}"
+      unless actualAssigned.equalSet r.assignedMVars.toArray do throwError
+        "{Check.tree.name}: rapp {r.id} reports incorrect assigned mvars.\n  reported: {r.assignedMVars.toArray.map (·.name)}\n  actual: {actualAssigned.map (·.name)}"
 
     checkDroppedMVars (r : Rapp) : MetaM Unit := do
-      let droppableMVars := (← r.parent.get).mvars ++ r.introducedMVars
-      let mut nonDroppedMVars := HashSet.ofArray r.assignedMVars
+      let droppableMVars :=
+        (← r.parent.get).mvars ++ r.introducedMVars |>.toArray
+      let mut nonDroppedMVars := HashSet.ofArray r.assignedMVars.toArray
       for cref in r.children do
         for gref in (← cref.get).goals do
           let g ← gref.get
@@ -176,9 +177,9 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit :=
       checkNormMVars g
       let actualPreNormMVars ←
         g.runMetaMInParentState' $ getGoalMVarsNoDelayed g.preNormGoal
-      let expectedMVars := HashSet.ofArray g.mvars
+      let expectedMVars := HashSet.ofArray g.mvars.toArray
       unless actualPreNormMVars == expectedMVars do throwError
-        "{Check.tree.name}: goal {g.id} reports incorrect unassigned mvars.\n  reported: {g.mvars.map (·.name)}\n  actual: {actualPreNormMVars.toArray.map (·.name)}"
+        "{Check.tree.name}: goal {g.id} reports incorrect unassigned mvars.\n  reported: {g.mvars.toArray.map (·.name)}\n  actual: {actualPreNormMVars.toArray.map (·.name)}"
 
     checkNormMVars (g : Goal) : MetaM Unit := do
       let go (parentMetaState postMetaState : Meta.SavedState)

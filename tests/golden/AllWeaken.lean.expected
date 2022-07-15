@@ -1,0 +1,4 @@
+tests/golden/AllWeaken.lean:20:2: warning: aesop: maximum number of rule applications (200) reached. Set the 'maxRuleApplications' option to increase the limit.
+tests/golden/AllWeaken.lean:19:40: error: unsolved goals
+α : Type ?u.341
+⊢ All (fun a => a ∈ []) []

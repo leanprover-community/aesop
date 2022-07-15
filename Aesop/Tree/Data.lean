@@ -306,7 +306,7 @@ structure GoalData (Rapp MVarCluster : Type) : Type where
     -- The goal before normalisation. The goal after normalisation (if any) is
     -- contained in the `normalizationState`.
   normalizationState : NormalizationState
-  mvars : Array MVarId
+  mvars : UnorderedArraySet MVarId
     -- Unassigned expression metavariables that appear in the goal, i.e. that
     -- appear in the target or hypotheses of `goal` when interpreted in the
     -- metavar context of `parent?` (or in the global metavar context if
@@ -360,11 +360,11 @@ structure RappData (Goal MVarCluster : Type) : Type where
   metaState : Meta.SavedState
     -- This is the state *after* the rule was successfully applied, so the goal
     -- mvar is assigned in this state.
-  introducedMVars : Array MVarId
+  introducedMVars : UnorderedArraySet MVarId
     -- Unassigned expression mvars introduced by this rapp. These are exactly
     -- the unassigned expr mvars that are declared in `metaState`, but not in
     -- the meta state of the parent rapp of `parent`.
-  assignedMVars : Array MVarId
+  assignedMVars : UnorderedArraySet MVarId
     -- Expression mvars that were previously unassigned but were assigned by
     -- this rapp. These are exactly the expr mvars that (a) are declared and
     -- unassigned in the meta state of the parent rapp of `parent` and (b) are
@@ -546,7 +546,7 @@ def normalizationState (g : Goal) : NormalizationState :=
   g.elim.normalizationState
 
 @[inline]
-def mvars (g : Goal) : Array MVarId :=
+def mvars (g : Goal) : UnorderedArraySet MVarId :=
   g.elim.mvars
 
 @[inline]
@@ -619,7 +619,7 @@ def setNormalizationState (normalizationState : NormalizationState) (g : Goal) :
   g.modify λ g => { g with normalizationState }
 
 @[inline]
-def setMVars (mvars : Array MVarId) (g : Goal) : Goal :=
+def setMVars (mvars : UnorderedArraySet MVarId) (g : Goal) : Goal :=
   g.modify λ g => { g with mvars }
 
 @[inline]
@@ -715,11 +715,11 @@ def metaState (r : Rapp) : Meta.SavedState :=
   r.elim.metaState
 
 @[inline]
-def introducedMVars (r : Rapp) : Array MVarId :=
+def introducedMVars (r : Rapp) : UnorderedArraySet MVarId :=
   r.elim.introducedMVars
 
 @[inline]
-def assignedMVars (r : Rapp) : Array MVarId :=
+def assignedMVars (r : Rapp) : UnorderedArraySet MVarId :=
   r.elim.assignedMVars
 
 @[inline]
@@ -755,12 +755,12 @@ def setMetaState (metaState : Meta.SavedState) (r : Rapp) : Rapp :=
   r.modify λ r => { r with metaState }
 
 @[inline]
-def setIntroducedMVars (introducedMVars : Array MVarId)
+def setIntroducedMVars (introducedMVars : UnorderedArraySet MVarId)
     (r : Rapp) : Rapp :=
   r.modify λ r => { r with introducedMVars }
 
 @[inline]
-def setAssignedMVars (assignedMVars : Array MVarId) (r : Rapp) : Rapp :=
+def setAssignedMVars (assignedMVars : UnorderedArraySet MVarId) (r : Rapp) : Rapp :=
   r.modify λ r => { r with assignedMVars }
 
 instance : Nonempty Rapp :=

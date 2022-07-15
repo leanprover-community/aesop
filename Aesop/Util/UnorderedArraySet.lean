@@ -66,6 +66,11 @@ def erase (x : α) (s : UnorderedArraySet α) : UnorderedArraySet α :=
   ⟨s.rep.erase x⟩
 
 /-- O(n) -/
+def filterM [Monad m] (p : α → m Bool) (s : UnorderedArraySet α) :
+    m (UnorderedArraySet α) :=
+  return ⟨← s.rep.filterM p⟩
+
+/-- O(n) -/
 def filter (p : α → Bool) (s : UnorderedArraySet α) : UnorderedArraySet α :=
   ⟨s.rep.filter p⟩
 
@@ -104,6 +109,26 @@ def size (s : UnorderedArraySet α) : Nat :=
 /-- O(1) -/
 def isEmpty (s : UnorderedArraySet α) : Bool :=
   s.rep.isEmpty
+
+/-- O(n) -/
+def anyM [Monad m] (p : α → m Bool) (s : UnorderedArraySet α) (start := 0)
+    (stop := s.size) : m Bool :=
+  s.rep.anyM p start stop
+
+/-- O(n) -/
+def any (p : α → Bool) (s : UnorderedArraySet α) (start := 0) (stop := s.size) :
+    Bool :=
+  s.rep.any p start stop
+
+/-- O(n) -/
+def allM [Monad m] (p : α → m Bool) (s : UnorderedArraySet α) (start := 0)
+    (stop := s.size) : m Bool :=
+  s.rep.allM p start stop
+
+/-- O(n) -/
+def all (p : α → Bool) (s : UnorderedArraySet α) (start := 0) (stop := s.size) :
+    Bool :=
+  s.rep.all p start stop
 
 instance : BEq (UnorderedArraySet α) where
   beq s t := s.rep.equalSet t.rep
