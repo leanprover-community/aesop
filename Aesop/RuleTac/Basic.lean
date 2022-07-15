@@ -18,7 +18,16 @@ namespace Aesop
 
 /-! # Rule Tactic Types -/
 
--- TODO doc
+/--
+Input for a rule tactic. Contains:
+
+- `goal`: the goal on which the rule is run.
+- `mvars`: the set of mvars which occur in `goal`.
+- `indexMatchLocations`: if the rule is indexed, the locations (e.g. hyps or the
+  target) matched by the rule's index entries. Otherwise an empty set.
+- `branchState?`: if the rule uses branch state, the current branch state.
+  Otherwise `none`.
+-/
 structure RuleTacInput where
   goal : MVarId
   mvars : UnorderedArraySet MVarId
