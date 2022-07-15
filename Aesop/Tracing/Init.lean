@@ -38,6 +38,10 @@ initialize proof : TraceOption ←
   registerTraceOption `proof false
     "(aesop) If the search is successful, print the produced proof term."
 
+initialize finalTree : TraceOption ←
+  registerTraceOption `finalTree false
+    "(aesop) Once the search has concluded (successfully or unsuccessfully), print the final search tree."
+
 initialize profile : TraceOption ←
   registerTraceOption `profile false
     "(aesop) Print a summary of execution times after the tactic has finished. See also trace.aesop.steps.profile."

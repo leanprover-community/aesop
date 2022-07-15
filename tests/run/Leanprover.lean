@@ -165,7 +165,7 @@ theorem map {xs ys : List α} (f : α → β) (perm : xs ↭ ys)
 
 theorem all {xs ys : List α} (perm : xs ↭ ys) (P : α → Prop)
   : All P xs → All P ys := by
-  induction perm <;> simp_all [All.cons]
+  induction perm <;> aesop
 
 theorem any {xs ys : List α} (perm : xs ↭ ys) (P : α → Prop)
   : Any P xs → Any P ys := by

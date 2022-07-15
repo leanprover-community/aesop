@@ -92,6 +92,12 @@ def finishIfProven : SearchM Q Bool := do
     aesop_trace[proof] "Final proof:{indentExpr proof}"
     return true
 
+def traceFinalTree : SearchM Q Unit := do
+  aesop_trace[finalTree] do
+    let treeMsg ←
+      (← (← getRootGoal).get).treeToMessageData (← TraceModifiers.get)
+    aesop_trace![finalTree] "Final search tree:{indentD treeMsg}"
+
 -- When we hit a non-fatal error (i.e. the search terminates without a proof
 -- because the root goal is unprovable or because we hit a search limit), we
 -- usually:
@@ -120,7 +126,12 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
     let proof ← getProof
     withMVarContext (← read).rootGoalMVar do
       aesop_trace![proof] "Final proof:{indentExpr proof}"
+  traceFinalTree
   return goals
+
+def handleFatalError (e : Exception) : SearchM Q α := do
+  traceFinalTree
+  throw e
 
 partial def searchLoop : SearchM Q (Array MVarId) :=
   withIncRecDepth do
@@ -150,7 +161,10 @@ def search (Q) [Queue Q] (goal : MVarId) (ruleSet? : Option RuleSet := none)
     | none => Frontend.getDefaultAttributeRuleSet
     | some ruleSet => pure ruleSet
   let (goals, state, _) ← SearchM.run ruleSet options simpConfig goal profile do
-    show SearchM Q _ from try searchLoop finally freeTree
+    show SearchM Q _ from
+    try searchLoop
+    catch e => handleFatalError e
+    finally freeTree
   return (goals, state.profile)
 
 def bestFirst (goal : MVarId) (ruleSet? : Option RuleSet := none)
