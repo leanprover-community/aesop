@@ -175,8 +175,8 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit :=
 
     checkGoalMVars (g : Goal) : MetaM Unit := do
       checkNormMVars g
-      let actualPreNormMVars ←
-        g.runMetaMInParentState' $ getGoalMVarsNoDelayed g.preNormGoal
+      let actualPreNormMVars ← g.runMetaMInParentState' $
+        getUnassignedGoalMVarDependencies g.preNormGoal
       let expectedMVars := HashSet.ofArray g.mvars.toArray
       unless actualPreNormMVars == expectedMVars do throwError
         "{Check.tree.name}: goal {g.id} reports incorrect unassigned mvars.\n  reported: {g.mvars.toArray.map (·.name)}\n  actual: {actualPreNormMVars.toArray.map (·.name)}"

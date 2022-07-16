@@ -19,7 +19,7 @@ structure Tree where
   nextRappId : RappId
 
 def mkInitialTree (goal : MVarId) : MetaM Tree := do
-  let mvars ← getGoalMVarsNoDelayed goal
+  let mvars ← getUnassignedGoalMVarDependencies goal
   unless mvars.isEmpty do
     throwError "aesop: the goal contains metavariables, which is not currently supported."
     -- TODO support this

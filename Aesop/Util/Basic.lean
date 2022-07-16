@@ -1267,23 +1267,24 @@ def isDeclaredMVar (mvarId : MVarId) : MetaM Bool := do
   | some _ => pure true
   | none => pure false
 
--- Note: includes mvars in auxDecls.
-def getHypMVarsNoDelayed (goal : MVarId) : MetaM (HashSet MVarId) := do
-  instantiateMVarsInGoal goal
-  withMVarContext goal do
-    let mut mvars := HashSet.empty
-    for ldecl in (← getLCtx) do
-      mvars := mvars.insertMany (← getMVarsNoDelayed ldecl.type)
-      if let (some val) := ldecl.value? then
-        mvars := mvars.insertMany (← getMVarsNoDelayed val)
-    return mvars
+partial def getUnassignedGoalMVarDependencies (mvarId : MVarId) :
+    MetaM (HashSet MVarId) :=
+  return (← go mvarId |>.run {}).snd
+  where
+    addMVars (e : Expr) : StateRefT (HashSet MVarId) MetaM Unit := do
+      let mvars ← getMVarsNoDelayed e
+      modify (·.insertMany mvars)
+      mvars.forM go
 
-def getTargetMVarsNoDelayed (goal : MVarId) : MetaM (Array MVarId) := do
-  getMVarsNoDelayed (← instantiateMVarsInMVarType goal)
-
-def getGoalMVarsNoDelayed (goal : MVarId) : MetaM (HashSet MVarId) := do
-  let hypMVars ← getHypMVarsNoDelayed goal
-  return hypMVars.insertMany (← getTargetMVarsNoDelayed goal)
+    go (mvarId : MVarId) : StateRefT (HashSet MVarId) MetaM Unit :=
+      withIncRecDepth do
+        instantiateMVarsInGoal mvarId
+        let mdecl ← getMVarDecl mvarId
+        addMVars mdecl.type
+        for ldecl in mdecl.lctx do
+          addMVars ldecl.type
+          if let (some val) := ldecl.value? then
+            addMVars val
 
 def isExprMVarDeclared [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool :=
   return (← getMCtx).decls.contains mvarId

@@ -73,9 +73,9 @@ def RuleApplication.toRuleApplicationWithMVarInfo
     let mut goalsAndMVars := #[]
     let mut mvars := {}
     for g in r.goals do
-      let gProperMVars ← UnorderedArraySet.ofHashSet <$> getGoalMVarsNoDelayed g
-      mvars := mvars.merge gProperMVars
-      goalsAndMVars := goalsAndMVars.push (g, gProperMVars)
+      let gMVars ← .ofHashSet <$> getUnassignedGoalMVarDependencies g
+      mvars := mvars.merge gMVars
+      goalsAndMVars := goalsAndMVars.push (g, gMVars)
     let goals :=
       if mvars.isEmpty then
         goalsAndMVars

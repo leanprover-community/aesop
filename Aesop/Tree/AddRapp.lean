@@ -94,8 +94,8 @@ private unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
   toCopy.mapM λ gref => do
     let g ← gref.get
     have : Ord MVarId := ⟨λ m₁ m₂ => m₁.name.quickCmp m₂.name⟩
-    let mvars ← parentMetaState.runMetaM' $ UnorderedArraySet.ofArray <$>
-      g.mvars.toArray.concatMapM (getMVarsNoDelayed ∘ mkMVar)
+    let mvars ← parentMetaState.runMetaM' $ .ofHashSet <$>
+      getUnassignedGoalMVarDependencies g.preNormGoal
     return Goal.mk {
       id := ← getAndIncrementNextGoalId
       parent := unsafeCast () -- will be filled in later
@@ -188,7 +188,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
       return none
     else
       let mvars ← r.postState.runMetaM' $
-        UnorderedArraySet.ofHashSet <$> getGoalMVarsNoDelayed m
+        .ofHashSet <$> getUnassignedGoalMVarDependencies m
       let g ← makeInitialGoal m mvars (unsafeCast ()) goalDepth
         r.successProbability r.branchState .droppedMVar
         -- The parent (`unsafeCast ()`) will be patched up later.
