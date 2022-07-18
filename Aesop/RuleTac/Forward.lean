@@ -136,8 +136,8 @@ def forwardExpr (e : Expr) (immediate : UnorderedArraySet Nat)
     return [goal]
 
 def forwardConst (decl : Name) (immediate : UnorderedArraySet Nat)
-    (clear : Bool) : RuleTac :=
-  forwardExpr (mkConst decl) immediate clear
+    (clear : Bool) : RuleTac := λ input => do
+  forwardExpr (← mkConstWithFreshMVarLevels decl) immediate clear input
 
 def forwardFVar (userName : Name) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac := λ input =>
