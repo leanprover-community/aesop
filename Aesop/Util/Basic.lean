@@ -1272,8 +1272,13 @@ partial def getUnassignedGoalMVarDependencies (mvarId : MVarId) :
   return (← go mvarId |>.run {}).snd
   where
     addMVars (e : Expr) : StateRefT (HashSet MVarId) MetaM Unit := do
-      let mvars ← getMVarsNoDelayed e
-      modify (·.insertMany mvars)
+      let mvars ← getMVars e
+      let mut s ← get
+      set ({} : HashSet MVarId) -- Ensure that `s` is not shared.
+      for mvarId in mvars do
+        unless ← isMVarDelayedAssigned mvarId do
+          s := s.insert mvarId
+      set s
       mvars.forM go
 
     go (mvarId : MVarId) : StateRefT (HashSet MVarId) MetaM Unit :=
@@ -1285,6 +1290,12 @@ partial def getUnassignedGoalMVarDependencies (mvarId : MVarId) :
           addMVars ldecl.type
           if let (some val) := ldecl.value? then
             addMVars val
+        if let (some ass) ← getDelayedMVarAssignment? mvarId then
+          let pendingMVarId := ass.mvarIdPending
+          if ! (← isExprMVarAssigned pendingMVarId) &&
+             ! (← isMVarDelayedAssigned pendingMVarId) then
+            modify (·.insert pendingMVarId)
+          go pendingMVarId
 
 def isExprMVarDeclared [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool :=
   return (← getMCtx).decls.contains mvarId
