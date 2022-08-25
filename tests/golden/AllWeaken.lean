@@ -6,7 +6,7 @@ Authors: Jannis Limperg, Asta H. From
 
 import Aesop
 
-set_option aesop.check.all false
+set_option aesop.check.all true
 
 inductive All (P : α → Prop) : List α → Prop where
   | none : All P []
@@ -17,4 +17,4 @@ axiom weaken {α} (P Q : α → Prop) (wk : ∀ x, P x → Q x) (xs : List α)
   (h : All P xs) : All Q xs
 
 example : All (· ∈ []) (@List.nil α) := by
-  aesop
+  aesop (options := { maxRuleApplications := 50, terminal := true })

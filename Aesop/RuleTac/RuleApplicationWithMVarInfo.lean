@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.RuleTac.Basic
 
 open Lean Lean.Meta
+open Std (HashSet)
 
 namespace Aesop
 
@@ -40,16 +41,19 @@ namespace RuleApplicationWithMVarInfo
 protected def check (preState : Meta.SavedState) (parentGoal : MVarId)
     (r : RuleApplicationWithMVarInfo) : MetaM (Option MessageData) := do
   -- Check introduced mvars
-  let actualIntroducedMVars ← introducedExprMVars preState r.postState
-  let reportedIntroducedMVars := r.goals.map (·.fst) ++ r.introducedMVars.toArray
+  let mut actualIntroducedMVars : HashSet MVarId := {}
+  for (_, mvars) in r.goals do
+    for mvarId in mvars do
+      unless ← preState.runMetaM' $ return (← isExprMVarDeclared mvarId) do
+        actualIntroducedMVars := actualIntroducedMVars.insert mvarId
   let unreportedIntroducedMVars :=
-    actualIntroducedMVars.filter (! reportedIntroducedMVars.contains ·)
+    actualIntroducedMVars.toArray.filter (! r.introducedMVars.contains ·)
   unless unreportedIntroducedMVars.isEmpty do
-    return m!"the following mvars were introduced but do not appear in the goals: {unreportedIntroducedMVars.map (·.name)}"
+    return m!"the following mvars were introduced but not reported: {unreportedIntroducedMVars.map (·.name)}"
   let overreportedIntroducedMVars :=
     r.introducedMVars.toArray.filter (! actualIntroducedMVars.contains ·)
   unless overreportedIntroducedMVars.isEmpty do
-    return m!"the following mvars were reported as introduced but were already present before the rule was applied: {overreportedIntroducedMVars.map (·.name)}"
+    return m!"the following mvars were reported as introduced but do not exist or were already present before the rule was applied: {overreportedIntroducedMVars.map (·.name)}"
 
   -- Check assigned mvars
   let actualAssignedMVars :=

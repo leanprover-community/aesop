@@ -131,7 +131,6 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit :=
       return true)
     (λ rref => do
       let r ← rref.get
-      checkIntroducedMVars r
       checkAssignedMVars r
       checkDroppedMVars r
       return true)
@@ -142,16 +141,6 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit :=
       let some res := (← r.parent.get).postNormGoalAndMetaState? | throwError
         "{Check.tree.name}: expected parent goal of rapp {r.id} to be normalised (but not proven by normalisation)."
       return res
-
-    checkIntroducedMVars (r : Rapp) : MetaM Unit := do
-      let (_, parentPostNormState) ← getParentInfo r
-      let subgoalMVars ← r.foldSubgoalsM (init := #[]) λ mvars gref =>
-        return mvars.push (← gref.get).preNormGoal
-      let actualIntroduced :=
-        (← introducedExprMVars parentPostNormState r.metaState).filter
-          (! subgoalMVars.contains ·)
-      unless actualIntroduced.equalSet r.introducedMVars.toArray do throwError
-        "{Check.tree.name}: rapp {r.id} reports incorrect introduced mvars.\n  reported: {r.introducedMVars.toArray.map (·.name)}\n  actual: {actualIntroduced.map (·.name)}"
 
     checkAssignedMVars (r : Rapp) : MetaM Unit := do
       let (parentPostNormGoal, parentPostNormState) ← getParentInfo r
