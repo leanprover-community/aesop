@@ -204,13 +204,11 @@ instance Val.instDecidable (i : Φ → Prop) [d : DecidablePred i] (φ : Form Φ
     have ihψ : Decidable (Val i ψ) := instDecidable i ψ
     aesop (add norm unfold Not, unsafe apply 50% False.elim)
 
-@[simp]
-def Valid (φ : Form Φ) : Prop :=
-  ∀ i, DecidablePred i → Val i φ
+abbrev Valid (φ : Form Φ) : Prop := ∀ i, DecidablePred i → Val i φ
 
 @[simp]
-def SC (i : Φ → Prop) (l r : List (Form Φ)) : Prop :=
-  All (Val i) l → Any (Val i) r
+def SC (i : Φ → Prop) (Γ Δ : List (Form Φ)) : Prop :=
+  All (Val i) Γ → Any (Val i) Δ
 
 namespace SC
 
@@ -273,7 +271,7 @@ example : Prove (♩0 ⇒ ♩1 ⇒ ♩0) := by simp
 example : ¬ Prove (♩0 ⇒ ♩1) := by simp
 
 
---- Completeness
+--- Soundness and Completeness
 
 @[simp]
 def SC' (i : Φ → Prop) (l r : List Φ) (Γ Δ : List (Form Φ)) : Prop :=
@@ -400,12 +398,12 @@ theorem Prove_sound_complete [DecidableEq Φ] (φ : Form Φ)
 --- Proof System
 
 inductive Proof : (Γ Δ : List (Form Φ)) → Prop where
-  | basic (Γ Δ n) : Proof (♩n :: Γ) (♩n :: Δ)
-  | fls_l (Γ Δ) : Proof (⊥ :: Γ) Δ
-  | imp_l (Γ Δ φ ψ) : Proof Γ (φ :: Δ) → Proof (ψ :: Γ) Δ → Proof (φ ⇒ ψ :: Γ) Δ
-  | imp_r (Γ Δ φ ψ): Proof (φ :: Γ) (ψ :: Δ) → Proof Γ (φ ⇒ ψ :: Δ)
-  | per_l (Γ Γ' Δ) : Proof Γ Δ → Γ' ↭ Γ → Proof Γ' Δ
-  | per_r (Γ Δ Δ') : Proof Γ Δ → Δ ↭ Δ' → Proof Γ Δ'
+  | basic Γ Δ n : Proof (♩n :: Γ) (♩n :: Δ)
+  | fls_l Γ Δ : Proof (⊥ :: Γ) Δ
+  | imp_l Γ Δ φ ψ : Proof Γ (φ :: Δ) → Proof (ψ :: Γ) Δ → Proof (φ ⇒ ψ :: Γ) Δ
+  | imp_r Γ Δ φ ψ: Proof (φ :: Γ) (ψ :: Δ) → Proof Γ (φ ⇒ ψ :: Δ)
+  | per_l Γ Γ' Δ : Proof Γ Δ → Γ' ↭ Γ → Proof Γ' Δ
+  | per_r Γ Δ Δ' : Proof Γ Δ → Δ ↭ Δ' → Proof Γ Δ'
 
 attribute [aesop safe apply] Proof.basic Proof.fls_l
 attribute [aesop unsafe 50% apply] Proof.imp_l Proof.imp_r
@@ -450,7 +448,7 @@ theorem sound (i : Φ → Prop) [DecidablePred i] (prf : Proof Γ Δ) : SC i Γ 
   case per_r Γ Δ Δ' _ perm ih =>
     aesop (add unsafe apply Perm.any)
 
-end Proof -- TODO
+end Proof
 
 @[simp]
 def Proof' (l r : List Φ) (Γ Δ : List (Form Φ)) : Prop :=
