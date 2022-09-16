@@ -26,3 +26,7 @@ theorem mem (P : α → Prop) (xs : List α)
   induction xs
   case nil => aesop
   case cons x xs ih => aesop (simp_options := { useHyps := false })
+
+theorem mem' (P : α → Prop) (xs : List α)
+  : All P xs ↔ ∀ a : α, a ∈ xs → P a := by
+  induction xs <;> aesop

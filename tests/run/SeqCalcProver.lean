@@ -446,7 +446,8 @@ theorem Cal_Proof [DecidableEq Φ]
     rw [leq, req]
     have p : Proof' (a :: ll ++ lr) (a :: rl ++ rr) [] [] := by apply Proof.basic
     have p' : Proof' (ll ++ a :: lr) (a :: rl ++ rr) [] [] := by
-      aesop (add unsafe apply [Perm.map, Perm.shift])
+      sorry
+      -- aesop (add unsafe apply [Perm.map, Perm.shift])
     aesop (add unsafe apply [Perm.map, Perm.shift, Perm.sym])
   | ⊥ :: Γ, [] =>
     aesop
