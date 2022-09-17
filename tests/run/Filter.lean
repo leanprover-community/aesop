@@ -58,10 +58,10 @@ theorem mem_filter : a ∈ filter p as ↔ a ∈ as ∧ p a := by
       | tail ha =>
         have : a ∈ filter p as := ih ⟨ha, h.2⟩
         by_cases hpa' : p a'
-        case inl =>
+        case pos =>
           rw [filter_cons_true hpa']
           exact Mem.tail this
-        case inr =>
+        case neg =>
           rw [filter_cons_false hpa']
           exact this
 

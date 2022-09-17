@@ -7,7 +7,6 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Aesop.Nanos
 import Aesop.Util.UnionFind
 import Lean
-import Std
 
 open Std (HashSet PHashSet)
 
@@ -316,6 +315,7 @@ def mergeSortedMergingDuplicates [ord : Ord α] (xs ys : Array α)
           go (acc.push (merge x y)) (i + 1) (j + 1)
     termination_by _ => xs.size + ys.size - (i + j)
 
+set_option linter.unusedVariables false in
 def mergeSortedFilteringDuplicates [ord : Ord α] (xs ys : Array α) :
     Array α :=
   mergeSortedMergingDuplicates xs ys λ x _ => x
@@ -323,6 +323,7 @@ def mergeSortedFilteringDuplicates [ord : Ord α] (xs ys : Array α) :
 -- Merge `xs` and `ys`, which do not need to be sorted. Elements which occur in
 -- both `xs` and `ys` are only added once. If `xs` and `ys` do not contain
 -- duplicates, then neither does the result. O(n*m)!
+set_option linter.unusedVariables false in
 def mergeUnsortedFilteringDuplicates [eq : BEq α] (xs ys : Array α) :
     Array α :=
   -- Ideally we would check whether `xs` or `ys` have spare capacity, to prevent
@@ -350,24 +351,29 @@ def mergeAdjacentDuplicates [eq : BEq α] (f : α → α → α) (xs : Array α)
         acc.push hd
     termination_by _ i _ => xs.size - i
 
+set_option linter.unusedVariables false in
 def deduplicateSorted [eq : BEq α] (xs : Array α) : Array α :=
   xs.mergeAdjacentDuplicates (λ x _ => x)
 
+set_option linter.unusedVariables false in
 def deduplicate [Inhabited α] [ord : Ord α] (xs : Array α) : Array α :=
   deduplicateSorted $ xs.qsort λ x y => compare x y |>.isLT
 
 def equalSet [BEq α] (xs ys : Array α) : Bool :=
   xs.all (ys.contains ·) && ys.all (xs.contains ·)
 
+set_option linter.unusedVariables false in
 def qsortOrd [Inhabited α] [ord : Ord α] (xs : Array α) : Array α :=
   xs.qsort λ x y => compare x y |>.isLT
 
+set_option linter.unusedVariables false in
 @[inline]
 protected def maxD [ord : Ord α] (d : α) (xs : Array α) (start := 0)
     (stop := xs.size) : α :=
   xs.foldl (init := d) (start := start) (stop := stop) λ max x =>
     if compare x max |>.isLT then max else x
 
+set_option linter.unusedVariables false in
 @[inline]
 protected def max? [ord : Ord α] (xs : Array α) (start := 0)
     (stop := xs.size) : Option α :=
@@ -376,17 +382,20 @@ protected def max? [ord : Ord α] (xs : Array α) (start := 0)
   else
     none
 
+set_option linter.unusedVariables false in
 @[inline]
 protected def max [ord : Ord α] [Inhabited α] (xs : Array α) (start := 0)
     (stop := xs.size) : α :=
   xs.maxD default start stop
 
+set_option linter.unusedVariables false in
 @[inline]
 protected def minD [ord : Ord α] (d : α) (xs : Array α) (start := 0)
     (stop := xs.size) : α :=
   xs.foldl (init := d) (start := start) (stop := stop) λ min x =>
     if compare x min |>.isGE then min else x
 
+set_option linter.unusedVariables false in
 @[inline]
 protected def min? [ord : Ord α] (xs : Array α) (start := 0)
     (stop := xs.size) : Option α :=
@@ -395,6 +404,7 @@ protected def min? [ord : Ord α] (xs : Array α) (start := 0)
   else
     none
 
+set_option linter.unusedVariables false in
 @[inline]
 protected def min [ord : Ord α] [Inhabited α] (xs : Array α) (start := 0)
     (stop := xs.size) : α :=
@@ -509,6 +519,11 @@ def indentDUnlinesSkipEmpty (fs : Array MessageData) : MessageData :=
 
 def toMessageDataIf (b : Bool) (f : Thunk MessageData) : MessageData :=
   if b then f.get else nil
+
+-- TODO this is for compatibility with a previous version of the MessageData
+-- API.
+def node (fs : Array MessageData) : MessageData :=
+  indentD (unlines fs)
 
 def nodeFiltering (fs : Array (Option MessageData)) : MessageData :=
   node $ fs.filterMap id
@@ -653,101 +668,7 @@ def merge (m n : PersistentHashMap α β) (f : α → β → β → β) :
     loop m n f := m.foldl (init := n) λ map k v =>
       map.insertWith k v λ v' => f k v v'
 
-mutual
-  @[specialize]
-  private unsafe def mapMEntryImpl [Monad m] {β γ : Type u} (f : β → m γ)
-      {α : Type u} : Entry α β (Node α β) → m (Entry α γ (Node α γ))
-    | Entry.entry key val => Entry.entry key <$> f val
-    | Entry.ref node => Entry.ref <$> mapMNodeImpl f node
-    | Entry.null => pure Entry.null
-
-  @[specialize]
-  private unsafe def mapMNodeImpl [Monad m] {β γ : Type u} (f : β → m γ)
-      {α : Type u} : Node α β → m (Node α γ)
-    | Node.entries es => Node.entries <$> es.mapM (mapMEntryImpl f)
-    | Node.collision ks vs _ =>
-      return Node.collision ks (← vs.mapM f) lcProof
-      -- The lcProof here is conceptually trivial (it says that `vs.mapM f` has
-      -- the same length as `vs`), but it would require a bit of effort because
-      -- there seem to be no lemmas about array length in the library yet.
-end
-
-@[implementedBy mapMEntryImpl]
-opaque mapMEntry [Monad m] {β γ : Type u} (f : β → m γ) {α : Type u} :
-    Entry α β (Node α β) → m (Entry α γ (Node α γ))
-
-@[implementedBy mapMNodeImpl]
-opaque mapMNode [Monad m] {β γ : Type u} (f : β → m γ) {α : Type u} :
-    Node α β → m (Node α γ)
-
-@[inline]
-def Entry.mapM [Monad m] : (β → m γ) → ∀ {α}, Entry α β (Node α β) →
-    m (Entry α γ (Node α γ)) :=
-  mapMEntry
-
-@[inline]
-def Node.mapM [Monad m] : (β → m γ) → ∀ {α}, Node α β → m (Node α γ) :=
-  mapMNode
-
-@[inline]
-def mapM [Monad m] (f : β → m γ) {α} [BEq α] [Hashable α]
-    (map : PersistentHashMap α β) : m (PersistentHashMap α γ) :=
-  return {
-    root := (← mapMNode f map.root)
-    size := map.size
-  }
-
-def map (f : β → γ) {α} [BEq α] [Hashable α] (map : PersistentHashMap α β) :
-    PersistentHashMap α γ :=
-  Id.run $ map.mapM f
-
 universe u v
-
--- We need to give u and v explicitly here, otherwise the compiler gets
--- confused.
-unsafe def forInImpl [BEq α] [Hashable α] {m : Type u → Type v} [Monad m]
-    (map : PersistentHashMap α β) (init : σ) (f : α × β → σ → m (ForInStep σ)) :
-    m σ := do
-  match (← go map.root init) with
-  | ForInStep.yield r => pure r
-  | ForInStep.done r => pure r
-  where
-    go : Node α β → σ → m (ForInStep σ)
-      | Node.collision keys vals heq, acc =>
-        let rec go' (i : Nat) (acc : σ) : m (ForInStep σ) := do
-          if h : i < keys.size then
-            let k := keys.get ⟨i, h⟩
-            let v := vals.get ⟨i, heq ▸ h⟩
-            match (← f (k, v) acc) with
-            | ForInStep.done result => return ForInStep.done result
-            | ForInStep.yield acc => go' (i + 1) acc
-          else
-            return ForInStep.yield acc
-        go' 0 acc
-      | Node.entries entries, acc => do
-        let mut acc := acc
-        for entry in entries do
-          match entry with
-          | Entry.null => pure ⟨⟩
-          | Entry.entry k v =>
-            match (← f (k, v) acc) with
-            | ForInStep.done result => return ForInStep.done result
-            | ForInStep.yield acc' => acc := acc'
-          | Entry.ref node =>
-            match (← go node acc) with
-            | ForInStep.done result => return ForInStep.done result
-            | ForInStep.yield acc' => acc := acc'
-        return ForInStep.yield acc
-
--- Inhabited inference is being stupid here, so we can't use `partial`.
-@[implementedBy forInImpl]
-opaque forIn [BEq α] [Hashable α] {m : Type u → Type v} [Monad m]
-    (map : PersistentHashMap α β) (init : σ) (f : α × β → σ → m (ForInStep σ)) :
-    m σ :=
-  pure init
-
-instance [BEq α] [Hashable α] : ForIn m (PersistentHashMap α β) (α × β) where
-  forIn map := map.forIn
 
 def toArray (map : PersistentHashMap α β) : Array (α × β) :=
   map.foldl (init := Array.mkEmpty map.size) λ acc a b => acc.push (a, b)
@@ -1300,7 +1221,7 @@ partial def getUnassignedGoalMVarDependencies (mvarId : MVarId) :
 def isExprMVarDeclared [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool :=
   return (← getMCtx).decls.contains mvarId
 
-def isLevelMVarDeclared [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool :=
+def isLevelMVarDeclared [Monad m] [MonadMCtx m] (mvarId : LMVarId) : m Bool :=
   return (← getMCtx).lDepth.contains mvarId
 
 def delayedAssignMVar [Monad m] [MonadMCtx m] (mvarId : MVarId)

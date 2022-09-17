@@ -23,5 +23,5 @@ axiom RingId (R : Ring) : RingHom R R
 @[aesop 99%]
 axiom ZZ : Ring
 
-example : ∃ (R : Ring) (f : RingHom R R), True := by
+example : ∃ (R : Ring) (_ : RingHom R R), True := by
   aesop

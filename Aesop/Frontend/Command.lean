@@ -18,7 +18,7 @@ elab_rules : command
 
 elab "erase_aesop_rules" "[" es:Aesop.rule_expr,* "]" : command => do
   let filters ← (es : Array _).mapM λ e => do
-    let e ← Elab.Command.liftTermElabM none $
+    let e ← Elab.Command.liftTermElabM $
       RuleExpr.elab e |>.run ElabOptions.forErasing
     e.toGlobalRuleNameFilters
   modifyAttributeRuleSets λ rss => do

@@ -8,3 +8,5 @@ package aesop {
 
 @[defaultTarget]
 lean_lib Aesop {}
+
+require std from git "https://github.com/leanprover/std4"

@@ -47,7 +47,7 @@ inductive All (P : α → Prop) : List α → Prop
 
 namespace All
 
--- @[simp]
+@[simp]
 theorem split_cons (P : α → Prop) (x : α) (xs : List α)
   : All P (x :: xs) ↔ (P x ∧ All P xs) := by
   aesop
@@ -230,8 +230,7 @@ def sum : List Nat → Nat
   | x :: xs => sum xs + x
 
 @[simp]
-def Cal (l r : List Φ) (Γ Δ : List (Form Φ)) : Prop :=
-  match Γ, Δ with
+def Cal (l r : List Φ) : (Γ Δ : List (Form Φ)) → Prop
   | [], [] => Common l r
   | ⊥ :: _, [] => true
   | Γ, ⊥ :: Δ => Cal l r Γ Δ
@@ -239,7 +238,8 @@ def Cal (l r : List Φ) (Γ Δ : List (Form Φ)) : Prop :=
   | Γ, ♩n :: Δ => Cal l (n :: r) Γ Δ
   | φ ⇒ ψ :: Γ, [] => Cal l r Γ [φ] ∧ Cal l r (ψ :: Γ) []
   | Γ, φ ⇒ ψ :: Δ => Cal l r (φ :: Γ) (ψ :: Δ)
-termination_by _ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
+termination_by _ Γ Δ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
+decreasing_by simp_wf <;> simp_arith
 
 instance Cal.instDecidable [DecidableEq Φ] (l r : List Φ) (Γ Δ : List (Form Φ))
   : Decidable (Cal l r Γ Δ) := by
@@ -263,6 +263,7 @@ instance Cal.instDecidable [DecidableEq Φ] (l r : List Φ) (Γ Δ : List (Form 
     have ih : Decidable (Cal l r (φ :: Γ) (ψ :: Δ)) := instDecidable l r (φ :: Γ) (ψ :: Δ)
     aesop
 termination_by _ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
+decreasing_by simp_wf <;> simp_arith
 
 abbrev Prove (φ : Form Φ) : Prop := Cal [] [] [] [φ]
 
@@ -382,6 +383,7 @@ theorem Cal_sound_complete [DecidableEq Φ]
         have AnyφψΔ : Any (Val i) (φ ⇒ ψ :: Δ ++ r.map (♩·)) := h i dec AllΓ
         simp_all
 termination_by _ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
+decreasing_by simp_wf <;> simp_arith
 
 theorem Prove_sound_complete [DecidableEq Φ] (φ : Form Φ)
   : Prove φ ↔ Valid φ := by
@@ -418,7 +420,7 @@ theorem weaken (Γ Δ : List (Form Φ)) (prf : Proof Γ Δ) (δ : Form Φ)
   | imp_r Γ Δ φ ψ =>
     have ih' : Proof (φ :: Γ) (ψ :: δ :: Δ) := by aesop
     aesop
-  | _ => aesop (options := { maxRuleApplications := 250 }) 
+  | _ => aesop (options := { maxRuleApplications := 250 })
 
 --- Soundness
 
@@ -446,8 +448,7 @@ theorem Cal_Proof [DecidableEq Φ]
     rw [leq, req]
     have p : Proof' (a :: ll ++ lr) (a :: rl ++ rr) [] [] := by apply Proof.basic
     have p' : Proof' (ll ++ a :: lr) (a :: rl ++ rr) [] [] := by
-      sorry
-      -- aesop (add unsafe apply [Perm.map, Perm.shift])
+      aesop (add unsafe apply [Perm.map, Perm.shift])
     aesop (add unsafe apply [Perm.map, Perm.shift, Perm.sym])
   | ⊥ :: Γ, [] =>
     aesop
@@ -472,6 +473,7 @@ theorem Cal_Proof [DecidableEq Φ]
     have ih : Proof' l r (φ :: Γ) (ψ :: Δ) := Cal_Proof l r (φ :: Γ) (ψ :: Δ) h
     aesop
 termination_by _ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
+decreasing_by simp_wf <;> simp_arith
 
 theorem Proof_sound_complete [DecidableEq Φ] (φ : Form Φ)
   : Proof [] [φ] ↔ Valid φ := by

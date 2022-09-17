@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Tracing
 import Aesop.Tree
+import Std
 
 open Lean
 open Std (BinomialHeap)

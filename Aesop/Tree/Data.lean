@@ -7,7 +7,6 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Aesop.Constants
 import Aesop.Tree.BranchState
 import Aesop.Tree.UnsafeQueue
-import Std
 
 open Lean
 open Lean.Meta

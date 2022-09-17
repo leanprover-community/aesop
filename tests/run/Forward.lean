@@ -43,11 +43,13 @@ example (rule : (a : α) → (b : β) → γ) (h₁ : α) (h₂ : β) : γ := by
   forward rule [a b]
   assumption
 
+set_option linter.unusedVariables false in
 example {P Q R : α → Type} (rule : ∀ a (p : P a) (q : Q a), R a)
     (h₁ : P a) (h₁' : P a) (h₂ : Q a) (h₃ : P b) (h₄ : Q c) : R a := by
   forward rule [p q]
   assumption
 
+set_option linter.unusedVariables false in
 example {P Q R : α → Type} (rule : ∀ a (p : P a) (q : Q a), R a)
     (h₁ : P a) (h₁' : P a) (h₂ : Q a) (h₃ : P b) (h₄ : Q c) : R a := by
   forward rule
