@@ -42,13 +42,13 @@ theorem Mem.split [DecidableEq α] {xs : List α} {v : α} (h : v ∈ xs)
 
 @[aesop safe [constructors, (cases (patterns := [All _ [], All _ (_ :: _)]))]]
 inductive All (P : α → Prop) : List α → Prop
-  | none : All P []
-  | more {x xs} : P x → All P xs → All P (x :: xs)
+  | nil : All P []
+  | cons {x xs} : P x → All P xs → All P (x :: xs)
 
 namespace All
 
 -- @[simp]
-theorem cons (P : α → Prop) (x : α) (xs : List α)
+theorem split_cons (P : α → Prop) (x : α) (xs : List α)
   : All P (x :: xs) ↔ (P x ∧ All P xs) := by
   aesop
 
@@ -60,6 +60,7 @@ theorem weaken (P Q : α → Prop) (wk : ∀ x, P x → Q x) (xs : List α) (h :
   : All Q xs := by
   induction h <;> aesop
 
+-- TODO: the trace.aesop.proof does not work here
 theorem in_self (xs : List α) : All (· ∈ xs) xs := by
   induction xs <;> aesop (add unsafe apply weaken)
 
@@ -300,7 +301,7 @@ theorem Cal_sound_complete [DecidableEq Φ]
       have Any_r' : Any (fun n => Val (· ∈ l) (♩n)) r := Iff.mp (Any.map (Val i) (♩·) r) Any_r
       apply Common.sym Any_r'
   | ⊥ :: Γ, [] =>
-    simp [All.cons]
+    simp [All.split_cons]
   | Γ, ⊥ :: Δ =>
     have ih : Cal l r Γ Δ ↔ ∀ i, DecidablePred i → SC' i l r Γ Δ :=
       Cal_sound_complete l r Γ Δ
@@ -346,7 +347,7 @@ theorem Cal_sound_complete [DecidableEq Φ]
       intro h i dec
       simp at h
       have ih₁' : SC' i l r Γ [φ] := Iff.mp ih₁ h.left i dec
-      cases (Val.instDecidable i φ) <;> simp_all [All.cons]
+      cases (Val.instDecidable i φ) <;> simp_all [All.split_cons]
     case mpr =>
       intro h
       simp
@@ -354,11 +355,11 @@ theorem Cal_sound_complete [DecidableEq Φ]
       case left =>
         apply Iff.mpr ih₁
         intro i dec
-        cases (Val.instDecidable i φ) <;> simp_all [All.cons]
+        cases (Val.instDecidable i φ) <;> simp_all [All.split_cons]
       case right =>
         apply Iff.mpr ih₂
         intro i dec
-        cases (Val.instDecidable i φ) <;> simp_all [All.cons]
+        cases (Val.instDecidable i φ) <;> simp_all [All.split_cons]
   | Γ, φ ⇒ ψ :: Δ =>
     have ih : Cal l r (φ :: Γ) (ψ :: Δ) ↔ ∀ i, DecidablePred i →
       SC' i l r (φ :: Γ) (ψ :: Δ) :=
@@ -366,7 +367,7 @@ theorem Cal_sound_complete [DecidableEq Φ]
     apply Iff.intro
     case mp =>
       intro h i dec
-      cases (Val.instDecidable i φ) <;> simp_all [All.cons]
+      cases (Val.instDecidable i φ) <;> simp_all [All.split_cons]
     case mpr =>
       intro h
       simp
@@ -374,10 +375,10 @@ theorem Cal_sound_complete [DecidableEq Φ]
       intro i dec
       cases (Val.instDecidable i φ)
       case isFalse no =>
-        simp_all [All.cons]
+        simp_all [All.split_cons]
       case isTrue yes =>
         intro AllφΓ
-        have AllΓ : All (Val i) (Γ ++ l.map (♩·)) := by simp_all [All.cons]
+        have AllΓ : All (Val i) (Γ ++ l.map (♩·)) := by simp_all [All.split_cons]
         have AnyφψΔ : Any (Val i) (φ ⇒ ψ :: Δ ++ r.map (♩·)) := h i dec AllΓ
         simp_all
 termination_by _ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
@@ -389,7 +390,7 @@ theorem Prove_sound_complete [DecidableEq Φ] (φ : Form Φ)
   apply Iff.intro
   case mp =>
     intro Pφ i dec
-    have h' : Any (Val i) (φ :: [].map (♩·)) := Iff.mp h Pφ i dec All.none
+    have h' : Any (Val i) (φ :: [].map (♩·)) := Iff.mp h Pφ i dec All.nil
     aesop
   case mpr =>
     aesop
@@ -476,7 +477,7 @@ theorem Proof_sound_complete [DecidableEq Φ] (φ : Form Φ)
   apply Iff.intro
   case mp =>
     intro prf i dec
-    have h : Any (Val i) [φ] := Proof.sound i prf All.none
+    have h : Any (Val i) [φ] := Proof.sound i prf All.nil
     aesop
   case mpr =>
     intro h
