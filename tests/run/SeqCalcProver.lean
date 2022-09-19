@@ -41,7 +41,7 @@ theorem Mem.split [DecidableEq α] {xs : List α} {v : α} (h : v ∈ xs)
 --- All
 
 @[aesop safe [constructors, (cases (patterns := [All _ [], All _ (_ :: _)]))]]
-inductive All (P : α → Prop) : List α → Prop where
+inductive All (P : α → Prop) : List α → Prop
   | none : All P []
   | more {x xs} : P x → All P xs → All P (x :: xs)
 
@@ -74,7 +74,7 @@ end All
 
 @[aesop safe (cases (patterns := [Any _ []])),
   aesop unsafe [50% constructors, 50% (cases (patterns := [Any _ (_ :: _ )]))]]
-inductive Any (P : α → Prop) : List α → Prop where
+inductive Any (P : α → Prop) : List α → Prop
   | here {x xs} : P x → Any P (x :: xs)
   | there {x xs} : Any P xs → Any P (x :: xs)
 
@@ -140,8 +140,8 @@ end Common
 --- List Permutations
 
 -- From https://github.com/agda/agda-stdlib/blob/master/src/Data/List/Relation/Binary/Permutation/Propositional.agda
-@[aesop unsafe [50% constructors, 25% cases]]
-inductive Perm : (xs ys : List α) → Type where
+@[aesop unsafe [50% constructors, 25% (cases (patterns := [Perm (_ :: _) (_ :: _ )]))]]
+inductive Perm : (xs ys : List α) → Type
   | refl {xs} : Perm xs xs
   | prep {xs ys} x : Perm xs ys → Perm (x :: xs) (x :: ys)
   | swap {xs ys} x y : Perm xs ys → Perm (x :: y :: xs) (y :: x :: ys)
@@ -176,7 +176,7 @@ end Perm
 
 --- Syntax
 
-inductive Form (Φ : Type) where
+inductive Form (Φ : Type)
 | pro : Φ → Form Φ
 | fls : Form Φ
 | imp (φ ψ : Form Φ) : Form Φ
@@ -397,7 +397,7 @@ theorem Prove_sound_complete [DecidableEq Φ] (φ : Form Φ)
 
 --- Proof System
 
-inductive Proof : (Γ Δ : List (Form Φ)) → Prop where
+inductive Proof : (Γ Δ : List (Form Φ)) → Prop
   | basic Γ Δ n : Proof (♩n :: Γ) (♩n :: Δ)
   | fls_l Γ Δ : Proof (⊥ :: Γ) Δ
   | imp_l Γ Δ φ ψ : Proof Γ (φ :: Δ) → Proof (ψ :: Γ) Δ → Proof (φ ⇒ ψ :: Γ) Δ
@@ -411,42 +411,22 @@ attribute [aesop unsafe 20% apply] Proof.per_l Proof.per_r
 
 namespace Proof
 
--- TODO: doing this one completely automatically would be awesome
 theorem weaken (Γ Δ : List (Form Φ)) (prf : Proof Γ Δ) (δ : Form Φ)
   : Proof Γ (δ :: Δ) := by
-  induction prf
-  case basic Γ Δ n =>
-    aesop
-  case fls_l Γ Δ =>
-    aesop
-  case imp_l Γ Δ φ ψ _ _ ih₁ ih₂ =>
-    aesop (options := { maxRuleApplications := 250 })
-  case imp_r Γ Δ φ ψ _ ih =>
+  induction prf with
+  | imp_r Γ Δ φ ψ =>
     have ih' : Proof (φ :: Γ) (ψ :: δ :: Δ) := by aesop
     aesop
-  case per_l Γ Γ' Δ _ perm ih =>
-    aesop
-  case per_r Γ Δ Δ' _ perm ih =>
-    aesop
-
+  | _ => aesop (options := { maxRuleApplications := 250 }) 
 
 --- Soundness
 
 theorem sound (i : Φ → Prop) [DecidablePred i] (prf : Proof Γ Δ) : SC i Γ Δ := by
-  induction prf
-  case basic Γ Δ n =>
-    aesop
-  case fls_l Γ Δ =>
-    aesop
-  case imp_l Γ Δ φ ψ _ _ ih₁ ih₂  =>
-    aesop
-  case imp_r Γ Δ φ ψ _ ih =>
+  induction prf with
+  | imp_r Γ Δ φ ψ _ ih =>
     have d : Decidable (Val i φ) := inferInstance
     aesop
-  case per_l Γ Δ Γ' _ perm ih =>
-    aesop (add unsafe apply Perm.all)
-  case per_r Γ Δ Δ' _ perm ih =>
-    aesop (add unsafe apply Perm.any)
+  | _ => aesop (add unsafe apply [Perm.all, Perm.any])
 
 end Proof
 
@@ -502,4 +482,4 @@ theorem Proof_sound_complete [DecidableEq Φ] (φ : Form Φ)
     intro h
     have c : Prove φ := Iff.mpr (Prove_sound_complete φ) h
     have prf : Proof' [] [] [] [φ] := Cal_Proof [] [] [] [φ] c
-    aesop
+    exact prf
