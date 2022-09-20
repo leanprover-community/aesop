@@ -215,7 +215,7 @@ theorem not_mem_append {a : α} {s t : List α} (h₁ : a ∉ s) (h₂ : a ∉ t
 
 -- attribute [-simp] ne_nil_of_mem
 theorem X.ne_nil_of_mem {a : α} {l : List α} (h : a ∈ l) : l ≠ [] := by
-  aesop (add unsafe cases Mem)
+  aesop (add unsafe cases Mem, norm unfold Not)
 
 theorem mem_split {a : α} {l : List α} (h : a ∈ l) : ∃ s t : List α, l = s ++ a :: t := by
   sorry
@@ -670,7 +670,7 @@ theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) :
 @[simp]
 theorem mem_pure {α} (x y : α) :
     x ∈ (pure y : List α) ↔ x = y := by
-  aesop
+  aesop (add norm unfold pure)
 
 /-! ### bind -/
 
@@ -890,7 +890,7 @@ theorem last'_eq_last_of_ne_nil : ∀ {l : List α} (h : l ≠ []), l.last' = so
 
 -- IND
 theorem mem_last'_cons {x y : α} : ∀ {l : List α} (_ : x ∈ l.last'), x ∈ (y :: l).last' := by
-  intro l; induction l <;> aesop
+  intro l; induction l <;> aesop (add norm unfold [Membership.mem])
 
 theorem mem_of_mem_last' {l : List α} {a : α} (ha : a ∈ l.last') : a ∈ l := by
   sorry
@@ -938,9 +938,8 @@ theorem last'_append {l₁ l₂ : List α} {x : α} (h : x ∈ l₂.last') :
 theorem head_eq_head' [Inhabited α] (l : List α) : ihead l = (head' l).iget := by
   aesop (add 1% cases List)
 
--- IND
 theorem mem_of_mem_head' {x : α} : ∀ {l : List α}, x ∈ l.head' → x ∈ l := by
-  intro l; induction l <;> aesop
+  sorry
 
 -- SKIP TRIV
 @[simp] theorem head_cons [Inhabited α] (a : α) (l : List α) : head' (a::l) = a := rfl
@@ -960,7 +959,7 @@ attribute [-simp] tail_cons
 
 theorem head'_append {s t : List α} {x : α} (h : x ∈ s.head') :
   x ∈ (s ++ t).head' := by
-  aesop (add 1% cases List)
+  aesop (add 1% cases List, norm unfold Membership.mem)
 
 theorem head'_append_of_ne_nil : ∀ (l₁ : List α) {l₂ : List α} (_ : l₁ ≠ []),
   head' (l₁ ++ l₂) = head' l₁ := by
@@ -971,10 +970,10 @@ theorem tail_append_singleton_of_ne_nil {a : α} {l : List α} (h : l ≠ nil) :
   sorry
 
 theorem cons_head'_tail : ∀ {l : List α} {a : α} (_ : a ∈ head' l), a :: tail l = l := by
-  aesop
+  aesop (add norm unfold Membership.mem)
 
 theorem head_mem_head' [Inhabited α] : ∀ {l : List α} (_ : l ≠ []), ihead l ∈ head' l := by
-  aesop
+  aesop (add norm unfold Membership.mem)
 
 theorem cons_head_tail [Inhabited α] {l : List α} (h : l ≠ []) : (ihead l)::(tail l) = l := by
   aesop

@@ -903,80 +903,13 @@ private def getKeyArgs (e : Expr) (isMatch root : Bool) : MetaM (Key × Array Ex
   | _ =>
     return (Key.other, #[])
 
--- TODO copypasta from stdlib Meta/DiscrTree.lean
-private def initCapacity := 8
-
-def mkPathWithTransparency (e : Expr) (transparency : TransparencyMode) :
-    MetaM (Array Key) :=
-  withTransparency transparency do
-    let todo : Array Expr := Array.mkEmpty initCapacity
-    let keys : Array Key  := Array.mkEmpty initCapacity
-    mkPathAux (root := true) (todo.push e) keys
-
-private def getStarResult (d : DiscrTree α) : Array α :=
-  let result : Array α := Array.mkEmpty initCapacity
-  match d.root.find? Key.star with
-  | none                  => result
-  | some (Trie.node vs _) => result ++ vs
-
-private abbrev findKey (cs : Array (Key × Trie α)) (k : Key) : Option (Key × Trie α) :=
-  cs.binSearch (k, default) (fun a b => a.1 < b.1)
-
-private abbrev getUnifyKeyArgs (e : Expr) (root : Bool) : MetaM (Key × Array Expr) :=
-  getKeyArgs e (isMatch := false) (root := root)
-
-partial def getUnifyWithTransparency (d : DiscrTree α) (e : Expr)
-    (transparency : TransparencyMode) : MetaM (Array α) :=
-  withTransparency transparency do
-    let (k, args) ← getUnifyKeyArgs e (root := true)
-    match k with
-    | Key.star => d.root.foldlM (init := #[]) fun result k c => process k.arity #[] c result
-    | _ =>
-      let result := getStarResult d
-      match d.root.find? k with
-      | none   => return result
-      | some c => process 0 args c result
-where
-  process (skip : Nat) (todo : Array Expr) (c : Trie α) (result : Array α) : MetaM (Array α) := do
-    match skip, c with
-    | skip+1, Trie.node _ cs =>
-      if cs.isEmpty then
-        return result
-      else
-        cs.foldlM (init := result) fun result ⟨k, c⟩ => process (skip + k.arity) todo c result
-    | 0, Trie.node vs cs => do
-      if todo.isEmpty then
-        return result ++ vs
-      else if h : 0 < cs.size then
-        let e     := todo.back
-        let todo  := todo.pop
-        let (k, args) ← getUnifyKeyArgs e (root := false)
-        let visitStar (result : Array α) : MetaM (Array α) :=
-          let first := cs[0]
-          if first.1 == Key.star then
-            process 0 todo first.2 result
-          else
-            return result
-        let visitNonStar (k : Key) (args : Array Expr) (result : Array α) : MetaM (Array α) :=
-          match findKey cs k with
-          | none   => return result
-          | some c => process 0 (todo ++ args) c.2 result
-        match k with
-        | Key.star  => cs.foldlM (init := result) fun result ⟨k, c⟩ => process k.arity todo c result
-        -- See comment a `getMatch` regarding non-dependent arrows vs dependent arrows
-        | Key.arrow => visitNonStar Key.other #[] (← visitNonStar k args (← visitStar result))
-        | _         => visitNonStar k args (← visitStar result)
-      else
-        return result
-
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
--- `n` stars). The `transparency` is used when processing `T`, but no
--- computation whatsoever is performed on `type`.
-def getConclusionKeys (type : Expr) (transparency : TransparencyMode) :
+-- `n` stars).
+def getConclusionKeys (type : Expr) :
     MetaM (Array Key) :=
   withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
-    mkPathWithTransparency conclusion transparency
+    mkPath conclusion
     -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
     -- turn into `Key.star`) but not fvars.
 

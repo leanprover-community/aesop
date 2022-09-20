@@ -78,8 +78,7 @@ private def applicableByTargetRules (ri : Index α) (goal : MVarId)
     (include? : α → Bool) : MetaM (Array (α × Array IndexMatchLocation)) :=
   withMVarContext goal do
     let rules ←
-      ri.byTarget.getUnifyWithTransparency (← getMVarType goal)
-        indexingTransparency
+      ri.byTarget.getUnify (← goal.getType)
     let mut rs := Array.mkEmpty rules.size
       -- Assumption: include? is true for most rules.
     for r in rules do
@@ -96,7 +95,7 @@ private def applicableByHypRules (ri : Index α) (goal : MVarId)
     for localDecl in ← getLCtx do
       if localDecl.isAuxDecl then continue
       let rules ←
-        ri.byHyp.getUnifyWithTransparency localDecl.type indexingTransparency
+        ri.byHyp.getUnify localDecl.type
       for r in rules do
         if include? r then
           rs := rs.push (r, #[.hyp localDecl])
@@ -114,6 +113,7 @@ private def applicableUnindexedRules (ri : Index α) (include? : α → Bool) :
       acc
 
 -- Returns the rules in the order given by the `Ord α` instance.
+set_option linter.unusedVariables false in
 @[specialize]
 def applicableRules [ord : Ord α] (ri : Index α) (goal : MVarId)
     (include? : α → Bool) : MetaM (Array (IndexMatchResult α)) := do
