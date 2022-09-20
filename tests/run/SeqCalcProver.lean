@@ -458,6 +458,7 @@ theorem Cal_Proof [DecidableEq Φ]
     apply Proof.weaken _ _ ih ⊥
   | ♩n :: Γ, [] =>
     have ih : Proof' (n :: l) r Γ [] := Cal_Proof (n :: l) r Γ [] h
+    apply Proof.per_l _ _ _ ih
     aesop (add unsafe apply [Perm.shift, Perm.sym])
   | Γ, ♩n :: Δ =>
     simp at h

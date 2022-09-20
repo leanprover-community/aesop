@@ -70,7 +70,7 @@ private def getIndexingMode (type : Expr) (immediate : UnorderedArraySet Nat) :
       match args.get? i with
       | some arg =>
         let argT ← inferType arg
-        let keys ← DiscrTree.mkPathWithTransparency argT indexingTransparency
+        let keys ← DiscrTree.mkPath argT
         return .hyps keys
       | none => throwError
         "aesop: internal error: immediate arg for forward rule is out of range"
