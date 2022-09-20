@@ -16,17 +16,13 @@ import Aesop.Frontend
 
 namespace Aesop.BuiltinRules
 
--- Product introduction is considered unsafe. This is to support situations like
---
---   def p := q ∧ r
---
--- where we may have a bunch of lemmas concluding `p`. If we then split `p` as
--- a safe rule, these lemmas never apply.
---
 -- Hypotheses of product type are split by a separate builtin rule because the
 -- `cases` builder currently cannot be used for norm rules.
+attribute [aesop (rule_sets [builtin]) safe 101 constructors]
+  And Prod PProd MProd
+
 attribute [aesop (rule_sets [builtin]) unsafe 30% constructors]
-  And Prod PProd MProd Exists Subtype Sigma PSigma
+  Exists Subtype Sigma PSigma
 
 -- Sums are split and introduced lazily.
 attribute [aesop (rule_sets [builtin]) [safe 100 cases, 50% constructors]]
