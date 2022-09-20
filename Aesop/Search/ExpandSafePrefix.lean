@@ -16,7 +16,7 @@ private def Goal.isSafeExpanded (g : Goal) : BaseIO Bool :=
   (pure g.unsafeRulesSelected) <||> g.hasSafeRapp
 
 mutual
-  private partial def expandFirstSafePrefixGoal (gref : GoalRef) :
+  private partial def expandSafePrefixGoal (gref : GoalRef) :
       SearchM Q Unit :=
     withIncRecDepth do
       let g ← gref.get
@@ -36,23 +36,21 @@ mutual
         return
       let safeRapps ← g.safeRapps
       if h₁ : 0 < safeRapps.size then
-        aesop_trace[steps] do
-          if safeRapps.size > 1 then
-            let rappIds ← safeRapps.mapM λ rref => return (← rref.get).id
-            aesop_trace![steps] "Goal has multiple safe rapps ({rappIds}). Expanding only the first one."
-        expandFirstSafePrefixRapp safeRapps[0]
+        if safeRapps.size > 1 then
+          throwError "aesop: internal error: goal {g.id} has multiple safe rapps"
+        expandFirstPrefixRapp safeRapps[0]
 
-  private partial def expandFirstSafePrefixRapp (rref : RappRef) :
+  private partial def expandFirstPrefixRapp (rref : RappRef) :
       SearchM Q Unit := do
-    (← rref.get).children.forM expandFirstSafePrefixMVarCluster
+    (← rref.get).children.forM expandSafePrefixMVarCluster
 
-  private partial def expandFirstSafePrefixMVarCluster (cref : MVarClusterRef) :
+  private partial def expandSafePrefixMVarCluster (cref : MVarClusterRef) :
       SearchM Q Unit := do
-    (← cref.get).goals.forM expandFirstSafePrefixGoal
+    (← cref.get).goals.forM expandSafePrefixGoal
 end
 
-def expandFirstSafePrefix : SearchM Q Unit := do
+def expandSafePrefix : SearchM Q Unit := do
   aesop_trace[steps] "Expanding safe subtree of the root goal."
-  expandFirstSafePrefixGoal (← getRootGoal)
+  expandSafePrefixGoal (← getRootGoal)
 
 end Aesop

@@ -18,16 +18,6 @@ example : MyTrue₃ := by
   apply MyTrue₁.mk
 
 @[aesop safe]
-inductive MyTrue₄
-  | intro₁ : MyTrue₁ → MyTrue₄
-  | intro₂ : MyTrue₂ → MyTrue₄
-
-example : MyTrue₄ := by
-  aesop
-  fail_if_success apply MyTrue₂.mk
-  apply MyTrue₁.mk
-
-@[aesop safe]
 structure MyFalse where
   falso : False
 
@@ -43,7 +33,7 @@ example : MyFalse := by
 @[aesop safe]
 structure MyFalse₂ where
   falso : False
-  tt : MyTrue₄
+  tt : MyTrue₃
 
 example : MyFalse₂ := by
   aesop
