@@ -37,14 +37,14 @@ private partial def makeForwardHyps (e : Expr)
         MetaM (Array Expr × Array FVarId) := do
       if h : i < immediateMVars.size then
         let mvarId := immediateMVars.get ⟨i, h⟩
-        let type ← getMVarType mvarId
+        let type ← mvarId.getType
         (← getLCtx).foldlM (init := (proofsAcc, usedHypsAcc)) λ s@(proofsAcc, usedHypsAcc) ldecl =>
           if ldecl.isAuxDecl then
             pure s
           else
             withoutModifyingState do
               if ← isDefEq ldecl.type type then
-                assignExprMVar mvarId (mkFVar ldecl.fvarId)
+                mvarId.assign (mkFVar ldecl.fvarId)
                 let currentUsedHyps :=
                   if collectUsedHyps then
                     currentUsedHyps.push ldecl.fvarId
@@ -56,9 +56,9 @@ private partial def makeForwardHyps (e : Expr)
                 pure s
       else
         for instMVar in instMVars do
-          withMVarContext instMVar do
-            let inst ← synthInstance (← getMVarType instMVar)
-            assignExprMVar instMVar inst
+          instMVar.withContext do
+            let inst ← synthInstance (← instMVar.getType)
+            instMVar.assign inst
         let proofsAcc := proofsAcc.push (← abstractMVars app).expr
         let usedHypsAcc := usedHypsAcc ++ currentUsedHyps
         return (proofsAcc, usedHypsAcc)
@@ -95,7 +95,7 @@ def getForwardHypTypes : MetaM (HashSet Expr) := do
 
 def applyForwardRule (goal : MVarId) (e : Expr)
     (immediate : UnorderedArraySet Nat) (clear : Bool) : MetaM MVarId :=
-  withMVarContext goal do
+  goal.withContext do
     let (newHypProofs, usedHyps) ←
       makeForwardHyps e immediate (collectUsedHyps := clear)
     if newHypProofs.isEmpty then
@@ -115,10 +115,10 @@ def applyForwardRule (goal : MVarId) (e : Expr)
       }
     if newHyps.isEmpty then
       err
-    let (_, goal) ← assertHypotheses goal newHyps
+    let (_, goal) ← goal.assertHypotheses newHyps
     let auxDecls ← newHyps.mapM λ hyp =>
       return { hyp with userName := ← mkFreshForwardHypName }
-    let (auxDecls, goal) ← assertHypotheses goal auxDecls
+    let (auxDecls, goal) ← goal.assertHypotheses auxDecls
     setFVarBinderInfos goal auxDecls .auxDecl
     if clear then
       tryClearMany' goal usedHyps
@@ -131,7 +131,7 @@ def applyForwardRule (goal : MVarId) (e : Expr)
 @[inline]
 def forwardExpr (e : Expr) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac :=
-  SimpleRuleTac.toRuleTac λ input => withMVarContext input.goal do
+  SimpleRuleTac.toRuleTac λ input => input.goal.withContext do
     let goal ← applyForwardRule input.goal e immediate clear
     return [goal]
 
@@ -141,7 +141,7 @@ def forwardConst (decl : Name) (immediate : UnorderedArraySet Nat)
 
 def forwardFVar (userName : Name) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac := λ input =>
-  withMVarContext input.goal do
+  input.goal.withContext do
     let ldecl ← getLocalDeclFromUserName userName
     forwardExpr (mkFVar ldecl.fvarId) immediate clear input
 
