@@ -349,6 +349,8 @@ def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
     let rapps ← output.applications.mapM
       (·.toRuleApplicationWithMVarInfo parent.mvars)
     if let (.safe rule) := rule then
+      if rapps.size != 1 then
+        return ← onFailure "Safe rule did not produce exactly one rule application. Treating it as failed."
       if rapps.any (! ·.assignedMVars.isEmpty) then
         aesop_trace[steps] "Safe rule assigned metavariables. Postponing it."
         return RuleResult.postponed ⟨rule, output⟩

@@ -88,14 +88,14 @@ private def copyMatchEqnsExtState (oldEnv newEnv : Environment) : CoreM Unit := 
 private def copyMVarDecl (s : Meta.SavedState) (mvarId : MVarId) :
     MetaM Unit := do
   let decl ← s.runMetaM' $ do
-    let decl ← getMVarDecl mvarId
+    let decl ← mvarId.getDecl
     aesop_trace[extraction] "declare ?{mvarId.name} : {decl.type}"
     pure decl
   modifyMCtx λ mctx => { mctx with decls := mctx.decls.insert mvarId decl }
 
 private partial def copyExprMVarAssignment (s : Meta.SavedState)
     (mvarId : MVarId) : MetaM Unit := do
-  if ← isExprMVarAssigned mvarId <||> isMVarDelayedAssigned mvarId then
+  if ← mvarId.isAssigned <||> mvarId.isDelayedAssigned then
     return
   unless ← isExprMVarDeclared mvarId do
     copyMVarDecl s mvarId
@@ -111,7 +111,7 @@ private partial def copyExprMVarAssignment (s : Meta.SavedState)
     for mvarId in ← getMVars e do
       copyExprMVarAssignment s mvarId
     aesop_trace[extraction] "assign  ?{mvarId.name} := {toString e}"
-    assignExprMVar mvarId e
+    mvarId.assign e
   | some (Sum.inr d) =>
     for mvarId in ← getMVars (mkMVar d.mvarIdPending) do
       copyExprMVarAssignment s mvarId
@@ -170,42 +170,35 @@ end
 
 private structure SafePrefixState where
   goals : Array MVarId := #[]
-  hasMultiplePrefixes := false
-    -- True if a goal had multiple safe rapps. This can happen with safe
-    -- multi-rules.
 
 private abbrev SafePrefixM := StateRefT SafePrefixState MetaM
 
 mutual
-  private partial def extractFirstSafePrefixGoal
+  private partial def extractSafePrefixGoal
       (parentEnv : Environment) (g : Goal) : SafePrefixM Unit := do
     match ← visitGoal g with
     | none => return
     | some (postNormGoal, _) =>
       let safeRapps ← g.safeRapps
       if h : 0 < safeRapps.size then
-        extractFirstSafePrefixRapp parentEnv postNormGoal
+        extractSafePrefixRapp parentEnv postNormGoal
           (← safeRapps[0].get)
         if safeRapps.size > 1 then
-          modify λ s => { s with hasMultiplePrefixes := true }
+          throwError "aesop: internal error: goal {g.id} has multiple safe rapps"
       else
         modify λ s => { s with goals := s.goals.push postNormGoal }
 
-  private partial def extractFirstSafePrefixRapp
+  private partial def extractSafePrefixRapp
       (parentEnv : Environment) (parentGoal : MVarId) (r : Rapp) :
       SafePrefixM Unit := do
     let (children, env) ← visitRapp parentEnv parentGoal r
     children.forM λ cref => do
-      extractFirstSafePrefixMVarCluster env (← cref.get)
+      extractSafePrefixMVarCluster env (← cref.get)
 
-  private partial def extractFirstSafePrefixMVarCluster
+  private partial def extractSafePrefixMVarCluster
       (parentEnv : Environment) (c : MVarCluster) : SafePrefixM Unit :=
-    c.goals.forM λ gref => do extractFirstSafePrefixGoal parentEnv (← gref.get)
+    c.goals.forM λ gref => do extractSafePrefixGoal parentEnv (← gref.get)
 end
-
-def Goal.extractFirstSafePrefix (root : Goal) : MetaM (Array MVarId × Bool) := do
-  let (_, state) ← extractFirstSafePrefixGoal (← getEnv) root |>.run {}
-  return (state.goals, state.hasMultiplePrefixes)
 
 def Goal.extractProof (root : Goal) : MetaM Unit := do
   extractProofGoal (← getEnv) root
@@ -213,7 +206,11 @@ def Goal.extractProof (root : Goal) : MetaM Unit := do
 def extractProof : TreeM Unit := do
   (← (← getRootGoal).get).extractProof
 
-def extractFirstSafePrefix : TreeM (Array MVarId × Bool) := do
-  (← (← getRootGoal).get).extractFirstSafePrefix
+def Goal.extractSafePrefix (root : Goal) : MetaM (Array MVarId) := do
+  let (_, state) ← extractSafePrefixGoal (← getEnv) root |>.run {}
+  return state.goals
+
+def extractSafePrefix : TreeM (Array MVarId) := do
+  (← (← getRootGoal).get).extractSafePrefix
 
 end Aesop
