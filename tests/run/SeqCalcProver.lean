@@ -302,7 +302,7 @@ theorem Cal_sound_complete [DecidableEq Φ]
       have Any_r' : Any (fun n => Val (· ∈ l) (♩n)) r := Iff.mp (Any.map (Val i) (♩·) r) Any_r
       apply Common.sym Any_r'
   | ⊥ :: Γ, [] =>
-    simp [All.split_cons]
+    simp
   | Γ, ⊥ :: Δ =>
     have ih : Cal l r Γ Δ ↔ ∀ i, DecidablePred i → SC' i l r Γ Δ :=
       Cal_sound_complete l r Γ Δ
@@ -348,7 +348,7 @@ theorem Cal_sound_complete [DecidableEq Φ]
       intro h i dec
       simp at h
       have ih₁' : SC' i l r Γ [φ] := Iff.mp ih₁ h.left i dec
-      cases (Val.instDecidable i φ) <;> simp_all [All.split_cons]
+      cases (Val.instDecidable i φ) <;> simp_all
     case mpr =>
       intro h
       simp
@@ -356,11 +356,11 @@ theorem Cal_sound_complete [DecidableEq Φ]
       case left =>
         apply Iff.mpr ih₁
         intro i dec
-        cases (Val.instDecidable i φ) <;> simp_all [All.split_cons]
+        cases (Val.instDecidable i φ) <;> simp_all
       case right =>
         apply Iff.mpr ih₂
         intro i dec
-        cases (Val.instDecidable i φ) <;> simp_all [All.split_cons]
+        cases (Val.instDecidable i φ) <;> simp_all
   | Γ, φ ⇒ ψ :: Δ =>
     have ih : Cal l r (φ :: Γ) (ψ :: Δ) ↔ ∀ i, DecidablePred i →
       SC' i l r (φ :: Γ) (ψ :: Δ) :=
@@ -368,7 +368,7 @@ theorem Cal_sound_complete [DecidableEq Φ]
     apply Iff.intro
     case mp =>
       intro h i dec
-      cases (Val.instDecidable i φ) <;> simp_all [All.split_cons]
+      cases (Val.instDecidable i φ) <;> simp_all
     case mpr =>
       intro h
       simp
@@ -376,10 +376,10 @@ theorem Cal_sound_complete [DecidableEq Φ]
       intro i dec
       cases (Val.instDecidable i φ)
       case isFalse no =>
-        simp_all [All.split_cons]
+        simp_all
       case isTrue yes =>
         intro AllφΓ
-        have AllΓ : All (Val i) (Γ ++ l.map (♩·)) := by simp_all [All.split_cons]
+        have AllΓ : All (Val i) (Γ ++ l.map (♩·)) := by simp_all
         have AnyφψΔ : Any (Val i) (φ ⇒ ψ :: Δ ++ r.map (♩·)) := h i dec AllΓ
         simp_all
 termination_by _ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
