@@ -465,7 +465,7 @@ theorem append_subset_of_subset_of_subset {l₁ l₂ l : List α} (l₁subl : l�
     l₁ ++ l₂ ⊆ l ↔ l₁ ⊆ l ∧ l₂ ⊆ l := by
   aesop (add norm unfold Subset)
 
-@[aesop safe elim]
+@[aesop safe destruct]
 theorem eq_nil_of_subset_nil {l : List α} : l ⊆ [] → l = [] := by
   aesop (add 1% cases List)
 
@@ -607,7 +607,7 @@ theorem X.map_eq_append_split {f : α → β} {l : List α} {s₁ s₂ : List β
   induction n <;> aesop (add norm unfold Not)
 
 -- attribute [-simp] eq_of_mem_replicate
-@[aesop safe elim]
+@[aesop safe destruct]
 theorem X.eq_of_mem_replicate {a b : α} {n} (h : b ∈ replicate n a) : b = a := by
   aesop
 

@@ -115,7 +115,7 @@ syntax &"unfold" : Aesop.builder_name
 syntax &"tactic" : Aesop.builder_name
 syntax &"constructors" : Aesop.builder_name
 syntax &"forward" : Aesop.builder_name
-syntax &"elim" : Aesop.builder_name
+syntax &"destruct" : Aesop.builder_name
 syntax &"cases" : Aesop.builder_name
 syntax &"default" : Aesop.builder_name
 
@@ -136,7 +136,7 @@ def «elab» (stx : Syntax) : ElabM DBuilderName :=
     | `(builder_name| tactic) => return regular .tactic
     | `(builder_name| constructors) => return regular .constructors
     | `(builder_name| forward) => return regular .forward
-    | `(builder_name| elim) => return regular .elim
+    | `(builder_name| destruct) => return regular .destruct
     | `(builder_name| cases) => return regular .cases
     | `(builder_name| default) => return dflt
     | _ => throwUnsupportedSyntax
@@ -292,7 +292,7 @@ def tactic : BuilderOptions TacticBuilderOptions where
 @[inline]
 private def forwardCore (clear : Bool) :
     BuilderOptions ForwardBuilderOptions where
-  builderName := .regular $ if clear then .elim else .forward
+  builderName := .regular $ if clear then .destruct else .forward
   init := .default clear
   add
     | opts, .immediate ns => some { opts with immediateHyps := ns }
@@ -302,7 +302,7 @@ private def forwardCore (clear : Bool) :
 def forward : BuilderOptions ForwardBuilderOptions :=
   forwardCore (clear := false)
 
-def elim : BuilderOptions ForwardBuilderOptions :=
+def destruct : BuilderOptions ForwardBuilderOptions :=
   forwardCore (clear := true)
 
 def cases : BuilderOptions CasesBuilderOptions where
@@ -369,7 +369,7 @@ def elabOptions (b : DBuilderName) (opts : Syntax) : ElabM Builder := do
   | .regular .tactic => tactic <$> BuilderOptions.tactic.elab opts
   | .regular .constructors => constructors <$> getRegularOptions .constructors
   | .regular .forward => forward <$> BuilderOptions.forward.elab opts
-  | .regular .elim => forward <$> BuilderOptions.elim.elab opts
+  | .regular .destruct => forward <$> BuilderOptions.destruct.elab opts
   | .regular .cases => «cases» <$> BuilderOptions.cases.elab opts
   | .dflt => checkNoOptions; return default
   where
