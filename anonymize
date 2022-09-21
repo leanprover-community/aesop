@@ -1,0 +1,18 @@
+#!/bin/bash
+
+AUTHOR_REGEX='s/Authors:.*$/Authors: <redacted>/'
+COPYRIGHT_REGEX='s/Copyright.*/Copyright <redacted>/'
+
+function anonymize_file {
+  sed -E -i -e "$AUTHOR_REGEX" "$1"
+  sed -E -i -e "$COPYRIGHT_REGEX" "$1"
+}
+
+function anonymize_dir {
+  find "$1" -type f -exec sed -E -i -e "$AUTHOR_REGEX" {} \;
+  find "$1" -type f -exec sed -E -i -e "$COPYRIGHT_REGEX" {} \;
+}
+
+anonymize_file Aesop.lean
+anonymize_dir Aesop/
+anonymize_dir tests/
