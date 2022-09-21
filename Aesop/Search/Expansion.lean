@@ -290,47 +290,44 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
     rule.withRule λ r => parent.branchState.update r postBranchState?
   aesop_trace[stepsBranchStates] "Updated branch state: {rule.withRule λ r => postBranchState.find? r}"
   let successProbability := parent.successProbability * rule.successProbability
-  let rrefs ← go postBranchState successProbability rapps
+
+  let mut rrefs := Array.mkEmpty rapps.size
+  let mut subgoals := Array.mkEmpty $ rapps.size * 3
+  for h : i in [:rapps.size] do
+    let rapp := rapps[i]'(by simp_all [Membership.mem])
+    let rref ← addRapp {
+      rapp with
+      parent := parentRef
+      appliedRule := rule
+      branchState := postBranchState
+      successProbability }
+    rrefs := rrefs.push rref
+    for cref in (← rref.get).children do
+      for gref in (← cref.get).goals do
+        subgoals := subgoals.push gref
+
+  enqueueGoals subgoals
+  rrefs.forM (·.markProven)
+    -- `markProven` is a no-op if the rapp is not, in fact, proven. We must
+    -- perform this computation after all rapps have been added to ensure
+    -- that if one is proven, the others are all marked as irrelevant.
+
+  aesop_trace[steps] do
+    let traceMods ← TraceModifiers.get
+    let rappMsgs ← rrefs.mapM λ rref => do
+      let r ← rref.get
+      let rappMsg ← r.toMessageData
+      let subgoalMsgs ← r.foldSubgoalsM (init := #[]) λ msgs gref =>
+        return msgs.push (← (← gref.get).toMessageData traceMods)
+      return rappMsg ++ MessageData.node subgoalMsgs
+    aesop_trace![steps] "New rapps and goals:{MessageData.node rappMsgs}"
+
   let provenRref? ← rrefs.findM? λ rref => return (← rref.get).state.isProven
   if let (some _) := provenRref? then
     aesop_trace[steps] "One of the rule applications has no subgoals. Goal is proven."
     return RuleResult.proven
   else
     return RuleResult.succeeded
-  where
-    -- TODO compress: much of the rapp/goal data is not interesting for new
-    -- rapps/goals.
-    traceNewRapps (rrefs : Array RappRef) : SearchM Q Unit := do
-      let traceMods ← TraceModifiers.get
-      let rappMsgs ← rrefs.mapM λ rref => do
-        let r ← rref.get
-        let rappMsg ← r.toMessageData
-        let subgoalMsgs ← r.foldSubgoalsM (init := #[]) λ msgs gref =>
-          return msgs.push (← (← gref.get).toMessageData traceMods)
-        return rappMsg ++ MessageData.node subgoalMsgs
-      aesop_trace![steps] "New rapps and goals:{MessageData.node rappMsgs}"
-
-    go (postBranchState : BranchState) (successProbability : Percent)
-        (rapps : Array RuleApplicationWithMVarInfo) : SearchM Q (Array RappRef) := do
-      let mut rrefs := Array.mkEmpty rapps.size
-      for h : i in [:rapps.size] do
-        have h : i < rapps.size := by simp_all [Membership.mem]
-        let rapp := rapps[i]
-        let rref ← addRapp {
-          rapp with
-          parent := parentRef
-          appliedRule := rule
-          branchState := postBranchState
-          successProbability }
-        rrefs := rrefs.push rref
-        (← rref.get).children.forM λ cref => do
-          enqueueGoals (← cref.get).goals
-      rrefs.forM (·.markProven)
-        -- `markProven` is a no-op if the rapp is not, in fact, proven. We must
-        -- perform this computation after all rapps have been added to ensure
-        -- that if one is proven, the others are all marked as irrelevant.
-      aesop_trace[steps] do traceNewRapps rrefs
-      return rrefs
 
 def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
     (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :

@@ -6,9 +6,16 @@ open Lean.Elab.Term
 
 namespace Aesop
 
+inductive Strategy
+  | bestFirst
+  | depthFirst
+  | breadthFirst
+  deriving Inhabited, BEq, Repr
+
 /--
 Options that modify Aesop's behaviour. Available options are:
 
+- `strategy`: the search strategy to use.
 - `maxRuleApplicationDepth`: maximum number of rule applications in any branch
   of the search tree, aka maximum search depth. When a branch exceeds this
   limit, it is considered unprovable; other branches may still be explored. 0
@@ -26,6 +33,7 @@ Options that modify Aesop's behaviour. Available options are:
 - `warnOnNonterminal`: print a warning when Aesop does not prove the goal.
 -/
 structure Options where
+  strategy := Strategy.bestFirst
   maxRuleApplicationDepth := 30
   maxRuleApplications := 200
   maxGoals := 0

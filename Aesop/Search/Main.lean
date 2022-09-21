@@ -10,6 +10,7 @@ import Aesop.Options
 import Aesop.RuleSet
 import Aesop.Search.Expansion
 import Aesop.Search.ExpandSafePrefix
+import Aesop.Search.Queue
 import Aesop.Tree
 import Aesop.Util
 
@@ -149,7 +150,7 @@ partial def searchLoop : SearchM Q (Array MVarId) :=
     incrementIteration
     searchLoop
 
-def search (Q) [Queue Q] (goal : MVarId) (ruleSet? : Option RuleSet := none)
+def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
      (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
      (profile : Profile := {}) :
      MetaM (Array MVarId × Profile) := do
@@ -158,16 +159,12 @@ def search (Q) [Queue Q] (goal : MVarId) (ruleSet? : Option RuleSet := none)
     match ruleSet? with
     | none => Frontend.getDefaultAttributeRuleSet
     | some ruleSet => pure ruleSet
+  let ⟨Q, _⟩ := options.queue
   let (goals, state, _) ← SearchM.run ruleSet options simpConfig goal profile do
     show SearchM Q _ from
     try searchLoop
     catch e => handleFatalError e
     finally freeTree
   return (goals, state.profile)
-
-def bestFirst (goal : MVarId) (ruleSet? : Option RuleSet := none)
-    (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
-    (profile : Profile := {}) : MetaM (Array MVarId × Profile) :=
-  search BestFirstQueue goal ruleSet? options simpConfig profile
 
 end Aesop

@@ -4,8 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Options
 import Aesop.Tracing
 import Aesop.Tree
+import Aesop.Search.Queue.Class
 import Std
 
 open Lean
@@ -13,18 +15,10 @@ open Std (BinomialHeap)
 
 namespace Aesop
 
-class Queue (Q : Type) where
-  init : BaseIO Q
-  addGoals : Q → Array GoalRef → BaseIO Q
-  popGoal : Q → BaseIO (Option GoalRef × Q)
-  format : Q → MetaM MessageData
-
-namespace Queue
-
-def init' [Queue Q] (grefs : Array GoalRef) : BaseIO Q := do
-  addGoals (← init) grefs
-
-end Queue
+private def formatGoalArray (grefs : Array GoalRef) : MetaM MessageData := do
+  let traceMods ← TraceModifiers.get
+  let goals ← grefs.mapM λ g => do (← g.get).toMessageData traceMods
+  return MessageData.node goals
 
 
 namespace BestFirstQueue
@@ -83,15 +77,13 @@ protected def addGoals (q : BestFirstQueue) (grefs : Array GoalRef) :
   grefs.foldlM (init := q) λ q gref =>
     return q.insert (← ActiveGoal.ofGoalRef gref)
 
-protected def popGoal (q : BestFirstQueue) : (Option GoalRef × BestFirstQueue) :=
+protected def popGoal (q : BestFirstQueue) : Option GoalRef × BestFirstQueue :=
   match q.deleteMin with
   | none => (none, q)
   | some (ag, q) => (some ag.goal, q)
 
-protected def format (q : BestFirstQueue) : MetaM MessageData := do
-  let traceMods ← TraceModifiers.get
-  let goals ← q.toArray.mapM λ ag => do (← ag.goal.get).toMessageData traceMods
-  return MessageData.node goals
+protected def format (q : BestFirstQueue) : MetaM MessageData :=
+  formatGoalArray (q.toArray.map (·.goal))
 
 end BestFirstQueue
 
@@ -100,5 +92,69 @@ instance : Queue BestFirstQueue where
   addGoals := BestFirstQueue.addGoals
   popGoal q := return BestFirstQueue.popGoal q
   format := BestFirstQueue.format
+
+
+structure LIFOQueue where
+  goals : Array GoalRef
+
+namespace LIFOQueue
+
+protected def init : LIFOQueue :=
+  ⟨#[]⟩
+
+protected def addGoals (q : LIFOQueue) (grefs : Array GoalRef) : LIFOQueue :=
+  ⟨q.goals ++ grefs.reverse⟩
+
+protected def popGoal (q : LIFOQueue) : Option GoalRef × LIFOQueue :=
+  match q.goals.back? with
+  | some g => (some g, ⟨q.goals.pop⟩)
+  | none => (none, q)
+
+protected def format (q : LIFOQueue) : MetaM MessageData :=
+  formatGoalArray q.goals.reverse
+
+instance : Queue LIFOQueue where
+  init := return .init
+  addGoals q grefs := return q.addGoals grefs
+  popGoal q := return q.popGoal
+  format q := q.format
+
+end LIFOQueue
+
+
+structure FIFOQueue where
+  goals : Array GoalRef
+  pos : Nat
+
+namespace FIFOQueue
+
+protected def init : FIFOQueue :=
+  ⟨#[], 0⟩
+
+protected def addGoals (q : FIFOQueue) (grefs : Array GoalRef) : FIFOQueue :=
+  { q with goals := q.goals ++ grefs }
+
+protected def popGoal (q : FIFOQueue) : Option GoalRef × FIFOQueue :=
+  if h : q.pos < q.goals.size then
+    (some q.goals[q.pos], { q with pos := q.pos + 1 })
+  else
+    (none, q)
+
+protected def format (q : FIFOQueue) : MetaM MessageData :=
+  formatGoalArray q.goals[q.pos:]
+
+instance : Queue FIFOQueue where
+  init := return .init
+  addGoals q grefs := return q.addGoals grefs
+  popGoal q := return q.popGoal
+  format q := q.format
+
+end FIFOQueue
+
+def Options.queue (opts : Aesop.Options) : Σ Q, Queue Q :=
+  match opts.strategy with
+  | .bestFirst => ⟨BestFirstQueue, inferInstance⟩
+  | .depthFirst => ⟨LIFOQueue, inferInstance⟩
+  | .breadthFirst => ⟨FIFOQueue, inferInstance⟩
 
 end Aesop
