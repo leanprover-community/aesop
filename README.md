@@ -39,7 +39,7 @@ TODO Document (and, indeed, find out) how to use Aesop as a plugin.
 
 This section is intended for prospective Aesop users. Aesop is very work
 in progress and this text may be out of date, so if you have questions, please
-ping me (Jannis Limperg) on the [Lean Zulip](https://leanprover.zulipchat.com).
+ping me (<redacted>) on the [Lean Zulip](https://leanprover.zulipchat.com).
 
 ### Quickstart
 
