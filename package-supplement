@@ -1,0 +1,7 @@
+#!/bin/bash
+
+cd ..
+rm -f aesop/aesop.tar.gz
+rm -f aesop/tests/golden/*.produced
+tar -caf aesop/aesop.tar.gz aesop/{Aesop,Aesop.lean,evaluate-list-case-study,lakefile.lean,lean-toolchain,LICENSE,README.md,test,tests}
+cd aesop
