@@ -1,7 +1,7 @@
 /-
-Copyright (c) 2022 Asta H. From. All rights reserved.
+Copyright <redacted>
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Asta H. From
+Authors: <redacted>
 -/
 
 import Aesop
