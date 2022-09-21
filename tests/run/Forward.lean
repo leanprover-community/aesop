@@ -73,6 +73,6 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
   fail_if_success
-    aesop (add safe [elim r₁, (elim (immediate := [a])) r₂])
+    aesop (add safe [destruct r₁, (destruct (immediate := [a])) r₂])
       (options := { terminal := true })
-  aesop (add safe [forward r₁], 90% elim r₂)
+  aesop (add safe [forward r₁], 90% destruct r₂)

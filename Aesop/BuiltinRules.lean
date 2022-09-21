@@ -31,7 +31,7 @@ attribute [aesop (rule_sets [builtin]) [safe 100 cases, 50% constructors]]
 -- Iff is treated as a product.
 attribute [aesop (rule_sets [builtin]) safe 100 constructors] Iff
 
-@[aesop [norm (rule_sets [builtin]) 0 elim]]
+@[aesop [norm (rule_sets [builtin]) 0 destruct]]
 theorem Iff_elim (h : α ↔ β) : (α → β) ∧ (β → α) :=
   ⟨h.mp, h.mpr⟩
 
@@ -39,6 +39,6 @@ attribute [aesop (rule_sets [builtin]) safe 0] Eq.refl HEq.refl
 
 attribute [aesop (rule_sets [builtin]) norm constructors] ULift
 
-attribute [aesop (rule_sets [builtin]) norm 0 elim] ULift.down
+attribute [aesop (rule_sets [builtin]) norm 0 destruct] ULift.down
 
 end Aesop.BuiltinRules
