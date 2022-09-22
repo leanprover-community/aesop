@@ -12,12 +12,12 @@ open Lean.Meta
 namespace Aesop.RuleTac
 
 def applyConst (decl : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input => do
-  apply input.goal (← mkConstWithFreshMVarLevels decl)
+  input.goal.apply (← mkConstWithFreshMVarLevels decl)
 
 def applyFVar (userName : Name) : RuleTac := SimpleRuleTac.toRuleTac λ input =>
-  withMVarContext input.goal do
+  input.goal.withContext do
     let decl ← getLocalDeclFromUserName userName
-    apply input.goal (mkFVar decl.fvarId)
+    input.goal.apply (mkFVar decl.fvarId)
 
 -- Tries to apply each constant in `decls`. For each one that applies, a rule
 -- application is returned. If none applies, the tactic fails.
@@ -25,7 +25,7 @@ def applyConsts (decls : Array Name) : RuleTac := λ input => do
   let initialState ← saveState
   let apps ← decls.filterMapM λ decl => do
     try
-      let goals ← apply input.goal (← mkConstWithFreshMVarLevels decl)
+      let goals ← input.goal.apply (← mkConstWithFreshMVarLevels decl)
       let postState ← saveState
       return some { postState, goals := goals.toArray }
     catch _ =>

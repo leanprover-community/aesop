@@ -71,7 +71,7 @@ def RuleApplication.toRuleApplicationWithMVarInfo
     -- Get assigned mvars
     r.postState.runMetaM' do
     let assignedMVars ← parentMVars.filterM λ mvarId =>
-        isExprMVarAssigned mvarId <||> isMVarDelayedAssigned mvarId
+        mvarId.isAssigned <||> mvarId.isDelayedAssigned
 
     -- Get goals and mvars
     let mut goalsAndMVars := #[]

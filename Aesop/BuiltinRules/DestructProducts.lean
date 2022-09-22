@@ -13,8 +13,8 @@ namespace Aesop.BuiltinRules
 
 private def destructProductHyp (goal : MVarId) (hyp : FVarId) :
     MetaM MVarId :=
-  withMVarContext goal do
-    let hypType ← instantiateMVars (← getLocalDecl hyp).type
+  goal.withContext do
+    let hypType ← instantiateMVars (← hyp.getDecl).type
     match hypType with
     | (.app (.app (.const ``And _) α) β) =>
       go hypType (mkApp2 (mkConst ``And.casesOn [← mkFreshLevelMVar]) α β)
@@ -37,21 +37,21 @@ private def destructProductHyp (goal : MVarId) (hyp : FVarId) :
     -- `rec` is the partially applied recursor. Missing arguments to `rec` are
     -- the motive, the hypothesis and the new proof.
     go (hypType : Expr) (rec : Expr) : MetaM MVarId := do
-      let (genHyps, goal) ← revert goal #[hyp] (preserveOrder := true)
-      let (hyp, goal) ← intro1 goal
+      let (genHyps, goal) ← goal.revert #[hyp] (preserveOrder := true)
+      let (hyp, goal) ← goal.intro1
       let hypExpr := mkFVar hyp
-      let tgt ← instantiateMVars (← getMVarType goal)
+      let tgt ← instantiateMVars (← goal.getType)
       let motive := mkLambda `h .default hypType $ tgt.abstract #[hypExpr]
       let prf := mkApp2 rec motive hypExpr
-      withMVarContext goal $ check prf
-      let [goal] ← apply goal prf
+      goal.withContext $ check prf
+      let [goal] ← goal.apply prf
         | throwError "destructProducts: apply did not return exactly one goal"
-      discard $ introN goal (genHyps.size - 1)
-      let (_, goal) ← introN goal 2
-      clear goal hyp
+      discard $ goal.introN (genHyps.size - 1)
+      let (_, goal) ← goal.introN 2
+      goal.clear hyp
 
 partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
-  withMVarContext goal do
+  goal.withContext do
     let newGoal ← go 0 goal
     if newGoal == goal then
       throwError "destructProducts: found no hypothesis with a product-like type"
@@ -59,7 +59,7 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
       return newGoal
   where
     go (i : Nat) (goal : MVarId) : MetaM MVarId := do
-      withMVarContext goal $ withIncRecDepth do
+      goal.withContext $ withIncRecDepth do
         let lctx ← getLCtx
         if h : i < lctx.decls.size then
           match lctx.decls[i] with

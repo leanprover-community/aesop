@@ -76,7 +76,7 @@ def size : Index α → Nat
 @[inline]
 private def applicableByTargetRules (ri : Index α) (goal : MVarId)
     (include? : α → Bool) : MetaM (Array (α × Array IndexMatchLocation)) :=
-  withMVarContext goal do
+  goal.withContext do
     let rules ←
       ri.byTarget.getUnify (← goal.getType)
     let mut rs := Array.mkEmpty rules.size
@@ -90,7 +90,7 @@ private def applicableByTargetRules (ri : Index α) (goal : MVarId)
 @[inline]
 private def applicableByHypRules (ri : Index α) (goal : MVarId)
     (include? : α → Bool) : MetaM (Array (α × Array IndexMatchLocation)) :=
-  withMVarContext goal do
+  goal.withContext do
     let mut rs := #[]
     for localDecl in ← getLCtx do
       if localDecl.isAuxDecl then continue

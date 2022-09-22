@@ -889,7 +889,7 @@ private def getKeyArgs (e : Expr) (isMatch root : Bool) : MetaM (Key × Array Ex
           This is incorrect because it is equivalent to saying that there is no solution even if
           the caller assigns `?m` and try again. -/
         return (Key.star, #[])
-      else if (← isReadOnlyOrSyntheticOpaqueExprMVar mvarId) then
+      else if (← mvarId.isReadOnlyOrSyntheticOpaque) then
         return (Key.other, #[])
       else
         return (Key.star, #[])
@@ -1046,17 +1046,17 @@ partial def saturate1 (goal : MVarId)
         | some goals => goals.forM go
 
 def instantiateMVarsInMVarType (mvarId : MVarId) : MetaM Expr := do
-  let type := (← getMVarDecl mvarId).type
+  let type ← mvarId.getType
   if type.hasMVar then
     let type ← instantiateMVars type
-    setMVarType mvarId type
+    mvarId.setType type
     return type
   else
     return type
 
 def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
     MetaM Expr := do
-  let mdecl ← getMVarDecl mvarId
+  let mdecl ← mvarId.getDecl
   let (some ldecl) := mdecl.lctx.find? fvarId | throwError
     "unknown local constant {fvarId.name} (in local context of metavariable ?{mvarId.name})"
   let type ← instantiateMVars ldecl.type
@@ -1068,20 +1068,20 @@ def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
   return type
 
 def instantiateMVarsInGoal (mvarId : MVarId) : MetaM Unit := do
-  discard $ getMVarDecl mvarId
+  discard $ mvarId.getDecl
     -- The line above throws an error if the `mvarId` is not declared. The line
     -- below panics.
   instantiateMVarDeclMVars mvarId
 
 def setMVarLCtx (mvarId : MVarId) (lctx : LocalContext) : MetaM Unit := do
-  let newDecl := { ← getMVarDecl mvarId with lctx := lctx }
+  let newDecl := { ← mvarId.getDecl with lctx := lctx }
   let mctx ← getMCtx
   setMCtx { mctx with decls := mctx.decls.insert mvarId newDecl }
 
 def setFVarBinderInfos (mvarId : MVarId) (fvars : Array FVarId)
     (bi : BinderInfo) : MetaM Unit := do
-  let decl ← getMVarDecl mvarId
-  let mut lctx := (← getMVarDecl mvarId).lctx
+  let decl ← mvarId.getDecl
+  let mut lctx := decl.lctx
   for fvar in fvars do
     lctx := lctx.setBinderInfo fvar bi
   let mctx ← getMCtx
@@ -1098,22 +1098,22 @@ def assertHypothesesWithBinderInfos (mvarId : MVarId)
     (hs : Array HypothesisWithBinderInfo) : MetaM (Array FVarId × MVarId) := do
   if hs.isEmpty then
     return (#[], mvarId)
-  else withMVarContext mvarId do
-    checkNotAssigned mvarId `assertHypotheses
-    let tag    ← getMVarTag mvarId
-    let target ← getMVarType mvarId
+  else mvarId.withContext do
+    mvarId.checkNotAssigned `assertHypotheses
+    let tag    ← mvarId.getTag
+    let target ← mvarId.getType
     let targetNew := hs.foldr (init := target) fun h targetNew =>
       mkForall h.userName h.binderInfo h.type targetNew
     let mvarNew ← mkFreshExprSyntheticOpaqueMVar targetNew tag
     let val := hs.foldl (init := mvarNew) fun val h => mkApp val h.value
-    assignExprMVar mvarId val
-    introNP mvarNew.mvarId! hs.size
+    mvarId.assign val
+    mvarNew.mvarId!.introNP hs.size
 
 def isValidMVarAssignment (mvarId : MVarId) (e : Expr) : MetaM Bool :=
-  withMVarContext mvarId do
+  mvarId.withContext do
     let (some _) ← observing? $ check e | return false
     let et ← inferType e
-    let mt := (← getMVarDecl mvarId).type
+    let mt ← mvarId.getType
     withTransparency TransparencyMode.all $ isDefEq et mt
 
 def isDeclaredMVar (mvarId : MVarId) : MetaM Bool := do
@@ -1130,7 +1130,7 @@ partial def getUnassignedGoalMVarDependencies (mvarId : MVarId) :
       let mut s ← get
       set ({} : HashSet MVarId) -- Ensure that `s` is not shared.
       for mvarId in mvars do
-        unless ← isMVarDelayedAssigned mvarId do
+        unless ← mvarId.isDelayedAssigned do
           s := s.insert mvarId
       set s
       mvars.forM go
@@ -1138,7 +1138,7 @@ partial def getUnassignedGoalMVarDependencies (mvarId : MVarId) :
     go (mvarId : MVarId) : StateRefT (HashSet MVarId) MetaM Unit :=
       withIncRecDepth do
         instantiateMVarsInGoal mvarId
-        let mdecl ← getMVarDecl mvarId
+        let mdecl ← mvarId.getDecl
         addMVars mdecl.type
         for ldecl in mdecl.lctx do
           addMVars ldecl.type
@@ -1146,8 +1146,8 @@ partial def getUnassignedGoalMVarDependencies (mvarId : MVarId) :
             addMVars val
         if let (some ass) ← getDelayedMVarAssignment? mvarId then
           let pendingMVarId := ass.mvarIdPending
-          if ! (← isExprMVarAssigned pendingMVarId) &&
-             ! (← isMVarDelayedAssigned pendingMVarId) then
+          if ! (← pendingMVarId.isAssigned) &&
+             ! (← pendingMVarId.isDelayedAssigned) then
             modify (·.insert pendingMVarId)
           go pendingMVarId
 
@@ -1172,7 +1172,7 @@ def unassignedExprMVarsNoDelayed : MetaM (Array MVarId) := do
   let mctx ← getMCtx
   let mut result := #[]
   for (mvarId, _) in mctx.decls do
-    if ← notM (isExprMVarAssigned mvarId) <&&> notM (isMVarDelayedAssigned mvarId) then
+    if ← notM mvarId.isAssigned <&&> notM mvarId.isDelayedAssigned then
       result := result.push mvarId
   return result
 
@@ -1210,12 +1210,11 @@ def assignedExprMVars (preState postState : SavedState) :
     MetaM (Array MVarId) := do
   let unassignedPre ← preState.runMetaM' unassignedExprMVarsNoDelayed
   postState.runMetaM' do
-    unassignedPre.filterM λ m =>
-      isExprMVarAssigned m <||> isMVarDelayedAssigned m
+    unassignedPre.filterM λ m => m.isAssigned <||> m.isDelayedAssigned
 
 def sortFVarsByReverseContextOrder (goal : MVarId) (hyps : Array FVarId) :
     MetaM (Array FVarId) :=
-  withMVarContext goal do
+  goal.withContext do
     let lctx ← getLCtx
     let hyps := hyps.map λ fvarId =>
       match lctx.fvarIdToDecl.find? fvarId with
@@ -1225,7 +1224,7 @@ def sortFVarsByReverseContextOrder (goal : MVarId) (hyps : Array FVarId) :
     return hyps.map (·.snd)
 
 def tryClearMany' (goal : MVarId) (hyps : Array FVarId) : MetaM MVarId := do
-  tryClearMany goal (← sortFVarsByReverseContextOrder goal hyps)
+  goal.tryClearMany (← sortFVarsByReverseContextOrder goal hyps)
 
 def matchAppOf (f : Expr) (e : Expr) : MetaM (Option (Array Expr)) := do
   let type ← inferType f

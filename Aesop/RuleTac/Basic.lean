@@ -52,7 +52,7 @@ namespace RuleApplication
 def check (r : RuleApplication) : MetaM (Option MessageData) :=
   r.postState.runMetaM' do
     for goal in r.goals do
-      if ← isExprMVarAssigned goal <||> isMVarDelayedAssigned goal then
+      if ← goal.isAssigned <||> goal.isDelayedAssigned then
         return some m!"subgoal metavariable {goal.name} is already assigned."
     return none
 

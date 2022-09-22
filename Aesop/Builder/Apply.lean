@@ -19,8 +19,8 @@ def apply (opts : RegularBuilderOptions) : RuleBuilder := λ input =>
     RuleBuilderOutput.global <$> mkResult tac type
   | RuleBuilderKind.local fvarUserName goal => do
     let (goal, newHyp) ← copyRuleHypothesis goal fvarUserName
-    withMVarContext goal do
-      let decl ← getLocalDecl newHyp
+    goal.withContext do
+      let decl ← newHyp.getDecl
       let tac := RuleTacDescr.applyFVar decl.userName
       let result ← mkResult tac decl.type
       return RuleBuilderOutput.local goal result

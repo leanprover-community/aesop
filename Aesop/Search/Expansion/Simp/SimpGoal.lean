@@ -19,14 +19,14 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     (fvarIdsToSimp : Array FVarId := #[])
     (fvarIdToLemmaId : HashMap FVarId Name := {}) :
     MetaM SimpResult :=
-  withMVarContext mvarId do
-    checkNotAssigned mvarId `simp
+  mvarId.withContext do
+    mvarId.checkNotAssigned `simp
     let mut mvarId := mvarId
     let mut toAssert := #[]
     let mut replaced := #[]
     let mut progress := false
     for fvarId in fvarIdsToSimp do
-      let ldecl ← getLocalDecl fvarId
+      let ldecl ← fvarId.getDecl
       let type ← instantiateMVars ldecl.type
       let ctx :=
         match fvarIdToLemmaId.find? fvarId with
@@ -43,26 +43,26 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
           toAssert := toAssert.push { userName := ldecl.userName, type := type, value := value }
       | none =>
         if r.expr.isConstOf ``False then
-          assignExprMVar mvarId (← mkFalseElim (← getMVarType mvarId) (mkFVar fvarId))
+          mvarId.assign (← mkFalseElim (← mvarId.getType) (mkFVar fvarId))
           return .solved
         -- TODO: if there are no forwards dependencies we may consider using the same approach we used when `r.proof?` is a `some ...`
         -- Reason: it introduces a `mkExpectedTypeHint`
-        mvarId ← replaceLocalDeclDefEq mvarId fvarId r.expr
+        mvarId ← mvarId.replaceLocalDeclDefEq fvarId r.expr
         replaced := replaced.push fvarId
     if simplifyTarget then
-      let preSimpTarget ← instantiateMVars (← getMVarType mvarId)
+      let preSimpTarget ← instantiateMVars (← mvarId.getType)
       match ← simpTarget mvarId ctx discharge? with
       | none => return .solved
       | some mvarIdNew =>
-        let postSimpTarget ← instantiateMVars (← getMVarType mvarIdNew)
+        let postSimpTarget ← instantiateMVars (← mvarIdNew.getType)
         progress := progress || preSimpTarget != postSimpTarget
         mvarId := mvarIdNew
     if ! progress then
       return .unchanged mvarId
     else
-      let (_, mvarIdNew) ← assertHypotheses mvarId toAssert
+      let (_, mvarIdNew) ← mvarId.assertHypotheses toAssert
       let toClear := fvarIdsToSimp.filter (! replaced.contains ·)
-      let mvarIdNew ← tryClearMany mvarIdNew toClear
+      let mvarIdNew ← mvarIdNew.tryClearMany toClear
       return .simplified mvarIdNew
 
 end Aesop

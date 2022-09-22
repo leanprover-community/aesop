@@ -777,7 +777,7 @@ def buildAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
 
 def toAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
     MetaM (Array (RuleConfig Id)) :=
-  withMVarContext goal do
+  goal.withContext do
     let init := {
       ident := none
       phase := none
@@ -838,6 +838,6 @@ def toGlobalRuleNameFilters (e : RuleExpr) :
 
 def toLocalRuleNameFilters (goal : MVarId) (e : RuleExpr) :
     MetaM (Array (RuleSetNameFilter × RuleNameFilter)) :=
-  withMVarContext goal $ e.toRuleNameFilters
+  goal.withContext $ e.toRuleNameFilters
 
 end Aesop.Frontend.RuleExpr

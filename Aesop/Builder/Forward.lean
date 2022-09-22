@@ -37,10 +37,10 @@ def getImmediatePremises (name : Name) (type : Expr) : Option (Array Name) →
       for h : i in [:args.size] do
         have h : i < args.size := by simp_all [Membership.mem]
         let fvarId := args[i].fvarId!
-        let ldecl ← getLocalDecl fvarId
+        let ldecl ← fvarId.getDecl
         let isNondep : MetaM Bool :=
           args.allM (start := i + 1) λ arg =>
-            return ! (← getLocalDecl arg.fvarId!).type.containsFVar fvarId
+            return ! (← arg.fvarId!.getDecl).type.containsFVar fvarId
         if ← pure ! ldecl.binderInfo.isInstImplicit <&&> isNondep then
           result := result.push i
       return UnorderedArraySet.ofDeduplicatedArray result
@@ -52,7 +52,7 @@ def getImmediatePremises (name : Name) (type : Expr) : Option (Array Name) →
       let mut result := #[]
       for h : i in [:args.size] do
         have h : i < args.size := by simp_all [Membership.mem]
-        let argName := (← getLocalDecl args[i].fvarId!).userName
+        let argName := (← args[i].fvarId!.getDecl).userName
         if immediate.contains argName then
           result := result.push i
           unseen := unseen.erase argName
@@ -85,8 +85,8 @@ def forward (opts : ForwardBuilderOptions) : RuleBuilder := λ input =>
     .global <$> mkResult tac type immediate
   | .«local» fvarUserName goal => do
     let (goal, newHyp) ← copyRuleHypothesis goal fvarUserName
-    withMVarContext goal do
-      let ldecl ← getLocalDecl newHyp
+    goal.withContext do
+      let ldecl ← newHyp.getDecl
       let type ← instantiateMVars ldecl.type
       let immediate ←
         getImmediatePremises ldecl.userName type opts.immediateHyps

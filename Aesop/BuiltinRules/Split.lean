@@ -22,7 +22,7 @@ def splitTarget : RuleTac := λ input => do
   }
 
 def splitFirstHypothesis (goal : MVarId) : MetaM (Option (Array MVarId)) :=
-  withMVarContext goal do
+  goal.withContext do
     for ldecl in ← getLCtx do
       if let some goals ← splitLocalDecl? goal ldecl.fvarId then
         return goals.toArray

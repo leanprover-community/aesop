@@ -41,11 +41,11 @@ private structure State where
 private abbrev M := StateRefT State MetaM
 
 private def initEntries : M Unit := do
-  let hs ← withMVarContext (← get).mvarId do getPropHyps
-  let hsNonDeps ← getNondepPropHyps (← get).mvarId
+  let hs ← (← get).mvarId.withContext do getPropHyps
+  let hsNonDeps ← (← get).mvarId.getNondepPropHyps
   let mut simpThms := (← get).ctx.simpTheorems
   for h in hs do
-    let localDecl ← getLocalDecl h
+    let localDecl ← h.getDecl
     unless simpThms.isErased localDecl.userName do
       let fvarId := localDecl.fvarId
       let proof  := localDecl.toExpr
@@ -135,15 +135,15 @@ private def main : M SimpResult := do
   else
     let mvarId := (← get).mvarId
     let entries := (← get).entries
-    let (_, mvarId) ← assertHypotheses mvarId <| entries.filterMap fun e =>
+    let (_, mvarId) ← mvarId.assertHypotheses <| entries.filterMap fun e =>
       -- Do not assert `True` hypotheses
       if e.type.isConstOf ``True then none else some { userName := e.userName, type := e.type, value := e.proof }
-    let mvarId ← tryClearMany mvarId (entries.map fun e => e.fvarId)
+    let mvarId ← mvarId.tryClearMany (entries.map fun e => e.fvarId)
     return .simplified mvarId
 
 def simpAll (mvarId : MVarId) (ctx : Simp.Context)
     (disabledTheorems : HashMap FVarId Name) : MetaM SimpResult := do
-  withMVarContext mvarId do
+  mvarId.withContext do
     main.run' { mvarId, ctx, disabledTheorems }
 
 end Aesop

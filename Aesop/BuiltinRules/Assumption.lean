@@ -15,8 +15,8 @@ namespace Aesop.BuiltinRules
 @[aesop safe -50 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
 def assumption : RuleTac := λ input => do
   let goal := input.goal
-  withMVarContext goal do
-    checkNotAssigned goal `Aesop.BuiltinRules.assumption
+  goal.withContext do
+    goal.checkNotAssigned `Aesop.BuiltinRules.assumption
     let tgt ← instantiateMVarsInMVarType goal
     let initialState ← saveState
     let mut applications := #[]
@@ -44,7 +44,7 @@ def assumption : RuleTac := λ input => do
       let proofHasMVar := ldecl.type.hasMVar
       if ! (← isDefEq ldecl.type tgt) then
         return none
-      assignExprMVar goal ldecl.toExpr
+      goal.assign ldecl.toExpr
       let postState ← saveState
       let app := {
         goals := #[]

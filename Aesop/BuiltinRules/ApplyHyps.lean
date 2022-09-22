@@ -12,13 +12,13 @@ open Lean
 open Lean.Meta
 
 def applyHyp (hyp : FVarId) (goal : MVarId) : MetaM RuleApplication := do
-  let goals ← apply goal (mkFVar hyp)
+  let goals ← goal.apply (mkFVar hyp)
   let postState ← saveState
   return { postState, goals := goals.toArray }
 
 @[aesop unsafe 75% (tactic (uses_branch_state := false)) (rule_sets [builtin])]
 def applyHyps : RuleTac := λ input =>
-  withMVarContext input.goal do
+  input.goal.withContext do
     let lctx ← getLCtx
     let mut rapps := Array.mkEmpty lctx.decls.size
     for localDecl in lctx do

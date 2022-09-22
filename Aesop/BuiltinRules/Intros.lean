@@ -13,7 +13,7 @@ namespace Aesop.BuiltinRules
 
 @[aesop norm -100 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
 def intros : RuleTac := λ input => do
-    let (newFVars, goal) ← Meta.intros input.goal
+    let (newFVars, goal) ← input.goal.intros
     if newFVars.size == 0 then
       throwError "nothing to introduce"
     let postState ← saveState

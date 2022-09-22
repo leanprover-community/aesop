@@ -43,6 +43,7 @@ protected def ofDeduplicatedArray (xs : Array α) : UnorderedArraySet α :=
 protected def ofSortedArray (xs : Array α) : UnorderedArraySet α :=
   ⟨xs.deduplicateSorted⟩
 
+set_option linter.unusedVariables false in
 /-- O(n*log(n)) -/
 protected def ofArray [ord : Ord α] [Inhabited α] (xs : Array α) :
     UnorderedArraySet α :=

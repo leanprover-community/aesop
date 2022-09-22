@@ -134,7 +134,7 @@ def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
 def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
     (localSimpRules : Array LocalNormSimpRule) (goal : MVarId)
     (mvars : UnorderedArraySet MVarId) : MetaM SimpResult := do
-  withMVarContext goal do
+  goal.withContext do
     let lctx ← getLCtx
     let mut simpTheorems := ctx.simpTheorems
     let mut disabledTheorems := {}
@@ -174,8 +174,8 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
       match result with
       | .solved =>
         let anyMVarDropped ← mvars.anyM λ mvarId =>
-          return ! (← isExprMVarAssigned mvarId) &&
-                 ! (← isMVarDelayedAssigned mvarId)
+          return ! (← mvarId.isAssigned) &&
+                 ! (← mvarId.isDelayedAssigned)
         if anyMVarDropped then
           aesop_trace[stepsNormalization] "Normalisation simp solved the goal but dropped some metavariables. Skipping normalisation simp."
           pure $ .unchanged goal

@@ -32,7 +32,7 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
   where
     findFirstApplicableHyp (excluded : Array FVarId) (goal : MVarId) :
         MetaM (Option FVarId) :=
-      withMVarContext goal do
+      goal.withContext do
         let «match» ldecl : MetaM Bool :=
           match target with
           | .decl d => withoutModifyingState do
@@ -54,7 +54,7 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
         (goal : MVarId) : MetaM (Option (Array MVarId)) := do
       let (some hyp) ← findFirstApplicableHyp excluded goal
         | return none
-      let goals ← try commitIfNoEx $ Meta.cases goal hyp catch _ => return none
+      let goals ← try commitIfNoEx $ goal.cases hyp catch _ => return none
       let mut newGoals := newGoals
       for g in goals do
         let excluded :=

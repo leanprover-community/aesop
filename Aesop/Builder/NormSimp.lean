@@ -41,15 +41,15 @@ def normSimpLemmas : RuleBuilder := λ input => do
     }
   | .«local» originalFVarUserName goal =>
     let (goal, hyp) ← copyRuleHypothesis goal originalFVarUserName
-    withMVarContext goal do
-      let ldecl ← getLocalDecl hyp
+    goal.withContext do
+      let ldecl ← hyp.getDecl
       let type := ldecl.type
       unless ← isProp type do
         throwError "aesop: simp builder: simp rules must be propositions but {originalFVarUserName} has type{indentExpr type}"
       return .«local» goal $ .localSimp {
         builder := builderName
         originalFVarUserName
-        copiedFVarUserName := (← getLocalDecl hyp).userName
+        copiedFVarUserName := (← hyp.getDecl).userName
       }
   where
     builderName := BuilderName.simp
