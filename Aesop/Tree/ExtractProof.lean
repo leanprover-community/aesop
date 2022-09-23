@@ -147,13 +147,12 @@ private def visitRapp (parentEnv : Environment) (parentGoal : MVarId) (r : Rapp)
 mutual
   private partial def extractProofGoal (parentEnv : Environment) (g : Goal) :
       MetaM Unit := do
-    match ← visitGoal g with
-    | some (postNormGoal, children) => do
-      let rref? ← children.findM? λ rref => return (← rref.get).state.isProven
-      let (some rref) := rref? | throwPRError
-        "goal {g.id} does not have a proven rapp."
-      extractProofRapp parentEnv postNormGoal (← rref.get)
-    | none => return
+    let (some (postNormGoal, children)) ← visitGoal g
+      | return
+    let rref? ← children.findM? λ rref => return (← rref.get).state.isProven
+    let (some rref) := rref? | throwPRError
+      "goal {g.id} does not have a proven rapp."
+    extractProofRapp parentEnv postNormGoal (← rref.get)
 
   private partial def extractProofRapp (parentEnv : Environment)
       (parentGoal : MVarId) (r : Rapp) : MetaM Unit := do
@@ -174,29 +173,25 @@ private structure SafePrefixState where
 private abbrev SafePrefixM := StateRefT SafePrefixState MetaM
 
 mutual
-  private partial def extractSafePrefixGoal
-      (parentEnv : Environment) (g : Goal) : SafePrefixM Unit := do
-    match ← visitGoal g with
-    | none => return
-    | some (postNormGoal, _) =>
-      let safeRapps ← g.safeRapps
-      if h : 0 < safeRapps.size then
-        extractSafePrefixRapp parentEnv postNormGoal
-          (← safeRapps[0].get)
-        if safeRapps.size > 1 then
-          throwError "aesop: internal error: goal {g.id} has multiple safe rapps"
-      else
-        modify λ s => { s with goals := s.goals.push postNormGoal }
+  private partial def extractSafePrefixGoal (parentEnv : Environment)
+      (g : Goal) : SafePrefixM Unit := do
+    let (some (postNormGoal, _)) ← visitGoal g
+      | return
+    let safeRapps ← g.safeRapps
+    if safeRapps.size > 1 then
+      throwError "aesop: internal error: goal {g.id} has multiple safe rapps"
+    if h : 0 < safeRapps.size then
+      extractSafePrefixRapp parentEnv postNormGoal (← safeRapps[0].get)
+    else
+      modify λ s => { s with goals := s.goals.push postNormGoal }
 
-  private partial def extractSafePrefixRapp
-      (parentEnv : Environment) (parentGoal : MVarId) (r : Rapp) :
-      SafePrefixM Unit := do
-    let (children, env) ← visitRapp parentEnv parentGoal r
-    children.forM λ cref => do
-      extractSafePrefixMVarCluster env (← cref.get)
+  private partial def extractSafePrefixRapp (parentEnv : Environment)
+      (parentGoal : MVarId) (r : Rapp) : SafePrefixM Unit := do
+    let (children, newEnv) ← visitRapp parentEnv parentGoal r
+    children.forM λ cref => do extractSafePrefixMVarCluster newEnv (← cref.get)
 
-  private partial def extractSafePrefixMVarCluster
-      (parentEnv : Environment) (c : MVarCluster) : SafePrefixM Unit :=
+  private partial def extractSafePrefixMVarCluster (parentEnv : Environment)
+      (c : MVarCluster) : SafePrefixM Unit :=
     c.goals.forM λ gref => do extractSafePrefixGoal parentEnv (← gref.get)
 end
 
