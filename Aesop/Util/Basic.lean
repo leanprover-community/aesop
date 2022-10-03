@@ -1121,7 +1121,7 @@ def isDeclaredMVar (mvarId : MVarId) : MetaM Bool := do
   | some _ => pure true
   | none => pure false
 
-partial def getUnassignedGoalMVarDependencies (mvarId : MVarId) :
+partial def getGoalMVarDependencies (mvarId : MVarId) (includeDelayed := false):
     MetaM (HashSet MVarId) :=
   return (← go mvarId |>.run {}).snd
   where
@@ -1130,7 +1130,7 @@ partial def getUnassignedGoalMVarDependencies (mvarId : MVarId) :
       let mut s ← get
       set ({} : HashSet MVarId) -- Ensure that `s` is not shared.
       for mvarId in mvars do
-        unless ← mvarId.isDelayedAssigned do
+        if ← pure includeDelayed <||> notM (mvarId.isDelayedAssigned) then
           s := s.insert mvarId
       set s
       mvars.forM go

@@ -85,23 +85,23 @@ private def copyMatchEqnsExtState (oldEnv newEnv : Environment) : CoreM Unit := 
 
 -- ## Copying Metavariables
 
-private def copyMVarDecl (s : Meta.SavedState) (mvarId : MVarId) :
+private partial def copyExprMVar (s : Meta.SavedState) (mvarId : MVarId) :
     MetaM Unit := do
-  let decl ← s.runMetaM' $ do
-    let decl ← mvarId.getDecl
-    aesop_trace[extraction] "declare ?{mvarId.name} : {decl.type}"
-    pure decl
-  modifyMCtx λ mctx => { mctx with decls := mctx.decls.insert mvarId decl }
-
-private partial def copyExprMVarAssignment (s : Meta.SavedState)
-    (mvarId : MVarId) : MetaM Unit := do
   if ← mvarId.isAssigned <||> mvarId.isDelayedAssigned then
     return
   unless ← isExprMVarDeclared mvarId do
-    copyMVarDecl s mvarId
+    let decl ← s.runMetaM' $ do
+      instantiateMVarsInGoal mvarId
+      let decl ← mvarId.getDecl
+      aesop_trace[extraction] "declare ?{mvarId.name}:{indentD $ toMessageData mvarId}"
+      pure decl
+    modifyMCtx λ mctx => { mctx with decls := mctx.decls.insert mvarId decl }
+    let depMVarIds ← getGoalMVarDependencies mvarId (includeDelayed := true)
+    for depMVarId in depMVarIds do
+      copyExprMVar s depMVarId
   let assignment? ← s.runMetaM' do
     if let (some e) ← getExprMVarAssignment? mvarId then
-      return some $ Sum.inl (← instantiateMVars e)
+      return some $ Sum.inl $ ← instantiateMVars e
     else if let (some d) ← getDelayedMVarAssignment? mvarId then
       return some $ Sum.inr d
     else
@@ -109,12 +109,12 @@ private partial def copyExprMVarAssignment (s : Meta.SavedState)
   match assignment? with
   | some (Sum.inl e) =>
     for mvarId in ← getMVars e do
-      copyExprMVarAssignment s mvarId
+      copyExprMVar s mvarId
     aesop_trace[extraction] "assign  ?{mvarId.name} := {toString e}"
     mvarId.assign e
   | some (Sum.inr d) =>
     for mvarId in ← getMVars (mkMVar d.mvarIdPending) do
-      copyExprMVarAssignment s mvarId
+      copyExprMVar s mvarId
     aesop_trace[extraction] "dassign ?{mvarId.name} := {d.fvars} => {d.mvarIdPending.name}"
     delayedAssignMVar mvarId d
   | none => return
@@ -127,10 +127,10 @@ private def visitGoal (g : Goal) : MetaM (Option (MVarId × Array RappRef)) := d
   | NormalizationState.notNormal => throwPRError
     "goal {g.id} was not normalised."
   | NormalizationState.normal postNormGoal postState =>
-    copyExprMVarAssignment postState g.preNormGoal
+    copyExprMVar postState g.preNormGoal
     return (postNormGoal, g.children)
   | NormalizationState.provenByNormalization postState =>
-    copyExprMVarAssignment postState g.preNormGoal
+    copyExprMVar postState g.preNormGoal
     return none
 
 private def visitRapp (parentEnv : Environment) (parentGoal : MVarId) (r : Rapp) :
@@ -139,9 +139,9 @@ private def visitRapp (parentEnv : Environment) (parentGoal : MVarId) (r : Rapp)
   let newEnv := r.metaState.core.env
   copyNewDeclarations parentEnv newEnv
   copyMatchEqnsExtState parentEnv newEnv
-  copyExprMVarAssignment r.metaState parentGoal
+  copyExprMVar r.metaState parentGoal
   for m in r.assignedMVars do
-    copyExprMVarAssignment r.metaState m
+    copyExprMVar r.metaState m
   return (r.children, newEnv)
 
 mutual

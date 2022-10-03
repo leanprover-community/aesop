@@ -1,0 +1,17 @@
+tests/golden/26.lean:13:2: warning: aesop: failed to prove the goal after exhaustive search.
+tests/golden/26.lean:12:22: error: unsolved goals
+case left
+α : Type u_1
+P : α → Bool
+x : α
+xs : List α
+h : List.all (x :: xs) P = true
+⊢ P x = true
+
+case right
+α : Type u_1
+P : α → Bool
+x : α
+xs : List α
+h : List.all (x :: xs) P = true
+⊢ List.all xs P = true

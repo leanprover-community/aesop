@@ -77,7 +77,7 @@ def RuleApplication.toRuleApplicationWithMVarInfo
     let mut goalsAndMVars := #[]
     let mut mvars := {}
     for g in r.goals do
-      let gMVars ← .ofHashSet <$> getUnassignedGoalMVarDependencies g
+      let gMVars ← .ofHashSet <$> getGoalMVarDependencies g
       mvars := mvars.merge gMVars
       goalsAndMVars := goalsAndMVars.push (g, gMVars)
     let goals :=
