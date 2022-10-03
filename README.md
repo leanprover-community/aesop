@@ -68,9 +68,7 @@ example : α → α :=
   by aesop
 ```
 
-## Usage
-
-### Quickstart
+## Quickstart
 
 To get you started, I'll explain Aesop's major concepts with a series of
 examples. A more thorough, reference-style discussion of follows in the next
@@ -244,12 +242,12 @@ themselves.
 
 More examples may be found in the `tests` folder of this repository.
 
-### Reference
+## Reference
 
 This section contains a systematic and fairly comprehensive account of how Aesop
 operates.
 
-#### Rules
+### Rules
 
 A rule is a tactic plus some associated metadata. Rules come in three flavours:
 
@@ -294,7 +292,7 @@ one possible way to solve the goal. For example, registering the constructors of
 the `Or` type will generate a multi-rule that, given a goal with target `A ∨ B`,
 generates one rule application with goal `A` and one with goal `B`.
 
-#### Search Tree
+### Search Tree
 
 Aesop's central data structure is a search tree. This tree alternates between
 two kinds of nodes:
@@ -312,7 +310,7 @@ When a goal node has multiple child rapp nodes, we have a choice of how to solve
 the goals. This makes the tree an AND-OR tree: to prove a rapp, *all* its child
 goals must be proved; to prove a goal, *any* of its child rapps must be proved.
 
-#### Search
+### Search
 
 We start with a search tree containing a single goal node. This node's goal is
 the goal which Aesop is supposed to solve. Then we perform the following steps
@@ -361,7 +359,7 @@ More formally, irrelevance is characterised by the following conditions:
   of the rapp is already proved, and we only need one proof.)
 - A goal or rapp is irrelevant if any of its ancestors is irrelevant.
 
-#### Rule Builders
+### Rule Builders
 
 A **rule builder** is a metaprogram that turns a declaration or hypothesis into
 an Aesop rule. Currently available builders are:
@@ -493,7 +491,7 @@ an Aesop rule. Currently available builders are:
   - For `safe` and `unsafe` rules: `constructors`, `tactic`, `apply`.
   - For `norm` rules: `constructors`, `tactic`, `simp`, `apply`.
 
-#### Rule Sets
+### Rule Sets
 
 Rule sets are declared with the command
 
@@ -513,12 +511,12 @@ Rules can appear in multiple rule sets, but in this case you should make sure
 that they have the same priority and use the same builder options. Otherwise,
 Aesop will consider these rules the same and arbitrarily pick one.
 
-#### The `@[aesop]` Attribute
+### The `@[aesop]` Attribute
 
 Declarations can be added to rule sets by annotating them with the `@[aesop]`
 attribute.
 
-##### Single Rule
+#### Single Rule
 
 In most cases, you'll want to add one rule for the declaration. The syntax for
 this is
@@ -557,7 +555,7 @@ where
   is added exactly to the specified rule sets. If this clause is omitted, it
   defaults to `(rule_sets [default])`.
 
-##### Multiple Rules
+#### Multiple Rules
 
 It is occasionally useful to add multiple rules for a single declaration, e.g.
 a `cases` and a `constructors` rule for the same inductive type. In this case,
@@ -601,7 +599,7 @@ where `feature` is a phase, priority, builder or `rule_sets` clause. This
 grammar yields one or more trees of features and each branch of these trees
 specifies one rule. (A branch is a list of features.)
 
-#### Erasing Rules
+### Erasing Rules
 
 There are two ways to erase rules. Usually it suffices to remove the `@[aesop]`
 attribute:
@@ -642,7 +640,7 @@ builder that is ultimately used, e.g. `apply` or `simp`. So if you want to erase
 such a rule, you may have to specify that builder instead of the default
 builder.
 
-#### The `aesop` Tactic
+### The `aesop` Tactic
 
 In its most basic form, you can call the Aesop tactic just by writing
 
@@ -670,7 +668,7 @@ Here we add some rules with an `add` clause, erase other rules with an `erase`
 clause, limit the used rule sets and set some options. Each of these clauses
 is discussed in more detail below.
 
-##### Adding Rules
+#### Adding Rules
 
 Rules can be added to an Aesop call with an `add` clause. This won't affect any
 declared rule sets. The syntax of the `add` clause is
@@ -693,7 +691,7 @@ rule with penalty 5.
 The rule names can also refer to hypotheses in the goal context, but not all
 builders support this.
 
-##### Erasing Rules
+#### Erasing Rules
 
 Rules can be removed from an Aesop call with an `erase` clause. Again, this
 affects only the current Aesop call and not the declared rule sets. The syntax
@@ -705,7 +703,7 @@ of the `erase` clause is
 
 and it works exactly like the `erase_aesop_rules` command.
 
-##### Selecting Rule Sets
+#### Selecting Rule Sets
 
 By default, Aesop uses the `default` and `builtin` rule sets. A `rule_sets`
 clause can be given to include additional rule sets, e.g.
@@ -717,7 +715,7 @@ clause can be given to include additional rule sets, e.g.
 This will use rule sets `A`, `B`, `default` and `builtin`. Rule sets can also
 be disabled with `rule_sets [-default, -builtin]`.
 
-##### Setting Options
+#### Setting Options
 
 Various options can be set with an `options` clause, whose syntax is:
 
@@ -739,13 +737,13 @@ option may be particularly useful: when `true` (the default), norm simp behaves
 like the `simp_all` tactic; when `false`, norm simp behaves like
 `simp (config := { contextual := true }) at *`.
 
-#### Builtin Rules
+### Builtin Rules
 
 The set of builtin rules (those in the `builtin` rule set) is currently quite
 unstable, so for now I won't document them in detail. See
 `Aesop/BuiltinRules.lean` and `Aesop/BuiltinRules/*.lean`
 
-#### Tracing
+### Tracing
 
 To see how Aesop proves a goal -- or why it doesn't prove a goal, or why it's
 slow to prove a goal -- it is useful to see what it's doing. To that end, you
@@ -769,7 +767,7 @@ The main options are:
 - `trace.aesop.proof`: if Aesop is successful, print the proof that was
   generated (as a Lean term).
 
-#### Checking Internal Invariants
+### Checking Internal Invariants
 
 If you encounter behaviour that looks like an internal error in Aesop, it may
 help to set the option `aesop.check.all` (or the more fine-grained
@@ -777,9 +775,9 @@ help to set the option `aesop.check.all` (or the more fine-grained
 tactic is running. These checks are somewhat expensive, so remember to unset the
 option after you've reported the bug.
 
-#### Advanced Features of the Search Algorithm
+### Advanced Features of the Search Algorithm
 
-##### Duplication of Local Hypotheses
+#### Duplication of Local Hypotheses
 
 When you use an `add` clause to register a local hypothesis as a rule, the
 hypothesis is duplicated to ensure that it will remain available regardless of
@@ -791,10 +789,10 @@ hypothesis as an `apply` rule. We also mark `_local.h` as an `auxDecl` to make
 sure that most tactics will ignore it; e.g. it will not be found by
 `assumption`.
 
-##### Branch State
+#### Branch State
 
 TODO
 
-##### Metavariables
+#### Metavariables
 
 TODO
