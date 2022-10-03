@@ -53,18 +53,13 @@ To use Aesop in a Lean 4 project, first add this package as a dependency. In
 your `lakefile.lean`, add
 
 ```lean
-dependencies := #[
-  { name := `aesop
-    src := Source.git "https://github.com/JLimperg/aesop" "<current HEAD commit of this repo>" }
-]
+require aesop from git "https://github.com/JLimperg/aesop"
 ```
 
-Now run `lake configure`. Unless you use the exact same Lean 4 nightly as this
-project (see our `lean-toolchain`), you'll get a warning. If you use a later
-nightly, you'll probably be fine and Aesop will compile anyway. If not, please
-open an issue and we'll update the tactic.
-
-You should now be able to use the `aesop` tactic:
+After that, `lake build` will download and compile Aesop. If you use a different
+Lean 4 nightly version, or if you depend on a different version of a library
+which Aesop also depends on (currently only the `std4` library), you may have to
+harmonise these versions. Now the following test file should compile:
 
 ```lean
 import Aesop
