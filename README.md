@@ -1,6 +1,46 @@
 # Aesop
 
-This is a work-in-progress proof search tactic for Lean 4.
+Aesop (Automated Extensible Search for Obvious Proofs) is a proof search tactic
+for Lean 4. It is broadly similar to Isabelle's `auto`. In essence, Aesop works
+like this:
+
+- As with `simp`, you tag a (large) collection of definitions with the
+  `@[aesop]` attribute, registering them as Aesop _rules_. Rules can be
+  arbitrary tactics. We provide convenient ways to create common types of rules,
+  e.g. rules which apply a lemma.
+- Aesop takes these rules and tries to apply each of them to the initial goal.
+  If a rule succeeds and generates subgoals, Aesop recursively applies the rules
+  to these subgoals, building a _search tree_.
+- The search tree is explored in a _best-first_ manner. You can mark rules as
+  more or less likely to be useful. Based on this information, Aesop prioritises
+  the goals in the search tree, visiting more promising goals before less
+  promising ones.
+- Before any rules are applied to a goal, it is _normalised_, using a special
+  (customisable) set of _normalisation rules_. An important built-in
+  normalisation rule runs `simp_all`, so your `@[simp]` lemmas are taken into
+  account by Aesop.
+- Rules can be marked as _safe_ to optimise Aesop's performance. A safe rule is
+  applied eagerly and is never backtracked. For example, Aesop's built-in rules
+  safely split a goal `P ∧ Q` into goals for `P` and `Q`. After this split, the
+  original goal `P ∧ Q` is never revisited.
+- Aesop provides a set of built-in rules which perform logical operations (e.g.
+  case-split on hypotheses `P ∨ Q`) and some other straightforward deductions.
+- Aesop uses indexing methods similar to those of `simp` and other Lean tactics.
+  This means it should remain reasonably fast even with a large rule set.
+
+Aesop should be suitable for two main use cases:
+
+- General-purpose automation, where Aesop is used to dispatch 'trivial' goals.
+  Once mathlib is ported to Lean 4 and we have registered many lemmas as Aesop
+  rules, Aesop will hopefully serve as a much more powerful `simp`.
+- Special-purpose automation, where specific Aesop rule sets are built to
+  address a certain class of goals. Tactics such as `measurability`,
+  `continuity` or `tidy`, which perform some sort of recursive search, can
+  hopefully be replaced by Aesop rule sets.
+
+I only occasionally update this README, so details may be out of date. If you
+have questions, please create an issue or ping me (Jannis Limperg) on the [Lean
+Zulip](https://leanprover.zulipchat.com). Pull requests are very welcome!
 
 ## Building
 
@@ -33,13 +73,7 @@ example : α → α :=
   by aesop
 ```
 
-TODO Document (and, indeed, find out) how to use Aesop as a plugin.
-
 ## Usage
-
-This section is intended for prospective Aesop users. Aesop is very work
-in progress and this text may be out of date, so if you have questions, please
-ping me (Jannis Limperg) on the [Lean Zulip](https://leanprover.zulipchat.com).
 
 ### Quickstart
 
