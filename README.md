@@ -724,7 +724,9 @@ Various options can be set with an `options` clause, whose syntax is:
 ```
 
 The term is an arbitrary Lean expression of type `Aesop.Options`; see there for
-details.
+details. A notable option is `strategy`, which is one of `.bestFirst`,
+`.depthFirst` and `.breadthFirst` and instructs Aesop to use the corresponding
+search strategy. Best-first is the default.
 
 Similarly, options for the builtin norm simp call can be set with
 
