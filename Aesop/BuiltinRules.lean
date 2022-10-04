@@ -28,17 +28,19 @@ attribute [aesop (rule_sets [builtin]) unsafe 30% constructors]
 attribute [aesop (rule_sets [builtin]) [safe 100 cases, 50% constructors]]
   Or Sum PSum
 
--- Iff is treated as a product.
+-- A goal ⊢ P ↔ Q is split into ⊢ P → Q and ⊢ Q → P. Hypotheses of type `P ↔ Q`
+-- are treated as equations `P = Q` by the simplifier and by our builtin subst
+-- rule.
 attribute [aesop (rule_sets [builtin]) safe 100 constructors] Iff
-
-@[aesop [norm (rule_sets [builtin]) 0 destruct]]
-theorem Iff_elim (h : α ↔ β) : (α → β) ∧ (β → α) :=
-  ⟨h.mp, h.mpr⟩
 
 attribute [aesop (rule_sets [builtin]) safe 0] Eq.refl HEq.refl
 
 attribute [aesop (rule_sets [builtin]) norm constructors] ULift
 
 attribute [aesop (rule_sets [builtin]) norm 0 destruct] ULift.down
+
+@[aesop norm simp]
+theorem heq_iff_eq (x y : α) : HEq x y ↔ x = y :=
+  ⟨eq_of_heq, heq_of_eq⟩
 
 end Aesop.BuiltinRules
