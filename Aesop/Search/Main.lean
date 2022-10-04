@@ -90,7 +90,10 @@ def finishIfProven : SearchM Q Bool := do
         m!"Proof: {proof}",
         m!"Unassigned metavariables: {(← getMVarsNoDelayed proof).map (·.name)}"
       ]
-    aesop_trace[proof] "Final proof:{indentExpr proof}"
+    aesop_trace[proof] do
+      withOptions (·.setBool `pp.analyze true) do
+        -- pp.analyze makes sure that the pretty-printer round-trips.
+        aesop_trace![proof] "Final proof:{indentExpr proof}"
     return true
 
 def traceFinalTree : SearchM Q Unit := do
