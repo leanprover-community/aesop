@@ -160,7 +160,7 @@ def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
   goal.checkNotAssigned `aesop
   let ruleSet ← do
     match ruleSet? with
-    | none => Frontend.getDefaultAttributeRuleSet
+    | none => Frontend.getDefaultRuleSet
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
   let (goals, state, _) ← SearchM.run ruleSet options simpConfig goal profile do

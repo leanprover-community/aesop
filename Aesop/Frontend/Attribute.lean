@@ -97,8 +97,23 @@ variable [Monad m] [MonadEnv m]
 def getAttributeRuleSets : m Aesop.RuleSets :=
   return extension.getState (← getEnv)
 
-def getDefaultAttributeRuleSet : m Aesop.RuleSet :=
-  return (← getAttributeRuleSets).makeMergedRuleSet defaultEnabledRuleSets
+-- These rule sets are used when `aesop` is called without any options.
+def getDefaultRuleSets (includeGlobalSimpTheorems := true) :
+    CoreM Aesop.RuleSets := do
+  let mut rss ← getAttributeRuleSets
+  if includeGlobalSimpTheorems then
+    let defaultSimpTheorems ← Meta.getSimpTheorems
+    let defaultRs :=
+      { rss.default with
+        normSimpLemmas := defaultSimpTheorems.merge rss.default.normSimpLemmas }
+    rss := { rss with default := defaultRs }
+  return rss
+
+def getDefaultRuleSet (includeGlobalSimpTheorems := true) :
+    CoreM Aesop.RuleSet := do
+  let rss ←
+    getDefaultRuleSets (includeGlobalSimpTheorems := includeGlobalSimpTheorems)
+  return rss.makeMergedRuleSet defaultEnabledRuleSets
 
 def modifyAttributeRuleSets
     (f : Aesop.RuleSets → m Aesop.RuleSets) : m Unit := do

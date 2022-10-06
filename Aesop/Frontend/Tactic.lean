@@ -129,15 +129,9 @@ def updateRuleSets (goal : MVarId) (rss : Aesop.RuleSets) (c : TacticConfig) :
 
 def getRuleSet (goal : MVarId) (c : TacticConfig) :
     MetaM (MVarId × Aesop.RuleSet) := do
-  let ruleSets ← getAttributeRuleSets
-  let defaultSimpLemmas ← Meta.getSimpTheorems
-  let defaultRuleSet :=
-    { ruleSets.default with
-      normSimpLemmas :=
-        defaultSimpLemmas.merge ruleSets.default.normSimpLemmas }
-  let ruleSets := { ruleSets with default := defaultRuleSet }
-  let (goal, ruleSets) ← c.updateRuleSets goal ruleSets
-  return (goal, ruleSets.makeMergedRuleSet c.enabledRuleSets)
+  let rss ← getDefaultRuleSets
+  let (goal, rss) ← c.updateRuleSets goal rss
+  return (goal, rss.makeMergedRuleSet c.enabledRuleSets)
 
 end TacticConfig
 
