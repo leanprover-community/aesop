@@ -71,10 +71,9 @@ def checkRootUnprovable : SearchM Q (Option MessageData) := do
     return msg
   return none
 
-def getProof : SearchM Q Expr := do
-  let rootGoal := (← read).rootGoalMVar
-  let (some proof) ← getExprMVarAssignment? rootGoal | throwError
-    "aesop: internal error: root goal mvar is not assigned"
+def getProof? : SearchM Q (Option Expr) := do
+  let (some proof) ← getExprMVarAssignment? (← read).rootGoalMVar
+    | return none
   instantiateMVars proof
 
 def finishIfProven : SearchM Q Bool := do
@@ -84,7 +83,8 @@ def finishIfProven : SearchM Q Bool := do
   aesop_trace[steps] "Root node is proven. Linking proofs."
   (← read).rootGoalMVar.withContext do
     extractProof
-    let proof ← getProof
+    let (some proof) ← getProof? | throwError
+      "aesop: internal error: root goal is proven but its metavariable is not assigned"
     if proof.hasExprMVar then throwError
       m!"aesop: internal error: extracted proof has metavariables." ++ MessageData.node #[
         m!"Proof: {proof}",
@@ -125,9 +125,11 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
   expandSafePrefix
   let goals ← extractSafePrefix
   aesop_trace[proof] do
-    let proof ← getProof
+    let proof? ← getProof?
     (← read).rootGoalMVar.withContext do
-      aesop_trace![proof] "Final proof:{indentExpr proof}"
+      match proof? with
+      | some proof => aesop_trace![proof] "Final proof:{indentExpr proof}"
+      | none => aesop_trace![proof] "Final proof: <none>"
   traceFinalTree
   return goals
 
