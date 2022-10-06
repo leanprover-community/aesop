@@ -10,7 +10,6 @@ import Aesop.Search.RuleSelection
 
 open Lean
 open Lean.Meta
-open Std (HashSet)
 
 namespace Aesop
 
@@ -146,17 +145,17 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
     for localRule in localSimpRules do
       let (some ldecl) := lctx.findFromUserName? localRule.copiedFVarUserName
         | continue
-      let id ← mkFreshUserName localRule.originalFVarUserName
+      let origin := Origin.fvar ldecl.fvarId
       let (some simpTheorems') ← observing? $
-        simpTheorems.addTheorem ldecl.toExpr (name? := id)
+        simpTheorems.addTheorem origin ldecl.toExpr
         | continue
       simpTheorems := simpTheorems'
       let (some origLDecl) := lctx.findFromUserName? localRule.originalFVarUserName
         | continue
-      disabledTheorems := disabledTheorems.insert origLDecl.fvarId id
+      disabledTheorems := disabledTheorems.insert origLDecl.fvarId origin
     let ctx := { ctx with simpTheorems }
 
-    let result ←
+    let (result, _) ←
       if useHyps then
         Aesop.simpAll goal ctx disabledTheorems
       else
@@ -166,23 +165,19 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
             continue
           fvarIdsToSimp := fvarIdsToSimp.push ldecl.fvarId
         Aesop.simpGoal goal ctx (fvarIdsToSimp := fvarIdsToSimp)
-          (fvarIdToLemmaId := disabledTheorems)
+          (disabledTheorems := disabledTheorems)
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
     -- unassigned. In this case, we treat the goal as unchanged.
-    let result ← do
-      match result with
-      | .solved =>
-        let anyMVarDropped ← mvars.anyM λ mvarId =>
-          return ! (← mvarId.isAssigned) &&
-                 ! (← mvarId.isDelayedAssigned)
-        if anyMVarDropped then
-          aesop_trace[stepsNormalization] "Normalisation simp solved the goal but dropped some metavariables. Skipping normalisation simp."
-          pure $ .unchanged goal
-        else
-          pure result
-      | _ => pure result
-
+    if let .solved := result then
+      let anyMVarDropped ← mvars.anyM λ mvarId =>
+        return ! (← mvarId.isAssigned) &&
+                ! (← mvarId.isDelayedAssigned)
+      if anyMVarDropped then
+        aesop_trace[stepsNormalization] "Normalisation simp solved the goal but dropped some metavariables. Skipping normalisation simp."
+        return .unchanged goal
+      else
+        return result
     return result
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.

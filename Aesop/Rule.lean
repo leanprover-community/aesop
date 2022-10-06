@@ -13,7 +13,6 @@ namespace Aesop
 
 open Lean
 open Lean.Meta
-open Std (RBMap mkRBMap)
 
 /-! ### Normalisation Rules -/
 

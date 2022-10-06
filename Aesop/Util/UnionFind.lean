@@ -6,9 +6,9 @@ Authors: Jannis Limperg
 
 import Lean
 
-namespace Aesop
+open Lean (HashMap)
 
-open Std (HashMap)
+namespace Aesop
 
 structure UnionFind (α) [BEq α] [Hashable α] where
   parents : Array USize

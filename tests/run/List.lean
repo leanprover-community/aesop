@@ -795,7 +795,7 @@ attribute [-simp] reverse_append
   induction s <;> aesop
 
 -- IND
-attribute [-simp] reverse_concat
+-- attribute [-simp] reverse_concat
 theorem X.reverse_concat (l : List α) (a : α) : reverse (concat l a) = a :: reverse l := by
   induction l <;> aesop
 
@@ -1019,7 +1019,8 @@ theorem mem_of_mem_head' {x : α} : ∀ {l : List α}, x ∈ l.head' → x ∈ l
   intro l; induction l <;> aesop
 
 -- SKIP TRIV
-@[simp] theorem head_cons [Inhabited α] (a : α) (l : List α) : head' (a::l) = a := rfl
+attribute [-simp] head_cons
+@[simp] theorem X.head_cons [Inhabited α] (a : α) (l : List α) : head' (a::l) = a := rfl
 
 -- SKIP TRIV
 attribute [-simp] tail_nil

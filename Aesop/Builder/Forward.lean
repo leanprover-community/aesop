@@ -8,7 +8,6 @@ import Aesop.Builder.Basic
 
 open Lean
 open Lean.Meta
-open Std (HashSet)
 
 namespace Aesop
 

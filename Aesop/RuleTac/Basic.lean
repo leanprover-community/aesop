@@ -11,7 +11,6 @@ import Aesop.Util
 open Lean
 open Lean.Elab.Tactic
 open Lean.Meta
-open Std (HashSet)
 
 namespace Aesop
 

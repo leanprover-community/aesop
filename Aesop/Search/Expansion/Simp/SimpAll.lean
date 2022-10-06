@@ -8,18 +8,18 @@ import Aesop.Search.Expansion.Simp.Basic
 
 open Lean
 open Lean.Meta
-open Std (HashMap)
+open Lean.Meta.Simp (UsedSimps)
 
 namespace Aesop
 
 -- Largely copy pasta, originally from Lean/Meta/Simp/SimpAll.lean.
 
 private structure Entry where
-  fvarId : FVarId -- original fvarId
+  fvarId   : FVarId -- original fvarId
   userName : Name
-  id : Name   -- id of the theorem at `SimpTheorems`
-  type : Expr
-  proof : Expr
+  id       : Origin -- id of the theorem at `SimpTheorems`
+  type     : Expr
+  proof    : Expr
   deriving Inhabited
 
 private structure State where
@@ -31,30 +31,29 @@ private structure State where
   mvarId  : MVarId
   entries : Array Entry := #[]
   ctx : Simp.Context
-  disabledTheorems : HashMap FVarId Name
-    -- If `fvarId` is mapped to `id` in this map, the simp theorem with name
-    -- `id` is disabled while simplifying the hypothesis `fvarId`.
+  usedSimps : UsedSimps := {}
+  disabledTheorems : HashMap FVarId Origin
+    -- If `fvarId` is mapped to `origin` in this map, the simp theorem `origin`
+    -- is disabled while simplifying the hypothesis `fvarId`.
     --
-    -- This should really be `HashMap FVarId (Array Name)`, but for the purposes
-    -- of Aesop we only need a single disabled entry per FVarId.
+    -- This should really be `HashMap FVarId (Array Origin)`, but for the
+    -- purposes of Aesop we only need a single disabled entry per FVarId.
 
 private abbrev M := StateRefT State MetaM
 
 private def initEntries : M Unit := do
-  let hs ← (← get).mvarId.withContext do getPropHyps
+  let hs ←  (← get).mvarId.withContext do getPropHyps
   let hsNonDeps ← (← get).mvarId.getNondepPropHyps
   let mut simpThms := (← get).ctx.simpTheorems
   for h in hs do
-    let localDecl ← h.getDecl
-    unless simpThms.isErased localDecl.userName do
-      let fvarId := localDecl.fvarId
+    unless simpThms.isErased (.fvar h) do
+      let localDecl ← h.getDecl
       let proof  := localDecl.toExpr
-      let id     ← mkFreshUserName `h
-      simpThms ← simpThms.addTheorem proof (name? := id)
+      simpThms ← simpThms.addTheorem (.fvar h) proof
       modify fun s => { s with ctx.simpTheorems := simpThms }
       if hsNonDeps.contains h then
         -- We only simplify nondependent hypotheses
-        let entry : Entry := { fvarId := fvarId, userName := localDecl.userName, id := id, type := (← instantiateMVars localDecl.type), proof := proof }
+        let entry : Entry := { fvarId := h, userName := localDecl.userName, id := .fvar h, type := (← instantiateMVars localDecl.type), proof := proof }
         modify fun s => { s with entries := s.entries.push entry }
 
 private abbrev getSimpTheorems : M SimpTheoremsArray :=
@@ -74,7 +73,9 @@ private partial def loop : M Bool := do
     if let (some disabledEntry) := (← get).disabledTheorems.find? entry.fvarId then
       simpThmsWithoutEntry := simpThmsWithoutEntry.eraseTheorem disabledEntry
     let ctx := { ctx with simpTheorems := simpThmsWithoutEntry }
-    match (← simpStep (← get).mvarId entry.proof entry.type ctx) with
+    let (r, usedSimps) ← simpStep (← get).mvarId entry.proof entry.type ctx (usedSimps := (← get).usedSimps)
+    modify fun s => { s with usedSimps }
+    match r with
     | none => return true -- closed the goal
     | some (proofNew, typeNew) =>
       unless typeNew == entry.type do
@@ -101,18 +102,21 @@ private partial def loop : M Bool := do
            We must use `mkExpectedTypeHint` because `inferType proofNew` may not be equal to `typeNew` when
            we have theorems marked with `rfl`.
         -/
-        let mut simpThmsNew := (← getSimpTheorems).eraseTheorem entry.id
-        let idNew ← mkFreshUserName `h
-        simpThmsNew ← simpThmsNew.addTheorem (← mkExpectedTypeHint proofNew typeNew) (name? := idNew)
+        trace[Meta.Tactic.simp.all] "entry.id: {← ppOrigin entry.id}, {entry.type} => {typeNew}"
+        let mut simpThmsNew := (← getSimpTheorems).eraseTheorem (.fvar entry.fvarId)
+        let idNew ← mkFreshId
+        simpThmsNew ← simpThmsNew.addTheorem (.other idNew) (← mkExpectedTypeHint proofNew typeNew)
         modify fun s => { s with
           modified         := true
           anyModified      := true
           ctx.simpTheorems := simpThmsNew
-          entries[i]       := { entry with type := typeNew, proof := proofNew, id := idNew }
+          entries[i]       := { entry with type := typeNew, proof := proofNew, id := .other idNew }
         }
   -- simplify target
   let mvarId := (← get).mvarId
-  match (← simpTarget mvarId (← get).ctx) with
+  let (r, usedSimps) ← simpTarget mvarId (← get).ctx (usedSimps := (← get).usedSimps)
+  modify fun s => { s with usedSimps }
+  match r with
   | none => return true
   | some mvarIdNew =>
     unless mvarId == mvarIdNew do
@@ -142,8 +146,10 @@ private def main : M SimpResult := do
     return .simplified mvarId
 
 def simpAll (mvarId : MVarId) (ctx : Simp.Context)
-    (disabledTheorems : HashMap FVarId Name) : MetaM SimpResult := do
+    (disabledTheorems : HashMap FVarId Origin) (usedSimps : UsedSimps := {}) :
+    MetaM (SimpResult × UsedSimps) := do
   mvarId.withContext do
-    main.run' { mvarId, ctx, disabledTheorems }
+    let (r, s) ← main.run { mvarId, ctx, usedSimps, disabledTheorems }
+    return (r, s.usedSimps)
 
 end Aesop

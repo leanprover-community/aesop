@@ -10,7 +10,6 @@ import Aesop.Rule
 
 open Lean
 open Lean.Meta
-open Std (PHashMap HashSet)
 
 namespace Aesop
 
@@ -287,7 +286,7 @@ end RuleSetNameFilter
 
 structure RuleSets where
   default : RuleSet
-  others : Std.PersistentHashMap Name RuleSet
+  others : PersistentHashMap Name RuleSet
   deriving Inhabited
 
 namespace RuleSets
@@ -295,7 +294,7 @@ namespace RuleSets
 protected def empty : RuleSets where
   default := {}
   others :=
-    Std.PersistentHashMap.empty
+    PersistentHashMap.empty
     |>.insert builtinRuleSetName {}
     |>.insert localRuleSetName {}
 

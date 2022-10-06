@@ -8,7 +8,6 @@ import Aesop.Frontend
 
 open Lean
 open Lean.Meta
-open Std (HashSet)
 
 namespace Aesop.BuiltinRules
 

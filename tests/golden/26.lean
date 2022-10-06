@@ -8,6 +8,8 @@ import Aesop
 
 set_option aesop.check.all true
 
+attribute [-simp] List.all_cons List.all_nil List.all_eq_true
+
 theorem all_cons (P : α → Bool) (x : α) (xs : List α) (h : (x :: xs).all P)
   : P x ∧ xs.all P := by
   aesop

@@ -7,7 +7,6 @@ Authors: Jannis Limperg
 import Aesop.RuleTac.Basic
 
 open Lean Lean.Meta
-open Std (HashSet)
 
 namespace Aesop
 

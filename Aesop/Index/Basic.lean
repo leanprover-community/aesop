@@ -8,7 +8,6 @@ import Aesop.Util
 
 open Lean
 open Lean.Meta
-open Std (RBMap)
 
 namespace Aesop
 

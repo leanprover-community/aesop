@@ -14,7 +14,6 @@ open Lean
 open Lean.Meta
 open Lean.Elab
 open Lean.Elab.Term
-open Std (HashSet)
 
 
 variable [Monad m] [MonadError m]

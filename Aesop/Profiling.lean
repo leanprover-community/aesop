@@ -9,7 +9,6 @@ import Aesop.Tree.Data
 import Aesop.Tracing
 
 open Lean
-open Std (HashMap)
 
 namespace Aesop
 

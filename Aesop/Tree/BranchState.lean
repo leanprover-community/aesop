@@ -7,7 +7,6 @@ Authors: Jannis Limperg
 import Aesop.Rule.Basic
 
 open Lean
-open Std (PersistentHashMap)
 
 namespace Aesop
 

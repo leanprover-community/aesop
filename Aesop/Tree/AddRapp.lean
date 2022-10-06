@@ -11,7 +11,6 @@ import Aesop.Tree.TreeM
 
 open Lean
 open Lean.Meta
-open Std (HashMap HashSet)
 
 namespace Aesop
 

@@ -8,7 +8,6 @@ import Aesop.Index.Basic
 
 open Lean
 open Lean.Meta
-open Std (RBMap mkRBMap PHashSet)
 
 namespace Aesop
 

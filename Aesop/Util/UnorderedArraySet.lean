@@ -7,7 +7,6 @@ Authors: Jannis Limperg
 import Aesop.Util.Basic
 
 open Lean
-open Std (HashSet PersistentHashSet)
 
 namespace Aesop
 

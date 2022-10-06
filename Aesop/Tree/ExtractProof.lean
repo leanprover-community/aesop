@@ -10,7 +10,6 @@ import Aesop.Tree.TreeM
 
 open Lean
 open Lean.Meta
-open Std (HashMap)
 
 /-
 To extract a proof, we start in the `MetaM` state in which Aesop was called.

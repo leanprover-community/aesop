@@ -8,8 +8,6 @@ import Aesop.Nanos
 import Aesop.Util.UnionFind
 import Lean
 
-open Std (HashSet PHashSet)
-
 
 def BEq.ofOrd (ord : Ord α) : BEq α where
   beq x y :=
@@ -531,7 +529,7 @@ def nodeFiltering (fs : Array (Option MessageData)) : MessageData :=
 end Lean.MessageData
 
 
-namespace Std.HashSet
+namespace Lean.HashSet
 
 def insertMany [ForIn Id ρ α] [BEq α] [Hashable α] (s : HashSet α) (as : ρ) :
     HashSet α := Id.run do
@@ -570,10 +568,10 @@ instance [BEq α] [Hashable α] : BEq (HashSet α) where
         return false
     return true
 
-end Std.HashSet
+end Lean.HashSet
 
 
-namespace Std.HashMap
+namespace Lean.HashMap
 
 variable [BEq α] [Hashable α]
 
@@ -613,10 +611,10 @@ instance : ForIn m (HashMap α β) (α × β) where
         | .yield b => acc := b
     return acc
 
-end Std.HashMap
+end Lean.HashMap
 
 
-namespace Std.PersistentHashSet
+namespace Lean.PersistentHashSet
 
 @[inline]
 def merge [BEq α] [Hashable α] (s t : PersistentHashSet α) : PersistentHashSet α :=
@@ -636,10 +634,10 @@ def toList [BEq α] [Hashable α] (s : PersistentHashSet α) : List α :=
 def toArray [BEq α] [Hashable α] (s : PersistentHashSet α) : Array α :=
   s.fold (init := Array.mkEmpty s.size) λ as a => as.push a
 
-end Std.PersistentHashSet
+end Lean.PersistentHashSet
 
 
-namespace Std.PersistentHashMap
+namespace Lean.PersistentHashMap
 
 variable [BEq α] [Hashable α]
 
@@ -673,10 +671,10 @@ universe u v
 def toArray (map : PersistentHashMap α β) : Array (α × β) :=
   map.foldl (init := Array.mkEmpty map.size) λ acc a b => acc.push (a, b)
 
-end Std.PersistentHashMap
+end Lean.PersistentHashMap
 
 
-namespace Std.RBMap
+namespace Lean.RBMap
 
 -- TODO horribly inefficient
 @[inline]
@@ -701,7 +699,7 @@ def insertListWith {cmp} (xs : List (α × β)) (f : α → β → β → β)
 def toArray {cmp} (m : RBMap α β cmp) : Array (α × β) :=
   m.fold (init := #[]) λ xs a b => xs.push (a, b)
 
-end Std.RBMap
+end Lean.RBMap
 
 
 namespace Prod.Lex
@@ -932,20 +930,15 @@ namespace SimpTheorems
 
 def addSimpEntry (s : SimpTheorems) : SimpEntry → SimpTheorems
   | SimpEntry.thm l =>
-    let s := addSimpTheoremEntry s l
-    match l.name? with
-    | some l => { s with erased := s.erased.erase l }
-    | none => s
+    { addSimpTheoremEntry s l with erased := s.erased.erase l.origin }
   | SimpEntry.toUnfold d =>
     { s with toUnfold := s.toUnfold.insert d }
   | SimpEntry.toUnfoldThms n thms => s.registerDeclToUnfoldThms n thms
 
 def eraseSimpEntry (s : SimpTheorems) : SimpEntry → SimpTheorems
   | SimpEntry.thm l =>
-    match l.name? with
-    | some l =>
-      { s with erased := s.erased.insert l, lemmaNames := s.lemmaNames.erase l }
-    | none => s
+    let o := l.origin
+    { s with erased := s.erased.insert o, lemmaNames := s.lemmaNames.erase o }
   | SimpEntry.toUnfold d =>
     { s with toUnfold := s.toUnfold.erase d }
   | SimpEntry.toUnfoldThms n _ =>
@@ -961,13 +954,10 @@ def foldSimpEntriesM [Monad m] (f : σ → SimpEntry → m σ) (init : σ)
   where
     @[inline]
     processTheorem (s : σ) (thm : SimpTheorem) : m σ :=
-      match thm.name? with
-      | none => f s (SimpEntry.thm thm)
-      | some n =>
-        if thms.erased.contains n then
-          return s
-        else
-          f s (SimpEntry.thm thm)
+      if thms.erased.contains thm.origin then
+        return s
+      else
+        f s (SimpEntry.thm thm)
 
 def foldSimpEntries (f : σ → SimpEntry → σ) (init : σ) (thms : SimpTheorems) :
     σ :=
@@ -990,15 +980,15 @@ def merge (s t : SimpTheorems) : SimpTheorems := {
   where
     -- Adds the erased lemmas from `s` to `init`, excluding those lemmas which
     -- occur in `t`.
-    mkErased (s t : SimpTheorems) (init : PHashSet Name) : PHashSet Name :=
-      s.erased.fold (init := init) λ x decl =>
+    mkErased (s t : SimpTheorems) (init : PHashSet Origin) : PHashSet Origin :=
+      s.erased.fold (init := init) λ x origin =>
         -- I think the following check suffices to ensure that `decl` does not
         -- occur in `t`. If `decl` is an unfold theorem (in the sense of
         -- `toUnfoldThms`), then it occurs also in `t.lemmaNames`.
-        if t.lemmaNames.contains decl || t.toUnfold.contains decl then
+        if t.lemmaNames.contains origin || t.toUnfold.contains origin.key then
           x
         else
-          x.insert decl
+          x.insert origin
 
 open MessageData in
 protected def toMessageData (s : SimpTheorems) : MessageData :=
@@ -1008,7 +998,7 @@ protected def toMessageData (s : SimpTheorems) : MessageData :=
     "definitions to unfold:" ++ node
       (s.toUnfold.toArray.qsort Name.lt |>.map toMessageData),
     "erased entries:" ++ node
-      (s.erased.toArray.qsort Name.lt |>.map toMessageData)
+      (s.erased.toArray.qsort (λ o₁ o₂ => o₁.key.lt o₂.key) |>.map (·.key))
   ]
 
 end SimpTheorems
