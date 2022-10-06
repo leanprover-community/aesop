@@ -37,7 +37,7 @@ attribute [aesop (rule_sets [builtin]) safe 100 constructors] Iff
 -- negated hypothesis Γ, h : ¬ P ⊢ Q is transformed into Γ[P := ⊥] ⊢ Q[P := ⊥]
 -- by the simplifier. Quantified negated hypotheses h : ∀ x : T, ¬ P x are also
 -- supported by the simplifier if the premises x can be discharged.
-@[aesop (rule_sets [builtin]) norm apply]
+@[aesop (rule_sets [builtin]) safe 0]
 theorem Not_intro (h : P → False) : ¬ P := h
 
 attribute [aesop (rule_sets [builtin]) safe 0] Eq.refl HEq.refl
