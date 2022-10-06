@@ -209,9 +209,8 @@ features:
   goal before any other rules are applied. As part of this normalisation
   process, we run a variant of `simp_all` with the global `simp` set plus
   Aesop-specific simp lemmas. The **`unfold`** builder adds such an
-  Aesop-specific simp lemma which unfolds the `Not` definition. (This is only
-  necessary because the builtin rules currently do not handle negation very
-  well.)
+  Aesop-specific simp lemma which unfolds the `Not` definition. (Aesop does not,
+  in fact, need this rule to succeed.)
 
 Here are some other examples where normalisation comes in handy:
 

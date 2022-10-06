@@ -167,7 +167,7 @@ theorem X.cons_ne_nil (a : α) (l : List α) : a::l ≠ [] := by
 
 -- attribute [-simp] cons_ne_self
 theorem X.cons_ne_self (a : α) (l : List α) : a::l ≠ l := by
-  aesop (add norm unfold Not, 1% cases Eq)
+  aesop (add 1% cases Eq)
 
 -- attribute [-simp] head_eq_of_cons_eq
 theorem X.head_eq_of_cons_eq {h₁ h₂ : α} {t₁ t₂ : List α} :
@@ -229,11 +229,11 @@ theorem X.eq_or_ne_mem_of_mem {a b : α} {l : List α} : a ∈ b :: l → a = b 
 
 -- IND
 theorem not_mem_append {a : α} {s t : List α} (h₁ : a ∉ s) (h₂ : a ∉ t) : a ∉ s ++ t := by
-  induction s <;> aesop (add norm unfold Not)
+  induction s <;> aesop
 
 -- attribute [-simp] ne_nil_of_mem
 theorem X.ne_nil_of_mem {a : α} {l : List α} (h : a ∈ l) : l ≠ [] := by
-  aesop (add unsafe cases Mem, norm unfold Not)
+  aesop (add unsafe cases Mem)
 
 set_option linter.unusedVariables false in
 theorem mem_split {a : α} {l : List α} (h : a ∈ l) : ∃ s t : List α, l = s ++ a :: t :=
@@ -243,16 +243,16 @@ theorem mem_of_ne_of_mem {a y : α} {l : List α} (h₁ : a ≠ y) (h₂ : a ∈
   aesop
 
 theorem ne_of_not_mem_cons {a b : α} {l : List α} : a ∉ b::l → a ≠ b := by
-  aesop (add norm unfold Not)
+  aesop
 
 theorem not_mem_of_not_mem_cons {a b : α} {l : List α} : a ∉ b::l → a ∉ l := by
-  aesop (add norm unfold Not)
+  aesop
 
 theorem not_mem_cons_of_ne_of_not_mem {a y : α} {l : List α} : a ≠ y → a ∉ l → a ∉ y::l := by
-  aesop (add norm unfold Not)
+  aesop
 
 theorem ne_and_not_mem_of_not_mem_cons {a y : α} {l : List α} : a ∉ y::l → a ≠ y ∧ a ∉ l := by
-  aesop (add norm unfold Not)
+  aesop
 
 -- IND
 -- attribute [-simp] mem_map
@@ -439,7 +439,7 @@ theorem X.forall_mem_append {p : α → Prop} {l₁ l₂ : List α} :
   aesop
 
 theorem not_exists_mem_nil (p : α → Prop) : ¬ ∃ x, x ∈ @nil α ∧ p x := by
-  aesop (add norm unfold Not)
+  aesop
 
 theorem exists_mem_cons_of {p : α → Prop} {a : α} (l : List α) (h : p a) :
     ∃ x, x ∈ a :: l ∧ p x := by
@@ -494,7 +494,7 @@ theorem eq_nil_of_subset_nil {l : List α} : l ⊆ [] → l = [] := by
 
 -- attribute [-simp] eq_nil_iff_forall_not_mem
 theorem X.eq_nil_iff_forall_not_mem {l : List α} : l = [] ↔ ∀ a, a ∉ l := by
-  aesop (add 1% cases List, norm unfold Not)
+  aesop (add 1% cases List)
 
 -- attribute [-simp] map_subset
 theorem X.map_subset {l₁ l₂ : List α} (f : α → β) (H : l₁ ⊆ l₂) : map f l₁ ⊆ map f l₂ := by
@@ -628,7 +628,7 @@ theorem X.map_eq_append_split {f : α → β} {l : List α} {s₁ s₂ : List β
 -- IND
 -- attribute [-simp] mem_replicate
 @[simp] theorem X.mem_replicate {a b : α} {n} : b ∈ replicate n a ↔ n ≠ 0 ∧ b = a := by
-  induction n <;> aesop (add norm unfold Not)
+  induction n <;> aesop
 
 -- attribute [-simp] eq_of_mem_replicate
 @[aesop safe destruct]

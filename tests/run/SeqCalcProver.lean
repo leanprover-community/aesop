@@ -105,10 +105,10 @@ instance instDecidablePred (P : α → Prop) [d : DecidablePred P]
   : DecidablePred (Any P) := by
   intro xs
   match xs with
-  | [] => aesop (add norm unfold Not)
+  | [] => aesop
   | x :: xs =>
     have ih : Decidable (Any P xs) := instDecidablePred P xs
-    cases d x <;> aesop (add norm unfold Not)
+    cases d x <;> aesop
 
 end Any
 
@@ -203,7 +203,7 @@ instance Val.instDecidable (i : Φ → Prop) [d : DecidablePred i] (φ : Form Φ
   | φ ⇒ ψ =>
     have ihφ : Decidable (Val i φ) := instDecidable i φ
     have ihψ : Decidable (Val i ψ) := instDecidable i ψ
-    aesop (add norm unfold Not, unsafe apply 50% False.elim)
+    aesop
 
 abbrev Valid (φ : Form Φ) : Prop := ∀ i, DecidablePred i → Val i φ
 
