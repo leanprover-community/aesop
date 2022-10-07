@@ -146,7 +146,7 @@ theorem subset_trans {l₁ l₂ l₃ : List α} : l₁ ⊆ l₂ → l₂ ⊆ l�
 -- END PRELUDE
 
 /-- There is only one list of an empty type -/
-noncomputable instance unique_of_is_empty [IsEmpty α] : Unique (List α) := by
+instance unique_of_is_empty [IsEmpty α] : Unique (List α) := by
   aesop (add 1% cases List)
 
 -- SKIP NA
@@ -226,7 +226,7 @@ theorem _root_.decidable.list.eq_or_ne_mem_of_mem [deq : DecidableEq α]
 -- attribute [-simp] eq_or_ne_mem_of_mem
 theorem X.eq_or_ne_mem_of_mem {a b : α} {l : List α} : a ∈ b :: l → a = b ∨ (a ≠ b ∧ a ∈ l) :=
   ADMIT
-  -- TODO the proof of this is just the previous theorem, with LEM used to
+  -- TODO the proof of this is just the previous lemma, with LEM used to
   -- discharge the decidability assumption.
 
 -- IND
@@ -638,7 +638,7 @@ theorem X.eq_of_mem_replicate {a b : α} {n} (h : b ∈ replicate n a) : b = a :
   aesop
 
 theorem eq_replicate_of_mem {a : α} {l : List α} : (∀ b, b ∈ l → b = a) → l = replicate l.length a :=
-  -- induction l <;> aesop
+  -- by induction l <;> aesop
   ADMIT
   -- BUG
 
@@ -713,6 +713,7 @@ instance : Bind List where
 @[simp] theorem bind_eq_bind {α β} (f : α → List β) (l : List α) :
     l >>= f = l.bind f := rfl
 
+-- IND
 theorem bind_append (f : α → List β) (l₁ l₂ : List α) :
   (l₁ ++ l₂).bind f = l₁.bind f ++ l₂.bind f := by
   induction l₁ <;> aesop
