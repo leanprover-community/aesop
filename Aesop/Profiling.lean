@@ -8,7 +8,8 @@ import Aesop.Nanos
 import Aesop.Tree.Data
 import Aesop.Tracing
 
-open Lean
+open Lean hiding HashMap
+open Std (HashMap)
 
 namespace Aesop
 
@@ -86,7 +87,7 @@ def ruleApplicationTotals (p : Profile) :
         λ (successful, failed) => (successful, failed + rp.elapsed)
   return m
 
-open MessageData in
+open Lean.MessageData in
 protected def toMessageData (p : Profile) : MessageData :=
   let totalRuleApplications :=
     p.ruleApplications.foldl (init := 0) λ total rp =>

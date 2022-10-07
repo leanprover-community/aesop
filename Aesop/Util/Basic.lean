@@ -7,6 +7,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Aesop.Nanos
 import Aesop.Util.UnionFind
 import Lean
+import Std
 
 
 def BEq.ofOrd (ord : Ord α) : BEq α where
@@ -571,7 +572,7 @@ instance [BEq α] [Hashable α] : BEq (HashSet α) where
 end Lean.HashSet
 
 
-namespace Lean.HashMap
+namespace Std.HashMap
 
 variable [BEq α] [Hashable α]
 
@@ -611,7 +612,7 @@ instance : ForIn m (HashMap α β) (α × β) where
         | .yield b => acc := b
     return acc
 
-end Lean.HashMap
+end Std.HashMap
 
 
 namespace Lean.PersistentHashSet
