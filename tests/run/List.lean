@@ -11,6 +11,7 @@ import Aesop
 
 axiom ADMIT : ∀ {α : Sort _}, α
 
+@[aesop safe cases]
 class IsEmpty (α : Sort _) where
   false : α → False
 
@@ -145,9 +146,8 @@ theorem subset_trans {l₁ l₂ l₃ : List α} : l₁ ⊆ l₂ → l₂ ⊆ l�
 -- END PRELUDE
 
 /-- There is only one list of an empty type -/
-noncomputable instance unique_of_is_empty [IsEmpty α] : Unique (List α) :=
-  ADMIT
-  -- TODO unclear
+noncomputable instance unique_of_is_empty [IsEmpty α] : Unique (List α) := by
+  aesop (add 1% cases List)
 
 -- SKIP NA
 -- instance : is_left_id (list α) has_append.append [] :=
@@ -217,15 +217,17 @@ theorem X.mem_of_mem_cons_of_mem {a b : α} {l : List α} : a ∈ b::l → b ∈
   aesop
 
 set_option linter.unusedVariables false in
-theorem _root_.decidable.list.eq_or_ne_mem_of_mem [DecidableEq α]
+theorem _root_.decidable.list.eq_or_ne_mem_of_mem [deq : DecidableEq α]
   {a b : α} {l : List α} (h : a ∈ b :: l) : a = b ∨ (a ≠ b ∧ a ∈ l) :=
   ADMIT
-  -- TODO unclear
+  -- by cases deq a b <;> aesop
+  -- TODO add a default rule that uses decidability assumptions?
 
 -- attribute [-simp] eq_or_ne_mem_of_mem
 theorem X.eq_or_ne_mem_of_mem {a b : α} {l : List α} : a ∈ b :: l → a = b ∨ (a ≠ b ∧ a ∈ l) :=
   ADMIT
-  -- TODO unclear
+  -- TODO the proof of this is just the previous theorem, with LEM used to
+  -- discharge the decidability assumption.
 
 -- IND
 theorem not_mem_append {a : α} {s t : List α} (h₁ : a ∉ s) (h₂ : a ∉ t) : a ∉ s ++ t := by
@@ -648,7 +650,7 @@ theorem eq_replicate {a : α} {n} {l : List α} : l = replicate n a ↔ length l
   aesop (add norm simp eq_replicate')
 
 theorem replicate_add (a : α) (m n) : replicate (m + n) a = replicate m a ++ replicate n a :=
-  -- induction m <;> aesop (simp_options := { arith := true }) (add norm simp Nat.succ_eq_add_one)
+  -- by induction m <;> aesop (simp_options := { arith := true }) (add norm simp Nat.succ_eq_add_one)
   ADMIT
   -- TODO n + 1 + n = n + n + 1
 
@@ -712,10 +714,8 @@ instance : Bind List where
     l >>= f = l.bind f := rfl
 
 theorem bind_append (f : α → List β) (l₁ l₂ : List α) :
-  (l₁ ++ l₂).bind f = l₁.bind f ++ l₂.bind f :=
-  -- induction l₁ <;> aesop
-  ADMIT
-  -- TODO ++-assoc
+  (l₁ ++ l₂).bind f = l₁.bind f ++ l₂.bind f := by
+  induction l₁ <;> aesop
 
 @[simp] theorem bind_singleton (f : α → List β) (x : α) : [x].bind f = f x := by
   aesop
@@ -730,7 +730,7 @@ theorem map_eq_bind {α β} (f : α → β) (l : List α) : map f l = l.bind (λ
 
 theorem bind_assoc {α β} (l : List α) (f : α → List β) (g : β → List γ) :
     (l.bind f).bind g = l.bind (λ x => (f x).bind g) :=
-  -- induction l <;> aesop
+  -- by induction l <;> aesop (add norm simp bind_append)
   -- TODO needs join_append
   ADMIT
 
@@ -817,8 +817,6 @@ attribute [-simp] reverse_reverse
   aesop (add norm unfold Bijective)
 
 @[simp] theorem reverse_inj {l₁ l₂ : List α} : reverse l₁ = reverse l₂ ↔ l₁ = l₂ :=
-  -- induction l₁ <;> induction l₂ <;> aesop
-  -- TODO requires injectivity of ++
   ADMIT
 
 theorem reverse_eq_iff {l l' : List α} :
