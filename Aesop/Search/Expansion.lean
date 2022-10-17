@@ -50,15 +50,14 @@ def runRuleTac (tac : RuleTac) (ruleName : RuleName)
 
 def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
     (indexMatchLocations : UnorderedArraySet IndexMatchLocation)
-    (branchState : Option RuleBranchState) :
+    (branchState : RuleBranchState) :
     MetaM (Sum Exception RuleTacOutput) := do
   let some (postNormGoal, postNormState) := goal.postNormGoalAndMetaState? | throwError
     "aesop: internal error: expected goal {goal.id} to be normalised (but not proven by normalisation)."
   let input := {
     goal := postNormGoal
     mvars := goal.mvars
-    indexMatchLocations := indexMatchLocations
-    branchState? := branchState
+    indexMatchLocations, branchState
   }
   runRuleTac tac ruleName postNormState input
 
@@ -93,14 +92,13 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
 def runNormRuleCore (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (bs : BranchState) (rule : IndexMatchResult NormRule) :
     MetaM NormRuleResult := do
-  let branchState? := bs.find? rule.rule
+  let branchState := bs.find rule.rule
   aesop_trace[stepsNormalization] do
     aesop_trace![stepsNormalization] "Running {rule.rule}"
-    aesop_trace[stepsBranchStates] "Branch state before rule application: {branchState?}"
+    aesop_trace[stepsBranchStates] "Branch state before rule application: {branchState}"
   let ruleInput := {
-    goal, mvars
     indexMatchLocations := rule.locations
-    branchState?
+    goal, mvars, branchState
   }
   runNormRuleTac bs rule.rule ruleInput
 
@@ -328,7 +326,7 @@ def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
     (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
     SearchM Q RuleResult := do
   let parent ← parentRef.get
-  let initialBranchState := rule.withRule λ r => parent.branchState.find? r
+  let initialBranchState := rule.withRule λ r => parent.branchState.find r
   aesop_trace[stepsBranchStates] "Initial branch state: {initialBranchState}"
   let ruleOutput? ←
     runRegularRuleTac parent rule.tac.run rule.name indexMatchLocations

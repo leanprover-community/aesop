@@ -23,6 +23,12 @@ protected def empty : BranchState :=
 def find? (r : Rule α) (bs : BranchState) : Option RuleBranchState :=
   if r.usesBranchState then PersistentHashMap.find? bs r.name else none
 
+def find (r : Rule α) (bs : BranchState) : RuleBranchState :=
+  if r.usesBranchState then
+    PersistentHashMap.find? bs r.name |>.getD .initial
+  else
+    .initial
+
 def insert (r : Rule α) (rbs : RuleBranchState) (bs : BranchState) :
     BranchState :=
   if r.usesBranchState then PersistentHashMap.insert bs r.name rbs else bs

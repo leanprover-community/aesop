@@ -24,14 +24,14 @@ Input for a rule tactic. Contains:
 - `mvars`: the set of mvars which occur in `goal`.
 - `indexMatchLocations`: if the rule is indexed, the locations (e.g. hyps or the
   target) matched by the rule's index entries. Otherwise an empty set.
-- `branchState?`: if the rule uses branch state, the current branch state.
-  Otherwise `none`.
+- `branchState`: the current branch state for this rule. If the rule does not
+  use branch state, this is always `RuleBranchState.initial`.
 -/
 structure RuleTacInput where
   goal : MVarId
   mvars : UnorderedArraySet MVarId
   indexMatchLocations : UnorderedArraySet IndexMatchLocation
-  branchState? : Option RuleBranchState
+  branchState : RuleBranchState
   deriving Inhabited
 
 /--
@@ -94,7 +94,7 @@ namespace RuleTac
 def withBranchState (check : RuleBranchState → MetaM Unit)
     (modify : RuleBranchState → RuleBranchState) (r : RuleTac) :
     RuleTac := λ input => do
-  let initialBranchState := input.branchState?.getD RuleBranchState.initial
+  let initialBranchState := input.branchState
   check initialBranchState
   let output ← r input
   let newBranchState := modify $ output.postBranchState?.getD initialBranchState
