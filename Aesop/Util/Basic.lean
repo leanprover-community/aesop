@@ -1203,7 +1203,7 @@ def assignedExprMVars (preState postState : SavedState) :
   postState.runMetaM' do
     unassignedPre.filterM λ m => m.isAssigned <||> m.isDelayedAssigned
 
-def sortFVarsByReverseContextOrder (goal : MVarId) (hyps : Array FVarId) :
+def sortFVarsByContextOrder (goal : MVarId) (hyps : Array FVarId) :
     MetaM (Array FVarId) :=
   goal.withContext do
     let lctx ← getLCtx
@@ -1211,11 +1211,13 @@ def sortFVarsByReverseContextOrder (goal : MVarId) (hyps : Array FVarId) :
       match lctx.fvarIdToDecl.find? fvarId with
       | none => (0, fvarId)
       | some ldecl => (ldecl.index, fvarId)
-    let hyps := hyps.qsort λ h i => h.fst > i.fst
+    let hyps := hyps.qsort λ h i => h.fst < i.fst
     return hyps.map (·.snd)
 
 def tryClearMany' (goal : MVarId) (hyps : Array FVarId) : MetaM MVarId := do
-  goal.tryClearMany (← sortFVarsByReverseContextOrder goal hyps)
+  goal.tryClearMany (← sortFVarsByContextOrder goal hyps)
+  -- `tryClearMany` iterates over the `FvarId`s from right to left, so we want
+  -- to sort by context order.
 
 def matchAppOf (f : Expr) (e : Expr) : MetaM (Option (Array Expr)) := do
   let type ← inferType f
