@@ -56,10 +56,12 @@ your `lakefile.lean`, add
 require aesop from git "https://github.com/JLimperg/aesop"
 ```
 
-After that, `lake build` will download and compile Aesop. If you use a different
-Lean 4 nightly version, or if you depend on a different version of a library
-which Aesop also depends on (currently only the `std4` library), you may have to
-harmonise these versions. Now the following test file should compile:
+You also need to make sure that your `lean-toolchain` file contains the same
+version of Lean 4 as Aesop's, and that your versions of Aesop's dependencies
+(currently only `std4`) match. We unfortunately can't support version ranges at
+the moment.
+
+Now the following test file should compile:
 
 ```lean
 import Aesop
@@ -67,6 +69,10 @@ import Aesop
 example : α → α :=
   by aesop
 ```
+
+On Windows, you may get an error when you `import Aesop`. See [this issue](https://github.com/JLimperg/aesop/issues/28). As a workaround, you can
+remove the line `precompileModules := true` from Aesop's `lakefile.lean`. This
+will decrease Aesop's performance.
 
 ## Quickstart
 
