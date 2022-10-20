@@ -38,7 +38,7 @@ private partial def makeForwardHyps (e : Expr)
         let mvarId := immediateMVars.get ⟨i, h⟩
         let type ← mvarId.getType
         (← getLCtx).foldlM (init := (proofsAcc, usedHypsAcc)) λ s@(proofsAcc, usedHypsAcc) ldecl =>
-          if ldecl.isAuxDecl then
+          if ldecl.isImplementationDetail then
             pure s
           else
             withoutModifyingState do
@@ -68,12 +68,12 @@ hypotheses; otherwise any forward rule could be applied infinitely often (if
 it can be applied at all). We use the following scheme to ensure this:
 
 - Whenever we add a hypothesis `h : T` as an instance of a forward rule, we also
-  add an aux decl `h' : T`.
-- Before we add a hypothesis `h : T`, we check whether there is already an aux
-  decl `h' : T`. If so, `h` is not added.
+  add an `implDetail` decl `h' : T`.
+- Before we add a hypothesis `h : T`, we check whether there is already an
+  `implDetail` `h' : T`. If so, `h` is not added.
 
 This scheme ensures that forward rules never add more than one hypothesis of
-any given type. `h'` is added as an aux decl, rather than as a regular
+any given type. `h'` is added as an `implDetail`, rather than as a regular
 hypothesis, to ensure that future rule applications do not change its type.
 -/
 
@@ -88,7 +88,7 @@ def isForwardHypName (n : Name) : Bool :=
 def getForwardHypTypes : MetaM (HashSet Expr) := do
   let mut result := {}
   for ldecl in (← getLCtx) do
-    if ldecl.isAuxDecl && isForwardHypName ldecl.userName then
+    if ldecl.isImplementationDetail && isForwardHypName ldecl.userName then
       result := result.insert ldecl.type
   return result
 
@@ -115,10 +115,14 @@ def applyForwardRule (goal : MVarId) (e : Expr)
     if newHyps.isEmpty then
       err
     let (_, goal) ← goal.assertHypotheses newHyps
-    let auxDecls ← newHyps.mapM λ hyp =>
-      return { hyp with userName := ← mkFreshForwardHypName }
-    let (auxDecls, goal) ← goal.assertHypotheses auxDecls
-    setFVarBinderInfos goal auxDecls .auxDecl
+    let implDetailHyps ← newHyps.mapM λ hyp =>
+      return {
+        hyp with
+        userName := ← mkFreshForwardHypName
+        binderInfo := .default
+        kind := .implDetail
+      }
+    let (_, goal) ← goal.assertHypotheses' implDetailHyps
     if clear then
       tryClearMany' goal usedHyps
     else

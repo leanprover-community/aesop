@@ -44,7 +44,7 @@ inductive Check
 
 namespace Check
 
-@[inlineIfReduce]
+@[inline_if_reduce]
 def toOption : Check → Lean.Option Bool
   | all => checkAllOption
   | tree => checkTreeOption

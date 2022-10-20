@@ -65,7 +65,7 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
           match lctx.decls[i] with
           | none => go (i + 1) goal
           | some ldecl =>
-            if ldecl.isAuxDecl then
+            if ldecl.isImplementationDetail then
               go (i + 1) goal
             else
               let newGoal ← destructProductHyp goal ldecl.fvarId

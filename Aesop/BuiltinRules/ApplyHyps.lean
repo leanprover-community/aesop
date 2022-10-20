@@ -22,7 +22,7 @@ def applyHyps : RuleTac := λ input =>
     let lctx ← getLCtx
     let mut rapps := Array.mkEmpty lctx.decls.size
     for localDecl in lctx do
-      if localDecl.isAuxDecl then continue
+      if localDecl.isImplementationDetail then continue
       let initialState ← saveState
       try
         let rapp ← applyHyp localDecl.fvarId input.goal

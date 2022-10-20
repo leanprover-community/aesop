@@ -243,7 +243,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
 -- Note that adding a rapp may prove the parent goal, but this function does not
 -- make the necessary changes. So after calling it, you should check whether the
 -- rapp's parent goal is proven and mark it accordingly.
-@[implementedBy addRappUnsafe]
+@[implemented_by addRappUnsafe]
 opaque addRapp : AddRapp → TreeM RappRef
 
 end Aesop

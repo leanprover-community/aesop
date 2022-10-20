@@ -92,7 +92,7 @@ private def applicableByHypRules (ri : Index α) (goal : MVarId)
   goal.withContext do
     let mut rs := #[]
     for localDecl in ← getLCtx do
-      if localDecl.isAuxDecl then continue
+      if localDecl.isImplementationDetail then continue
       let rules ←
         ri.byHyp.getUnify localDecl.type
       for r in rules do

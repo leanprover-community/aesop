@@ -50,7 +50,7 @@ private unsafe def findRepUnsafe (i : USize) (u : UnionFind α) :
     let (parent, u) := u.findRepUnsafe parent
     (parent, { u with parents := u.parents.uset i parent lcProof })
 
-@[implementedBy findRepUnsafe]
+@[implemented_by findRepUnsafe]
 private opaque findRep : USize → UnionFind α → USize × UnionFind α
 
 partial def find? (x : α) (u : UnionFind α) : Option USize × UnionFind α :=
@@ -82,18 +82,18 @@ private unsafe def mergeUnsafe (x y : α) (u : UnionFind α) :
         toRep := u.toRep
       }
 
-@[implementedBy mergeUnsafe]
+@[implemented_by mergeUnsafe]
 opaque merge (x y : α) : UnionFind α → UnionFind α
 
-def sets (u : UnionFind α) : Array (Array α) × UnionFind α :=
-  let (sets, u) := u.toRep.fold (init := (HashMap.empty, u)) λ (sets, u) x rep =>
+def sets {α : Type v} [BEq α] [Hashable α] (u : UnionFind α) : Array (Array α) × UnionFind α :=
+  let (sets, u) := u.toRep.fold (init := (HashMap.empty, u)) λ ((sets : HashMap USize _), u) x rep =>
     let (rep, u) := u.findRep rep
     let sets :=
       match sets.find? rep with
       | some set => sets.insert rep (set.push x)
       | none => sets.insert rep #[x]
     (sets, u)
-  let sets := sets.fold (init := Array.mkEmpty sets.size) λ sets _ v =>
+  let sets := sets.fold (init := Array.mkEmpty sets.size) λ (sets : Array _) _ v =>
     sets.push v
   (sets, u)
 

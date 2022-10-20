@@ -786,8 +786,8 @@ which other rules are applied to the goal. E.g. when you have a hypothesis `h :
 A ∧ B` which you register as an `apply` rule, and you also have a `cases` rule
 for `And`, we want to make sure that `h` is not destroyed by the `cases` rule.
 To do this, we create a new hypothesis `_local.h : A ∧ B` and register that
-hypothesis as an `apply` rule. We also mark `_local.h` as an `auxDecl` to make
-sure that most tactics will ignore it; e.g. it will not be found by
+hypothesis as an `apply` rule. We also mark `_local.h` as an `implDetail` to
+make sure that most tactics will ignore it; e.g. it will not be found by
 `assumption`.
 
 #### Branch State

@@ -20,7 +20,7 @@ def assumption : RuleTac := λ input => do
     let initialState ← saveState
     let mut applications := #[]
     for ldecl in ← getLCtx do
-      if ldecl.isAuxDecl then
+      if ldecl.isImplementationDetail then
         continue
       restoreState initialState
       let (some (application, proofHasMVar)) ←

@@ -6,7 +6,7 @@ package aesop {
   precompileModules := true
 }
 
-@[defaultTarget]
+@[default_target]
 lean_lib Aesop {}
 
 require std from git "https://github.com/leanprover/std4"

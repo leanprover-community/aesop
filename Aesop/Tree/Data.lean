@@ -414,7 +414,7 @@ unsafe def treeImpl : TreeSpec where
   introMVarCluster := MVarClusterUnsafe.mk
   elimMVarCluster | MVarClusterUnsafe.mk x => x
 
-@[implementedBy treeImpl]
+@[implemented_by treeImpl]
 opaque tree : TreeSpec := {
   Goal := Unit
   Rapp := Unit

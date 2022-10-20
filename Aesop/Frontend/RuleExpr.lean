@@ -473,7 +473,11 @@ private def elabRuleIdent (stx : Syntax) : ElabM RuleIdent :=
     resolveLocal : ElabM RuleIdent := do
       let n := stx.getId.eraseMacroScopes
       match (← getLCtx).findFromUserName? n with
-      | some ldecl => if ! ldecl.isAuxDecl then return .fvar n else throwError ""
+      | some ldecl =>
+        if ldecl.isImplementationDetail then
+          throwError ""
+        else
+          return .fvar n
       | none => throwError ""
 
     resolveGlobal : ElabM RuleIdent := do

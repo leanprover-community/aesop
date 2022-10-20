@@ -44,13 +44,13 @@ unsafe def elabConfigUnsafe (type : Name) (stx : Syntax) : TermElabM α :=
 unsafe def elabOptionsUnsafe : Syntax → TermElabM Aesop.Options :=
   elabConfigUnsafe ``Aesop.Options
 
-@[implementedBy elabOptionsUnsafe]
+@[implemented_by elabOptionsUnsafe]
 opaque elabOptions : Syntax → TermElabM Aesop.Options
 
 unsafe def elabSimpConfigUnsafe : Syntax → TermElabM Aesop.SimpConfig :=
   elabConfigUnsafe ``Aesop.SimpConfig
 
-@[implementedBy elabSimpConfigUnsafe]
+@[implemented_by elabSimpConfigUnsafe]
 opaque elabSimpConfig : Syntax → TermElabM Aesop.SimpConfig
 
 structure TacticConfig where

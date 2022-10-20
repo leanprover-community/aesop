@@ -433,7 +433,7 @@ end IO
 
 namespace Std.Format
 
-@[inlineIfReduce]
+@[inline_if_reduce]
 def isEmptyShallow : Format → Bool
   | nil => true
   | text "" => true
@@ -483,7 +483,7 @@ namespace Lean.MessageData
 def join (ms : Array MessageData) : MessageData :=
 ms.foldl (· ++ ·) nil
 
-@[inlineIfReduce]
+@[inline_if_reduce]
 def isEmptyShallow : MessageData → Bool
   | ofFormat f => f.isEmptyShallow
   | _ => false
@@ -753,7 +753,7 @@ unsafe def foldMUnsafe [Monad m] (initialKeys : Array Key)
     children.foldlM (init := s) λ s (k, t) =>
       t.foldMUnsafe (initialKeys.push k) f s
 
-@[implementedBy foldMUnsafe]
+@[implemented_by foldMUnsafe]
 opaque foldM [Monad m] (initalKeys : Array Key)
     (f : σ → Array Key → α → m σ) (init : σ) (t : Trie α) : m σ :=
   pure init
@@ -771,7 +771,7 @@ unsafe def foldValuesMUnsafe [Monad m] (f : σ → α → m σ) (init : σ) :
   let s ← vs.foldlM (init := init) f
   children.foldlM (init := s) λ s (_, c) => c.foldValuesMUnsafe (init := s) f
 
-@[implementedBy foldValuesMUnsafe]
+@[implemented_by foldValuesMUnsafe]
 opaque foldValuesM [Monad m] (f : σ → α → m σ) (init : σ) (t : Trie α) :
     m σ :=
   pure init
@@ -925,9 +925,10 @@ def getConstKeys (decl : Name) : MetaM (Array Key) := do
   return keys
 
 
-end DiscrTree
+end Lean.Meta.DiscrTree
 
-namespace SimpTheorems
+
+namespace Lean.Meta.SimpTheorems
 
 def addSimpEntry (s : SimpTheorems) : SimpEntry → SimpTheorems
   | SimpEntry.thm l =>
@@ -1002,7 +1003,38 @@ protected def toMessageData (s : SimpTheorems) : MessageData :=
       (s.erased.toArray.qsort (λ o₁ o₂ => o₁.key.lt o₂.key) |>.map (·.key))
   ]
 
-end SimpTheorems
+end Lean.Meta.SimpTheorems
+
+
+def Lean.LocalDecl.setKind : LocalDecl → LocalDeclKind → LocalDecl
+  | cdecl index fvarId userName type bi _, kind =>
+      cdecl index fvarId userName type bi kind
+  | ldecl index fvarId userName type value nonDep _, kind =>
+      ldecl index fvarId userName type value nonDep kind
+
+def Lean.LocalContext.setKind (lctx : LocalContext) (fvarId : FVarId)
+    (kind : LocalDeclKind) : LocalContext :=
+  lctx.modifyLocalDecl fvarId (·.setKind kind)
+
+open Lean in
+private def modifyLCtx [Monad m] [MonadMCtx m] (mvarId : MVarId)
+    (f : LocalContext → LocalContext) : m Unit :=
+  modifyMCtx λ mctx =>
+    let mdecl := mctx.getDecl mvarId
+    let lctx := mdecl |>.lctx |> f
+    let decls := mctx.decls.insert mvarId { mdecl with lctx }
+    { mctx with decls }
+
+def Lean.MVarId.setFVarKind [Monad m] [MonadMCtx m] (mvarId : MVarId)
+    (fvarId : FVarId) (kind : LocalDeclKind) : m Unit :=
+  modifyLCtx mvarId (·.setKind fvarId kind)
+
+def Lean.MVarId.setFVarBinderInfo [Monad m] [MonadMCtx m] (mvarId : MVarId)
+    (fvarId : FVarId) (bi : BinderInfo) : m Unit :=
+  modifyLCtx mvarId (·.setBinderInfo fvarId bi)
+
+
+namespace Lean.Meta
 
 -- Runs `tac` on `goal`, then on the subgoals created by `tac`, etc. Returns the
 -- goals to which `tac` does not apply any more. If `tac` applies infinitely
@@ -1064,11 +1096,6 @@ def instantiateMVarsInGoal (mvarId : MVarId) : MetaM Unit := do
     -- below panics.
   instantiateMVarDeclMVars mvarId
 
-def setMVarLCtx (mvarId : MVarId) (lctx : LocalContext) : MetaM Unit := do
-  let newDecl := { ← mvarId.getDecl with lctx := lctx }
-  let mctx ← getMCtx
-  setMCtx { mctx with decls := mctx.decls.insert mvarId newDecl }
-
 def setFVarBinderInfos (mvarId : MVarId) (fvars : Array FVarId)
     (bi : BinderInfo) : MetaM Unit := do
   let decl ← mvarId.getDecl
@@ -1079,38 +1106,35 @@ def setFVarBinderInfos (mvarId : MVarId) (fvars : Array FVarId)
   let newDecl := { decl with lctx := lctx }
   setMCtx { mctx with decls := mctx.decls.insert mvarId newDecl }
 
-structure HypothesisWithBinderInfo where
-  userName : Name
-  type : Expr
-  value : Expr
+structure Hypothesis' extends Hypothesis where
   binderInfo : BinderInfo
+  kind : LocalDeclKind
 
-def assertHypothesesWithBinderInfos (mvarId : MVarId)
-    (hs : Array HypothesisWithBinderInfo) : MetaM (Array FVarId × MVarId) := do
+def _root_.Lean.MVarId.assertHypotheses' (mvarId : MVarId)
+    (hs : Array Hypothesis') : MetaM (Array FVarId × MVarId) := do
   if hs.isEmpty then
     return (#[], mvarId)
-  else mvarId.withContext do
-    mvarId.checkNotAssigned `assertHypotheses
-    let tag    ← mvarId.getTag
-    let target ← mvarId.getType
-    let targetNew := hs.foldr (init := target) fun h targetNew =>
-      mkForall h.userName h.binderInfo h.type targetNew
-    let mvarNew ← mkFreshExprSyntheticOpaqueMVar targetNew tag
-    let val := hs.foldl (init := mvarNew) fun val h => mkApp val h.value
-    mvarId.assign val
-    mvarNew.mvarId!.introNP hs.size
+  else
+    let (fvarIds, mvarId) ← mvarId.assertHypotheses $ hs.map (·.toHypothesis)
+    modifyLCtx mvarId λ lctx => Id.run do
+      let mut lctx := lctx
+      for h : i in [:hs.size] do
+        let fvarId := fvarIds[i]!
+        let h := hs[i]'h.2
+        lctx := lctx.setKind fvarId h.kind
+        lctx := lctx.setBinderInfo fvarId h.binderInfo
+      return lctx
+    return (fvarIds, mvarId)
 
 def isValidMVarAssignment (mvarId : MVarId) (e : Expr) : MetaM Bool :=
   mvarId.withContext do
     let (some _) ← observing? $ check e | return false
     let et ← inferType e
     let mt ← mvarId.getType
-    withTransparency TransparencyMode.all $ isDefEq et mt
+    withTransparency .all $ isDefEq et mt
 
-def isDeclaredMVar (mvarId : MVarId) : MetaM Bool := do
-  match (← getMCtx).findDecl? mvarId with
-  | some _ => pure true
-  | none => pure false
+def isDeclaredMVar (mvarId : MVarId) : MetaM Bool :=
+  return (← getMCtx).findDecl? mvarId |>.isSome
 
 partial def getGoalMVarDependencies (mvarId : MVarId) (includeDelayed := false):
     MetaM (HashSet MVarId) :=
@@ -1258,7 +1282,7 @@ unsafe def modifyMUnsafe (r : Ref σ α) (f : α → m α) : m Unit := do
   let v ← r.take
   r.set (← f v)
 
-@[implementedBy modifyMUnsafe]
+@[implemented_by modifyMUnsafe]
 def modifyM (r : Ref σ α) (f : α → m α) : m Unit := do
   let v ← r.get
   r.set (← f v)
@@ -1270,7 +1294,7 @@ unsafe def modifyGetMUnsafe (r : Ref σ α) (f : α → m (β × α)) : m β := 
   r.set a
   return b
 
-@[implementedBy modifyGetMUnsafe]
+@[implemented_by modifyGetMUnsafe]
 def modifyGetM (r : Ref σ α) (f : α → m (β × α)) : m β := do
   let v ← r.get
   let (b, a) ← f v

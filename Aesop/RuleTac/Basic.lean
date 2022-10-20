@@ -158,9 +158,10 @@ def copyRuleHypotheses (goal : MVarId) (userNames : Array Name) :
       userName := ← mkFreshUserName $ `_local ++ n
       value := mkFVar decl.fvarId
       type := decl.type
-      binderInfo := BinderInfo.auxDecl
+      binderInfo := .default
+      kind := .implDetail
     }
-  let (newHyps, goal) ← assertHypothesesWithBinderInfos goal newHyps
+  let (newHyps, goal) ← goal.assertHypotheses' newHyps
   return (goal, newHyps)
 
 def copyRuleHypothesis (goal : MVarId) (userName : Name) :

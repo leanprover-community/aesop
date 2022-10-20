@@ -139,7 +139,7 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
       -- `fvarId`, `lemmaId` should be temporarily removed from the simp set.
       -- We use this to prevent `simp` from 'self-simplifying' the original
       -- hypothesis of a local simp rule. The copied hypothesis is never
-      -- simplified (being an `auxDecl`), so we don't need to consider it.
+      -- simplified (being an `implDetail`), so we don't need to consider it.
     for localRule in localSimpRules do
       let (some ldecl) := lctx.findFromUserName? localRule.copiedFVarUserName
         | continue
@@ -159,7 +159,7 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
       else
         let mut fvarIdsToSimp := Array.mkEmpty lctx.decls.size
         for ldecl in lctx do
-          if ldecl.isAuxDecl then
+          if ldecl.isImplementationDetail then
             continue
           fvarIdsToSimp := fvarIdsToSimp.push ldecl.fvarId
         Aesop.simpGoal goal ctx (fvarIdsToSimp := fvarIdsToSimp)
