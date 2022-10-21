@@ -17,12 +17,11 @@ def apply (opts : RegularBuilderOptions) : RuleBuilder := λ input =>
     let tac := .applyConst decl
     let type := (← getConstInfo decl).type
     RuleBuilderOutput.global <$> mkResult tac type
-  | RuleBuilderKind.local fvarUserName goal => do
-    let (goal, newHyp) ← copyRuleHypothesis goal fvarUserName
+  | RuleBuilderKind.local fvarUserName goal =>
     goal.withContext do
-      let decl ← newHyp.getDecl
-      let tac := RuleTacDescr.applyFVar decl.userName
-      let result ← mkResult tac decl.type
+      let tac := RuleTacDescr.applyFVar fvarUserName
+      let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
+      let result ← mkResult tac type
       return RuleBuilderOutput.local goal result
   where
     mkResult (tac : RuleTacDescr) (type : Expr) : MetaM RuleBuilderResult :=

@@ -90,7 +90,7 @@ instance : ToMessageData RuleSet where
       "Normalisation rules:" ++ toMessageData rs.normRules,
       "Normalisation simp lemmas:" ++ rs.normSimpLemmas.toMessageData,
       "Local normalisation simp lemmas:" ++ .node
-        (rs.localNormSimpLemmas.map (·.originalFVarUserName)),
+        (rs.localNormSimpLemmas.map (·.fvarUserName)),
       "Erased rules:" ++ indentD (unlines $
         rs.erased.toArray.qsort (λ x y => compare x y |>.isLT)
           |>.map toMessageData)

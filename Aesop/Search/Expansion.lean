@@ -134,36 +134,28 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
   goal.withContext do
     let lctx ← getLCtx
     let mut simpTheorems := ctx.simpTheorems
-    let mut disabledTheorems := {}
-      -- A pair `(fvarId, lemmaId)` in this map indicates that while simplifying
-      -- `fvarId`, `lemmaId` should be temporarily removed from the simp set.
-      -- We use this to prevent `simp` from 'self-simplifying' the original
-      -- hypothesis of a local simp rule. The copied hypothesis is never
-      -- simplified (being an `implDetail`), so we don't need to consider it.
     for localRule in localSimpRules do
-      let (some ldecl) := lctx.findFromUserName? localRule.copiedFVarUserName
+      let (some ldecl) := lctx.findFromUserName? localRule.fvarUserName
         | continue
       let origin := Origin.fvar ldecl.fvarId
       let (some simpTheorems') ← observing? $
         simpTheorems.addTheorem origin ldecl.toExpr
         | continue
       simpTheorems := simpTheorems'
-      let (some origLDecl) := lctx.findFromUserName? localRule.originalFVarUserName
-        | continue
-      disabledTheorems := disabledTheorems.insert origLDecl.fvarId origin
     let ctx := { ctx with simpTheorems }
 
     let (result, _) ←
       if useHyps then
-        Aesop.simpAll goal ctx disabledTheorems
+        Aesop.simpAll goal ctx (disabledTheorems := {})
       else
         let mut fvarIdsToSimp := Array.mkEmpty lctx.decls.size
         for ldecl in lctx do
+          -- TODO exclude non-prop and dependent hyps?
           if ldecl.isImplementationDetail then
             continue
           fvarIdsToSimp := fvarIdsToSimp.push ldecl.fvarId
         Aesop.simpGoal goal ctx (fvarIdsToSimp := fvarIdsToSimp)
-          (disabledTheorems := disabledTheorems)
+          (disabledTheorems := {})
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
     -- unassigned. In this case, we treat the goal as unchanged.

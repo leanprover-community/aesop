@@ -37,8 +37,7 @@ structure GlobalSimpRuleBuilderResult where
 
 structure LocalSimpRuleBuilderResult where
   builder : BuilderName
-  originalFVarUserName : Name
-  copiedFVarUserName : Name
+  fvarUserName : Name
 
 inductive RuleBuilderResult
   | regular (r : RegularRuleBuilderResult)

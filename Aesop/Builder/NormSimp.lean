@@ -39,18 +39,12 @@ def normSimpLemmas : RuleBuilder := λ input => do
     } catch e => {
       throwError "aesop: simp builder: exception while trying to add {decl} as a simp theorem:{indentD e.toMessageData}"
     }
-  | .«local» originalFVarUserName goal =>
-    let (goal, hyp) ← copyRuleHypothesis goal originalFVarUserName
+  | .«local» fvarUserName goal =>
     goal.withContext do
-      let ldecl ← hyp.getDecl
-      let type := ldecl.type
+      let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
       unless ← isProp type do
-        throwError "aesop: simp builder: simp rules must be propositions but {originalFVarUserName} has type{indentExpr type}"
-      return .«local» goal $ .localSimp {
-        builder := builderName
-        originalFVarUserName
-        copiedFVarUserName := (← hyp.getDecl).userName
-      }
+        throwError "aesop: simp builder: simp rules must be propositions but {fvarUserName} has type{indentExpr type}"
+      return .«local» goal (.localSimp { builder := builderName, fvarUserName })
   where
     builderName := BuilderName.simp
 

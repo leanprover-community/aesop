@@ -147,27 +147,4 @@ def isGlobal : RuleTacDescr → Bool
 
 end RuleTacDescr
 
-
-/-! # Miscellany -/
-
-def copyRuleHypotheses (goal : MVarId) (userNames : Array Name) :
-    MetaM (MVarId × Array FVarId) := do
-  let newHyps ← userNames.mapM λ n => do
-    let decl ← getLocalDeclFromUserName n
-    pure {
-      userName := ← mkFreshUserName $ `_local ++ n
-      value := mkFVar decl.fvarId
-      type := decl.type
-      binderInfo := .default
-      kind := .implDetail
-    }
-  let (newHyps, goal) ← goal.assertHypotheses' newHyps
-  return (goal, newHyps)
-
-def copyRuleHypothesis (goal : MVarId) (userName : Name) :
-    MetaM (MVarId × FVarId) := do
-  let (goal, #[hyp]) ← copyRuleHypotheses goal #[userName]
-    | unreachable!
-  return (goal, hyp)
-
 end Aesop

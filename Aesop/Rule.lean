@@ -171,15 +171,9 @@ end NormSimpRule
 -- represented by its user name. When we run the simplifier, we add this
 -- hypothesis to the simp set. This must be done for each goal individually
 -- since the `FVarId` of the hypothesis is not guaranteed to be stable.
---
--- When building a local rule, we copy the hypothesis (as usual). We record both
--- the user name of the original hypothesis (which will not be added to the simp
--- set but is needed anyway) and the user name of the copied hypothesis (which
--- will be added to the simp set).
 structure LocalNormSimpRule where
   name : RuleName
-  originalFVarUserName : Name
-  copiedFVarUserName : Name
+  fvarUserName : Name
   deriving Inhabited
 
 namespace LocalNormSimpRule
