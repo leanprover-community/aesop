@@ -476,7 +476,7 @@ theorem X.subset_append_of_subset_right (l l₁ l₂ : List α) : l ⊆ l₂ →
 attribute [-simp] cons_subset
 @[simp] theorem X.cons_subset {a : α} {l m : List α} :
   a::l ⊆ m ↔ a ∈ m ∧ l ⊆ m := by
-  aesop (add norm unfold [Subset.subset, List.Subset])
+  aesop (add norm unfold [HasSubset.Subset, List.Subset])
 
 theorem cons_subset_of_subset_of_mem {a : α} {l m : List α}
     (ainm : a ∈ m) (lsubm : l ⊆ m) : a::l ⊆ m := by
@@ -484,11 +484,11 @@ theorem cons_subset_of_subset_of_mem {a : α} {l m : List α}
 
 theorem append_subset_of_subset_of_subset {l₁ l₂ l : List α} (l₁subl : l₁ ⊆ l) (l₂subl : l₂ ⊆ l) :
   l₁ ++ l₂ ⊆ l := by
-  aesop (add norm unfold Subset)
+  aesop (add norm unfold [HasSubset.Subset, List.Subset])
 
 @[simp] theorem append_subset_iff {l₁ l₂ l : List α} :
     l₁ ++ l₂ ⊆ l ↔ l₁ ⊆ l ∧ l₂ ⊆ l := by
-  aesop (add norm unfold Subset)
+  aesop (add norm unfold [HasSubset.Subset, List.Subset])
 
 @[aesop safe destruct]
 theorem eq_nil_of_subset_nil {l : List α} : l ⊆ [] → l = [] := by
@@ -500,7 +500,7 @@ theorem X.eq_nil_iff_forall_not_mem {l : List α} : l = [] ↔ ∀ a, a ∉ l :=
 
 -- attribute [-simp] map_subset
 theorem X.map_subset {l₁ l₂ : List α} (f : α → β) (H : l₁ ⊆ l₂) : map f l₁ ⊆ map f l₂ := by
-  aesop (add norm unfold [Subset.subset, List.Subset])
+  aesop (add norm unfold [HasSubset.Subset, List.Subset])
 
 -- IND
 theorem map_subset_iff {l₁ l₂ : List α} (f : α → β) (h : Injective f) :
@@ -655,7 +655,7 @@ theorem replicate_add (a : α) (m n) : replicate (m + n) a = replicate m a ++ re
   -- TODO n + 1 + n = n + n + 1
 
 theorem replicate_subset_singleton (a : α) (n) : replicate n a ⊆ [a] := by
-  aesop (add norm unfold [Subset.subset, List.Subset])
+  aesop (add norm unfold [HasSubset.Subset, List.Subset])
 
 theorem subset_singleton_iff {a : α} {L : List α} : L ⊆ [a] ↔ ∃ n, L = replicate n a :=
   ADMIT
