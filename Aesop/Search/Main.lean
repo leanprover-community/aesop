@@ -15,8 +15,9 @@ import Aesop.Tree
 import Aesop.Util
 
 open Lean
-open Lean.Meta
 open Lean.Elab.Tactic (liftMetaTacticAux TacticM)
+open Lean.Parser.Tactic (tacticSeq)
+open Lean.Meta
 
 namespace Aesop
 
@@ -76,10 +77,10 @@ def getProof? : SearchM Q (Option Expr) := do
     | return none
   instantiateMVars proof
 
-def finishIfProven : SearchM Q Bool := do
-  let root ← getRootMVarCluster
-  unless (← root.get).state.isProven do
-    return false
+private def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
+  withOptions (·.setBool `pp.analyze true) x
+
+def finalizeProof : SearchM Q Unit := do
   aesop_trace[steps] "Root node is proven. Linking proofs."
   (← read).rootGoalMVar.withContext do
     extractProof
@@ -91,10 +92,56 @@ def finishIfProven : SearchM Q Bool := do
         m!"Unassigned metavariables: {(← getMVarsNoDelayed proof).map (·.name)}"
       ]
     aesop_trace[proof] do
-      withOptions (·.setBool `pp.analyze true) do
-        -- pp.analyze makes sure that the pretty-printer round-trips.
+      withPPAnalyze do
         aesop_trace![proof] "Final proof:{indentExpr proof}"
-    return true
+
+open Lean.Elab.Tactic in
+def checkScript (script : TSyntax ``tacticSeq) : SearchM Q Unit := do
+  let initialGoals := (← read).initialGoals
+  let go : TacticM Unit := do
+    let goal ← getMainGoal
+    setGoals [goal]
+    evalTactic script
+    unless (← getUnsolvedGoals).isEmpty do
+      throwError "script executed successfully but did not solve the main goal"
+  try
+    discard $ show MetaM _ from withoutModifyingState $ do
+      initialGoals.forM eraseExprMVarAssignment
+      go.run { elaborator := .anonymous, recover := false }
+        |>.run { goals := initialGoals.toList } |>.run
+  catch e => throwError
+    "{Check.script.name}: error while executing generated script:{indentD e.toMessageData}"
+
+def traceScript : SearchM Q Unit := do
+  let ctx ← read
+  let doCheck ← Check.script.isEnabled
+  if ! ctx.options.traceScript && ! doCheck then
+    return
+  let script? ←
+    try
+      let script ← (← getRootMVarCluster).extractScript
+      let script ← script.render ctx.initialGoals
+      let script ← `(tacticSeq| $script:tactic*)
+      if ctx.options.traceScript then
+        withPPAnalyze do
+          logInfo m!"Try this:\n{script}"
+      pure $ some script
+    catch e =>
+      logError m!"aesop: error while generating tactic script:{indentD e.toMessageData}"
+      pure none
+  if doCheck then
+    if let (some script) := script? then
+      checkScript script
+
+def finishIfProven : SearchM Q Bool := do
+  unless (← (← getRootMVarCluster).get).state.isProven do
+    return false
+  finalizeProof
+  traceScript
+  -- `traceScript` needs to run after `finalizeProof` because in `checkScript`
+  -- we assume that all the intermediate mvars are available in the current
+  -- `MetavarContext`.
+  return true
 
 def traceFinalTree : SearchM Q Unit := do
   aesop_trace[finalTree] do
@@ -155,21 +202,29 @@ partial def searchLoop : SearchM Q (Array MVarId) :=
     incrementIteration
     searchLoop
 
-def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
+/--
+The `goals` should be the current goals (as reported by `getGoals`). If you
+don't use Aesop's `traceScript` option, `goals` may also contain just the
+current main goal (as reported by `getMainGoal`).
+-/
+def search (goals : Array MVarId) (ruleSet? : Option RuleSet := none)
      (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
      (profile : Profile := {}) :
      MetaM (Array MVarId × Profile) := do
-  goal.checkNotAssigned `aesop
-  let ruleSet ← do
-    match ruleSet? with
-    | none => Frontend.getDefaultRuleSet
-    | some ruleSet => pure ruleSet
-  let ⟨Q, _⟩ := options.queue
-  let (goals, state, _) ← SearchM.run ruleSet options simpConfig goal profile do
-    show SearchM Q _ from
-    try searchLoop
-    catch e => handleFatalError e
-    finally freeTree
-  return (goals, state.profile)
+  if h : 0 < goals.size then
+    goals[0].checkNotAssigned `aesop
+    let ruleSet ←
+      match ruleSet? with
+      | none => Frontend.getDefaultRuleSet
+      | some ruleSet => pure ruleSet
+    let ⟨Q, _⟩ := options.queue
+    let (goals, state, _) ← SearchM.run ruleSet options simpConfig goals profile do
+      show SearchM Q _ from
+      try searchLoop
+      catch e => handleFatalError e
+      finally freeTree
+    return (goals, state.profile)
+  else
+    throwError "aesop: no goals to be solved"
 
 end Aesop

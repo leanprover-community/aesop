@@ -30,8 +30,14 @@ def RuleResult.isSuccessful
 
 inductive NormRuleResult
   | succeeded (goal : MVarId) (branchState : BranchState)
-  | proven
+      (scriptStep : UnstructuredScriptStep)
+  | proven (scriptStep : UnstructuredScriptStep)
   | failed
+
+def NormRuleResult.isSuccessful : NormRuleResult → Bool
+  | succeeded .. => true
+  | proven .. => true
+  | failed => false
 
 def runRuleTac (tac : RuleTac) (ruleName : RuleName)
     (preState : Meta.SavedState) (input : RuleTacInput) :
@@ -61,6 +67,19 @@ def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
   }
   runRuleTac tac ruleName postNormState input
 
+private def mkNormRuleScriptStep (scriptBuilder : RuleTacScriptBuilder)
+    (inGoal : MVarId) (outGoal? : Option MVarId) :
+    MetaM UnstructuredScriptStep := do
+  let tacticSeq ← scriptBuilder.unstructured.run
+  let outGoals :=
+    match outGoal? with
+    | none => #[]
+    | some g => #[g]
+  return {
+    otherSolvedGoals := #[]
+    tacticSeq, inGoal, outGoals
+  }
+
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
     MetaM NormRuleResult := do
@@ -76,14 +95,16 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
     restoreState rapp.postState
     if rapp.goals.isEmpty then
       aesop_trace[stepsNormalization] "Rule proved the goal."
-      return .proven
+      let step ← mkNormRuleScriptStep rapp.scriptBuilder input.goal none
+      return .proven step
     let (#[g]) := rapp.goals
       | err m!"rule produced more than one subgoal."
     let postBranchState := bs.update rule result.postBranchState?
     aesop_trace[stepsNormalization] do
       aesop_trace![stepsNormalization] "Rule succeeded. New goal:{indentD $ .ofGoal g}"
       aesop_trace[stepsBranchStates] "Branch state after rule application: {postBranchState.find? rule}"
-    return .succeeded g postBranchState
+    let step ← mkNormRuleScriptStep rapp.scriptBuilder input.goal (some g)
+    return .succeeded g postBranchState step
   where
     err {α} (msg : MessageData) : MetaM α := throwError
       "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal input.goal}"
@@ -107,13 +128,8 @@ def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (bs : BranchState) (rule : IndexMatchResult NormRule) :
     ProfileT MetaM NormRuleResult :=
   profiling (runNormRuleCore goal mvars bs rule) λ result elapsed => do
-    let successful :=
-      match result with
-      | .proven => true
-      | .succeeded .. => true
-      | .failed .. => false
     let rule := RuleProfileName.rule rule.rule.name
-    let ruleProfile := { elapsed, successful, rule }
+    let ruleProfile := { elapsed, successful := result.isSuccessful, rule }
     recordAndTraceRuleProfile ruleProfile
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
@@ -122,10 +138,8 @@ def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     ProfileT MetaM NormRuleResult := do
   for rule in rules do
     let result ← runNormRule goal mvars branchState rule
-    match result with
-    | .proven => return result
-    | .failed => continue
-    | .succeeded _ _ => return result
+    if result.isSuccessful then
+      return result
   return .failed
 
 def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
@@ -144,7 +158,7 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
       simpTheorems := simpTheorems'
     let ctx := { ctx with simpTheorems }
 
-    let (result, _) ←
+    let result ←
       if useHyps then
         Aesop.simpAll goal ctx (disabledTheorems := {})
       else
@@ -159,7 +173,7 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
     -- unassigned. In this case, we treat the goal as unchanged.
-    if let .solved := result then
+    if let .solved .. := result then
       let anyMVarDropped ← mvars.anyM λ mvarId =>
         return ! (← mvarId.isAssigned) &&
                 ! (← mvarId.isDelayedAssigned)
@@ -195,40 +209,72 @@ def normSimp (goal : MVarId) (mvars : UnorderedArraySet MVarId) (useHyps : Bool)
       else
         normSimpCore useHyps ctx localSimpRules goal mvars
 
+-- FIXME add custom context if the user provided one
+-- FIXME minimised simp (`simp only`) does not work reliably
+private def mkNormSimpScriptStep
+    (inGoal : MVarId) (outGoal? : Option MVarId)
+    (usedTheorems : Simp.UsedSimps) : MetaM UnstructuredScriptStep := do
+  let thms ← mkSimpOnlyTheorems inGoal usedTheorems
+  let tactic ← `(tactic| simp only [$thms:simpLemma,*] at *)
+  let outGoals :=
+    match outGoal? with
+    | none => #[]
+    | some g => #[g]
+  return {
+    tacticSeq := #[tactic]
+    otherSolvedGoals := #[]
+    inGoal, outGoals
+  }
+
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 partial def normalizeGoalMVar (rs : RuleSet) (normSimpUseHyps : Bool)
     (ctx : Simp.Context) (maxIterations : Nat) (goal : MVarId)
     (mvars : UnorderedArraySet MVarId) (bs : BranchState) :
-    ProfileT MetaM (Option (MVarId × BranchState)) :=
-  go 0 goal bs
+    ProfileT MetaM (Option (MVarId × BranchState) × UnstructuredScript) := do
+  aesop_trace[steps] "Goal before normalisation:{indentD $ .ofGoal goal}"
+  let (result?, script) ← go 0 goal bs #[]
+  if let (some (goal, _)) := result? then
+    aesop_trace[steps] "Goal after normalisation ({goal.name}):{indentD $ .ofGoal goal}"
+  return (result?, script)
   where
-    go (iteration : Nat) (goal : MVarId) (bs : BranchState) :
-        ProfileT MetaM (Option (MVarId × BranchState)) := do
+    go (iteration : Nat) (goal : MVarId) (bs : BranchState)
+       (script : UnstructuredScript) :
+       ProfileT MetaM (Option (MVarId × BranchState) × UnstructuredScript) := do
       if maxIterations > 0 && iteration > maxIterations then throwError
         "aesop: exceeded maximum number of normalisation iterations ({maxIterations}). This means normalisation probably got stuck in an infinite loop."
       let rules ← selectNormRules rs goal
       let (preSimpRules, postSimpRules) :=
         rules.partition λ r => r.rule.extra.penalty < (0 : Int)
+      -- TODO separate pre- and post-simp rules up front for efficiency?
       let preSimpResult ← runFirstNormRule goal mvars bs preSimpRules
       match preSimpResult with
-      | .proven => return none
-      | .succeeded goal bs => go (iteration + 1) goal bs
+      | .proven scriptStep =>
+        return (none, script.push scriptStep)
+      | .succeeded outGoal bs scriptStep =>
+        go (iteration + 1) outGoal bs (script.push scriptStep)
       | .failed =>
         aesop_trace[stepsNormalization] "Running normalisation simp"
         let simpResult ←
           normSimp goal mvars normSimpUseHyps ctx rs.localNormSimpLemmas
         match simpResult with
-        | .solved => return none
-        | .simplified goal =>
+        | .solved usedTheorems =>
+          let scriptStep ← mkNormSimpScriptStep goal none usedTheorems
+          return (none, script.push scriptStep)
+        | .simplified goal' usedTheorems =>
           aesop_trace[stepsNormalization] "Goal after normalisation simp:{indentD $ MessageData.ofGoal goal}"
-          go (iteration + 1) goal bs
-        | .unchanged goal =>
+          let scriptStep ← mkNormSimpScriptStep goal (some goal') usedTheorems
+          go (iteration + 1) goal' bs (script.push scriptStep)
+        | .unchanged goal' =>
           aesop_trace[stepsNormalization] "Goal unchanged after normalisation simp."
-          let postSimpResult ← runFirstNormRule goal mvars bs postSimpRules
+          let script := script.push $ .dummy goal goal'
+          let postSimpResult ← runFirstNormRule goal' mvars bs postSimpRules
           match postSimpResult with
-          | .proven => return none
-          | .succeeded goal bs => go (iteration + 1) goal bs
-          | .failed => return some (goal, bs)
+          | .proven scriptStep =>
+            return (none, script.push scriptStep)
+          | .succeeded goal' bs scriptStep =>
+            go (iteration + 1) goal' bs (script.push scriptStep)
+          | .failed =>
+            return (some (goal', bs), script)
 
 -- Returns true if the goal was solved by normalisation.
 def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Q Bool := do
@@ -241,29 +287,22 @@ def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Q Bool := do
   let ctx ← read
   let profilingEnabled ← isProfilingEnabled
   let profile ← getThe Profile
-  let ((postGoal?, profile), postState) ←
+  let (((normResult?, script), profile), postState) ←
     (← gref.get).runMetaMInParentState do
-      aesop_trace[steps] "Goal before normalisation:{indentD $ MessageData.ofGoal g.preNormGoal}"
-      let (postGoal?, profile) ←
-        normalizeGoalMVar ctx.ruleSet ctx.normSimpUseHyps ctx.normSimpContext
-          ctx.options.maxNormIterations g.preNormGoal g.mvars g.branchState
-        |>.run profilingEnabled profile
-      if let (some (postGoal, _)) := postGoal? then
-        aesop_trace[steps] "Goal after normalisation ({postGoal.name}):{indentD $ toMessageData postGoal}"
-        -- This trace needs to happen within the `runMetaMInParentState` to make
-        -- sure that the goal is printed correctly.
-      return (postGoal?, profile)
+      normalizeGoalMVar ctx.ruleSet ctx.normSimpUseHyps ctx.normSimpContext
+        ctx.options.maxNormIterations g.preNormGoal g.mvars g.branchState
+      |>.run profilingEnabled profile
   modify λ s => { s with profile }
-  match postGoal? with
+  match normResult? with
   | some (postGoal, postBranchState) =>
     gref.modify λ g =>
-      g.setNormalizationState (NormalizationState.normal postGoal postState)
+      g.setNormalizationState (.normal postGoal postState script)
       |>.setBranchState postBranchState
     return false
   | none =>
     aesop_trace[steps] "Normalisation solved the goal"
     gref.modify λ g =>
-      g.setNormalizationState (NormalizationState.provenByNormalization postState)
+      g.setNormalizationState (.provenByNormalization postState script)
     gref.markProvenByNormalization
     return true
 

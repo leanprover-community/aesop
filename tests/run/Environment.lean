@@ -10,6 +10,7 @@ import Lean
 open Lean Lean.Meta Lean.Elab.Tactic
 
 set_option aesop.check.all true
+set_option aesop.check.script false
 
 -- When rules add declarations to the environment, Aesop must copy these
 -- declarations during proof extraction.

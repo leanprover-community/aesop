@@ -27,17 +27,17 @@ theorem All.split_cons₂ (P : α → Prop) (x : α) (xs : List α) (h : All P (
       (fun (h_1 : All P (x :: xs)) =>
           ((fun (h_2 : All P (x :: xs)) =>
                 (All.casesOn (P := P) (motive := fun a x_1 => x :: xs = a → HEq h x_1 → P x ∧ All P xs) h_2
-                    (fun h_3 => List.noConfusion h_3) fun {x_1} {xs_1} a a_1 h_3 =>
-                    List.noConfusion h_3 fun head_eq =>
-                      Eq.ndrec (motive := fun {x_2} =>
-                        ∀ (a : P x_2), xs = xs_1 → HEq h (All.cons (P := P) a a_1) → P x ∧ All P xs)
+                    (fun h_1 => List.noConfusion h_1) fun {x_1} {xs_1} a a_1 h_1 =>
+                    List.noConfusion h_1 fun head_eq =>
+                      Eq.ndrec (motive := fun {x_1} =>
+                        ∀ (a : P x_1), xs = xs_1 → HEq h (All.cons (P := P) a a_1) → P x ∧ All P xs)
                         (fun a tail_eq =>
-                          Eq.ndrec (motive := fun {xs_2} =>
-                            ∀ (a_2 : All P xs_2), HEq h (All.cons (P := P) a a_2) → P x ∧ All P xs)
-                            (fun a_2 h_4 =>
+                          Eq.ndrec (motive := fun {xs_1} =>
+                            ∀ (a_1 : All P xs_1), HEq h (All.cons (P := P) a a_1) → P x ∧ All P xs)
+                            (fun a_1 h_1 =>
                               Eq.ndrec (motive := fun h => P x ∧ All P xs)
-                                (of_eq_true (Eq.trans (congr (congrArg And (eq_true a)) (eq_true a_2)) (and_self True)))
-                                (Eq.symm (eq_of_heq h_4)))
+                                (of_eq_true (Eq.trans (congr (congrArg And (eq_true a)) (eq_true a_1)) (and_self True)))
+                                (Eq.symm (eq_of_heq h_1)))
                             tail_eq a_1)
                         head_eq a :
                   x :: xs = x :: xs → HEq h h_2 → P x ∧ All P xs))

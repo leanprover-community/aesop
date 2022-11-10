@@ -77,23 +77,29 @@ any given type. `h'` is added as an `implDetail`, rather than as a regular
 hypothesis, to ensure that future rule applications do not change its type.
 -/
 
-def forwardHypPrefix := `_fwd
+-- Prefix of the regular hyps added by `forward`.
+def forwardHypPrefix := `fwd
 
-def mkFreshForwardHypName : MetaM Name :=
-  mkFreshIdWithPrefix forwardHypPrefix
+-- Prefix of the `implDetail` hyps added by `forward`.
+def forwardImplDetailHypPrefix := `_fwd
 
-def isForwardHypName (n : Name) : Bool :=
-  forwardHypPrefix.isPrefixOf n
+-- Names for the `implDetail` hyps added by `forward`.
+def mkFreshForwardImplDetailHypName : MetaM Name :=
+  mkFreshIdWithPrefix forwardImplDetailHypPrefix
+
+def isForwardImplDetailHypName (n : Name) : Bool :=
+  forwardImplDetailHypPrefix.isPrefixOf n
 
 def getForwardHypTypes : MetaM (HashSet Expr) := do
   let mut result := {}
   for ldecl in (← getLCtx) do
-    if ldecl.isImplementationDetail && isForwardHypName ldecl.userName then
+    if ldecl.isImplementationDetail && isForwardImplDetailHypName ldecl.userName then
       result := result.insert ldecl.type
   return result
 
 def applyForwardRule (goal : MVarId) (e : Expr)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) : MetaM MVarId :=
+    (immediate : UnorderedArraySet Nat) (clear : Bool) :
+    MetaM (MVarId × RuleTacScriptBuilder) :=
   goal.withContext do
     let (newHypProofs, usedHyps) ←
       makeForwardHyps e immediate (collectUsedHyps := clear)
@@ -102,31 +108,29 @@ def applyForwardRule (goal : MVarId) (e : Expr)
     let forwardHypTypes ← getForwardHypTypes
     let mut newHyps := Array.mkEmpty newHypProofs.size
     let mut newHypTypes : HashSet Expr := {}
-    for proof in newHypProofs do
+    let newHypUserNames ← getUnusedUserNames newHypProofs.size forwardHypPrefix
+    for proof in newHypProofs, userName in newHypUserNames do
       let type ← inferType proof
       if forwardHypTypes.contains type || newHypTypes.contains type then
         continue
       newHypTypes := newHypTypes.insert type
-      newHyps := newHyps.push {
-        userName := ← mkFreshForwardHypName
-        value := proof
-        type
-      }
+      newHyps := newHyps.push { value := proof, type, userName }
     if newHyps.isEmpty then
       err
-    let (_, goal) ← goal.assertHypotheses newHyps
+    let (_, goal, assertStxb) ← goal.assertHypothesesWithSyntax newHyps
     let implDetailHyps ← newHyps.mapM λ hyp =>
       return {
         hyp with
-        userName := ← mkFreshForwardHypName
+        userName := ← mkFreshForwardImplDetailHypName
         binderInfo := .default
         kind := .implDetail
       }
     let (_, goal) ← goal.assertHypotheses' implDetailHyps
     if clear then
-      tryClearMany' goal usedHyps
+      let (goal, _, clearStxb) ← goal.tryClearManyWithSyntax usedHyps
+      return (goal, assertStxb.seq #[clearStxb])
     else
-      return goal
+      return (goal, assertStxb)
   where
     err {α} : MetaM α := throwError
       "found no instances of {e} (other than possibly those which had been previously added by forward rules)"
@@ -134,9 +138,9 @@ def applyForwardRule (goal : MVarId) (e : Expr)
 @[inline]
 def forwardExpr (e : Expr) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac :=
-  SimpleRuleTac.toRuleTac λ input => input.goal.withContext do
-    let goal ← applyForwardRule input.goal e immediate clear
-    return [goal]
+  SingleRuleTac.toRuleTac λ input => input.goal.withContext do
+    let (goal, stxb) ← applyForwardRule input.goal e immediate clear
+    return (#[goal], stxb)
 
 def forwardConst (decl : Name) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac := λ input => do

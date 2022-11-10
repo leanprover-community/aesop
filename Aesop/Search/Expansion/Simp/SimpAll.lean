@@ -133,7 +133,7 @@ private partial def loop : M Bool := do
 private def main : M SimpResult := do
   initEntries
   if (← loop) then
-    return .solved
+    return .solved (← get).usedSimps
   else if ! (← get).anyModified then
     return .unchanged (← get).mvarId
   else
@@ -143,13 +143,12 @@ private def main : M SimpResult := do
       -- Do not assert `True` hypotheses
       if e.type.isConstOf ``True then none else some { userName := e.userName, type := e.type, value := e.proof }
     let mvarId ← mvarId.tryClearMany (entries.map fun e => e.fvarId)
-    return .simplified mvarId
+    return .simplified mvarId (← get).usedSimps
 
 def simpAll (mvarId : MVarId) (ctx : Simp.Context)
     (disabledTheorems : HashMap FVarId Origin) (usedSimps : UsedSimps := {}) :
-    MetaM (SimpResult × UsedSimps) := do
+    MetaM SimpResult :=
   mvarId.withContext do
-    let (r, s) ← main.run { mvarId, ctx, usedSimps, disabledTheorems }
-    return (r, s.usedSimps)
+    (·.fst) <$> main.run { mvarId, ctx, usedSimps, disabledTheorems }
 
 end Aesop

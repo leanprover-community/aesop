@@ -125,10 +125,10 @@ private def visitGoal (g : Goal) : MetaM (Option (MVarId × Array RappRef)) := d
   match g.normalizationState with
   | NormalizationState.notNormal => throwPRError
     "goal {g.id} was not normalised."
-  | NormalizationState.normal postNormGoal postState =>
+  | NormalizationState.normal postNormGoal postState _ =>
     copyExprMVar postState g.preNormGoal
     return (postNormGoal, g.children)
-  | NormalizationState.provenByNormalization postState =>
+  | NormalizationState.provenByNormalization postState _ =>
     copyExprMVar postState g.preNormGoal
     return none
 

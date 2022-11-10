@@ -24,11 +24,10 @@ end CasesPattern
 namespace RuleTac
 
 partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
-  SimpleRuleTac.toRuleTac λ input => do
-    let goals? ← go #[] #[] input.goal
-    match goals? with
+  SingleRuleTac.toRuleTac λ input => do
+    match ← go #[] #[] input.goal with
     | none => throwError "No matching hypothesis found."
-    | some goals => return goals.toList
+    | some x => return x
   where
     findFirstApplicableHyp (excluded : Array FVarId) (goal : MVarId) :
         MetaM (Option FVarId) :=
@@ -51,11 +50,16 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
             return none
 
     go (newGoals : Array MVarId) (excluded : Array FVarId)
-        (goal : MVarId) : MetaM (Option (Array MVarId)) := do
+        (goal : MVarId) : MetaM (Option (Array MVarId × RuleTacScriptBuilder)) := do
       let (some hyp) ← findFirstApplicableHyp excluded goal
         | return none
-      let goals ← try commitIfNoEx $ goal.cases hyp catch _ => return none
+      let (goals, stxb) ←
+        try
+          commitIfNoEx $ unhygienic $ goal.casesWithSyntax hyp
+        catch _ =>
+          return none
       let mut newGoals := newGoals
+      let mut newStxbs := Array.mkEmpty goals.size
       for g in goals do
         let excluded :=
           if ! isRecursiveType then
@@ -69,10 +73,13 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
               | (.fvar fvarId' ..) => some fvarId'
               | _ => none
             excluded ++ fields
-        let newGoals? ← go newGoals excluded g.mvarId
-        match newGoals? with
-        | some newGoals' => newGoals := newGoals'
-        | none => newGoals := newGoals.push g.mvarId
-      return some newGoals
+        match ← go newGoals excluded g.mvarId with
+        | some (newGoals', newStxb) =>
+          newGoals := newGoals'
+          newStxbs := newStxbs.push newStxb
+        | none =>
+          newGoals := newGoals.push g.mvarId
+          newStxbs := newStxbs.push .id
+      return some (newGoals, stxb.seq newStxbs)
 
 end Aesop.RuleTac

@@ -25,8 +25,8 @@ def RuleBuilder.tactic (opts : TacticBuilderOptions) : RuleBuilder :=
     let type := (← getConstInfo decl).type
     if ← isDefEq (mkApp (mkConst ``TacticM) (mkConst ``Unit)) type then
       mkResult $ .tacticM decl
-    else if ← isDefEq (mkConst ``SimpleRuleTac) type then
-      mkResult $ .simpleRuleTac decl
+    else if ← isDefEq (mkConst ``SingleRuleTac) type then
+      mkResult $ .singleRuleTac decl
     else if ← isDefEq (mkConst ``RuleTac) type then
       mkResult $ .ruleTac decl
     else

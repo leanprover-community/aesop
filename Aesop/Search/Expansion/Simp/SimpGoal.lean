@@ -19,7 +19,7 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     (fvarIdsToSimp : Array FVarId := #[])
     (usedSimps : UsedSimps := {})
     (disabledTheorems : HashMap FVarId Origin := {}) :
-    MetaM (SimpResult × UsedSimps) :=
+    MetaM SimpResult :=
   mvarId.withContext do
     mvarId.checkNotAssigned `simp
     let mut mvarId := mvarId
@@ -42,13 +42,13 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
       match r.proof? with
       | some _ =>
         match (← applySimpResultToProp mvarId (mkFVar fvarId) type r) with
-        | none => return (.solved, usedSimps)
+        | none => return .solved usedSimps
         | some (value, type) =>
           toAssert := toAssert.push { userName := localDecl.userName, type := type, value := value }
       | none =>
         if r.expr.isConstOf ``False then
           mvarId.assign (← mkFalseElim (← mvarId.getType) (mkFVar fvarId))
-          return (.solved, usedSimps)
+          return .solved usedSimps
         -- TODO: if there are no forwards dependencies we may consider using the same approach we used when `r.proof?` is a `some ...`
         -- Reason: it introduces a `mkExpectedTypeHint`
         mvarId ← mvarId.replaceLocalDeclDefEq fvarId r.expr
@@ -58,17 +58,17 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
       let (r, usedSimps') ← simpTarget mvarId ctx discharge? (usedSimps := usedSimps)
       usedSimps := usedSimps'
       match r with
-      | none => return (.solved, usedSimps)
+      | none => return .solved usedSimps
       | some mvarIdNew =>
         let postSimpTarget ← instantiateMVars (← mvarIdNew.getType)
         progress := progress || preSimpTarget != postSimpTarget
         mvarId := mvarIdNew
     if ! progress then
-      return (.unchanged mvarId, usedSimps)
+      return .unchanged mvarId
     else
       let (_, mvarIdNew) ← mvarId.assertHypotheses toAssert
       let toClear := fvarIdsToSimp.filter fun fvarId => !replaced.contains fvarId
       let mvarIdNew ← mvarIdNew.tryClearMany toClear
-      return (.simplified mvarIdNew, usedSimps)
+      return .simplified mvarIdNew usedSimps
 
 end Aesop

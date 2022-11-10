@@ -29,6 +29,7 @@ syntax "(" &"options" ":=" term ")" : Aesop.tactic_clause
 syntax "(" &"simp_options" ":=" term ")" : Aesop.tactic_clause
 
 syntax (name := aesopTactic) &"aesop" Aesop.tactic_clause* : tactic
+syntax (name := aesopTactic?) &"aesop?" Aesop.tactic_clause* : tactic
 
 end Parser
 
@@ -65,16 +66,19 @@ namespace TacticConfig
 def parse (stx : Syntax) : TermElabM TacticConfig :=
   withRefThen stx λ
     | `(tactic| aesop $clauses:Aesop.tactic_clause*) =>
-      let init := {
-        additionalRules := #[]
-        erasedRules := #[]
-        enabledRuleSets := defaultEnabledRuleSets
-        options := {}
-        simpConfig := {}
-      }
-      clauses.foldlM addClause init
+      clauses.foldlM addClause $ init (traceScript := false)
+    | `(tactic| aesop? $clauses:Aesop.tactic_clause*) =>
+      clauses.foldlM addClause $ init (traceScript := true)
     | _ => throwUnsupportedSyntax
   where
+    init (traceScript : Bool) : TacticConfig := {
+      additionalRules := #[]
+      erasedRules := #[]
+      enabledRuleSets := defaultEnabledRuleSets
+      options := { traceScript }
+      simpConfig := {}
+    }
+
     addClause (c : TacticConfig) (stx : Syntax) : TermElabM TacticConfig :=
       withRefThen stx λ
         | `(tactic_clause| (add $es:Aesop.rule_expr,*)) => do

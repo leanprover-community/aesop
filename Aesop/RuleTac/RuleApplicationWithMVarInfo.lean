@@ -19,6 +19,9 @@ application manipulated metavariables.
 Let `ms` be the metavariables which were declared but not assigned by the
 tactic.
 
+- `originalSubgoals` are the goals originally reported by the tactic. In other
+  words, these are the goals that would show up in the goal list if the user
+  were to manually execute the tactic corresponding to this rapp.
 - `goals` are those `ms` which do not occur in any other `m ∈ ms`. Each of these
   goals `g` is associated with the set of metavariables which occur in `g`.
 - `mvars` are the metavariables which occur in the `goals`.
@@ -30,10 +33,12 @@ tactic.
 -/
 structure RuleApplicationWithMVarInfo where
   postState : Meta.SavedState
+  originalSubgoals : Array MVarId
   goals : Array (MVarId × UnorderedArraySet MVarId)
   mvars : UnorderedArraySet MVarId
   introducedMVars : UnorderedArraySet MVarId
   assignedMVars : UnorderedArraySet MVarId
+  scriptBuilder : ScriptBuilder MetaM
 
 namespace RuleApplicationWithMVarInfo
 
@@ -66,6 +71,7 @@ end RuleApplicationWithMVarInfo
 def RuleApplication.toRuleApplicationWithMVarInfo
     (parentMVars : UnorderedArraySet MVarId) (r : RuleApplication) :
     MetaM RuleApplicationWithMVarInfo :=
+  let originalSubgoals := r.goals
   r.postState.runMetaM' do
     -- Get assigned mvars
     r.postState.runMetaM' do
@@ -88,9 +94,8 @@ def RuleApplication.toRuleApplicationWithMVarInfo
     -- Get introduced mvars
     let introducedMVars := mvars.filter (! parentMVars.contains ·)
 
-    return {
-      postState := r.postState
-      goals, mvars, introducedMVars, assignedMVars
+    return { r with
+      originalSubgoals, goals, mvars, introducedMVars, assignedMVars
     }
 
 end Aesop

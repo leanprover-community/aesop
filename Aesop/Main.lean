@@ -14,21 +14,24 @@ open Lean.Elab.Tactic
 
 namespace Aesop
 
-@[tactic Frontend.Parser.aesopTactic]
+@[tactic Frontend.Parser.aesopTactic, tactic Frontend.Parser.aesopTactic?]
 def evalAesop : Tactic := λ stx =>
   withMainContext do
     let (profile, totalTime) ← IO.time do
       let (config, configParseTime) ← IO.time $ Frontend.TacticConfig.parse stx
       let profile := { Profile.empty with configParsing := configParseTime }
-      let (profile, searchTime) ← IO.time $
-        liftMetaTacticAux λ goal => do
-          let ((goal, ruleSet), ruleSetConstructionTime) ← IO.time $
-            config.getRuleSet goal
-          let profile := { profile with ruleSetConstruction := ruleSetConstructionTime }
-          aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
-          let (goals, profile) ←
-            search goal ruleSet config.options config.simpConfig profile
-          return (profile, goals.toList)
+      let (profile, searchTime) ← IO.time do
+        let goal ← getMainGoal
+        let ((goal, ruleSet), ruleSetConstructionTime) ← IO.time $
+          config.getRuleSet goal
+        replaceMainGoal [goal]
+        let profile := { profile with ruleSetConstruction := ruleSetConstructionTime }
+        aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
+        let (goals, profile) ←
+          search (← getGoals).toArray ruleSet config.options config.simpConfig
+            profile
+        replaceMainGoal goals.toList
+        return profile
       pure { profile with search := searchTime }
     let profile := { profile with total := totalTime }
     aesop_trace[profile] toMessageData profile

@@ -31,6 +31,7 @@ Options that modify Aesop's behaviour. Available options are:
   Aesop always succeeds and reports the goals remaining after safe rules were
   applied.
 - `warnOnNonterminal`: print a warning when Aesop does not prove the goal.
+- `traceScript`: print a tactic script as a `Try this:` suggestion.
 -/
 structure Options where
   strategy := Strategy.bestFirst
@@ -40,6 +41,7 @@ structure Options where
   maxNormIterations := 100
   terminal := false
   warnOnNonterminal := true
+  traceScript := false
   deriving Inhabited, BEq, Repr
 
 end Aesop

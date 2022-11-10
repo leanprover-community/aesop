@@ -13,6 +13,8 @@ theorem Mem.map (f : α → β) (x : α) (xs : List α) (h : x ∈ xs) :
     f x ∈ xs.map f := by
   induction h
   case tail =>
+    -- TODO issue with simp
+    set_option aesop.check.script false in
     aesop
   case head =>
     aesop

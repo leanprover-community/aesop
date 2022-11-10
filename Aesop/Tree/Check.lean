@@ -179,12 +179,12 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit :=
         unless assigned.isEmpty do throwError
           "{Check.tree.name}: normalisation of goal {g.id} assigned metavariables:{indentD $ toMessageData $ assigned.map (·.name)}"
       match g.normalizationState with
-      | NormalizationState.notNormal => return
-      | NormalizationState.provenByNormalization postMetaState =>
+      | .notNormal => return
+      | .provenByNormalization postMetaState .. =>
         let parentMetaState ← g.parentMetaState
         let introduced ← introducedExprMVars parentMetaState postMetaState
         go parentMetaState postMetaState introduced
-      | NormalizationState.normal postGoal postMetaState =>
+      | .normal postGoal postMetaState .. =>
         let parentMetaState ← g.parentMetaState
         let introduced :=
           (← introducedExprMVars parentMetaState postMetaState).erase postGoal

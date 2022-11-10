@@ -48,7 +48,7 @@ initialize profile : TraceOption ←
 
 initialize extraction : TraceOption ←
   registerTraceOption `extraction false
-    "(aesop) If Aesop finds a proof, print a trace of the proof extraction procedure."
+    "(aesop) Print a trace of the proof extraction procedure."
 
 initialize steps : TraceOption ←
   registerTraceOption `steps false

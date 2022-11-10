@@ -963,6 +963,9 @@ def Lean.MVarId.setFVarBinderInfo [Monad m] [MonadMCtx m] (mvarId : MVarId)
 
 namespace Lean.Meta
 
+def unhygienic [Monad m] [MonadWithOptions m] (x : m α) : m α :=
+  withOptions (·.setBool `tactic.hygienic false) x
+
 -- Runs `tac` on `goal`, then on the subgoals created by `tac`, etc. Returns the
 -- goals to which `tac` does not apply any more. If `tac` applies infinitely
 -- often, `saturate'` diverges. If `tac` does not apply to `goal`, a singleton
@@ -1154,21 +1157,26 @@ def assignedExprMVars (preState postState : SavedState) :
   postState.runMetaM' do
     unassignedPre.filterM λ m => m.isAssigned <||> m.isDelayedAssigned
 
-def sortFVarsByContextOrder (goal : MVarId) (hyps : Array FVarId) :
-    MetaM (Array FVarId) :=
-  goal.withContext do
-    let lctx ← getLCtx
-    let hyps := hyps.map λ fvarId =>
-      match lctx.fvarIdToDecl.find? fvarId with
-      | none => (0, fvarId)
-      | some ldecl => (ldecl.index, fvarId)
-    let hyps := hyps.qsort λ h i => h.fst < i.fst
-    return hyps.map (·.snd)
+def sortFVarsByContextOrder [Monad m] [MonadLCtx m] (hyps : Array FVarId) :
+    m (Array FVarId) := do
+  let lctx ← getLCtx
+  let hyps := hyps.map λ fvarId =>
+    match lctx.fvarIdToDecl.find? fvarId with
+    | none => (0, fvarId)
+    | some ldecl => (ldecl.index, fvarId)
+  let hyps := hyps.qsort λ h i => h.fst < i.fst
+  return hyps.map (·.snd)
 
-def tryClearMany' (goal : MVarId) (hyps : Array FVarId) : MetaM MVarId := do
-  goal.tryClearMany (← sortFVarsByContextOrder goal hyps)
-  -- `tryClearMany` iterates over the `FvarId`s from right to left, so we want
-  -- to sort by context order.
+-- Returns, in addition to the new goal, the hypotheses that were cleared.
+def _root_.Lean.MVarId.tryClearMany' (goal : MVarId) (hyps : Array FVarId) :
+    MetaM (MVarId × Array FVarId) :=
+  goal.withContext do
+    let hyps ← sortFVarsByContextOrder hyps
+    hyps.foldrM (init := (goal, Array.mkEmpty hyps.size))
+      λ h (goal, cleared) => do
+        let goal' ← goal.tryClear h
+        let cleared := if goal == goal' then cleared else cleared.push h
+        return (goal', cleared)
 
 def matchAppOf (f : Expr) (e : Expr) : MetaM (Option (Array Expr)) := do
   let type ← inferType f

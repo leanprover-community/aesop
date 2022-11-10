@@ -5,6 +5,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Aesop.Constants
+import Aesop.Script
 import Aesop.Tree.BranchState
 import Aesop.Tree.UnsafeQueue
 
@@ -240,7 +241,9 @@ end GoalState
 inductive NormalizationState
   | notNormal
   | normal (postGoal : MVarId) (postState : Meta.SavedState)
+      (script : UnstructuredScript)
   | provenByNormalization (postState : Meta.SavedState)
+      (script : UnstructuredScript)
   deriving Inhabited
 
 namespace NormalizationState
@@ -251,8 +254,9 @@ def isNormal : NormalizationState → Bool
   | provenByNormalization .. => true
 
 def isProvenByNormalization : NormalizationState → Bool
+  | notNormal .. => false
+  | normal .. => false
   | provenByNormalization .. => true
-  | _ => false
 
 end NormalizationState
 
@@ -355,6 +359,8 @@ structure RappData (Goal MVarCluster : Type) : Type where
   state : NodeState
   isIrrelevant : Bool
   appliedRule : RegularRule
+  scriptBuilder : RuleTacScriptBuilder
+  originalSubgoals : Array MVarId
   successProbability : Percent
   metaState : Meta.SavedState
     -- This is the state *after* the rule was successfully applied, so the goal
@@ -376,6 +382,8 @@ instance [Nonempty Goal] : Nonempty (RappData Goal MVarCluster) :=
      state := default
      isIrrelevant := default
      appliedRule := default
+     scriptBuilder := default
+     originalSubgoals := default
      successProbability := default
      metaState := default
      introducedMVars := default
@@ -706,6 +714,14 @@ def appliedRule (r : Rapp) : RegularRule :=
   r.elim.appliedRule
 
 @[inline]
+def scriptBuilder (r : Rapp) : RuleTacScriptBuilder :=
+  r.elim.scriptBuilder
+
+@[inline]
+def originalSubgoals (r : Rapp) : Array MVarId :=
+  r.elim.originalSubgoals
+
+@[inline]
 def successProbability (r : Rapp) : Percent :=
   r.elim.successProbability
 
@@ -746,6 +762,16 @@ def setAppliedRule (appliedRule : RegularRule) (r : Rapp) : Rapp :=
   r.modify λ r => { r with appliedRule }
 
 @[inline]
+def setScriptBuilder (scriptBuilder : RuleTacScriptBuilder)
+    (r : Rapp) : Rapp :=
+  r.modify λ r => { r with scriptBuilder }
+
+@[inline]
+def setOriginalSubgoals (originalSubgoals : Array MVarId)
+    (r : Rapp) : Rapp :=
+  r.modify λ r => { r with originalSubgoals }
+
+@[inline]
 def setSuccessProbability (successProbability : Percent) (r : Rapp) : Rapp :=
   r.modify λ r => { r with successProbability }
 
@@ -781,7 +807,7 @@ namespace Goal
 @[inline]
 def postNormGoalAndMetaState? (g : Goal) : Option (MVarId × Meta.SavedState) :=
   match g.normalizationState with
-  | NormalizationState.normal postGoal postState => some (postGoal, postState)
+  | .normal postGoal postState _ => some (postGoal, postState)
   | _ => none
 
 def postNormGoal? (g : Goal) : Option MVarId :=
@@ -789,6 +815,11 @@ def postNormGoal? (g : Goal) : Option MVarId :=
 
 def currentGoal (g : Goal) : MVarId :=
   g.postNormGoal?.getD g.preNormGoal
+
+def normScript? (g : Goal) : Option UnstructuredScript :=
+  match g.normalizationState with
+  | .normal _ _ s => some s
+  | _ => none
 
 def parentRapp? (g : Goal) : BaseIO (Option RappRef) :=
   return (← g.parent.get).parent?
@@ -865,3 +896,11 @@ def depth (r : Rapp) : BaseIO Nat :=
   return (← r.parent.get).depth
 
 end Rapp
+
+
+namespace MVarCluster
+
+def provenGoal? (c : MVarCluster) : BaseIO (Option GoalRef) :=
+  c.goals.findM? λ gref => return (← gref.get).state.isProven
+
+end MVarCluster

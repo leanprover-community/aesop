@@ -25,7 +25,7 @@ protected def run : RuleTacDescr → RuleTacInput → MetaM RuleTacOutput
     RuleTac.forwardFVar userName immediate clear
   | cases decl isRecursiveType => RuleTac.cases decl isRecursiveType
   | tacticM decl => RuleTac.tacticM decl
-  | simpleRuleTac decl => RuleTac.simpleRuleTac decl
+  | singleRuleTac decl => RuleTac.singleRuleTac decl
   | ruleTac decl => RuleTac.ruleTac decl
 
 end RuleTacDescr

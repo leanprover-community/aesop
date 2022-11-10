@@ -14,9 +14,10 @@ namespace Aesop.RuleTac
 
 -- Precondition: `decl` has type `TacticM Unit`.
 unsafe def tacticMImpl (decl : Name) : RuleTac :=
-  SimpleRuleTac.toRuleTac λ input => do
+  SingleRuleTac.toRuleTac λ input => do
     let tac ← evalConst (TacticM Unit) decl
-    runTacticMAsMetaM tac input.goal
+    let goals ← runTacticMAsMetaM tac input.goal
+    return (goals.toArray, .unknown decl)
 
 -- Precondition: `decl` has type `TacticM Unit`.
 @[implemented_by tacticMImpl]
@@ -32,13 +33,13 @@ unsafe def ruleTacImpl (decl : Name) : RuleTac := λ input => do
 opaque ruleTac (decl : Name) : RuleTac
 
 -- Precondition: `decl` has type `SimpleRuleTac`.
-unsafe def simpleRuleTacImpl (decl : Name) : RuleTac :=
-  SimpleRuleTac.toRuleTac λ input => do
-    let tac ← evalConst SimpleRuleTac decl
+unsafe def singleRuleTacImpl (decl : Name) : RuleTac :=
+  SingleRuleTac.toRuleTac λ input => do
+    let tac ← evalConst SingleRuleTac decl
     tac input
 
 -- Precondition: `decl` has type `SimpleRuleTac`.
-@[implemented_by simpleRuleTacImpl]
-opaque simpleRuleTac (decl : Name) : RuleTac
+@[implemented_by singleRuleTacImpl]
+opaque singleRuleTac (decl : Name) : RuleTac
 
 end Aesop.RuleTac

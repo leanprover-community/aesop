@@ -11,10 +11,13 @@ namespace Aesop.BuiltinRules
 open Lean
 open Lean.Meta
 
-def applyHyp (hyp : FVarId) (goal : MVarId) : MetaM RuleApplication := do
-  let goals ← goal.apply (mkFVar hyp)
-  let postState ← saveState
-  return { postState, goals := goals.toArray }
+def applyHyp (hyp : FVarId) (goal : MVarId) : MetaM RuleApplication :=
+  goal.withContext do
+    let goals := (← goal.apply (mkFVar hyp)).toArray
+    let postState ← saveState
+    let scriptBuilder :=
+      .ofTactic goals.size `(tactic| apply $(mkIdent $ ← hyp.getUserName))
+    return { postState, goals, scriptBuilder }
 
 @[aesop unsafe 75% (tactic (uses_branch_state := false)) (rule_sets [builtin])]
 def applyHyps : RuleTac := λ input =>

@@ -40,15 +40,17 @@ def assumption : RuleTac := λ input => do
   where
     tryHyp (goal : MVarId) (tgt : Expr) (ldecl : LocalDecl) :
         MetaM (Option (RuleApplication × Bool)) := do
-      let proofHasMVar := ldecl.type.hasMVar
       if ! (← isDefEq ldecl.type tgt) then
         return none
       goal.assign ldecl.toExpr
       let postState ← saveState
+      let scriptBuilder :=
+        .ofTactic 0 `(tactic| exact $(mkIdent ldecl.userName))
       let app := {
         goals := #[]
-        postState
+        postState, scriptBuilder
       }
+      let proofHasMVar := ldecl.type.hasMVar
       return some (app, proofHasMVar)
 
 end Aesop.BuiltinRules

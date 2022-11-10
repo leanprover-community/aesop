@@ -76,6 +76,9 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
         else
           return goal
 
+elab &"aesop_destruct_products" : tactic =>
+  Elab.Tactic.liftMetaTactic1 λ goal => some <$> destructProductsCore goal
+
 -- This tactic splits hypotheses of product-like types: `And`, `Prod`, `PProd`,
 -- `MProd`, `Exists`, `Subtype`, `Sigma` and `PSigma`. It's a restricted version
 -- of `cases`. We have this separate tactic because `cases` interacts badly with
@@ -84,12 +87,9 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
   (tactic (uses_branch_state := false)
     (index := [hyp And _ _, hyp Prod _ _, hyp PProd _ _, hyp MProd _ _,
                hyp Exists _, hyp Subtype _, hyp Sigma _, hyp PSigma _]))]
-partial def destructProducts : RuleTac := λ input => do
-  let goal ← destructProductsCore input.goal
-  let postState ← saveState
-  return {
-    applications := #[{ goals := #[goal], postState }]
-    postBranchState? := none
-  }
+partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
+  let goal ← unhygienic $ destructProductsCore input.goal
+  let scriptBuilder := .ofTactic 1 `(tactic| unhygienic aesop_destruct_products)
+  return (#[goal], scriptBuilder)
 
 end Aesop.BuiltinRules
