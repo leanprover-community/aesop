@@ -39,7 +39,7 @@ mutual
     let r ← rref.get
     let tacticSeq ←
       try
-        r.scriptBuilder.unstructured.run
+        r.metaState.runMetaM' r.scriptBuilder.unstructured.run
       catch e =>
         throwError "script builder for rapp {r.id} reported error:{indentD $ e.toMessageData}"
     let otherSolvedGoals := r.assignedMVars.toArray
