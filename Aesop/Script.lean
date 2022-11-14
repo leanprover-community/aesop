@@ -443,9 +443,13 @@ def UnstructuredScript.render (initialGoals : Array MVarId)
     if step.tacticSeq.size == 0 then
       tacticState ← tacticState.applyUnstructuredScriptStep step
     else
-      let pos := mkOneBasedNumLit $ ← tacticState.get step.inGoal
-      let t ← `(tactic| on_goal $pos:num => $(step.tacticSeq):tactic*)
-      script := script.push t
+      let pos ← tacticState.get step.inGoal
+      if pos == 0 then
+        script := script ++ step.tacticSeq
+      else
+        let posLit := mkOneBasedNumLit pos
+        let t ← `(tactic| on_goal $posLit:num => $(step.tacticSeq):tactic*)
+        script := script.push t
       tacticState ← tacticState.applyUnstructuredScriptStep step
   return script
 
