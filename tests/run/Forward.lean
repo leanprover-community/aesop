@@ -79,6 +79,6 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
   fail_if_success
     aesop (add safe [destruct r₁, (destruct (immediate := [a])) r₂])
       (options := { terminal := true })
-  -- TODO issues with simp only and on_goal printing
+  -- TODO issues with simp only
   set_option aesop.check.script false in
   aesop (add safe [forward r₁], 90% destruct r₂)

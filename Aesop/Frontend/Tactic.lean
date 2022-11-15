@@ -60,6 +60,7 @@ structure TacticConfig where
   enabledRuleSets : Array RuleSetName
   options : Aesop.Options
   simpConfig : Aesop.SimpConfig
+  simpConfigSyntax? : Option Term
 
 namespace TacticConfig
 
@@ -77,6 +78,7 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
       enabledRuleSets := defaultEnabledRuleSets
       options := { traceScript }
       simpConfig := {}
+      simpConfigSyntax? := none
     }
 
     addClause (c : TacticConfig) (stx : Syntax) : TermElabM TacticConfig :=
@@ -108,7 +110,11 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
         | `(tactic_clause| (options := $t:term)) =>
           return { c with options := ← elabOptions t }
         | `(tactic_clause| (simp_options := $t:term)) =>
-          return { c with simpConfig := ← elabSimpConfig t }
+          return {
+            c with
+            simpConfig := ← elabSimpConfig t
+            simpConfigSyntax? := some t
+          }
         | _ => throwUnsupportedSyntax
 
 def updateRuleSets (goal : MVarId) (rss : Aesop.RuleSets) (c : TacticConfig) :

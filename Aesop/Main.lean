@@ -29,7 +29,7 @@ def evalAesop : Tactic := λ stx =>
         aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
         let (goals, profile) ←
           search (← getGoals).toArray ruleSet config.options config.simpConfig
-            profile
+            config.simpConfigSyntax? profile
         replaceMainGoal goals.toList
         return profile
       pure { profile with search := searchTime }

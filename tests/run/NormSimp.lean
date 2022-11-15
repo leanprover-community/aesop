@@ -15,7 +15,7 @@ example {α : Prop} (h : α) : α := by
 -- This test checks that we don't 'self-simplify' hypotheses: `h` should not
 -- be used to simplify itself.
 example (h : (α ∧ β) ∨ γ) : α ∨ γ := by
-  -- TODO issue with simp?
+  -- TODO simp minimisation does not work any more when `h` goes out of scope.
   set_option aesop.check.script false in
   aesop (add h norm simp)
 
@@ -24,8 +24,6 @@ example {α β : Prop} (ha : α) (h : α → β) : β := by
   fail_if_success aesop (rule_sets [-builtin,-default])
     (simp_options := { maxDischargeDepth := 0 })
     (options := { terminal := true })
-  -- TODO issue with simp
-  set_option aesop.check.script false in
   aesop (rule_sets [-builtin,-default])
 
 -- We can use the `useHyps` config option to switch between `simp_all` and

@@ -21,7 +21,7 @@ structure Sig (α : Sort u) (β : α → Sort v) : Sort _ where
   snd : β fst
 
 example (h : α ∧ β) : Sig α (λ _ => β) := by
-  -- TODO issue with simp
+  -- TODO issue with simp: `simp_all only [h]` self-simplifies `h` :)
   set_option aesop.check.script false in
   aesop
 

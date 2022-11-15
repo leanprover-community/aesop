@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Lean
+import Aesop.Script
 
 open Lean Lean.Meta
 open Simp (UsedSimps)
@@ -25,30 +25,86 @@ def newGoal? : SimpResult → Option MVarId
 
 end SimpResult
 
+-- TODO move to core
+deriving instance BEq for Simp.ConfigCtx
+
 structure SimpConfig extends Simp.ConfigCtx where
   maxDischargeDepth := 1
   useHyps := true
+  deriving BEq
 
 variable [Monad m] [MonadQuotation m] [MonadError m]
 
--- NOTE: This is necessarily best-effort since the simp set can contain lemmas
--- which we can't represent as `simp only` arguments.
-open Lean.Parser.Tactic in
-def mkSimpOnlyTheorems (goalBeforeSimp : MVarId) (usedTheorems : UsedSimps) :
-    MetaM (Array (TSyntax ``simpLemma)) :=
-  goalBeforeSimp.withContext do
-    usedTheorems.foldM (init := Array.mkEmpty usedTheorems.size) λ r origin _ => do
-      match origin with
-      | .decl name => return r.push $ ← `(simpLemma| $(mkIdent name):ident)
-      | .fvar fvarId =>
-        if let some ldecl ← fvarId.findDecl? then
-          if ! ldecl.userName.hasMacroScopes then
-            return r.push $ ← `(simpLemma| $(mkIdent $ ldecl.userName):ident)
+-- TODO copy-pasta from Lean.Elab.Tactic.traceSimpCall
+-- NOTE: Must be executed in the context of the goal on which `simp` was run.
+-- `stx` is the syntax of the original `simp`/`simp_all`/`simp?`/`simp_all?`
+-- call.
+def mkSimpOnly (stx : Syntax) (usedSimps : UsedSimps) : MetaM Syntax := do
+  let mut stx := stx
+  if stx[3].isNone then
+    stx := stx.setArg 3 (mkNullNode #[mkAtom "only"])
+  let mut args : Array Syntax := #[]
+  let mut localsOrStar := some #[]
+  let lctx ← getLCtx
+  let env ← getEnv
+  for (thm, _) in usedSimps.toArray.qsort (·.2 < ·.2) do
+    match thm with
+    | .decl declName => -- global definitions in the environment
+      if env.contains declName && !Lean.Elab.Tactic.simpOnlyBuiltins.contains declName then
+        args := args.push (← `(Parser.Tactic.simpLemma| $(mkIdent (← unresolveNameGlobal declName)):ident))
+    | .fvar fvarId => -- local hypotheses in the context
+      if let some ldecl := lctx.find? fvarId then
+        localsOrStar := localsOrStar.bind fun locals =>
+          if !ldecl.userName.isInaccessibleUserName &&
+              (lctx.findFromUserName? ldecl.userName).get!.fvarId == ldecl.fvarId then
+            some (locals.push ldecl.userName)
           else
-            return r
-        else
-          return r
-      | .stx _ stx => return r.push ⟨stx⟩
-      | .other _ => return r
+            none
+      -- Note: the `if let` can fail for `simp (config := {contextual := true})` when
+      -- rewriting with a variable that was introduced in a scope. In that case we just ignore.
+    | .stx _ thmStx => -- simp theorems provided in the local invocation
+      args := args.push thmStx
+    | .other _ => -- Ignore "special" simp lemmas such as constructed by `simp_all`.
+      pure ()     -- We can't display them anyway.
+  if let some locals := localsOrStar then
+    args := args ++ (← locals.mapM fun id => `(Parser.Tactic.simpLemma| $(mkIdent id):ident))
+  else
+    args := args.push (← `(Parser.Tactic.simpStar| *))
+  let argsStx := if args.isEmpty then #[] else #[mkAtom "[", (mkAtom ",").mkSep args, mkAtom "]"]
+  stx := stx.setArg 4 (mkNullNode argsStx)
+  return stx
+
+-- TODO this way to handle (config := ...) is ugly.
+def mkNormSimpSyntax (normSimpUseHyps : Bool) (config : SimpConfig)
+    (configStx? : Option Term) : MetaM Syntax.Tactic := do
+  if normSimpUseHyps then
+    match configStx? with
+    | none => `(tactic| simp_all)
+    | some cfg =>
+      if config.toConfigCtx == {} then
+        `(tactic| simp_all)
+      else if config.toConfigCtx == { arith := true } then
+        `(tactic| simp_all_arith)
+      else
+        `(tactic| simp_all (config := ($cfg : Aesop.SimpConfig).toConfigCtx))
+  else
+    match configStx? with
+    | none => `(tactic| simp at *)
+    | some cfg =>
+      if config.toConfig == {} then
+        `(tactic| simp at *)
+      else if config.toConfig == { arith := true } then
+        `(tactic| simp_arith at *)
+      else
+        `(tactic| simp (config := ($cfg : Aesop.SimpConfig).toConfig) at *)
+
+-- FIXME minimised simp (`simp only`) does not work reliably
+def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
+    (config : SimpConfig) (configStx? : Option Term)
+    (usedTheorems : Simp.UsedSimps) :
+    MetaM Syntax.Tactic := do
+  let originalStx ← mkNormSimpSyntax normSimpUseHyps config configStx?
+  let stx ← inGoal.withContext do mkSimpOnly originalStx usedTheorems
+  return ⟨stx⟩
 
 end Aesop

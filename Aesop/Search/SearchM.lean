@@ -18,12 +18,17 @@ namespace Aesop.SearchM
 structure Context where
   ruleSet : RuleSet
   normSimpContext : Simp.Context
+  normSimpConfigSyntax? : Option Term
   normSimpUseHyps : Bool
   options : Aesop.Options
   rootGoalMVar : MVarId -- TODO this is now the root goal's `preNormGoal`
   profilingEnabled : Bool
   initialGoals : Array MVarId
   deriving Inhabited
+
+def Context.normSimpConfig (ctx : Context) : SimpConfig where
+  useHyps := ctx.normSimpUseHyps
+  toConfigCtx := { ctx.normSimpContext.config with }
 
 structure State (Q) [Aesop.Queue Q] where
   iteration : Iteration
@@ -76,8 +81,9 @@ def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
   return (a, σ, t)
 
 def run (ruleSet : RuleSet) (options : Aesop.Options)
-    (simpConfig : Aesop.SimpConfig) (initialGoals : Array MVarId)
-    (profile : Profile) (x : SearchM Q α) : MetaM (α × State Q × Tree) := do
+    (simpConfig : Aesop.SimpConfig) (simpConfigSyntax? : Option Term)
+    (initialGoals : Array MVarId) (profile : Profile) (x : SearchM Q α) :
+    MetaM (α × State Q × Tree) := do
   if h : 0 < initialGoals.size then
     let goal := initialGoals[0]
     let t ← mkInitialTree goal
@@ -90,6 +96,7 @@ def run (ruleSet : RuleSet) (options : Aesop.Options)
     let ctx := {
       rootGoalMVar := goal
       normSimpUseHyps := simpConfig.useHyps
+      normSimpConfigSyntax? := simpConfigSyntax?
       ruleSet, options, profilingEnabled, normSimpContext, initialGoals
     }
     let #[rootGoal] := (← t.root.get).goals

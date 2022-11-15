@@ -19,8 +19,6 @@ inductive All (P : α → Prop) : List α → Prop where
 @[simp]
 theorem All.cons (P : α → Prop) (x : α) (xs : List α)
   : All P (x :: xs) ↔ (P x ∧ All P xs) := by
-  -- TODO issue with simp
-  set_option aesop.check.script false in
   aesop
 
 theorem mem (P : α → Prop) (xs : List α)
@@ -31,8 +29,4 @@ theorem mem (P : α → Prop) (xs : List α)
 
 theorem mem' (P : α → Prop) (xs : List α)
   : All P xs ↔ ∀ a : α, a ∈ xs → P a := by
-  induction xs
-  . aesop
-  . -- TODO issue with simp
-    set_option aesop.check.script false in
-    aesop
+  induction xs <;> aesop

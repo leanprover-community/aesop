@@ -10,7 +10,6 @@ Authors: Jannis Limperg
 import Aesop
 
 set_option aesop.check.all true
-set_option aesop.check.script false -- TODO issues with simp
 
 inductive MyList (α : Type _)
   | nil

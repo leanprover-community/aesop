@@ -16,11 +16,7 @@ inductive All (P : α → Prop) : List α → Prop where
 
 theorem weaken (P Q : α → Prop) (wk : ∀ x, P x → Q x) (xs : List α) (h : All P xs)
   : All Q xs := by
-  induction h
-  . aesop
-  . -- TODO issue with simp
-    set_option aesop.check.script false in
-    aesop
+  induction h <;> aesop
 
 set_option linter.unusedVariables false in
 theorem in_self (xs : List α) : All (· ∈ xs) xs := by

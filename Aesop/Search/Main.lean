@@ -124,11 +124,19 @@ def traceScript : SearchM Q Unit := do
         goals := ctx.initialGoals.map (⟨·, {}⟩)
         solvedGoals := {}
       }
-      let script ← script.render tacticState
-      let script ← `(tacticSeq| $script:tactic*)
+      let script ← script.toStructuredScript tacticState
+      let script₁ ← script.render tacticState
+      let script ← `(tacticSeq| $script₁:tactic*)
       if ctx.options.traceScript then
         withPPAnalyze do
           logInfo m!"Try this:\n{script}"
+      -- FIXME remove and rename script₁
+      -- let hasOnGoal := script₁.any λ t =>
+      --   match t with
+      --   | `(tactic| on_goal $_ => $_) => true
+      --   | _ => false
+      -- if hasOnGoal then
+      --   throwError "GOTEM"
       pure $ some script
     catch e =>
       logError m!"aesop: error while generating tactic script:{indentD e.toMessageData}"
@@ -213,6 +221,7 @@ current main goal (as reported by `getMainGoal`).
 -/
 def search (goals : Array MVarId) (ruleSet? : Option RuleSet := none)
      (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
+     (simpConfigSyntax? : Option Term := none)
      (profile : Profile := {}) :
      MetaM (Array MVarId × Profile) := do
   if h : 0 < goals.size then
@@ -222,11 +231,12 @@ def search (goals : Array MVarId) (ruleSet? : Option RuleSet := none)
       | none => Frontend.getDefaultRuleSet
       | some ruleSet => pure ruleSet
     let ⟨Q, _⟩ := options.queue
-    let (goals, state, _) ← SearchM.run ruleSet options simpConfig goals profile do
-      show SearchM Q _ from
-      try searchLoop
-      catch e => handleFatalError e
-      finally freeTree
+    let (goals, state, _) ←
+      SearchM.run ruleSet options simpConfig simpConfigSyntax? goals profile do
+        show SearchM Q _ from
+        try searchLoop
+        catch e => handleFatalError e
+        finally freeTree
     return (goals, state.profile)
   else
     throwError "aesop: no goals to be solved"
