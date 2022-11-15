@@ -150,22 +150,21 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
     (localSimpRules : Array LocalNormSimpRule) (goal : MVarId)
     (mvars : UnorderedArraySet MVarId) : MetaM SimpResult := do
   goal.withContext do
-    let lctx ← getLCtx
-    let mut simpTheorems := ctx.simpTheorems
-    for localRule in localSimpRules do
-      let (some ldecl) := lctx.findFromUserName? localRule.fvarUserName
-        | continue
-      let origin := Origin.fvar ldecl.fvarId
-      let (some simpTheorems') ← observing? $
-        simpTheorems.addTheorem origin ldecl.toExpr
-        | continue
-      simpTheorems := simpTheorems'
-    let ctx := { ctx with simpTheorems }
-
     let result ←
       if useHyps then
         Aesop.simpAll goal ctx (disabledTheorems := {})
       else
+        let lctx ← getLCtx
+        let mut simpTheorems := ctx.simpTheorems
+        for localRule in localSimpRules do
+          let (some ldecl) := lctx.findFromUserName? localRule.fvarUserName
+            | continue
+          let origin := Origin.fvar ldecl.fvarId
+          let (some simpTheorems') ← observing? $
+            simpTheorems.addTheorem origin ldecl.toExpr
+            | continue
+          simpTheorems := simpTheorems'
+        let ctx := { ctx with simpTheorems }
         let mut fvarIdsToSimp := Array.mkEmpty lctx.decls.size
         for ldecl in lctx do
           -- TODO exclude non-prop and dependent hyps?
