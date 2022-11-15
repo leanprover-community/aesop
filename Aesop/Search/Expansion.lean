@@ -68,7 +68,7 @@ def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
   runRuleTac tac ruleName postNormState input
 
 private def mkNormRuleScriptStep (scriptBuilder : RuleTacScriptBuilder)
-    (inGoal : MVarId) (outGoal? : Option MVarId) :
+    (inGoal : MVarId) (outGoal? : Option GoalWithMVars) :
     MetaM UnstructuredScriptStep := do
   let tacticSeq ← scriptBuilder.unstructured.run
   let outGoals :=
@@ -103,7 +103,11 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
     aesop_trace[stepsNormalization] do
       aesop_trace![stepsNormalization] "Rule succeeded. New goal:{indentD $ .ofGoal g}"
       aesop_trace[stepsBranchStates] "Branch state after rule application: {postBranchState.find? rule}"
-    let step ← mkNormRuleScriptStep rapp.scriptBuilder input.goal (some g)
+    -- FIXME redundant computation?
+    let mvars ← rapp.postState.runMetaM' do
+      getGoalMVarDependencies g
+    let step ←
+      mkNormRuleScriptStep rapp.scriptBuilder input.goal (some ⟨g, mvars⟩)
     return .succeeded g postBranchState step
   where
     err {α} (msg : MessageData) : MetaM α := throwError
@@ -212,7 +216,7 @@ def normSimp (goal : MVarId) (mvars : UnorderedArraySet MVarId) (useHyps : Bool)
 -- FIXME add custom context if the user provided one
 -- FIXME minimised simp (`simp only`) does not work reliably
 private def mkNormSimpScriptStep
-    (inGoal : MVarId) (outGoal? : Option MVarId)
+    (inGoal : MVarId) (outGoal? : Option GoalWithMVars)
     (usedTheorems : Simp.UsedSimps) : MetaM UnstructuredScriptStep := do
   let thms ← mkSimpOnlyTheorems inGoal usedTheorems
   let tactic ← `(tactic| simp only [$thms:simpLemma,*] at *)
@@ -262,11 +266,14 @@ partial def normalizeGoalMVar (rs : RuleSet) (normSimpUseHyps : Bool)
           return (none, script.push scriptStep)
         | .simplified goal' usedTheorems =>
           aesop_trace[stepsNormalization] "Goal after normalisation simp:{indentD $ MessageData.ofGoal goal}"
-          let scriptStep ← mkNormSimpScriptStep goal (some goal') usedTheorems
+          let mvars' := .ofArray mvars.toArray
+          let scriptStep ←
+            mkNormSimpScriptStep goal (some ⟨goal', mvars'⟩) usedTheorems
           go (iteration + 1) goal' bs (script.push scriptStep)
         | .unchanged goal' =>
           aesop_trace[stepsNormalization] "Goal unchanged after normalisation simp."
-          let script := script.push $ .dummy goal goal'
+          let mvars' := .ofArray mvars.toArray
+          let script := script.push $ .dummy goal ⟨goal', mvars'⟩
           let postSimpResult ← runFirstNormRule goal' mvars bs postSimpRules
           match postSimpResult with
           | .proven scriptStep =>

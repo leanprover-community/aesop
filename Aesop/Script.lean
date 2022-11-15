@@ -40,17 +40,18 @@ elab (name := Parser.solve) &"solve " ns:num+ " => " ts:tacticSeq : tactic => do
   for n in ns do
     -- Note that `n` is a 1-based index into `gs`.
     if n == 0 then
-      throwError "TODO"
+      throwError "solve: 0 is not a valid index"
     else if h : n - 1 < gs.size then
       selectedGoals := selectedGoals.push gs[n - 1]
       otherGoals := otherGoals ++ gs[start:n - 2].toArray -- TODO inefficient
       start := n
     else
-      throwError "TODO"
+      throwError "solve: tried to select goal {n} but there are only {gs.size} goals"
+  otherGoals := otherGoals ++ gs[start:].toArray -- TODO inefficient
   setGoals selectedGoals.toList
   evalTactic ts
   if ! (← getUnsolvedGoals).isEmpty then
-    throwError "TODO"
+    throwError "solve: tactic did not solve the goal"
   setGoals otherGoals.toList
 
 -- FIXME move
@@ -93,11 +94,28 @@ private def mkOneBasedNumLit (n : Nat) : NumLit :=
   Syntax.mkNumLit $ toString $ n + 1
 
 
+
+structure GoalWithMVars where
+  goal : MVarId
+  mvars : HashSet MVarId
+  deriving Inhabited
+
+instance : Repr GoalWithMVars where
+  reprPrec
+    | g, _ => s!"\{ goal := {repr g.goal}, mvars := {repr g.mvars.toArray} }"
+
+instance : BEq GoalWithMVars :=
+  ⟨λ g₁ g₂ => g₁.goal == g₂.goal⟩
+
+
+def GoalWithMVars.ofMVarId (goal : MVarId) : MetaM GoalWithMVars := do
+  return { goal, mvars := ← getGoalMVarDependencies goal }
+
 /-
 Invariant: goals occurring in `solvedGoals` do not occur in `goals`.
 -/
 structure TacticState where
-  goals : Array MVarId -- TODO make this an UnorderedArraySet?
+  goals : Array GoalWithMVars
   solvedGoals : HashSet MVarId
   deriving Inhabited
 
@@ -107,37 +125,75 @@ variable [Monad m] [MonadError m]
 
 @[inline]
 def get? (tacticState : TacticState) (goal : MVarId) : Option Nat :=
-  tacticState.goals.findIdx? (· == goal)
+  tacticState.goals.findIdx? (·.goal == goal)
 
-@[inline]
 def get (tacticState : TacticState) (goal : MVarId) : m Nat := do
   if let (some idx) := tacticState.get? goal then
     return idx
   else
     throwError "goal {goal.name} is not in the tactic state"
 
+def getMVars? (tacticState : TacticState) (goal : MVarId) :
+    Option (HashSet MVarId) :=
+  (·.mvars) <$> tacticState.goals.find? (·.goal == goal)
+
+def getMVars (tacticState : TacticState) (goal : MVarId) :
+    m (HashSet MVarId) := do
+  if let (some mvars) := tacticState.getMVars? goal then
+    return mvars
+  else
+    throwError "goal {goal.name} is not in the tactic state"
+
+def getWithMVars? (tacticState : TacticState) (goal : MVarId) :
+    Option (Nat × HashSet MVarId) := Id.run do
+  let goals := tacticState.goals
+  for h : i in [:goals.size] do
+    let g := goals[i]'h.2
+    if g.goal == goal then
+      return (i, g.mvars)
+  return none
+
+def getWithMVars (tacticState : TacticState) (goal : MVarId) :
+    m (Nat × HashSet MVarId) := do
+  if let (some result) := tacticState.getWithMVars? goal then
+    return result
+  else
+    throwError "goal {goal.name} is not in the tactic state"
+
+@[inline]
+def getMainGoal? (tacticState : TacticState) : Option GoalWithMVars :=
+  tacticState.goals[0]?
+
 @[inline]
 def isEmpty (tacticState : TacticState) : Bool :=
   tacticState.goals.isEmpty
 
 @[inline]
-def ensureIsEmpty (tacticState : TacticState) : m Unit := do
-  if ! tacticState.isEmpty then
-    throwError "expected there to be no remaining goals"
+def isSingleton (tacticState : TacticState) : Bool :=
+  tacticState.goals.size == 1
+
+@[inline]
+def hasMVars (tacticState : TacticState) : Bool :=
+  tacticState.goals.any (! ·.mvars.isEmpty)
+
+def isGoalIndependent (tacticState : TacticState) (goal : GoalWithMVars) :
+    Bool :=
+  tacticState.goals.all λ goal' =>
+    goal'.goal == goal.goal || goal.mvars.all (! goal'.mvars.contains ·)
 
 def empty : TacticState where
   goals := #[]
   solvedGoals := {}
 
-def initial (goals : Array MVarId) : TacticState where
+def initial (goals : Array GoalWithMVars) : TacticState where
   goals := goals
   solvedGoals := {}
 
 instance : EmptyCollection TacticState :=
   ⟨empty⟩
 
-def singleton (goal : MVarId) : TacticState where
-  goals := #[goal]
+def singleton (goal : MVarId) (mvars : HashSet MVarId) : TacticState where
+  goals := #[⟨goal, mvars⟩]
   solvedGoals := {}
 
 private def replaceWithArray [BEq α] (xs : Array α) (x : α) (r : Array α) :
@@ -153,12 +209,12 @@ private def replaceWithArray [BEq α] (xs : Array α) (x : α) (r : Array α) :
   return if found then some ys else none
 
 def applyTactic (tacticState : TacticState) (inGoal : MVarId)
-    (outGoals : Array MVarId) (otherSolvedGoals : Array MVarId) :
+    (outGoals : Array GoalWithMVars) (otherSolvedGoals : Array MVarId) :
     m TacticState := do
-  let (some goals) := replaceWithArray tacticState.goals inGoal outGoals
+  let (some goals) := replaceWithArray tacticState.goals ⟨inGoal, {}⟩ outGoals
     | throwError "goal {inGoal.name} is not in the tactic state"
   let solvedGoals := tacticState.solvedGoals.insertMany otherSolvedGoals
-  let goals := goals.filter (! solvedGoals.contains ·)
+  let goals := goals.filter (! solvedGoals.contains ·.goal)
   return { goals, solvedGoals }
 
 def restrict (tacticState : TacticState) (goals : Array MVarId) :
@@ -169,9 +225,14 @@ def restrict (tacticState : TacticState) (goals : Array MVarId) :
     tacticState := { tacticState with goals := tacticState.goals.eraseIdx idx }
   return tacticState
 
-def eraseGoals (tacticState : TacticState) (goals : HashSet MVarId) :
-    TacticState :=
-  { tacticState with goals := tacticState.goals.filter (! goals.contains ·)  }
+def solveGoals (tacticState : TacticState) (goals : HashSet MVarId) :
+    TacticState where
+  goals := tacticState.goals.filter (! goals.contains ·.goal)
+  solvedGoals := tacticState.solvedGoals.merge goals
+
+def solveGoal (tacticState : TacticState) (goal : MVarId) : TacticState where
+  goals := tacticState.goals.erase ⟨goal, {}⟩
+  solvedGoals := tacticState.solvedGoals.insert goal
 
 end TacticState
 
@@ -417,11 +478,11 @@ def _root_.Lean.MVarId.casesWithSyntax (goal : MVarId) (fvarId : FVarId) :
 structure UnstructuredScriptStep where
   tacticSeq : Array Syntax.Tactic
   inGoal : MVarId
-  outGoals : Array MVarId
+  outGoals : Array GoalWithMVars
   otherSolvedGoals : Array MVarId
-  deriving Repr
+  deriving Inhabited, Repr
 
-def UnstructuredScriptStep.dummy (inGoal outGoal : MVarId) :
+def UnstructuredScriptStep.dummy (inGoal : MVarId) (outGoal : GoalWithMVars) :
     UnstructuredScriptStep where
   tacticSeq := #[]
   inGoal := inGoal
@@ -432,25 +493,107 @@ def TacticState.applyUnstructuredScriptStep (tacticState : TacticState)
     (step : UnstructuredScriptStep) : m TacticState :=
   tacticState.applyTactic step.inGoal step.outGoals step.otherSolvedGoals
 
+def UnstructuredScriptStep.render (acc : Array Syntax.Tactic)
+    (step : UnstructuredScriptStep) (tacticState : TacticState) :
+    m (Array Syntax.Tactic × TacticState) := do
+  if step.tacticSeq.size == 0 then
+    let tacticState ← tacticState.applyUnstructuredScriptStep step
+    return (acc, tacticState)
+  else
+    let pos ← tacticState.get step.inGoal
+    let tacticState ← tacticState.applyUnstructuredScriptStep step
+    if pos == 0 then
+      return (acc ++ step.tacticSeq, tacticState)
+    else
+      let posLit := mkOneBasedNumLit pos
+      let t ← `(tactic| on_goal $posLit:num => $(step.tacticSeq):tactic*)
+      return (acc.push t, tacticState)
+
 abbrev UnstructuredScript := Array UnstructuredScriptStep
 
-def UnstructuredScript.render (initialGoals : Array MVarId)
+def UnstructuredScript.render (tacticState : TacticState)
     (s : UnstructuredScript) : m (Array Syntax.Tactic) := do
   let mut script := Array.mkEmpty s.size
-  let mut tacticState : TacticState :=
-    { goals := initialGoals, solvedGoals := {} }
+  let mut tacticState := tacticState
   for step in s do
-    if step.tacticSeq.size == 0 then
-      tacticState ← tacticState.applyUnstructuredScriptStep step
-    else
-      let pos ← tacticState.get step.inGoal
-      if pos == 0 then
-        script := script ++ step.tacticSeq
-      else
-        let posLit := mkOneBasedNumLit pos
-        let t ← `(tactic| on_goal $posLit:num => $(step.tacticSeq):tactic*)
-        script := script.push t
-      tacticState ← tacticState.applyUnstructuredScriptStep step
+    let (script', tacticState') ← step.render script tacticState
+    script := script'
+    tacticState := tacticState'
   return script
+
+inductive StructuredScript
+  | empty
+  | unstructuredStep (step : UnstructuredScriptStep) (tail : StructuredScript)
+  | solve (goal : MVarId) (here tail : StructuredScript)
+  deriving Inhabited, Repr
+
+def StructuredScript.render (tacticState : TacticState)
+    (script : StructuredScript) : m (Array Syntax.Tactic) := do
+  (·.fst) <$> go #[] tacticState script
+  where
+    go (script : Array Syntax.Tactic) (tacticState : TacticState) :
+        StructuredScript → m (Array Syntax.Tactic × TacticState)
+      | empty =>
+        return (script, tacticState)
+      | unstructuredStep step tail => do
+        let (script, tacticState) ← step.render script tacticState
+        go script tacticState tail
+      | solve goal here tail => do
+        let (pos, mvars) ← tacticState.getWithMVars goal
+        let (nestedScript, nestedTacticState) ←
+          go #[] { tacticState with goals := #[⟨goal, mvars⟩] } here
+        if ! nestedTacticState.isEmpty then
+          throwError "expected script to solve the goal"
+        let t ←
+          if pos == 0 then
+            `(tactic| · $[$nestedScript:tactic]*)
+          else
+            let posLit := mkOneBasedNumLit pos
+            `(tactic| solve $posLit:num => $nestedScript:tactic*)
+        let tacticState :=
+          tacticState.solveGoals $ nestedTacticState.solvedGoals.insert goal
+        go (script.push t) tacticState tail
+
+-- TODO resolve positions as part of this step?
+-- TODO We currently assume that we completely solve the tactic state. If we
+-- don't, we have to allow getStep to fail and leave the goal alone.
+partial def UnstructuredScript.toStructuredScript (tacticState : TacticState)
+    (script : UnstructuredScript) : m StructuredScript := do
+  let mut steps := {}
+  for h : i in [:script.size] do
+    let step := script[i]'h.2
+    steps := steps.insert step.inGoal (i, step)
+  (·.fst) <$> go steps tacticState
+  where
+  go (steps : HashMap MVarId (Nat × UnstructuredScriptStep))
+      (tacticState : TacticState) : m (StructuredScript × TacticState) := do
+    if tacticState.isEmpty then
+      return (.empty, tacticState)
+    else if tacticState.isSingleton || tacticState.hasMVars then
+      -- TODO If the original order happens to solve the main goal, we can
+      -- structure opportunistically.
+      let currentSteps ← tacticState.goals.mapM λ goal => do
+        let (some x) := steps[goal.goal]
+          | throwError "no such goal: {goal.goal.name}"
+        return x
+      let currentSteps := currentSteps.qsort (λ x y => x.fst < y.fst)
+      let firstStep := currentSteps[0]!.snd
+      let tacticState ← tacticState.applyUnstructuredScriptStep firstStep
+      let (tailScript, tacticState) ← go steps tacticState
+      return (.unstructuredStep firstStep tailScript, tacticState)
+    else
+      let mut tacticState := tacticState
+      let mut nestedScripts := #[]
+      for goal in tacticState.goals do
+        if tacticState.solvedGoals.contains goal.goal then
+          continue
+        let (nestedScript, nestedTacticState) ←
+          go steps { tacticState with goals := #[goal] }
+        tacticState := tacticState.solveGoals $
+          nestedTacticState.solvedGoals.insert goal.goal
+        nestedScripts := nestedScripts.push (goal.goal, nestedScript)
+      let script := nestedScripts.foldr (init := .empty)
+        λ (goal, nestedScript) tail => .solve goal nestedScript tail
+      return (script, tacticState)
 
 end Aesop

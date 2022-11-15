@@ -43,8 +43,10 @@ mutual
       catch e =>
         throwError "script builder for rapp {r.id} reported error:{indentD $ e.toMessageData}"
     let otherSolvedGoals := r.assignedMVars.toArray
-    let outGoals ← r.foldSubgoalsM (init := #[]) λ outGoals gref =>
-      return outGoals.push (← gref.get).preNormGoal
+    let outGoals ← r.foldSubgoalsM (init := #[]) λ outGoals gref => do
+      let g ← gref.get
+      return outGoals.push
+        { goal := g.preNormGoal, mvars := .ofArray g.mvars.toArray }
     modify λ s => s.push { tacticSeq, inGoal, outGoals, otherSolvedGoals }
     r.children.forM (·.extractScriptCore)
 end

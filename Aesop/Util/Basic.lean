@@ -22,6 +22,10 @@ instance (priority := low) [ord : Ord α] : BEq α :=
 
 namespace Option
 
+def toArray : Option α → Array α
+  | none => #[]
+  | some a => #[a]
+
 def forM [Monad m] (f : α → m Unit) : Option α → m Unit
   | none => pure ()
   | some a => f a
@@ -568,6 +572,12 @@ instance [BEq α] [Hashable α] : BEq (HashSet α) where
       unless s.contains x do
         return false
     return true
+
+def any [BEq α] [Hashable α] (s : HashSet α) (f : α → Bool) : Bool :=
+  s.fold (init := false) λ result a => result || f a
+
+def all [BEq α] [Hashable α] (s : HashSet α) (f : α → Bool) : Bool :=
+  s.fold (init := true) λ result a => result && f a
 
 end Lean.HashSet
 

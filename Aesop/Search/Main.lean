@@ -120,7 +120,11 @@ def traceScript : SearchM Q Unit := do
   let script? ←
     try
       let script ← (← getRootMVarCluster).extractScript
-      let script ← script.render ctx.initialGoals
+      let tacticState := {
+        goals := ctx.initialGoals.map (⟨·, {}⟩)
+        solvedGoals := {}
+      }
+      let script ← script.render tacticState
       let script ← `(tacticSeq| $script:tactic*)
       if ctx.options.traceScript then
         withPPAnalyze do
