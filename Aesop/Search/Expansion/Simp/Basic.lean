@@ -75,35 +75,24 @@ def mkSimpOnly (stx : Syntax) (usedSimps : UsedSimps) : MetaM Syntax := do
   return stx
 
 -- TODO this way to handle (config := ...) is ugly.
-def mkNormSimpSyntax (normSimpUseHyps : Bool) (config : SimpConfig)
+def mkNormSimpSyntax (normSimpUseHyps : Bool)
     (configStx? : Option Term) : MetaM Syntax.Tactic := do
   if normSimpUseHyps then
     match configStx? with
     | none => `(tactic| simp_all)
     | some cfg =>
-      if config.toConfigCtx == {} then
-        `(tactic| simp_all)
-      else if config.toConfigCtx == { arith := true } then
-        `(tactic| simp_all_arith)
-      else
-        `(tactic| simp_all (config := ($cfg : Aesop.SimpConfig).toConfigCtx))
+      `(tactic| simp_all (config := ($cfg : Aesop.SimpConfig).toConfigCtx))
   else
     match configStx? with
     | none => `(tactic| simp at *)
     | some cfg =>
-      if config.toConfig == {} then
-        `(tactic| simp at *)
-      else if config.toConfig == { arith := true } then
-        `(tactic| simp_arith at *)
-      else
-        `(tactic| simp (config := ($cfg : Aesop.SimpConfig).toConfig) at *)
+      `(tactic| simp (config := ($cfg : Aesop.SimpConfig).toConfig) at *)
 
 -- FIXME minimised simp (`simp only`) does not work reliably
 def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
-    (config : SimpConfig) (configStx? : Option Term)
-    (usedTheorems : Simp.UsedSimps) :
+    (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
     MetaM Syntax.Tactic := do
-  let originalStx ← mkNormSimpSyntax normSimpUseHyps config configStx?
+  let originalStx ← mkNormSimpSyntax normSimpUseHyps configStx?
   let stx ← inGoal.withContext do mkSimpOnly originalStx usedTheorems
   return ⟨stx⟩
 
