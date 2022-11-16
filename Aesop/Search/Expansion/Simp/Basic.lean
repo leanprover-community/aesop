@@ -74,21 +74,17 @@ def mkSimpOnly (stx : Syntax) (usedSimps : UsedSimps) : MetaM Syntax := do
   stx := stx.setArg 4 (mkNullNode argsStx)
   return stx
 
--- NOTE: the `Syntax`s produced by this function do not include the Aesop simp
--- set. This doesn't matter if we feed them into `mkSimpOnly`, but it would
--- matter if we were to execute them.
---
 -- TODO this way to handle (config := ...) is ugly.
 def mkNormSimpSyntax (normSimpUseHyps : Bool)
     (configStx? : Option Term) : MetaM Syntax.Tactic := do
   if normSimpUseHyps then
     match configStx? with
-    | none => `(tactic| simp_all (config := ({} : Aesop.SimpConfig).toConfigCtx))
+    | none => `(tactic| simp_all)
     | some cfg =>
       `(tactic| simp_all (config := ($cfg : Aesop.SimpConfig).toConfigCtx))
   else
     match configStx? with
-    | none => `(tactic| simp (config := ({} : Aesop.SimpConfig).toConfig) at *)
+    | none => `(tactic| simp at *)
     | some cfg =>
       `(tactic| simp (config := ($cfg : Aesop.SimpConfig).toConfig) at *)
 
