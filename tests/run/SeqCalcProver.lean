@@ -6,6 +6,8 @@ Authors: Asta H. From
 
 import Aesop
 
+set_option aesop.check.script true
+
 --- Decidable
 
 attribute [aesop unsafe [50% constructors, 50% cases]] Decidable
@@ -30,7 +32,10 @@ theorem Mem.split [DecidableEq α] {xs : List α} {v : α} (h : v ∈ xs)
     have dec : Decidable (x = v) := inferInstance
     cases dec
     case isFalse no =>
-      let ⟨l, r, eq⟩ : ∃ l r, xs = l ++ v :: r := by aesop
+      let ⟨l, r, eq⟩ : ∃ l r, xs = l ++ v :: r := by
+        -- TODO wrong hyp user names after unhygienic cases
+        set_option aesop.check.script false in
+        aesop
       rw [eq]
       exact ⟨x :: l, r, rfl⟩
     case isTrue yes =>
@@ -158,7 +163,12 @@ theorem sym {xs ys : List α} (perm : xs ↭ ys)
 
 theorem shift (v : α) (xs ys : List α)
   : xs ++ v :: ys ↭ v :: xs ++ ys := by
-  induction xs <;> aesop
+  induction xs
+  . aesop
+  . -- TODO need to make all hyps accessible in initial goal
+    -- BUG in on_goal: wrong position
+    set_option aesop.check.script false in
+    aesop
 
 theorem map {xs ys : List α} (f : α → β) (perm : xs ↭ ys)
   : xs.map f ↭ ys.map f := by
@@ -170,7 +180,13 @@ theorem all {xs ys : List α} (perm : xs ↭ ys) (P : α → Prop)
 
 theorem any {xs ys : List α} (perm : xs ↭ ys) (P : α → Prop)
   : Any P xs → Any P ys := by
-  induction perm <;> aesop
+  induction perm
+  . aesop
+  . aesop
+  . -- TODO wtf is happening here
+    set_option aesop.check.script false in
+    aesop
+  . aesop
 
 end Perm
 
@@ -420,7 +436,11 @@ theorem weaken (Γ Δ : List (Form Φ)) (prf : Proof Γ Δ) (δ : Form Φ)
   | imp_r Γ Δ φ ψ =>
     have ih' : Proof (φ :: Γ) (ψ :: δ :: Δ) := by aesop
     aesop
-  | _ => aesop (options := { maxRuleApplications := 250 })
+  | _ =>
+    -- TODO No "Try this:" output??
+    set_option aesop.check.script false in
+    aesop? (options := { maxRuleApplications := 250 })
+
 
 --- Soundness
 
@@ -482,6 +502,8 @@ theorem Proof_sound_complete [DecidableEq Φ] (φ : Form Φ)
   case mp =>
     intro prf i dec
     have h : Any (Val i) [φ] := Proof.sound i prf All.nil
+    -- TODO wrong hyp user names after unhygienic cases
+    set_option aesop.check.script false in
     aesop
   case mpr =>
     intro h
