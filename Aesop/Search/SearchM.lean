@@ -21,9 +21,7 @@ structure Context where
   normSimpConfigSyntax? : Option Term
   normSimpUseHyps : Bool
   options : Aesop.Options
-  rootGoalMVar : MVarId -- TODO this is now the root goal's `preNormGoal`
   profilingEnabled : Bool
-  initialGoals : Array MVarId
   deriving Inhabited
 
 def Context.normSimpConfig (ctx : Context) : SimpConfig where
@@ -82,35 +80,30 @@ def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
 
 def run (ruleSet : RuleSet) (options : Aesop.Options)
     (simpConfig : Aesop.SimpConfig) (simpConfigSyntax? : Option Term)
-    (initialGoals : Array MVarId) (profile : Profile) (x : SearchM Q α) :
+    (goal : MVarId) (profile : Profile) (x : SearchM Q α) :
     MetaM (α × State Q × Tree) := do
-  if h : 0 < initialGoals.size then
-    let goal := initialGoals[0]
-    let t ← mkInitialTree goal
-    let profilingEnabled ← TraceOption.profile.isEnabled
-    let normSimpContext := {
-      (← Simp.Context.mkDefault) with
-      simpTheorems := #[ruleSet.normSimpLemmas]
-      config := simpConfig.toConfig
-    }
-    let ctx := {
-      rootGoalMVar := goal
-      normSimpUseHyps := simpConfig.useHyps
-      normSimpConfigSyntax? := simpConfigSyntax?
-      ruleSet, options, profilingEnabled, normSimpContext, initialGoals
-    }
-    let #[rootGoal] := (← t.root.get).goals
-      | throwError "aesop: internal error: root mvar cluster does not contain exactly one goal."
-    let state := {
-      queue := ← Queue.init' #[rootGoal]
-      iteration := Iteration.one
-      profile
-      maxRuleApplicationDepthReached := false
-    }
-    let ((a, state), tree) ← ReaderT.run x ctx |>.run state |>.run t
-    return (a, state, tree)
-  else
-    throwError "aesop: no goals to be solved"
+  let t ← mkInitialTree goal
+  let profilingEnabled ← TraceOption.profile.isEnabled
+  let normSimpContext := {
+    (← Simp.Context.mkDefault) with
+    simpTheorems := #[ruleSet.normSimpLemmas]
+    config := simpConfig.toConfig
+  }
+  let ctx := {
+    normSimpUseHyps := simpConfig.useHyps
+    normSimpConfigSyntax? := simpConfigSyntax?
+    ruleSet, options, profilingEnabled, normSimpContext
+  }
+  let #[rootGoal] := (← t.root.get).goals
+    | throwError "aesop: internal error: root mvar cluster does not contain exactly one goal."
+  let state := {
+    queue := ← Queue.init' #[rootGoal]
+    iteration := Iteration.one
+    profile
+    maxRuleApplicationDepthReached := false
+  }
+  let ((a, state), tree) ← ReaderT.run x ctx |>.run state |>.run t
+  return (a, state, tree)
 
 end SearchM
 

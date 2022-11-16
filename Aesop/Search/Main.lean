@@ -73,7 +73,7 @@ def checkRootUnprovable : SearchM Q (Option MessageData) := do
   return none
 
 def getProof? : SearchM Q (Option Expr) := do
-  let (some proof) ← getExprMVarAssignment? (← read).rootGoalMVar
+  let (some proof) ← getExprMVarAssignment? (← getRootMVarId)
     | return none
   instantiateMVars proof
 
@@ -82,7 +82,7 @@ private def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
 
 def finalizeProof : SearchM Q Unit := do
   aesop_trace[steps] "Root node is proven. Linking proofs."
-  (← read).rootGoalMVar.withContext do
+  (← getRootMVarId).withContext do
     extractProof
     let (some proof) ← getProof? | throwError
       "aesop: internal error: root goal is proven but its metavariable is not assigned"
@@ -96,8 +96,8 @@ def finalizeProof : SearchM Q Unit := do
         aesop_trace![proof] "Final proof:{indentExpr proof}"
 
 open Lean.Elab.Tactic in
-def checkScript (script : TSyntax ``tacticSeq) : SearchM Q Unit := do
-  let initialGoals := (← read).initialGoals
+def checkScript (script : TSyntax ``tacticSeq) (initialState : Meta.SavedState) :
+    SearchM Q Unit := do
   let go : TacticM Unit := do
     let goal ← getMainGoal
     setGoals [goal]
@@ -105,29 +105,31 @@ def checkScript (script : TSyntax ``tacticSeq) : SearchM Q Unit := do
     unless (← getUnsolvedGoals).isEmpty do
       throwError "script executed successfully but did not solve the main goal"
   try
+    let rootGoal ← getRootMVarId
     discard $ show MetaM _ from withoutModifyingState $ do
-      initialGoals.forM eraseExprMVarAssignment
+      initialState.restore
       go.run { elaborator := .anonymous, recover := false }
-        |>.run { goals := initialGoals.toList } |>.run
+        |>.run { goals := [rootGoal] } |>.run
   catch e => throwError
     "{Check.script.name}: error while executing generated script:{indentD e.toMessageData}"
 
-def traceScript : SearchM Q Unit := do
-  let ctx ← read
+def traceScript (initialState : Meta.SavedState) : SearchM Q Unit := do
   let doCheck ← Check.script.isEnabled
-  if ! ctx.options.traceScript && ! doCheck then
+  let options := (← read).options
+  if ! options.traceScript && ! doCheck then
     return
   let script? ←
     try
       let script ← (← getRootMVarCluster).extractScript
+      let rootMVarId ← getRootMVarId
       let tacticState := {
-        goals := ctx.initialGoals.map (⟨·, {}⟩)
+        goals := #[⟨rootMVarId, {}⟩] -- TODO update once we allow mvars
         solvedGoals := {}
       }
       let script ← script.toStructuredScript tacticState
       let script₁ ← script.render tacticState
       let script ← `(tacticSeq| $script₁:tactic*)
-      if ctx.options.traceScript then
+      if options.traceScript then
         withPPAnalyze do
           logInfo m!"Try this:\n{script}"
       -- FIXME remove and rename script₁
@@ -143,16 +145,14 @@ def traceScript : SearchM Q Unit := do
       pure none
   if doCheck then
     if let (some script) := script? then
-      checkScript script
+      checkScript script initialState
 
 def finishIfProven : SearchM Q Bool := do
   unless (← (← getRootMVarCluster).get).state.isProven do
     return false
+  let initialState ← Meta.saveState
   finalizeProof
-  traceScript
-  -- `traceScript` needs to run after `finalizeProof` because in `checkScript`
-  -- we assume that all the intermediate mvars are available in the current
-  -- `MetavarContext`.
+  traceScript initialState
   return true
 
 def traceFinalTree : SearchM Q Unit := do
@@ -185,7 +185,7 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
   let goals ← extractSafePrefix
   aesop_trace[proof] do
     let proof? ← getProof?
-    (← read).rootGoalMVar.withContext do
+    (← getRootMVarId).withContext do
       match proof? with
       | some proof => aesop_trace![proof] "Final proof:{indentExpr proof}"
       | none => aesop_trace![proof] "Final proof: <none>"
@@ -219,26 +219,23 @@ The `goals` should be the current goals (as reported by `getGoals`). If you
 don't use Aesop's `traceScript` option, `goals` may also contain just the
 current main goal (as reported by `getMainGoal`).
 -/
-def search (goals : Array MVarId) (ruleSet? : Option RuleSet := none)
+def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
      (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
      (simpConfigSyntax? : Option Term := none)
      (profile : Profile := {}) :
      MetaM (Array MVarId × Profile) := do
-  if h : 0 < goals.size then
-    goals[0].checkNotAssigned `aesop
-    let ruleSet ←
-      match ruleSet? with
-      | none => Frontend.getDefaultRuleSet
-      | some ruleSet => pure ruleSet
-    let ⟨Q, _⟩ := options.queue
-    let (goals, state, _) ←
-      SearchM.run ruleSet options simpConfig simpConfigSyntax? goals profile do
-        show SearchM Q _ from
-        try searchLoop
-        catch e => handleFatalError e
-        finally freeTree
-    return (goals, state.profile)
-  else
-    throwError "aesop: no goals to be solved"
+  goal.checkNotAssigned `aesop
+  let ruleSet ←
+    match ruleSet? with
+    | none => Frontend.getDefaultRuleSet
+    | some ruleSet => pure ruleSet
+  let ⟨Q, _⟩ := options.queue
+  let (goals, state, _) ←
+    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal profile do
+      show SearchM Q _ from
+      try searchLoop
+      catch e => handleFatalError e
+      finally freeTree
+  return (goals, state.profile)
 
 end Aesop

@@ -91,6 +91,10 @@ def getRootGoal : TreeM GoalRef := do
   else
     throwError "aesop: internal error: unexpected number of goals in root mvar cluster: {grefs.size}"
 
+def getRootMVarId : TreeM MVarId := do
+  let gref ← getRootGoal
+  return (← gref.get).preNormGoal
+
 def incrementNumGoals (increment := 1) : TreeM Unit := do
   modify λ s => { s with numGoals := s.numGoals + increment }
 
