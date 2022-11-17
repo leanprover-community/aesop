@@ -96,12 +96,12 @@ def finalizeProof : SearchM Q Unit := do
         aesop_trace![proof] "Final proof:{indentExpr proof}"
 
 open Lean.Elab.Tactic in
-def checkScript (script : TSyntax ``tacticSeq) (initialState : Meta.SavedState) :
+def checkScript (script : Array Syntax.Tactic) (initialState : Meta.SavedState) :
     SearchM Q Unit := do
   let go : TacticM Unit := do
     let goal ← getMainGoal
     setGoals [goal]
-    evalTactic script
+    evalTactic $ ← `(tacticSeq| $script:tactic*)
     unless (← getUnsolvedGoals).isEmpty do
       throwError "script executed successfully but did not solve the main goal"
   try
@@ -126,13 +126,13 @@ def traceScript (initialState : Meta.SavedState) : SearchM Q Unit := do
       solvedGoals := {}
     }
     let script ← script.toStructuredScript tacticState
-    let script₁ ← script.render tacticState -- FIXME
-    let script ← `(tacticSeq| $script₁:tactic*)
+    let script ← script.render tacticState
     if options.traceScript then
+      let scriptMsg := MessageData.joinSepArray (script.map toMessageData) "\n"
       withPPAnalyze do
-        logInfo m!"Try this:\n{script}"
-    -- FIXME remove and rename script₁
-    -- let hasOnGoal := script₁.any λ t =>
+        logInfo m!"Try this:{indentD scriptMsg}"
+    -- FIXME remove
+    -- let hasOnGoal := script.any λ t =>
     --   match t with
     --   | `(tactic| on_goal $_ => $_) => true
     --   | _ => false
