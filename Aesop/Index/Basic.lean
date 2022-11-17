@@ -11,10 +11,14 @@ open Lean.Meta
 
 namespace Aesop
 
+-- This value controls whether we use 'powerful' reductions, e.g. iota, when
+-- indexing Aesop rules. See the `DiscrTree` docs for details.
+def simpleReduce := false
+
 inductive IndexingMode : Type
   | unindexed
-  | target (keys : Array DiscrTree.Key)
-  | hyps (keys : Array DiscrTree.Key)
+  | target (keys : Array (DiscrTree.Key simpleReduce))
+  | hyps (keys : Array (DiscrTree.Key simpleReduce))
   | or (imodes : Array IndexingMode)
   deriving Inhabited
 

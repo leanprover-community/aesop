@@ -729,7 +729,7 @@ namespace Lean.Meta.DiscrTree
 namespace Key
 
 -- TODO could be more efficient.
-protected def cmp (k l : Key) : Ordering :=
+protected def cmp (k l : Key s) : Ordering :=
   if lt k l then
     Ordering.lt
   else if lt l k then
@@ -737,7 +737,7 @@ protected def cmp (k l : Key) : Ordering :=
   else
     Ordering.eq
 
-instance : Ord Key where
+instance : Ord (Key s) where
   compare := Key.cmp
 
 end Key
@@ -746,166 +746,94 @@ namespace Trie
 
 -- This is just a partial function, but Lean doesn't realise that its type is
 -- inhabited.
-unsafe def foldMUnsafe [Monad m] (initialKeys : Array Key)
-    (f : σ → Array Key → α → m σ) (init : σ) : Trie α → m σ
+unsafe def foldMUnsafe [Monad m] (initialKeys : Array (Key s))
+    (f : σ → Array (Key s) → α → m σ) (init : σ) : Trie α s → m σ
   | Trie.node vs children => do
     let s ← vs.foldlM (init := init) λ s v => f s initialKeys v
     children.foldlM (init := s) λ s (k, t) =>
       t.foldMUnsafe (initialKeys.push k) f s
 
 @[implemented_by foldMUnsafe]
-opaque foldM [Monad m] (initalKeys : Array Key)
-    (f : σ → Array Key → α → m σ) (init : σ) (t : Trie α) : m σ :=
+opaque foldM [Monad m] (initalKeys : Array (Key s))
+    (f : σ → Array (Key s) → α → m σ) (init : σ) (t : Trie α s) : m σ :=
   pure init
 
 @[inline]
-def fold (initialKeys : Array Key) (f : σ → Array Key → α → σ) (init : σ)
-    (t : Trie α) : σ :=
+def fold (initialKeys : Array (Key s)) (f : σ → Array (Key s) → α → σ)
+    (init : σ) (t : Trie α s) : σ :=
   Id.run $ t.foldM initialKeys (init := init) λ s k a => return f s k a
 
 -- This is just a partial function, but Lean doesn't realise that its type is
 -- inhabited.
 unsafe def foldValuesMUnsafe [Monad m] (f : σ → α → m σ) (init : σ) :
-    Trie α → m σ
+    Trie α s → m σ
 | node vs children => do
   let s ← vs.foldlM (init := init) f
   children.foldlM (init := s) λ s (_, c) => c.foldValuesMUnsafe (init := s) f
 
 @[implemented_by foldValuesMUnsafe]
-opaque foldValuesM [Monad m] (f : σ → α → m σ) (init : σ) (t : Trie α) :
+opaque foldValuesM [Monad m] (f : σ → α → m σ) (init : σ) (t : Trie α s) :
     m σ :=
   pure init
 
 @[inline]
-def foldValues (f : σ → α → σ) (init : σ) (t : Trie α) : σ :=
+def foldValues (f : σ → α → σ) (init : σ) (t : Trie α s) : σ :=
   Id.run $ t.foldValuesM (init := init) f
 
-partial def size : Trie α → Nat
+partial def size : Trie α s → Nat
   | Trie.node vs children =>
     children.foldl (init := vs.size) λ n (_, c) => n + size c
 
-partial def merge : Trie α → Trie α → Trie α
+partial def merge : Trie α s → Trie α s → Trie α s
   | node vs₁ cs₁, node vs₂ cs₂ =>
     node (mergeValues vs₁ vs₂) (mergeChildren cs₁ cs₂)
   where
     mergeValues (vs₁ vs₂ : Array α) : Array α :=
       if vs₁.size > vs₂.size then vs₁ ++ vs₂ else vs₂ ++ vs₁
 
-    mergeChildren (cs₁ cs₂ : Array (Key × Trie α)) : Array (Key × Trie α) :=
-      have : Ord (Key × Trie α) :=
-        ⟨λ (k₁, _) (k₂, _) => compare k₁ k₂⟩
-      Array.mergeSortedMergingDuplicates cs₁ cs₂
+    mergeChildren (cs₁ cs₂ : Array (Key s × Trie α s)) :
+        Array (Key s × Trie α s) :=
+      Array.mergeSortedMergingDuplicates
+        (ord := ⟨λ (k₁, _) (k₂, _) => compare k₁ k₂⟩) cs₁ cs₂
         (λ (k₁, t₁) (_, t₂) => (k₁, merge t₁ t₂))
 
 end Trie
 
 @[inline]
-def foldM [Monad m] (f : σ → Array Key → α → m σ) (init : σ) (t : DiscrTree α) :
-    m σ :=
+def foldM [Monad m] (f : σ → Array (Key s) → α → m σ) (init : σ)
+    (t : DiscrTree α s) : m σ :=
   t.root.foldlM (init := init) λ s k t => t.foldM #[k] (init := s) f
 
 @[inline]
-def fold (f : σ → Array Key → α → σ) (init : σ) (t : DiscrTree α) : σ :=
+def fold (f : σ → Array (Key s) → α → σ) (init : σ) (t : DiscrTree α s) : σ :=
   Id.run $ t.foldM (init := init) λ s keys a => return f s keys a
 
 @[inline]
-def foldValuesM [Monad m] (f : σ → α → m σ) (init : σ) (t : DiscrTree α) : m σ :=
+def foldValuesM [Monad m] (f : σ → α → m σ) (init : σ) (t : DiscrTree α s) :
+    m σ :=
   t.root.foldlM (init := init) λ s _ t => t.foldValuesM (init := s) f
 
 @[inline]
-def foldValues (f : σ → α → σ) (init : σ) (t : DiscrTree α) : σ :=
+def foldValues (f : σ → α → σ) (init : σ) (t : DiscrTree α s) : σ :=
   Id.run $ t.foldValuesM (init := init) f
 
-def values (t : DiscrTree α) : Array α :=
+def values (t : DiscrTree α s) : Array α :=
   t.foldValues (init := #[]) λ as a => as.push a
 
-def toArray (t : DiscrTree α) : Array (Array Key × α) :=
+def toArray (t : DiscrTree α s) : Array (Array (Key s) × α) :=
   t.fold (init := #[]) λ as keys a => as.push (keys, a)
 
-def size (t : DiscrTree α) : Nat :=
+def size (t : DiscrTree α s) : Nat :=
   t.root.foldl (init := 0) λ n _ t => n + t.size
 
 @[inline]
-def merge [BEq α] (t u : DiscrTree α) : DiscrTree α :=
+def merge [BEq α] (t u : DiscrTree α s) : DiscrTree α s :=
   { root := t.root.merge u.root λ _ trie₁ trie₂ => trie₁.merge trie₂ }
-
-private def getKeyArgs (e : Expr) (isMatch root : Bool) : MetaM (Key × Array Expr) := do
-  let e ← whnfDT e root
-  match e.getAppFn with
-  | Expr.lit v       => return (Key.lit v, #[])
-  | Expr.const c _   =>
-    if (← getConfig).isDefEqStuckEx && e.hasExprMVar then
-      if (← isReducible c) then
-        /- `e` is a term `c ...` s.t. `c` is reducible and `e` has metavariables, but it was not unfolded.
-           This can happen if the metavariables in `e` are "blocking" smart unfolding.
-           If `isDefEqStuckEx` is enabled, then we must throw the `isDefEqStuck` exception to postpone TC resolution.
-           Here is an example. Suppose we have
-           ```
-            inductive Ty where
-              | bool | fn (a ty : Ty)
-
-
-            @[reducible] def Ty.interp : Ty → Type
-              | bool   => Bool
-              | fn a b => a.interp → b.interp
-           ```
-           and we are trying to synthesize `BEq (Ty.interp ?m)`
-        -/
-        Meta.throwIsDefEqStuck
-      else if let some matcherInfo := isMatcherAppCore? (← getEnv) e then
-        -- A matcher application is stuck is one of the discriminants has a metavariable
-        let args := e.getAppArgs
-        for arg in args[matcherInfo.getFirstDiscrPos: matcherInfo.getFirstDiscrPos + matcherInfo.numDiscrs] do
-          if arg.hasExprMVar then
-            Meta.throwIsDefEqStuck
-      else if (← isRec c) then
-        /- Similar to the previous case, but for `match` and recursor applications. It may be stuck (i.e., did not reduce)
-           because of metavariables. -/
-        Meta.throwIsDefEqStuck
-    let nargs := e.getAppNumArgs
-    return (Key.const c nargs, e.getAppRevArgs)
-  | Expr.fvar fvarId =>
-    let nargs := e.getAppNumArgs
-    return (Key.fvar fvarId nargs, e.getAppRevArgs)
-  | Expr.mvar mvarId =>
-    if isMatch then
-      return (Key.other, #[])
-    else do
-      let ctx ← read
-      if ctx.config.isDefEqStuckEx then
-        /-
-          When the configuration flag `isDefEqStuckEx` is set to true,
-          we want `isDefEq` to throw an exception whenever it tries to assign
-          a read-only metavariable.
-          This feature is useful for type class resolution where
-          we may want to notify the caller that the TC problem may be solveable
-          later after it assigns `?m`.
-          The method `DiscrTree.getUnify e` returns candidates `c` that may "unify" with `e`.
-          That is, `isDefEq c e` may return true. Now, consider `DiscrTree.getUnify d (Add ?m)`
-          where `?m` is a read-only metavariable, and the discrimination tree contains the keys
-          `HadAdd Nat` and `Add Int`. If `isDefEqStuckEx` is set to true, we must treat `?m` as
-          a regular metavariable here, otherwise we return the empty set of candidates.
-          This is incorrect because it is equivalent to saying that there is no solution even if
-          the caller assigns `?m` and try again. -/
-        return (Key.star, #[])
-      else if (← mvarId.isReadOnlyOrSyntheticOpaque) then
-        return (Key.other, #[])
-      else
-        return (Key.star, #[])
-  | Expr.proj s i a .. =>
-    return (Key.proj s i, #[a])
-  | Expr.forallE _ d b _ =>
-    if b.hasLooseBVars then
-      return (Key.other, #[])
-    else
-      return (Key.arrow, #[d, b])
-  | _ =>
-    return (Key.other, #[])
 
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
 -- `n` stars).
 def getConclusionKeys (type : Expr) :
-    MetaM (Array Key) :=
+    MetaM (Array (Key s)) :=
   withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
     mkPath conclusion
@@ -914,7 +842,7 @@ def getConclusionKeys (type : Expr) :
 
 -- For a constant `d` with type `∀ (x₁, ..., xₙ), T`, returns keys that
 -- match `d * ... *` (with `n` stars).
-def getConstKeys (decl : Name) : MetaM (Array Key) := do
+def getConstKeys (decl : Name) : MetaM (Array (Key s)) := do
   let (some info) ← getConst? decl
     | throwUnknownConstant decl
   let arity := info.type.arity
@@ -923,7 +851,6 @@ def getConstKeys (decl : Name) : MetaM (Array Key) := do
   for _ in [0:arity] do
     keys := keys.push $ .star
   return keys
-
 
 end Lean.Meta.DiscrTree
 

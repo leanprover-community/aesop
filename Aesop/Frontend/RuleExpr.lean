@@ -183,7 +183,7 @@ def elabSingleIndexingMode (stx : Syntax) : ElabM IndexingMode :=
     | `(indexing_mode| unindexed) => return .unindexed
     | _ => throwUnsupportedSyntax
   where
-    elabKeys (stx : Syntax) : ElabM (Array DiscrTree.Key) :=
+    elabKeys {s} (stx : Syntax) : ElabM (Array (DiscrTree.Key s)) :=
       show TermElabM _ from withoutModifyingState do
         let e ← elabPattern stx
         DiscrTree.mkPath e
