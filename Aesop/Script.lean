@@ -29,31 +29,6 @@ elab (name := Parser.onGoal) &"on_goal " n:num " => " ts:tacticSeq : tactic => d
   else
     throwError "on_goal: tried to select goal {n} but there are only {gs.size} goals"
 
--- FIXME replace with on_goals + braces
-open Lean.Elab.Tactic in
-elab &"solve " ns:num+ " => " ts:tacticSeq : tactic => do
-  let gs := (← getGoals).toArray
-  let ns := ns.map (·.getNat) |>.qsortOrd
-  let mut selectedGoals := Array.mkEmpty ns.size
-  let mut otherGoals := Array.mkEmpty (gs.size - ns.size)
-  let mut start := 0
-  for n in ns do
-    -- Note that `n` is a 1-based index into `gs`.
-    if n == 0 then
-      throwError "solve: 0 is not a valid index"
-    else if h : n - 1 < gs.size then
-      selectedGoals := selectedGoals.push gs[n - 1]
-      otherGoals := otherGoals ++ gs[start:n - 2].toArray -- TODO inefficient
-      start := n
-    else
-      throwError "solve: tried to select goal {n} but there are only {gs.size} goals"
-  otherGoals := otherGoals ++ gs[start:].toArray -- TODO inefficient
-  setGoals selectedGoals.toList
-  evalTactic ts
-  if ! (← getUnsolvedGoals).isEmpty then
-    throwError "solve: tactic did not solve the goal"
-  setGoals otherGoals.toList
-
 -- FIXME move
 syntax optTacticSeq := (tacticSeq)?
 
@@ -564,7 +539,7 @@ def StructuredScript.render (tacticState : TacticState)
             `(tactic| · $[$nestedScript:tactic]*)
           else
             let posLit := mkOneBasedNumLit pos
-            `(tactic| solve $posLit:num => $nestedScript:tactic*)
+            `(tactic| on_goal $posLit:num => { $nestedScript:tactic* })
         let tacticState :=
           tacticState.solveGoals $ nestedTacticState.solvedGoals.insert goal
         go (script.push t) tacticState tail
