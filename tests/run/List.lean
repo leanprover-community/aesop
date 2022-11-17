@@ -863,7 +863,7 @@ theorem empty_iff_eq_nil {l : List α} : Empty l ↔ l = [] := by
 @[simp] theorem length_init : ∀ (l : List α), length (init l) = length l - 1
   | [] => by aesop
   | [_] => by aesop
-  | (x :: y :: zs) => by
+  | (_ :: y :: zs) => by
     have ih := length_init (y :: zs)
     aesop (add norm unfold [init], norm simp [Nat.add_sub_cancel])
 
@@ -1004,6 +1004,7 @@ theorem last'_append_of_ne_nil (l₁ : List α) : ∀ {l₂ : List α} (_ : l₂
 set_option linter.unusedVariables false in
 theorem last'_append {l₁ l₂ : List α} {x : α} (h : x ∈ l₂.last') :
   x ∈ (l₁ ++ l₂).last' := by
+  -- TODO script: simp only contains private ident
   aesop (add 1% cases List)
 
 /-! ### head(') and tail -/

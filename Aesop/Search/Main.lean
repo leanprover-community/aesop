@@ -118,34 +118,30 @@ def traceScript (initialState : Meta.SavedState) : SearchM Q Unit := do
   let options := (← read).options
   if ! options.traceScript && ! doCheck then
     return
-  let script? ←
-    try
-      let script ← (← getRootMVarCluster).extractScript
-      let rootMVarId ← getRootMVarId
-      let tacticState := {
-        goals := #[⟨rootMVarId, {}⟩] -- TODO update once we allow mvars
-        solvedGoals := {}
-      }
-      let script ← script.toStructuredScript tacticState
-      let script₁ ← script.render tacticState
-      let script ← `(tacticSeq| $script₁:tactic*)
-      if options.traceScript then
-        withPPAnalyze do
-          logInfo m!"Try this:\n{script}"
-      -- FIXME remove and rename script₁
-      -- let hasOnGoal := script₁.any λ t =>
-      --   match t with
-      --   | `(tactic| on_goal $_ => $_) => true
-      --   | _ => false
-      -- if hasOnGoal then
-      --   throwError "GOTEM"
-      pure $ some script
-    catch e =>
-      logError m!"aesop: error while generating tactic script:{indentD e.toMessageData}"
-      pure none
-  if doCheck then
-    if let (some script) := script? then
+  try
+    let script ← (← getRootMVarCluster).extractScript (← read).scriptPrefix
+    let goal := (← read).originalGoal
+    let tacticState := {
+      goals := #[⟨goal, {}⟩] -- TODO update once we allow mvars
+      solvedGoals := {}
+    }
+    let script ← script.toStructuredScript tacticState
+    let script₁ ← script.render tacticState -- FIXME
+    let script ← `(tacticSeq| $script₁:tactic*)
+    if options.traceScript then
+      withPPAnalyze do
+        logInfo m!"Try this:\n{script}"
+    -- FIXME remove and rename script₁
+    -- let hasOnGoal := script₁.any λ t =>
+    --   match t with
+    --   | `(tactic| on_goal $_ => $_) => true
+    --   | _ => false
+    -- if hasOnGoal then
+    --   throwError "GOTEM"
+    if doCheck then
       checkScript script initialState
+  catch e =>
+    logError m!"aesop: error while generating tactic script:{indentD e.toMessageData}"
 
 def finishIfProven : SearchM Q Bool := do
   unless (← (← getRootMVarCluster).get).state.isProven do
@@ -214,24 +210,34 @@ partial def searchLoop : SearchM Q (Array MVarId) :=
     incrementIteration
     searchLoop
 
-/--
-The `goals` should be the current goals (as reported by `getGoals`). If you
-don't use Aesop's `traceScript` option, `goals` may also contain just the
-current main goal (as reported by `getMainGoal`).
--/
+def preprocessGoal (mvarId : MVarId) (mvars : HashSet MVarId) :
+    MetaM (MVarId × UnstructuredScript) := do
+  let (mvarId', _, scriptBuilder) ← mvarId.renameInaccessibleFVarsWithSyntax
+  let step := {
+    tacticSeq := ← scriptBuilder.unstructured.run
+    inGoal := mvarId
+    outGoals := #[⟨mvarId', mvars⟩]
+    otherSolvedGoals := {}
+  }
+  return (mvarId', #[step])
+
 def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
      (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
      (simpConfigSyntax? : Option Term := none)
      (profile : Profile := {}) :
      MetaM (Array MVarId × Profile) := do
   goal.checkNotAssigned `aesop
+  let mvars ← getGoalMVarDependencies goal
+  let originalGoal := goal
+  let (goal, preprocessingScript) ← preprocessGoal goal mvars
   let ruleSet ←
     match ruleSet? with
     | none => Frontend.getDefaultRuleSet
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
   let (goals, state, _) ←
-    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal profile do
+    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal originalGoal
+        preprocessingScript profile do
       show SearchM Q _ from
       try searchLoop
       catch e => handleFatalError e

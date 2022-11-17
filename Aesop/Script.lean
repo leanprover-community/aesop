@@ -29,9 +29,9 @@ elab (name := Parser.onGoal) &"on_goal " n:num " => " ts:tacticSeq : tactic => d
   else
     throwError "on_goal: tried to select goal {n} but there are only {gs.size} goals"
 
--- FIXME move
+-- FIXME replace with on_goals + braces
 open Lean.Elab.Tactic in
-elab (name := Parser.solve) &"solve " ns:num+ " => " ts:tacticSeq : tactic => do
+elab &"solve " ns:num+ " => " ts:tacticSeq : tactic => do
   let gs := (← getGoals).toArray
   let ns := ns.map (·.getNat) |>.qsortOrd
   let mut selectedGoals := Array.mkEmpty ns.size
@@ -440,6 +440,17 @@ def cases (goal : MVarId) (fvarId : FVarId) (subgoals : Nat) :
   .ofTactic subgoals $ goal.withContext do
     `(tactic| unhygienic cases $(mkIdent $ ← fvarId.getUserName):ident)
 
+def renameInaccessibleFVars (goal : MVarId) (renamedFVars : Array FVarId) :
+    ScriptBuilder MetaM :=
+  if renamedFVars.isEmpty then
+    .id
+  else
+    .ofTactic 1 $ goal.withContext do
+      let ids ← renamedFVars.mapM λ fvarId => do
+        let userName := mkIdent (← fvarId.getDecl).userName
+        `(binderIdent| $userName:ident)
+      `(tactic| rename_i $ids:binderIdent*)
+
 end ScriptBuilder
 
 abbrev RuleTacScriptBuilder := ScriptBuilder MetaM
@@ -474,6 +485,10 @@ def _root_.Lean.MVarId.casesWithSyntax (goal : MVarId) (fvarId : FVarId) :
   let goals ← goal.cases fvarId
   return (goals, .cases goal fvarId goals.size)
 
+def _root_.Lean.MVarId.renameInaccessibleFVarsWithSyntax (goal : MVarId) :
+    MetaM (MVarId × Array FVarId × ScriptBuilder MetaM) := do
+  let (goal, renamedFVars) ← goal.renameInaccessibleFVars
+  return (goal, renamedFVars, .renameInaccessibleFVars goal renamedFVars)
 
 structure UnstructuredScriptStep where
   tacticSeq : Array Syntax.Tactic
@@ -583,7 +598,7 @@ partial def UnstructuredScript.toStructuredScript (tacticState : TacticState)
       return (.unstructuredStep firstStep tailScript, tacticState)
     else
       let mut tacticState := tacticState
-      let mut nestedScripts := #[]
+      let mut nestedScripts := Array.mkEmpty tacticState.goals.size
       for goal in tacticState.goals do
         if tacticState.solvedGoals.contains goal.goal then
           continue

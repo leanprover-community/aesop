@@ -1342,7 +1342,10 @@ private def getUnusedUserNameIndex (lctx : LocalContext) (suggestion : Name) :
     Option Nat := Id.run do
   let mut minSuffix := none
   for ldecl in lctx do
-    match matchUpToIndexSuffix ldecl.userName.eraseMacroScopes suggestion with
+    let hypName := ldecl.userName
+    if hypName.hasMacroScopes then
+      continue
+    match matchUpToIndexSuffix ldecl.userName suggestion with
     | MatchUpToIndexSuffix.exactMatch =>
       minSuffix := updateMinSuffix minSuffix 1
     | MatchUpToIndexSuffix.noMatch =>
@@ -1381,7 +1384,26 @@ partial def getUnusedUserNames (lctx : LocalContext) (n : Nat) (suggestion : Nam
       | 0 => acc
       | n + 1 => loop (acc.push $ suggestion.appendIndexAfter i) n (i + 1)
 
-end LocalContext
+def inaccessibleFVars (lctx : LocalContext) : Array LocalDecl :=
+  let (result, _) :=
+    lctx.foldr (β := Array LocalDecl × HashSet Name)
+      (init := (Array.mkEmpty lctx.numIndices, {}))
+      λ ldecl (result, seen) =>
+        if ldecl.isImplementationDetail then
+          (result, seen)
+        else
+          let result :=
+            if ldecl.userName.hasMacroScopes || seen.contains ldecl.userName then
+              result.push ldecl
+            else
+              result
+          (result, seen.insert ldecl.userName)
+  result.reverse
+
+end Lean.LocalContext
+
+
+namespace Lean.Meta
 
 def getUnusedUserName [Monad m] [MonadLCtx m] (suggestion : Name) : m Name :=
   return (← getLCtx).getUnusedName' suggestion
@@ -1390,6 +1412,22 @@ def getUnusedUserNames [Monad m] [MonadLCtx m] (n : Nat) (suggestion : Name) :
     m (Array Name) :=
   return (← getLCtx).getUnusedUserNames n suggestion
 
+def _root_.Lean.MVarId.renameInaccessibleFVars (mvarId : MVarId) :
+    MetaM (MVarId × Array FVarId) := do
+  let mdecl ← mvarId.getDecl
+  let mut lctx := mdecl.lctx
+  let inaccessibleFVars := lctx.inaccessibleFVars
+  if inaccessibleFVars.isEmpty then
+    return (mvarId, #[])
+  let mut renamedFVars := Array.mkEmpty lctx.decls.size
+  for ldecl in inaccessibleFVars do
+    let newName := lctx.getUnusedName' ldecl.userName
+    lctx := lctx.setUserName ldecl.fvarId newName
+    renamedFVars := renamedFVars.push ldecl.fvarId
+  let newMVarId ← mkFreshExprMVarAt lctx mdecl.localInstances mdecl.type
+  mvarId.assign newMVarId
+  return (newMVarId.mvarId!, renamedFVars)
+
 def mkFreshIdWithPrefix [Monad m] [MonadNameGenerator m] («prefix» : Name) :
     m Name := do
   let ngen ← getNGen
@@ -1397,4 +1435,4 @@ def mkFreshIdWithPrefix [Monad m] [MonadNameGenerator m] («prefix» : Name) :
   setNGen ngen.next
   pure r
 
-end Lean
+end Lean.Meta

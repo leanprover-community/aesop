@@ -22,6 +22,10 @@ structure Context where
   normSimpUseHyps : Bool
   options : Aesop.Options
   profilingEnabled : Bool
+  originalGoal : MVarId
+    -- This is the goal before preprocessing.
+  scriptPrefix : UnstructuredScript
+    -- This is the script for tactics executed during preprocessing.
   deriving Inhabited
 
 def Context.normSimpConfig (ctx : Context) : SimpConfig where
@@ -80,7 +84,8 @@ def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
 
 def run (ruleSet : RuleSet) (options : Aesop.Options)
     (simpConfig : Aesop.SimpConfig) (simpConfigSyntax? : Option Term)
-    (goal : MVarId) (profile : Profile) (x : SearchM Q α) :
+    (goal : MVarId) (originalGoal : MVarId) (scriptPrefix : UnstructuredScript)
+    (profile : Profile) (x : SearchM Q α) :
     MetaM (α × State Q × Tree) := do
   let t ← mkInitialTree goal
   let profilingEnabled ← TraceOption.profile.isEnabled
@@ -92,7 +97,8 @@ def run (ruleSet : RuleSet) (options : Aesop.Options)
   let ctx := {
     normSimpUseHyps := simpConfig.useHyps
     normSimpConfigSyntax? := simpConfigSyntax?
-    ruleSet, options, profilingEnabled, normSimpContext
+    ruleSet, options, profilingEnabled, normSimpContext, originalGoal,
+    scriptPrefix
   }
   let #[rootGoal] := (← t.root.get).goals
     | throwError "aesop: internal error: root mvar cluster does not contain exactly one goal."
