@@ -1260,7 +1260,7 @@ def withRefThen [Monad m] [MonadRef m] (stx : Syntax) (cont : Syntax → m α) :
   withRef stx $ cont stx
 
 @[inline]
-def runTacticMAsMetaM (tac : TacticM Unit) (goal : MVarId) :
+def runTacticMAsMetaM (goal : MVarId) (tac : TacticM Unit) :
     MetaM (List MVarId) :=
   run goal tac |>.run'
 

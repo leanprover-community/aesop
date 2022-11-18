@@ -55,7 +55,7 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
         | return none
       let (goals, stxb) ←
         try
-          commitIfNoEx $ unhygienic $ goal.casesWithSyntax hyp
+          commitIfNoEx $ goal.unhygienicCasesWithSyntax hyp
         catch _ =>
           return none
       let mut newGoals := newGoals

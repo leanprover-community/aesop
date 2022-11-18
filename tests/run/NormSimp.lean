@@ -15,8 +15,6 @@ example {α : Prop} (h : α) : α := by
 -- This test checks that we don't 'self-simplify' hypotheses: `h` should not
 -- be used to simplify itself.
 example (h : (α ∧ β) ∨ γ) : α ∨ γ := by
-  -- TODO simp minimisation does not work any more when `h` goes out of scope.
-  set_option aesop.check.script false in
   aesop (add h norm simp)
 
 -- This test checks that the norm simp config is passed around properly.

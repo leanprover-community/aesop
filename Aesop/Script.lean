@@ -413,10 +413,11 @@ def clear (goal : MVarId) (fvarIds : Array FVarId) :
     let userNames ← fvarIds.mapM (mkIdent <$> ·.getUserName)
     `(tactic| clear $userNames*)
 
-def cases (goal : MVarId) (fvarId : FVarId) (subgoals : Nat) :
+def unhygienicAesopCases (goal : MVarId) (fvarId : FVarId) (subgoals : Nat) :
     ScriptBuilder MetaM :=
-  .ofTactic subgoals $ goal.withContext do
-    `(tactic| unhygienic cases $(mkIdent $ ← fvarId.getUserName):ident)
+  .ofTactic subgoals do
+    let userName ← goal.withContext fvarId.getUserName
+    `(tactic| unhygienic aesop_cases $(mkIdent userName):ident)
 
 def renameInaccessibleFVars (goal : MVarId) (renamedFVars : Array FVarId) :
     ScriptBuilder MetaM :=
@@ -458,10 +459,10 @@ def _root_.Lean.MVarId.tryClearManyWithSyntax (goal : MVarId)
   let (goal', cleared) ← goal.tryClearMany' fvarIds
   return (goal', cleared, .clear goal cleared)
 
-def _root_.Lean.MVarId.casesWithSyntax (goal : MVarId) (fvarId : FVarId) :
-    MetaM (Array CasesSubgoal × ScriptBuilder MetaM) := do
-  let goals ← goal.cases fvarId
-  return (goals, .cases goal fvarId goals.size)
+def _root_.Lean.MVarId.unhygienicCasesWithSyntax (goal : MVarId)
+    (fvarId : FVarId) : MetaM (Array CasesSubgoal × ScriptBuilder MetaM) := do
+  let goals ← unhygienic $ goal.cases fvarId
+  return (goals, .unhygienicAesopCases goal fvarId goals.size)
 
 def _root_.Lean.MVarId.renameInaccessibleFVarsWithSyntax (goal : MVarId) :
     MetaM (MVarId × Array FVarId × ScriptBuilder MetaM) := do

@@ -16,7 +16,7 @@ namespace Aesop.RuleTac
 unsafe def tacticMImpl (decl : Name) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
     let tac ← evalConst (TacticM Unit) decl
-    let goals ← runTacticMAsMetaM tac input.goal
+    let goals ← runTacticMAsMetaM input.goal tac
     return (goals.toArray, .unknown decl)
 
 -- Precondition: `decl` has type `TacticM Unit`.
