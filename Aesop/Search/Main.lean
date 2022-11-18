@@ -96,35 +96,32 @@ def finalizeProof : SearchM Q Unit := do
         aesop_trace![proof] "Final proof:{indentExpr proof}"
 
 open Lean.Elab.Tactic in
-def checkScript (script : Array Syntax.Tactic) (initialState : Meta.SavedState) :
-    SearchM Q Unit := do
+def checkRenderedScript (script : Array Syntax.Tactic) : SearchM Q Unit := do
+  let initialState := (← read).originalMetaState
+  let rootGoal := (← read).originalGoal
   let go : TacticM Unit := do
-    let goal ← getMainGoal
-    setGoals [goal]
+    setGoals [rootGoal]
     evalTactic $ ← `(tacticSeq| $script:tactic*)
     unless (← getUnsolvedGoals).isEmpty do
       throwError "script executed successfully but did not solve the main goal"
   try
-    let rootGoal ← getRootMVarId
-    discard $ show MetaM _ from withoutModifyingState $ do
+    discard $ show MetaM _ from withoutModifyingState do
       initialState.restore
       go.run { elaborator := .anonymous, recover := false }
         |>.run { goals := [rootGoal] } |>.run
   catch e => throwError
     "{Check.script.name}: error while executing generated script:{indentD e.toMessageData}"
 
-def traceScript (initialState : Meta.SavedState) : SearchM Q Unit := do
+def traceScript : SearchM Q Unit := do
   let doCheck ← Check.script.isEnabled
   let options := (← read).options
   if ! options.traceScript && ! doCheck then
     return
   try
-    let script ← (← getRootMVarCluster).extractScript (← read).scriptPrefix
+    let script ←
+      (← getRootMVarCluster).extractScript (← read).preprocessingScript
     let goal := (← read).originalGoal
-    let tacticState := {
-      goals := #[⟨goal, {}⟩] -- TODO update once we allow mvars
-      solvedGoals := {}
-    }
+    let tacticState ← TacticState.ofGoals #[goal]
     let script ← script.toStructuredScript tacticState
     let script ← script.render tacticState
     if options.traceScript then
@@ -139,16 +136,15 @@ def traceScript (initialState : Meta.SavedState) : SearchM Q Unit := do
     -- if hasOnGoal then
     --   throwError "GOTEM"
     if doCheck then
-      checkScript script initialState
+      checkRenderedScript script
   catch e =>
     logError m!"aesop: error while generating tactic script:{indentD e.toMessageData}"
 
 def finishIfProven : SearchM Q Bool := do
   unless (← (← getRootMVarCluster).get).state.isProven do
     return false
-  let initialState ← Meta.saveState
   finalizeProof
-  traceScript initialState
+  traceScript
   return true
 
 def traceFinalTree : SearchM Q Unit := do
@@ -227,6 +223,7 @@ def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
      (profile : Profile := {}) :
      MetaM (Array MVarId × Profile) := do
   goal.checkNotAssigned `aesop
+  let originalMetaState ← saveState
   let mvars ← getGoalMVarDependencies goal
   let originalGoal := goal
   let (goal, preprocessingScript) ← preprocessGoal goal mvars
@@ -236,8 +233,8 @@ def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
   let (goals, state, _) ←
-    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal originalGoal
-        preprocessingScript profile do
+    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal
+        originalMetaState originalGoal preprocessingScript profile do
       show SearchM Q _ from
       try searchLoop
       catch e => handleFatalError e

@@ -10,6 +10,9 @@ open Lean
 
 namespace Aesop
 
+-- TODO The following setup is unnecessarily complicated. We should just define
+-- a new `Aesop.CheckOption` type with a custom `isEnabled` function.
+
 def registerCheckOption (checkName : Name) (defValue : Bool)
     (descr : String) : IO (Lean.Option Bool) :=
   Option.register (`aesop.check ++ checkName)

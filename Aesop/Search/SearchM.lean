@@ -22,10 +22,12 @@ structure Context where
   normSimpUseHyps : Bool
   options : Aesop.Options
   profilingEnabled : Bool
+  originalMetaState : Meta.SavedState
+    -- The MetaM state before preprocessing.
   originalGoal : MVarId
-    -- This is the goal before preprocessing.
-  scriptPrefix : UnstructuredScript
-    -- This is the script for tactics executed during preprocessing.
+    -- The goal before preprocessing.
+  preprocessingScript : UnstructuredScript
+    -- The script for tactics executed during preprocessing.
   deriving Inhabited
 
 def Context.normSimpConfig (ctx : Context) : SimpConfig where
@@ -84,9 +86,9 @@ def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
 
 def run (ruleSet : RuleSet) (options : Aesop.Options)
     (simpConfig : Aesop.SimpConfig) (simpConfigSyntax? : Option Term)
-    (goal : MVarId) (originalGoal : MVarId) (scriptPrefix : UnstructuredScript)
-    (profile : Profile) (x : SearchM Q α) :
-    MetaM (α × State Q × Tree) := do
+    (goal : MVarId) (originalMetaState : Meta.SavedState)
+    (originalGoal : MVarId) (preprocessingScript : UnstructuredScript)
+    (profile : Profile) (x : SearchM Q α) : MetaM (α × State Q × Tree) := do
   let t ← mkInitialTree goal
   let profilingEnabled ← TraceOption.profile.isEnabled
   let normSimpContext := {
@@ -97,8 +99,8 @@ def run (ruleSet : RuleSet) (options : Aesop.Options)
   let ctx := {
     normSimpUseHyps := simpConfig.useHyps
     normSimpConfigSyntax? := simpConfigSyntax?
-    ruleSet, options, profilingEnabled, normSimpContext, originalGoal,
-    scriptPrefix
+    ruleSet, options, profilingEnabled, normSimpContext, originalMetaState,
+    originalGoal, preprocessingScript
   }
   let #[rootGoal] := (← t.root.get).goals
     | throwError "aesop: internal error: root mvar cluster does not contain exactly one goal."

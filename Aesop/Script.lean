@@ -7,13 +7,13 @@ Authors: Jannis Limperg
 import Aesop.Util
 
 open Lean
+open Lean.Elab.Tactic
 open Lean.Meta
 open Lean.Parser.Tactic
 open Lean.PrettyPrinter
 
 namespace Aesop
 
-open Lean.Elab.Tactic in
 -- FIXME remove
 elab (name := Parser.onGoal) &"on_goal " n:num " => " ts:tacticSeq : tactic => do
   let gs := (← getGoals).toArray
@@ -32,7 +32,6 @@ elab (name := Parser.onGoal) &"on_goal " n:num " => " ts:tacticSeq : tactic => d
 -- FIXME move
 syntax optTacticSeq := (tacticSeq)?
 
-open Lean.Elab.Tactic in
 /--
 `[ts₁ | ts₂ | ... | tsₙ] executes the tactic sequence `ts₁` on the first
 goal, `ts₂` on the second goal, etc. TODO describe corner cases
@@ -163,6 +162,10 @@ def empty : TacticState where
 def initial (goals : Array GoalWithMVars) : TacticState where
   goals := goals
   solvedGoals := {}
+
+def ofGoals (goals : Array MVarId) : MetaM TacticState := do
+  let goals ← goals.mapM λ g => return ⟨g, ← getGoalMVarDependencies g⟩
+  return { goals, solvedGoals := {} }
 
 instance : EmptyCollection TacticState :=
   ⟨empty⟩
@@ -465,6 +468,8 @@ def _root_.Lean.MVarId.renameInaccessibleFVarsWithSyntax (goal : MVarId) :
   let (goal, renamedFVars) ← goal.renameInaccessibleFVars
   return (goal, renamedFVars, .renameInaccessibleFVars goal renamedFVars)
 
+
+-- TODO rename to `TacticInvocation`
 structure UnstructuredScriptStep where
   tacticSeq : Array Syntax.Tactic
   inGoal : MVarId
