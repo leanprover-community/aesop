@@ -9,6 +9,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.script true
+
 axiom ADMIT : ∀ {α : Sort _}, α
 
 @[aesop safe cases]
@@ -476,7 +478,11 @@ theorem X.subset_append_of_subset_right (l l₁ l₂ : List α) : l ⊆ l₂ →
 attribute [-simp] cons_subset
 @[simp] theorem X.cons_subset {a : α} {l m : List α} :
   a::l ⊆ m ↔ a ∈ m ∧ l ⊆ m := by
+  -- TODO HasSubset.Subset not included in `simp only` call.
+  set_option aesop.check.script false in
   aesop (add norm unfold [HasSubset.Subset, List.Subset])
+  -- simp_all only [List.Subset, mem_cons, forall_eq_or_imp, iff_self]
+  -- simp_all [HasSubset.Subset, List.Subset, mem_cons, forall_eq_or_imp, iff_self]
 
 theorem cons_subset_of_subset_of_mem {a : α} {l m : List α}
     (ainm : a ∈ m) (lsubm : l ⊆ m) : a::l ⊆ m := by
@@ -484,11 +490,31 @@ theorem cons_subset_of_subset_of_mem {a : α} {l m : List α}
 
 theorem append_subset_of_subset_of_subset {l₁ l₂ l : List α} (l₁subl : l₁ ⊆ l) (l₂subl : l₂ ⊆ l) :
   l₁ ++ l₂ ⊆ l := by
+  -- TODO same issue as above
+  set_option aesop.check.script false in
   aesop (add norm unfold [HasSubset.Subset, List.Subset])
+  -- simp_all only [List.Subset, mem_append]
+  -- simp_all only [HasSubset.Subset, List.Subset, mem_append]
+  -- intro a a_1
+  -- unhygienic aesop_cases a_1
+  -- · simp_all only [h, l₁subl]
+  -- · simp_all only [h, l₂subl]
 
 @[simp] theorem append_subset_iff {l₁ l₂ l : List α} :
     l₁ ++ l₂ ⊆ l ↔ l₁ ⊆ l ∧ l₂ ⊆ l := by
+  -- TODO same issue as above
+  set_option aesop.check.script false in
   aesop (add norm unfold [HasSubset.Subset, List.Subset])
+  -- simp_all only [List.Subset, mem_append]
+  -- simp_all only [HasSubset.Subset, List.Subset, mem_append]
+  -- apply Iff.intro
+  -- · intro a
+  --   simp_all only [true_or, implies_true, or_true, and_self, a]
+  -- · intro a a_1 a_2
+  --   unhygienic aesop_destruct_products
+  --   unhygienic aesop_cases a_2
+  --   · simp_all only [h, left]
+  --   · simp_all only [h, right]
 
 @[aesop safe destruct]
 theorem eq_nil_of_subset_nil {l : List α} : l ⊆ [] → l = [] := by
@@ -500,12 +526,58 @@ theorem X.eq_nil_iff_forall_not_mem {l : List α} : l = [] ↔ ∀ a, a ∉ l :=
 
 -- attribute [-simp] map_subset
 theorem X.map_subset {l₁ l₂ : List α} (f : α → β) (H : l₁ ⊆ l₂) : map f l₁ ⊆ map f l₂ := by
+  -- TODO same issue as above
+  set_option aesop.check.script false in
   aesop (add norm unfold [HasSubset.Subset, List.Subset])
+  -- simp_all only [List.Subset, mem_map, exists_imp, and_imp]
+  -- simp_all only [HasSubset.Subset, List.Subset, mem_map, exists_imp, and_imp]
+  -- intro a x a_1 a_2
+  -- aesop_subst a_2
+  -- apply Exists.intro
+  -- apply And.intro
+  -- on_goal 2 => apply Eq.refl
+  -- simp_all only [a_1, H]
 
 -- IND
 theorem map_subset_iff {l₁ l₂ : List α} (f : α → β) (h : Injective f) :
     map f l₁ ⊆ map f l₂ ↔ l₁ ⊆ l₂ := by
-  induction l₁ <;> induction l₂ <;> aesop
+  induction l₁ <;> induction l₂
+  . aesop
+  . aesop
+  . aesop
+  . -- TODO simp_all only [h], where h is an fvar, removes h from the context
+    set_option aesop.check.script false in
+    aesop
+    -- rename_i head tail head_1 tail_1 tail_ih tail_ih_1
+    -- simp_all only [map, X.cons_subset, X.mem_map, and_congr_left_iff, mem_cons]
+    -- intro a
+    -- simp_all only [iff_true, a]
+    -- apply Iff.intro
+    -- · intro a_1
+    --   unhygienic aesop_cases a_1
+    --   · -- simp_all only [h_1]
+    --     simp_all only
+    --     have fwd : head = head_1 := injective_def h h_1
+    --     aesop_subst fwd
+    --     simp_all only [true_or]
+    --   · -- simp_all only [true_iff, h_1]
+    --     simp_all only [true_iff]
+    --     unhygienic aesop_destruct_products
+    --     have fwd : w = head := injective_def h right
+    --     aesop_subst fwd
+    --     simp_all only [implies_true, or_true, left]
+    -- · intro a_1
+    --   unhygienic aesop_cases a_1
+    --   · aesop_subst h_1
+    --     simp_all only [true_or]
+    --   · -- simp_all only [iff_true, h_1]
+    --     simp_all only [iff_true]
+    --     apply Or.inr
+    --     apply Exists.intro
+    --     apply And.intro
+    --     on_goal 2 => apply Eq.refl
+    --     -- simp_all only [h_1]
+    --     simp_all only
 
 /-! ### append -/
 
@@ -647,7 +719,18 @@ theorem eq_replicate' {a : α} {l : List α} : l = replicate l.length a ↔ ∀ 
   induction l <;> aesop
 
 theorem eq_replicate {a : α} {n} {l : List α} : l = replicate n a ↔ length l = n ∧ ∀ b, b ∈ l → b = a := by
+  -- TODO weird simp_all only behaviour
+  set_option aesop.check.script false in
   aesop (add norm simp eq_replicate')
+  -- apply Iff.intro
+  -- · intro a_1
+  --   aesop_subst a_1
+  --   simp_all only [length_replicate, X.mem_replicate, ne_eq, and_imp, implies_true, and_self]
+  -- · intro a_1
+  --   unhygienic aesop_destruct_products
+  --   aesop_subst left
+  --   simp_all only [eq_replicate', implies_true, right]
+  --   exact right -- this line should not be necessary
 
 theorem replicate_add (a : α) (m n) : replicate (m + n) a = replicate m a ++ replicate n a :=
   -- by induction m <;> aesop (simp_options := { arith := true }) (add norm simp Nat.succ_eq_add_one)
@@ -655,7 +738,11 @@ theorem replicate_add (a : α) (m n) : replicate (m + n) a = replicate m a ++ re
   -- TODO n + 1 + n = n + n + 1
 
 theorem replicate_subset_singleton (a : α) (n) : replicate n a ⊆ [a] := by
+  -- TODO HasSubset.Subset issue again
+  set_option aesop.check.script false in
   aesop (add norm unfold [HasSubset.Subset, List.Subset])
+  -- simp_all only [List.Subset, X.mem_replicate, ne_eq, mem_cons, not_mem_nil, or_false, and_imp, implies_true]
+  -- simp_all only [HasSubset.Subset, List.Subset, X.mem_replicate, ne_eq, mem_cons, not_mem_nil, or_false, and_imp, implies_true]
 
 theorem subset_singleton_iff {a : α} {L : List α} : L ⊆ [a] ↔ ∃ n, L = replicate n a :=
   ADMIT
@@ -702,7 +789,12 @@ theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) :
 @[simp]
 theorem mem_pure {α} (x y : α) :
     x ∈ (pure y : List α) ↔ x = y := by
+  -- TODO pure not added to simp_all only. Seems to be an issue with toUnfold
+  -- defs not being added to UsedSimps. HasSubset above probably same issue.
+  set_option aesop.check.script false in
   aesop (add norm unfold pure)
+  -- simp_all only [mem_cons, not_mem_nil, or_false, iff_self]
+  -- simp_all only [pure, mem_cons, not_mem_nil, or_false, iff_self]
 
 /-! ### bind -/
 
