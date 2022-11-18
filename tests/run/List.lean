@@ -541,43 +541,7 @@ theorem X.map_subset {l₁ l₂ : List α} (f : α → β) (H : l₁ ⊆ l₂) :
 -- IND
 theorem map_subset_iff {l₁ l₂ : List α} (f : α → β) (h : Injective f) :
     map f l₁ ⊆ map f l₂ ↔ l₁ ⊆ l₂ := by
-  induction l₁ <;> induction l₂
-  . aesop
-  . aesop
-  . aesop
-  . -- TODO simp_all only [h], where h is an fvar, removes h from the context
-    set_option aesop.check.script false in
-    aesop
-    -- rename_i head tail head_1 tail_1 tail_ih tail_ih_1
-    -- simp_all only [map, X.cons_subset, X.mem_map, and_congr_left_iff, mem_cons]
-    -- intro a
-    -- simp_all only [iff_true, a]
-    -- apply Iff.intro
-    -- · intro a_1
-    --   unhygienic aesop_cases a_1
-    --   · -- simp_all only [h_1]
-    --     simp_all only
-    --     have fwd : head = head_1 := injective_def h h_1
-    --     aesop_subst fwd
-    --     simp_all only [true_or]
-    --   · -- simp_all only [true_iff, h_1]
-    --     simp_all only [true_iff]
-    --     unhygienic aesop_destruct_products
-    --     have fwd : w = head := injective_def h right
-    --     aesop_subst fwd
-    --     simp_all only [implies_true, or_true, left]
-    -- · intro a_1
-    --   unhygienic aesop_cases a_1
-    --   · aesop_subst h_1
-    --     simp_all only [true_or]
-    --   · -- simp_all only [iff_true, h_1]
-    --     simp_all only [iff_true]
-    --     apply Or.inr
-    --     apply Exists.intro
-    --     apply And.intro
-    --     on_goal 2 => apply Eq.refl
-    --     -- simp_all only [h_1]
-    --     simp_all only
+  induction l₁ <;> induction l₂ <;> aesop
 
 /-! ### append -/
 

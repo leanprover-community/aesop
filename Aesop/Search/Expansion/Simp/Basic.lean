@@ -39,7 +39,8 @@ variable [Monad m] [MonadQuotation m] [MonadError m]
 -- NOTE: Must be executed in the context of the goal on which `simp` was run.
 -- `stx` is the syntax of the original `simp`/`simp_all`/`simp?`/`simp_all?`
 -- call.
-def mkSimpOnly (stx : Syntax) (usedSimps : UsedSimps) : MetaM Syntax := do
+def mkSimpOnly (stx : Syntax) (usedSimps : UsedSimps) (includeFVars : Bool) :
+    MetaM Syntax := do
   let mut stx := stx
   if stx[3].isNone then
     stx := stx.setArg 3 (mkNullNode #[mkAtom "only"])
@@ -53,6 +54,8 @@ def mkSimpOnly (stx : Syntax) (usedSimps : UsedSimps) : MetaM Syntax := do
       if env.contains declName && !Lean.Elab.Tactic.simpOnlyBuiltins.contains declName then
         args := args.push (← `(Parser.Tactic.simpLemma| $(mkIdent (← unresolveNameGlobal declName)):ident))
     | .fvar fvarId => -- local hypotheses in the context
+      if ! includeFVars then
+        continue
       if let some ldecl := lctx.find? fvarId then
         localsOrStar := localsOrStar.bind fun locals =>
           if !ldecl.userName.isInaccessibleUserName &&
@@ -93,7 +96,9 @@ def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
     (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
     MetaM Syntax.Tactic := do
   let originalStx ← mkNormSimpSyntax normSimpUseHyps configStx?
-  let stx ← inGoal.withContext do mkSimpOnly originalStx usedTheorems
+  let includeFVars := ! normSimpUseHyps
+  let stx ← inGoal.withContext do
+    mkSimpOnly originalStx usedTheorems (includeFVars := includeFVars)
   return ⟨stx⟩
 
 end Aesop

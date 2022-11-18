@@ -45,14 +45,7 @@ theorem mem_filter : a ∈ filter p as ↔ a ∈ as ∧ p a := by
     intro h
     induction as with
     | nil => cases h
-    | cons a' as ih =>
-      by_cases ha' : p a'
-      .  -- TODO issues with simp minimisation
-        set_option aesop.check.script false in
-        aesop
-      . -- TODO issues with simp minimisation
-        set_option aesop.check.script false in
-        aesop
+    | cons a' as ih => by_cases ha' : p a' <;> aesop
   case mpr =>
     intro h
     induction as with
