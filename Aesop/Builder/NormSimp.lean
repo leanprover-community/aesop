@@ -26,16 +26,26 @@ def normSimpUnfold : RuleBuilder :=
   where
     builderName := BuilderName.unfold
 
+private def getSimpEntriesFromPropConst (decl : Name) :
+    MetaM (Array SimpEntry) := do
+  let thms ← ({} : SimpTheorems).addConst decl
+  return thms.simpEntries
+
+private def getSimpEntriesForConst (decl : Name) : MetaM (Array SimpEntry) := do
+  let info ← getConstInfo decl
+  let mut thms : SimpTheorems := {}
+  if (← isProp info.type) then
+    thms ← thms.addConst decl
+  else if info.hasValue then
+    thms ← thms.addDeclToUnfold decl
+  return thms.simpEntries
+
 def normSimpLemmas : RuleBuilder := λ input => do
   match input.kind with
   | .global decl =>
     try {
-      let thms : SimpTheorems := {}
-      let thms ← thms.addConst decl
-      return .global $ .globalSimp {
-        builder := builderName
-        entries := thms.simpEntries
-      }
+      let entries ← getSimpEntriesForConst decl
+      return .global $ .globalSimp { builder := builderName, entries }
     } catch e => {
       throwError "aesop: simp builder: exception while trying to add {decl} as a simp theorem:{indentD e.toMessageData}"
     }
