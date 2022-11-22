@@ -43,22 +43,33 @@ def «elab» (stx : Syntax) : TermElabM AttrConfig :=
 end AttrConfig
 
 
+inductive AttributeEntry
+  | rule (rsName : RuleSetName) (r : RuleSetMember)
+  | ruleSet (rsName : RuleSetName)
+
 initialize extension :
-    PersistentEnvExtension
-      (RuleSetName × RuleSetMember)
-      (RuleSetName × RuleSetMember)
-      Aesop.RuleSets ← do
+    PersistentEnvExtension AttributeEntry AttributeEntry Aesop.RuleSets ← do
   let ext ← registerPersistentEnvExtension {
     name := `aesop
     mkInitial := return {}
-    addImportedFn := λ rss => do
+    addImportedFn := λ entriess => do
       let mut result := {}
-      for rs in rss do
-        for (rsName, r) in rs do
-          result := result.addRule rsName r
+      for entries in entriess do
+        for entry in entries do
+          match entry with
+          | .rule rsName r => result := result.addRule rsName r
+          | .ruleSet rsName => result := result.ensureRuleSet rsName
       return result
-    addEntryFn := λ rss (rsName, r) => rss.addRule rsName r
-    exportEntriesFn := λ rss => rss.globalRules
+    addEntryFn := λ
+      | rss, .rule rsName r => rss.addRule rsName r
+      | rss, .ruleSet rsName => rss.ensureRuleSet rsName
+    exportEntriesFn := λ rss => Id.run do
+      let mut result := #[]
+      for (rsName, _) in rss.others do
+        result := result.push $ .ruleSet rsName
+      for (rsName, r) in rss.globalRules do
+        result := result.push $ .rule rsName r
+      return result
   }
   let impl : AttributeImpl := {
     name := `aesop
@@ -78,7 +89,7 @@ initialize extension :
             "no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.)"
           if rss.containsRule rsName rule.name then throwError
             "'{rule.name.name}' is already registered in rule set '{rsName}'."
-          rss := rss.addRule rsName rule
+          rss := rss.addRuleCore rsName rule
       setEnv $ ext.setState (← getEnv) rss
     erase := λ decl => do
       let rss := ext.getState (← getEnv)

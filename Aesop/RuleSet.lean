@@ -319,6 +319,13 @@ def addEmptyRuleSet (rss : RuleSets) (rsName : RuleSetName) : RuleSets :=
 def containsRuleSet (rss : RuleSets) (name : RuleSetName) : Bool :=
   name == defaultRuleSetName || rss.others.contains name
 
+-- Adds the rule set `name` if it is not already present in `rss`.
+def ensureRuleSet (rss : RuleSets) (name : RuleSetName) : RuleSets :=
+  if rss.containsRuleSet name then
+    rss
+  else
+    rss.addEmptyRuleSet name
+
 -- Precondition: `rsName ≠ defaultRuleSetName`. The default rule set cannot be
 -- erased. If `rss` does not contain a rule set with name `rsName`, `rss` is
 -- returned unchanged.
@@ -361,9 +368,13 @@ def containsRule (rss : RuleSets) (rsName : RuleSetName) (rName : RuleName) :
   | some rs => rs.contains rName
 
 -- Precondition: a rule set with name `rsName` exists in `rss`.
-def addRule (rss : RuleSets) (rsName : RuleSetName) (r : RuleSetMember) :
+def addRuleCore (rss : RuleSets) (rsName : RuleSetName) (r : RuleSetMember) :
     RuleSets :=
   rss.modifyRuleSet rsName (·.add r)
+
+def addRule (rss : RuleSets) (rsName : RuleSetName) (r : RuleSetMember) :
+    RuleSets :=
+  rss.ensureRuleSet rsName |>.addRuleCore rsName r
 
 def addRuleChecked [Monad m] [MonadError m] (rss : RuleSets)
     (rsName : RuleSetName) (rule : RuleSetMember) : m RuleSets := do
@@ -371,7 +382,7 @@ def addRuleChecked [Monad m] [MonadError m] (rss : RuleSets)
     "aesop: no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.)"
   if rss.containsRule rsName rule.name then throwError
     "aesop: '{rule.name.name}' is already registered in rule set '{rsName}'"
-  return rss.addRule rsName rule
+  return rss.addRuleCore rsName rule
 
 -- Returns the updated rule sets and `true` if at least one rule was erased
 -- (from at least one rule set).
