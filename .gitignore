@@ -1,4 +1,3 @@
 /build/
 /tests/golden/*.produced
-/lean_packages/*
-!/lean_packages/manifest.json
+/lake-packages
