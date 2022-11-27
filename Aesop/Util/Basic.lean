@@ -536,13 +536,6 @@ end Lean.MessageData
 
 namespace Lean.HashSet
 
-def insertMany [ForIn Id ρ α] [BEq α] [Hashable α] (s : HashSet α) (as : ρ) :
-    HashSet α := Id.run do
-  let mut s := s
-  for a in as do
-    s := s.insert a
-  return s
-
 protected def ofArray [BEq α] [Hashable α] (as : Array α) : HashSet α :=
   HashSet.empty.insertMany as
 
