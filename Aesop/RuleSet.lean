@@ -411,7 +411,7 @@ def eraseRulesChecked [Monad m] [MonadError m] (rss : RuleSets)
     if rsNames.isEmpty then
       throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any rule set."
     else
-      throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any of the rule sets {String.joinSep ", " $ rsNames.map toString}."
+      throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any of the rule sets {rsNames.map toString}."
   return rss
 
 -- If a name in `rsNames` does not appear in `rss`, it is silently skipped.

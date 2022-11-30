@@ -30,79 +30,10 @@ def forM [Monad m] (f : α → m Unit) : Option α → m Unit
   | none => pure ()
   | some a => f a
 
-def mergeLeftBiased : Option α → Option α → Option α
-  | some x, _ => some x
-  | none, y => y
-
-def mergeRightBiased : Option α → Option α → Option α
-  | _, some y => some y
-  | x, none => x
-
 end Option
 
 
-inductive Tri {α} (lt eq gt : α → α → Prop) (x y : α)
-| lt (h : lt x y)
-| eq (h : eq x y)
-| gt (h : gt x y)
-
-abbrev Trichotomous {α} (lt eq gt : α → α → Prop) :=
-  ∀ x y, Tri lt eq gt x y
-
-
 namespace Nat
-
-theorem trichotomous_lt_eq_gt : @Trichotomous Nat (· < ·) (· = ·) (· > ·)
-| zero, zero => Tri.eq rfl
-| zero, succ _ => Tri.lt $ zero_lt_succ _
-| succ _, zero => Tri.gt $ zero_lt_succ _
-| succ n, succ m =>
-  match trichotomous_lt_eq_gt n m with
-  | Tri.lt p => Tri.lt $ succ_lt_succ p
-  | Tri.eq p => Tri.eq $ congrArg succ p
-  | Tri.gt p => Tri.gt $ succ_lt_succ p
-
-theorem lt_of_not_ge {n m : Nat} (h : ¬ n ≥ m) : n < m :=
-  match trichotomous_lt_eq_gt n m with
-  | Tri.lt p => p
-  | Tri.eq p => False.elim $ h $ Nat.le_of_eq p.symm
-  | Tri.gt p => False.elim $ h $ Nat.le_of_lt p
-
-theorem sub_add_le_sub (n m k : Nat) : n - (m + k) ≤ n - m :=
-  match k with
-  | zero => Nat.le_of_eq rfl
-  | succ _ => Nat.le_trans (pred_le _) (sub_add_le_sub _ _ _)
-
-theorem ne_zero_of_zero_lt {n : Nat} (h : 0 < n) : n ≠ 0 := λ contra =>
-  match n with
-  | zero => Nat.lt_irrefl _ h
-  | succ n => by cases contra
-
-theorem zero_sub_eq_zero : ∀ n, 0 - n = 0
-  | zero => rfl
-  | succ n => show pred (0 - n) = 0 by rw [zero_sub_eq_zero n]; rfl
-
-theorem pred_sub : ∀ n m, pred (n - m) = pred n - m
-  | zero, zero => rfl
-  | zero, succ m =>
-    show pred (0 - succ m) = 0 - succ m by
-    rw [zero_sub_eq_zero]; rfl
-  | succ n, zero => rfl
-  | succ n, succ m => by
-    show pred (pred (succ n - m)) = pred (pred (succ n) - m)
-    rw [pred_sub (succ n) m]
-
-theorem lt_pred_of_succ_lt {n m : Nat} : succ n < m → n < pred m
-  | le.refl => Nat.lt_succ_self _
-  | @le.step _ _ h₂ => Nat.lt_trans (Nat.lt_succ_self _) h₂
-
-theorem zero_lt_sub {n m : Nat} (h : m < n) : 0 < n - m :=
-  match m with
-  | zero => h
-  | succ m => by
-    show 0 < pred (n - m)
-    rw [pred_sub]
-    exact zero_lt_sub $ lt_pred_of_succ_lt h
 
 theorem sub_add_lt_sub {n m k : Nat} (h₁ : m + k ≤ n) (h₂ : k ≠ 0) :
     n - (m + k) < n - m :=
@@ -110,23 +41,10 @@ theorem sub_add_lt_sub {n m k : Nat} (h₁ : m + k ≤ n) (h₂ : k ≠ 0) :
   | zero => h₂ rfl |>.elim
   | succ _ =>
     Nat.lt_of_lt_of_le
-      (pred_lt $ ne_zero_of_zero_lt $ zero_lt_sub $ lt_of_succ_le h₁)
-      (sub_add_le_sub _ _ _)
+      (pred_lt (Nat.ne_of_lt $ Nat.sub_pos_of_lt $ lt_of_succ_le h₁).symm)
+      (Nat.sub_le_sub_left _ $ Nat.le_add_right _ _)
 
 end Nat
-
-
-namespace String
-
-def joinSep (sep : String) (ss : Array String) : String :=
-  let firstNonempty? := ss.findIdx? (! ·.isEmpty)
-  match firstNonempty? with
-  | none => ""
-  | some firstNonempty =>
-    ss.foldl (start := firstNonempty + 1) (init := ss[firstNonempty]!) λ res s =>
-      if s.isEmpty then res else res ++ sep ++ s
-
-end String
 
 
 namespace Ordering
@@ -164,7 +82,7 @@ def compareLexicographic (cmp₁ : α → α → Ordering) (cmp₂ : α → α �
   | ord => ord
 
 @[inline]
-def compareBy [ord : Ord β] (f : α → β) (x y : α) : Ordering :=
+def compareOn [ord : Ord β] (f : α → β) (x y : α) : Ordering :=
   compare (f x) (f y)
 
 @[inline]
@@ -173,21 +91,6 @@ def compareOpposite (cmp : α → α → Ordering) (x y : α) : Ordering :=
 
 
 namespace Ord
-
-def isLT (o : Ord α) (x y : α) : Bool :=
-  o.compare x y |>.isLT
-
-def isLE (o : Ord α) (x y : α) : Bool :=
-  o.compare x y |>.isLE
-
-def isEQ (o : Ord α) (x y : α) : Bool :=
-  o.compare x y |>.isEQ
-
-def isGT (o : Ord α) (x y : α) : Bool :=
-  o.compare x y |>.isGT
-
-def isGE (o : Ord α) (x y : α) : Bool :=
-  o.compare x y |>.isGE
 
 @[inline]
 def lexicographic (o₁ : Ord α) (o₂ : Ord α) : Ord α :=
@@ -238,9 +141,11 @@ end Subarray
 
 namespace Array
 
--- Merge arrays `xs` and `ys`. If `xs` and `ys` are sorted according to the
--- comparison function `le`, the result is as well. Duplicate elements are
--- preserved.
+/--
+Merge arrays `xs` and `ys`, which must be sorted according to `compare`. The
+result is sorted as well. If two (or more) elements are equal according to
+`compare`, they are preserved.
+-/
 def mergeSortedPreservingDuplicates [ord : Ord α] (xs ys : Array α) :
     Array α :=
   let acc := Array.mkEmpty (xs.size + ys.size)
@@ -252,17 +157,14 @@ def mergeSortedPreservingDuplicates [ord : Ord α] (xs ys : Array α) :
       else if hj : j ≥ ys.size then
         acc ++ xs[i:]
       else
-        have hi : i < xs.size :=
-          Nat.lt_of_not_ge hi
-        have hj : j < ys.size :=
-          Nat.lt_of_not_ge hj
-        have hij : i + j < xs.size + ys.size :=
-          Nat.add_lt_add hi hj
+        have hi : i < xs.size := Nat.lt_of_not_le hi
+        have hj : j < ys.size := Nat.lt_of_not_le hj
+        have hij : i + j < xs.size + ys.size := Nat.add_lt_add hi hj
         let x := xs.get ⟨i, hi⟩
         let y := ys.get ⟨j, hj⟩
         if compare x y |>.isLE then
           have : xs.size + ys.size - (i + 1 + j) < xs.size + ys.size - (i + j) := by
-            rw [Nat.add_assoc i 1 j, Nat.add_comm 1 j, ← Nat.add_assoc]
+            rw [show i + 1 + j = i + j + 1 by simp_arith]
             exact Nat.sub_succ_lt_self _ _ hij
           go (acc.push x) (i + 1) j
         else
@@ -271,11 +173,12 @@ def mergeSortedPreservingDuplicates [ord : Ord α] (xs ys : Array α) :
           go (acc.push y) i (j + 1)
     termination_by _ => xs.size + ys.size - (i + j)
 
--- Merge arrays `xs` and `ys`. If `xs` and `ys` are sorted according to
--- `compare`, the result is as well. Equal elements (meaning `x ∈ xs` and `y ∈
--- ys` such that `compare x y = eq`) are merged using `merge`. If `xs` and `ys`
--- do not contain duplicates according to `compare`, then neither does the
--- result.
+/--
+Merge arrays `xs` and `ys`, which must be sorted according to `compare` and must
+not contain duplicates. The result is sorted as well. Equal elements are merged
+using `merge`. If `xs` and `ys` do not contain duplicates according to
+`compare`, then neither does the result.
+-/
 def mergeSortedMergingDuplicates [ord : Ord α] (xs ys : Array α)
     (merge : α → α → α) : Array α :=
   let acc := Array.mkEmpty (xs.size + ys.size)
@@ -287,18 +190,15 @@ def mergeSortedMergingDuplicates [ord : Ord α] (xs ys : Array α)
       else if hj : j ≥ ys.size then
         acc ++ xs[i:]
       else
-        have hi : i < xs.size :=
-          Nat.lt_of_not_ge hi
-        have hj : j < ys.size :=
-          Nat.lt_of_not_ge hj
-        have hij : i + j < xs.size + ys.size :=
-          Nat.add_lt_add hi hj
+        have hi : i < xs.size := Nat.lt_of_not_le hi
+        have hj : j < ys.size := Nat.lt_of_not_le hj
+        have hij : i + j < xs.size + ys.size := Nat.add_lt_add hi hj
         let x := xs.get ⟨i, hi⟩
         let y := ys.get ⟨j, hj⟩
         match compare x y with
         | Ordering.lt =>
           have : xs.size + ys.size - (i + 1 + j) < xs.size + ys.size - (i + j) := by
-            rw [Nat.add_assoc i 1 j, Nat.add_comm 1 j, ← Nat.add_assoc]
+            rw [show i + 1 + j = i + j + 1 by simp_arith]
             exact Nat.sub_succ_lt_self _ _ hij
           go (acc.push x) (i + 1) j
         | Ordering.gt =>
@@ -306,15 +206,11 @@ def mergeSortedMergingDuplicates [ord : Ord α] (xs ys : Array α)
             Nat.sub_succ_lt_self _ _ hij
           go (acc.push y) i (j + 1)
         | Ordering.eq =>
-          have : xs.size + ys.size - (i + 1 + (j + 1)) < xs.size + ys.size - (i + j) := by -- fun :)
-            rw [Nat.add_assoc i 1 (j + 1), Nat.add_comm 1 (j + 1)]
-            show size xs + size ys - (i + (j + 2)) < size xs + size ys - (i + j)
-            rw [← Nat.add_assoc]
-            apply Nat.sub_add_lt_sub _ (by intro contra; cases contra)
-            show i + j + (1 + 1) ≤ xs.size + ys.size
-            rw [Nat.add_assoc i j (1 + 1), ← Nat.add_assoc j 1 1,
-                Nat.add_comm (j + 1) 1, ← Nat.add_assoc i 1 (j + 1)]
-            apply Nat.add_le_add hi hj
+          have : xs.size + ys.size - (i + 1 + (j + 1)) < xs.size + ys.size - (i + j) := by
+            rw [show i + 1 + (j + 1) = i + j + 2 by simp_arith]
+            apply Nat.sub_add_lt_sub _ (λ contra => by cases contra)
+            rw [show i + j + 2 = (i + 1) + (j + 1) by simp_arith]
+            exact Nat.add_le_add hi hj
           go (acc.push (merge x y)) (i + 1) (j + 1)
     termination_by _ => xs.size + ys.size - (i + j)
 
@@ -435,37 +331,6 @@ def time' [Monad m] [MonadLiftT BaseIO m] (x : m Unit) : m Aesop.Nanos := do
 end IO
 
 
-namespace Std.Format
-
-@[inline_if_reduce]
-def isEmptyShallow : Format → Bool
-  | nil => true
-  | text "" => true
-  | _ => false
-
-@[inline]
-def indentDSkipEmpty [ToFormat α] (f : α) : Format :=
-  let f := format f
-  if f.isEmptyShallow then nil else indentD f
-
-@[inline]
-def unlines [ToFormat α] (fs : List α) : Format :=
-  Format.joinSep fs line
-
-@[inline]
-def indentDUnlines [ToFormat α] : List α → Format :=
-  indentDSkipEmpty ∘ unlines
-
-@[inline]
-def indentDUnlinesSkipEmpty [ToFormat α] (fs : List α) : Format :=
-  indentDSkipEmpty $ unlines (fs.map format |>.filter (¬ ·.isEmptyShallow))
-
-def formatIf (b : Bool) (f : Thunk Format) : Format :=
-  if b then f.get else nil
-
-end Std.Format
-
-
 namespace Lean.Expr
 
 def arity : Expr → Nat
@@ -483,19 +348,6 @@ end Lean.Expr
 
 namespace Lean.MessageData
 
-@[inline]
-def join (ms : Array MessageData) : MessageData :=
-ms.foldl (· ++ ·) nil
-
-@[inline_if_reduce]
-def isEmptyShallow : MessageData → Bool
-  | ofFormat f => f.isEmptyShallow
-  | _ => false
-
-@[inline]
-def indentDSkipEmpty (m : MessageData) : MessageData :=
-  if m.isEmptyShallow then nil else indentD m
-
 def joinSepArray (ms : Array MessageData) (sep : MessageData) :
     MessageData := Id.run do
   let mut result := nil
@@ -511,17 +363,6 @@ def joinSepArray (ms : Array MessageData) (sep : MessageData) :
 @[inline]
 def unlines (ms : Array MessageData) : MessageData :=
   joinSepArray ms Format.line
-
-@[inline]
-def indentDUnlines : Array MessageData → MessageData :=
-  indentDSkipEmpty ∘ unlines
-
-@[inline]
-def indentDUnlinesSkipEmpty (fs : Array MessageData) : MessageData :=
-  indentDSkipEmpty $ unlines $ fs.filter (¬ ·.isEmptyShallow)
-
-def toMessageDataIf (b : Bool) (f : Thunk MessageData) : MessageData :=
-  if b then f.get else nil
 
 -- TODO this is for compatibility with a previous version of the MessageData
 -- API.
@@ -539,38 +380,18 @@ namespace Lean.HashSet
 protected def ofArray [BEq α] [Hashable α] (as : Array α) : HashSet α :=
   HashSet.empty.insertMany as
 
-instance [BEq α] [Hashable α] : ForIn m (HashSet α) α where
-  forIn map init step := do
-    let mut s := init
-    for bucket in map.val.buckets.val do
-      for x in bucket do
-        match ← step x s with
-        | ForInStep.done s' =>
-          s := s'
-          break
-        | ForInStep.yield s' =>
-          s := s'
-    return s
-
 @[inline]
 def merge [BEq α] [Hashable α] (s t : HashSet α) : HashSet α :=
-  if s.size < t.size then t.insertMany s else s.insertMany t
-
-instance [BEq α] [Hashable α] : BEq (HashSet α) where
-  beq s t := Id.run do
-    for x in s do
-      unless t.contains x do
-        return false
-    for x in t do
-      unless s.contains x do
-        return false
-    return true
+  s.insertMany t
 
 def any [BEq α] [Hashable α] (s : HashSet α) (f : α → Bool) : Bool :=
   s.fold (init := false) λ result a => result || f a
 
 def all [BEq α] [Hashable α] (s : HashSet α) (f : α → Bool) : Bool :=
   s.fold (init := true) λ result a => result && f a
+
+instance [BEq α] [Hashable α] : BEq (HashSet α) where
+  beq s t := s.all (t.contains ·) && t.all (s.contains ·)
 
 end Lean.HashSet
 
@@ -621,7 +442,8 @@ end Std.HashMap
 namespace Lean.PersistentHashSet
 
 @[inline]
-def merge [BEq α] [Hashable α] (s t : PersistentHashSet α) : PersistentHashSet α :=
+def merge [BEq α] [Hashable α] (s t : PersistentHashSet α) :
+    PersistentHashSet α :=
   if s.size < t.size then loop s t else loop t s
   where
     @[inline]
@@ -680,28 +502,12 @@ end Lean.PersistentHashMap
 
 namespace Lean.RBMap
 
--- TODO horribly inefficient
 @[inline]
 def insertWith {cmp} (a : α) (b : β) (f : β → β) (m : RBMap α β cmp) :
     RBMap α β cmp :=
   match m.find? a with
   | none => m.insert a b
   | some b' => m.insert a (f b')
-
-@[inline]
-def mergeWith {cmp} (m n : RBMap α β cmp) (f : α → β → β → β) : RBMap α β cmp :=
-  n.fold (init := m) λ m a b => m.insertWith a b λ b' => f a b' b
-
-def insertArrayWith {cmp} (xs : Array (α × β)) (f : α → β → β → β)
-    (m : RBMap α β cmp) : RBMap α β cmp :=
-  xs.foldl (init := m) λ m (a, b) => m.insertWith a b λ b' => f a b' b
-
-def insertListWith {cmp} (xs : List (α × β)) (f : α → β → β → β)
-    (m : RBMap α β cmp) : RBMap α β cmp :=
-  xs.foldl (init := m) λ m (a, b) => m.insertWith a b λ b' => f a b' b
-
-def toArray {cmp} (m : RBMap α β cmp) : Array (α × β) :=
-  m.fold (init := #[]) λ xs a b => xs.push (a, b)
 
 end Lean.RBMap
 
@@ -740,8 +546,8 @@ protected def cmp (k l : Key s) : Ordering :=
   else
     Ordering.eq
 
-instance : Ord (Key s) where
-  compare := Key.cmp
+instance : Ord (Key s) :=
+  ⟨Key.cmp⟩
 
 end Key
 
@@ -971,21 +777,6 @@ def unhygienic [Monad m] [MonadWithOptions m] (x : m α) : m α :=
 
 -- Runs `tac` on `goal`, then on the subgoals created by `tac`, etc. Returns the
 -- goals to which `tac` does not apply any more. If `tac` applies infinitely
--- often, `saturate'` diverges. If `tac` does not apply to `goal`, a singleton
--- array containing `goal` is returned.
-partial def saturate' (goal : MVarId)
-    (tac : MVarId → MetaM (Option (Array MVarId))) :
-    MetaM (Array MVarId) :=
-  return (← go goal |>.run #[]).snd
-  where
-    go (goal : MVarId) : StateRefT (Array MVarId) MetaM Unit :=
-      withIncRecDepth do
-        match ← tac goal with
-        | none => modify λ s => s.push goal
-        | some mvarIds => mvarIds.forM go
-
--- Runs `tac` on `goal`, then on the subgoals created by `tac`, etc. Returns the
--- goals to which `tac` does not apply any more. If `tac` applies infinitely
 -- often, `saturate1` diverges. If `tac` does not apply to `goal`, `none` is
 -- returned.
 partial def saturate1 (goal : MVarId)
@@ -1059,16 +850,6 @@ def _root_.Lean.MVarId.assertHypotheses' (mvarId : MVarId)
       return lctx
     return (fvarIds, mvarId)
 
-def isValidMVarAssignment (mvarId : MVarId) (e : Expr) : MetaM Bool :=
-  mvarId.withContext do
-    let (some _) ← observing? $ check e | return false
-    let et ← inferType e
-    let mt ← mvarId.getType
-    withTransparency .all $ isDefEq et mt
-
-def isDeclaredMVar (mvarId : MVarId) : MetaM Bool :=
-  return (← getMCtx).findDecl? mvarId |>.isSome
-
 partial def getGoalMVarDependencies (mvarId : MVarId) (includeDelayed := false):
     MetaM (HashSet MVarId) :=
   return (← go mvarId |>.run {}).snd
@@ -1124,6 +905,7 @@ def unassignedExprMVarsNoDelayed : MetaM (Array MVarId) := do
       result := result.push mvarId
   return result
 
+-- TODO generalise
 def runMetaMObservingFinalState (x : MetaM α) : MetaM (α × Meta.SavedState) :=
   withoutModifyingState do
     let result ← x
@@ -1134,11 +916,7 @@ namespace SavedState
 
 def runMetaM (s : Meta.SavedState) (x : MetaM α) :
     MetaM (α × Meta.SavedState) :=
-  withoutModifyingState do
-    restoreState s
-    let result ← x
-    let finalState ← saveState
-    return (result, finalState)
+  runMetaMObservingFinalState (do restoreState s; x)
 
 def runMetaM' (s : Meta.SavedState) (x : MetaM α) : MetaM α :=
   Prod.fst <$> s.runMetaM x
@@ -1193,89 +971,20 @@ def matchAppOf (f : Expr) (e : Expr) : MetaM (Option (Array Expr)) := do
 end Lean.Meta
 
 
-namespace MonadStateOf
-
 @[inline]
-def ofLens [Monad m] [MonadStateOf α m] (project : α → β) (inject : β → α → α) :
-    MonadStateOf β m where
-  get := return project (← get)
-  set b := modify λ a => inject b a
-  modifyGet f := modifyGet λ a =>
-    let (r, b) := f (project a)
-    (r, inject b a)
-
-end MonadStateOf
-
-@[inline]
-abbrev setThe (σ) {m} [MonadStateOf σ m] (s : σ) : m PUnit :=
+def setThe (σ) {m} [MonadStateOf σ m] (s : σ) : m PUnit :=
   MonadStateOf.set s
 
 
-namespace ST.Ref
-
-variable {m} [Monad m] [MonadLiftT (ST σ) m]
-
-@[inline]
-unsafe def modifyMUnsafe (r : Ref σ α) (f : α → m α) : m Unit := do
-  let v ← r.take
-  r.set (← f v)
-
-@[implemented_by modifyMUnsafe]
-def modifyM (r : Ref σ α) (f : α → m α) : m Unit := do
-  let v ← r.get
-  r.set (← f v)
-
-@[inline]
-unsafe def modifyGetMUnsafe (r : Ref σ α) (f : α → m (β × α)) : m β := do
-  let v ← r.take
-  let (b, a) ← f v
-  r.set a
-  return b
-
-@[implemented_by modifyGetMUnsafe]
-def modifyGetM (r : Ref σ α) (f : α → m (β × α)) : m β := do
-  let v ← r.get
-  let (b, a) ← f v
-  r.set a
-  return b
-
-end ST.Ref
-
-
 namespace Lean
-
-open Lean.Elab
-open Lean.Elab.Tactic
-
-@[inline]
-def withRefThen [Monad m] [MonadRef m] (stx : Syntax) (cont : Syntax → m α) :
-    m α :=
-  withRef stx $ cont stx
-
-@[inline]
-def runTacticMAsMetaM (goal : MVarId) (tac : TacticM Unit) :
-    MetaM (List MVarId) :=
-  run goal tac |>.run'
-
-def runMetaMAsImportM (x : MetaM α) : ImportM α := do
-  let ctx : Core.Context := { options := (← read).opts, fileName := "<runMetaMAsImportM>", fileMap := default }
-  let state : Core.State := { env := (← read).env }
-  let r ← x |>.run {} {} |>.run ctx state |>.toIO'
-  match r with
-  | Except.ok ((a, _), _) => pure a
-  | Except.error e => throw $ IO.userError (← e.toMessageData.toString)
 
 @[inline]
 def runMetaMAsCoreM (x : MetaM α) : CoreM α :=
   Prod.fst <$> x.run {} {}
 
 @[inline]
-def runTermElabMAsMetaM (x : TermElabM α) : MetaM α :=
-  x.run'
-
-@[inline]
-def runTermElabMAsCoreM (x : TermElabM α) : CoreM α :=
-  runMetaMAsCoreM $ runTermElabMAsMetaM x
+def runTermElabMAsCoreM (x : Elab.TermElabM α) : CoreM α :=
+  runMetaMAsCoreM x.run'
 
 end Lean
 

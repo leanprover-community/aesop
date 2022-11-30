@@ -81,7 +81,8 @@ syntax &"unsafe" : Aesop.phase
 end Parser
 
 def PhaseName.«elab» (stx : Syntax) : ElabM PhaseName :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(phase| safe) => return .safe
     | `(phase| norm) => return .norm
     | `(phase| unsafe) => return .«unsafe»
@@ -98,7 +99,8 @@ syntax &"false" : Aesop.bool_lit
 end Parser
 
 def elabBoolLit (stx : Syntax) : ElabM Bool :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(bool_lit| true) => return true
     | `(bool_lit| false) => return false
     | _ => throwUnsupportedSyntax
@@ -128,7 +130,8 @@ inductive DBuilderName
 namespace DBuilderName
 
 def «elab» (stx : Syntax) : ElabM DBuilderName :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(builder_name| apply) => return regular .apply
     | `(builder_name| simp) => return regular .simp
     | `(builder_name| unfold) => return regular .unfold
@@ -177,7 +180,8 @@ def elabPattern (stx : Syntax) : TermElabM Expr :=
     }
 
 def elabSingleIndexingMode (stx : Syntax) : ElabM IndexingMode :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(indexing_mode| target $t:term) => .target <$> elabKeys t
     | `(indexing_mode| hyp $t:term) => .hyps <$> elabKeys t
     | `(indexing_mode| unindexed) => return .unindexed
@@ -217,7 +221,8 @@ inductive BuilderOption
 namespace BuilderOption
 
 def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(builder_option| (uses_branch_state := $b:Aesop.bool_lit)) =>
       usesBranchState <$> elabBoolLit b
     | `(builder_option| (immediate := [$ns:ident,*])) =>
@@ -251,7 +256,8 @@ structure BuilderOptions (σ : Type _) where
 namespace BuilderOptions
 
 def «elab» (bo : BuilderOptions α) (stx : Syntax) : ElabM α :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(Parser.builderOptions| $stxs:Aesop.builder_option*) => do
       let mut opts := bo.init
       let mut seen : HashSet Nat := {}
@@ -354,7 +360,8 @@ def elabOptions (b : DBuilderName) (opts : Syntax) : ElabM Builder := do
       BuilderOptions.regular builderName |>.«elab» opts
 
 def «elab» (stx : Syntax) : ElabM Builder :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(builder| $b:Aesop.builder_name) => do
       elabOptions (← DBuilderName.elab b) (mkNode ``Parser.builderOptions #[])
     | `(builder| ($b:Aesop.builder_name $opts:builderOptions)) => do
@@ -397,7 +404,8 @@ structure RuleSets where
 namespace RuleSets
 
 def «elab» (stx : Syntax) : ElabM RuleSets :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(Parser.ruleSetsFeature| (rule_sets [$ns:ident,*])) =>
       return ⟨(ns : Array Syntax).map (·.getId)⟩
     | _ => throwUnsupportedSyntax
@@ -450,7 +458,8 @@ private def elabRuleIdent (stx : Syntax) : ElabM RuleIdent :=
       .const <$> resolveGlobalConstNoOverload stx
 
 partial def «elab» (stx : Syntax) : ElabM Feature :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(feature| $p:Aesop.priority) => priority <$> Priority.elab p
     | `(feature| $p:Aesop.phase) => phase <$> PhaseName.elab p
     | `(feature| $b:Aesop.builder) => builder <$> Builder.elab b
@@ -488,7 +497,8 @@ inductive RuleExpr
 namespace RuleExpr
 
 partial def «elab» (stx : Syntax) : ElabM RuleExpr :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(rule_expr| $f:Aesop.feature $e:Aesop.rule_expr) => do
       return node (← Feature.elab f) #[← «elab» e]
     | `(rule_expr| $f:Aesop.feature [ $es:Aesop.rule_expr,* ]) => do
@@ -661,10 +671,10 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
           "duplicate rule name: '{ident}'\n(previous rule name: '{previous}')"
         return { r with ident }
       | .ruleSets newRuleSets =>
-        have ord : Ord RuleSetName := ⟨Name.quickCmp⟩
+        have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
         let ruleSets :=
           ⟨Array.mergeSortedFilteringDuplicates r.ruleSets.ruleSets $
-            newRuleSets.ruleSets.qsort ord.isLT⟩
+            newRuleSets.ruleSets.qsortOrd⟩
         return { r with ruleSets }
 
     getPhaseAndPriority (c : RuleConfig Option) :
@@ -763,10 +773,10 @@ def toRuleNameFilters (e : RuleExpr) :
           "duplicate builder declaration: '{b.toDBuilderName}'\n(previous declaration: '{previous.toDBuilderName}')"
         return { r with builder := some b }
       | .ruleSets newRuleSets =>
-        have ord : Ord RuleSetName := ⟨Name.quickCmp⟩
+        have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
         let ruleSets :=
           ⟨Array.mergeSortedFilteringDuplicates r.ruleSets.ruleSets $
-            newRuleSets.ruleSets.qsort ord.isLT⟩
+            newRuleSets.ruleSets.qsortOrd⟩
         return { r with ruleSets }
 
 def toGlobalRuleNameFilters (e : RuleExpr) :

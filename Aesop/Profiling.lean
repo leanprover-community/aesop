@@ -105,8 +105,8 @@ protected def toMessageData (p : Profile) : MessageData :=
     compareTimings : (x y : RuleProfileName × Nanos × Nanos) → Ordering :=
       compareOpposite $
         compareLexicographic
-          (compareBy (λ (_, s, f) => s + f))
-          (compareBy (λ (n, _, _) => n))
+          (compareOn (λ (_, s, f) => s + f))
+          (compareOn (λ (n, _, _) => n))
 
     displayRuleApplications (apps : HashMap RuleProfileName (Nanos × Nanos)) :
         Array MessageData := Id.run do

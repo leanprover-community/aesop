@@ -46,8 +46,8 @@ def name : UnsafeQueueEntry → RuleName
 
 instance : Ord UnsafeQueueEntry :=
   ⟨ compareLexicographic
-      (compareOpposite $ compareBy successProbability)
-      (compareBy name) ⟩
+      (compareOpposite $ compareOn successProbability)
+      (compareOn name) ⟩
 
 end UnsafeQueueEntry
 

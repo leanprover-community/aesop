@@ -65,7 +65,8 @@ structure TacticConfig where
 namespace TacticConfig
 
 def parse (stx : Syntax) : TermElabM TacticConfig :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(tactic| aesop $clauses:Aesop.tactic_clause*) =>
       clauses.foldlM addClause $ init (traceScript := false)
     | `(tactic| aesop? $clauses:Aesop.tactic_clause*) =>
@@ -82,7 +83,8 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
     }
 
     addClause (c : TacticConfig) (stx : Syntax) : TermElabM TacticConfig :=
-      withRefThen stx λ
+      withRef stx do
+        match stx with
         | `(tactic_clause| (add $es:Aesop.rule_expr,*)) => do
           let rs ← (es : Array Syntax).mapM λ e =>
             RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
