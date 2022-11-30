@@ -370,8 +370,8 @@ def «elab» (stx : Syntax) : ElabM Builder :=
 
 def toRuleBuilder : Builder → RuleBuilder
   | apply opts  => RuleBuilder.apply opts
-  | simp => RuleBuilder.normSimpLemmas
-  | unfold => RuleBuilder.normSimpUnfold
+  | simp => RuleBuilder.simp
+  | unfold => RuleBuilder.unfold
   | tactic opts => RuleBuilder.tactic opts
   | constructors opts => RuleBuilder.constructors opts
   | forward opts => RuleBuilder.forward opts
@@ -572,27 +572,21 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
   | phase@PhaseName.norm =>
     let penalty ← c.getPenalty phase
     let (goal, res) ← runBuilder goal phase c.builder
-    match res with
-    | .regular res =>
-      let rule := RuleSetMember.normRule {
-        res with
-        name := c.ident.toRuleName phase res.builder
-        usesBranchState := res.mayUseBranchState
-        extra := { penalty }
-      }
-      return (goal, rule, c.ruleSets.ruleSets)
-    | .globalSimp res =>
-      let rule := RuleSetMember.normSimpRule {
-        res with
-        name := c.ident.toRuleName phase res.builder
-      }
-      return (goal, rule, c.ruleSets.ruleSets)
-    | .localSimp res =>
-      let rule := RuleSetMember.localNormSimpRule {
-        res with
-        name := c.ident.toRuleName phase res.builder
-      }
-      return (goal, rule, c.ruleSets.ruleSets)
+    let rule :=
+      match res with
+      | .regular res => .normRule {
+          res with
+          name := c.ident.toRuleName phase res.builder
+          usesBranchState := res.mayUseBranchState
+          extra := { penalty }
+        }
+      | .globalSimp entries => .normSimpRule {
+          entries
+          name := c.ident.toRuleName phase .simp
+        }
+      | .localSimp fvarUserName => .localNormSimpRule { fvarUserName }
+      | .unfold r => .unfoldRule r
+    return (goal, rule, c.ruleSets.ruleSets)
   where
     runBuilder (goal : MVarId) (phase : PhaseName) (b : Builder) :
         MetaM (MVarId × RuleBuilderResult) := do

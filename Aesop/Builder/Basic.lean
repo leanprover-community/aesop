@@ -30,18 +30,11 @@ structure RegularRuleBuilderResult where
   mayUseBranchState : Bool
   deriving Inhabited
 
-structure GlobalSimpRuleBuilderResult where
-  builder : BuilderName
-  entries : Array SimpEntry
-
-structure LocalSimpRuleBuilderResult where
-  builder : BuilderName
-  fvarUserName : Name
-
 inductive RuleBuilderResult
   | regular (r : RegularRuleBuilderResult)
-  | globalSimp (r : GlobalSimpRuleBuilderResult)
-  | localSimp (r : LocalSimpRuleBuilderResult)
+  | globalSimp (entries : Array SimpEntry)
+  | localSimp (userName : Name)
+  | unfold (r : UnfoldRule)
   deriving Inhabited
 
 inductive RuleBuilderOutput

@@ -19,6 +19,7 @@ inductive RuleSetMember
   | safeRule (r : SafeRule)
   | normSimpRule (r : NormSimpRule)
   | localNormSimpRule (r : LocalNormSimpRule)
+  | unfoldRule (r : UnfoldRule)
   deriving Inhabited
 
 namespace RuleSetMember
@@ -29,6 +30,7 @@ def name : RuleSetMember → RuleName
   | safeRule r => r.name
   | normSimpRule r => r.name
   | localNormSimpRule r => r.name
+  | unfoldRule r => r.name
 
 def isGlobal (m : RuleSetMember) : Bool :=
   m.name.scope == .global
@@ -70,18 +72,25 @@ structure RuleSet where
     -- rule is erased; (b) to serialise the norm simp rules.
   localNormSimpLemmas : Array LocalNormSimpRule
     -- This does not need to be persistent because the global rule set (which is
-    -- stored in an env extension and should therefore be persistent) never
-    -- contains local norm simp lemmas.
+    -- stored in a persistent env extension) never contains local norm simp
+    -- lemmas.
+  unfoldRules : PHashMap Name (Option Name)
+    -- A pair `(decl, unfoldThm?)` in this map represents a declaration `decl`
+    -- which should be unfolded. `unfoldThm?` should be the output of
+    -- `getUnfoldEqnFor? decl` and is cached here for efficiency.
   ruleNames : PHashMap RuleIdent (UnorderedArraySet RuleName)
     -- A cache of (non-erased) rule names. Invariant: `ruleNames` contains
     -- exactly the names of the rules in `normRules`, `normSimpLemmaDescrs`,
-    -- `unsafeRules` and `safeRules`, minus the rules in `erased`. We use this
-    -- cache to quickly determine whether a rule is present in the rule set.
-  erased : PHashSet RuleName
+    -- `unsafeRules`, `safeRules`, `localNormSimpLemmas` and `unfoldRules`,
+    -- minus the rules in `erased`. We use this cache (a) to quickly determine
+    -- whether a rule is present in the rule set and (b) to find the full rule
+    -- names corresponding to a `RuleIdent`.
+  erased : HashSet RuleName
     -- The set of rules that were erased from `normRules`, `unsafeRules` and
-    -- `safeRules`. When erasing a rule which is present in any of these three
+    -- `safeRules`. When we erase a rule which is present in any of these three
     -- indices, the rule is not removed from the indices but just added to this
-    -- set.
+    -- set. (When we erase a rule from other `normSimpLemmas`,
+    -- `localNormSimpLemmas` or `unfoldRules`, we just erase it.)
   deriving Inhabited
 
 namespace RuleSet
@@ -96,6 +105,8 @@ instance : ToMessageData RuleSet where
       "Normalisation simp lemmas:" ++ rs.normSimpLemmas.toMessageData,
       "Local normalisation simp lemmas:" ++ .node
         (rs.localNormSimpLemmas.map (·.fvarUserName)),
+      "Unfolding rules:" ++ .node
+        (rs.unfoldRules.toArray.map toMessageData),
       "Erased rules:" ++ indentD (unlines $
         rs.erased.toArray.qsort (λ x y => compare x y |>.isLT)
           |>.map toMessageData)
@@ -103,11 +114,12 @@ instance : ToMessageData RuleSet where
 
 def empty : RuleSet where
   normRules := {}
-  normSimpLemmas := {}
   unsafeRules := {}
   safeRules := {}
+  normSimpLemmas := {}
   normSimpLemmaDescrs := {}
   localNormSimpLemmas := {}
+  unfoldRules := {}
   ruleNames := {}
   erased := {}
 
@@ -116,21 +128,23 @@ instance : EmptyCollection RuleSet :=
 
 def merge (rs₁ rs₂ : RuleSet) : RuleSet where
   normRules := rs₁.normRules.merge rs₂.normRules
-  normSimpLemmas := rs₁.normSimpLemmas.merge rs₂.normSimpLemmas
   unsafeRules := rs₁.unsafeRules.merge rs₂.unsafeRules
   safeRules := rs₁.safeRules.merge rs₂.safeRules
+  normSimpLemmas := rs₁.normSimpLemmas.merge rs₂.normSimpLemmas
   normSimpLemmaDescrs :=
     rs₁.normSimpLemmaDescrs.mergeWith rs₂.normSimpLemmaDescrs λ _ nsd₁ _ => nsd₁
     -- We can merge left-biased here because `nsd₁` and `nsd₂` should be equal
     -- anyway.
   localNormSimpLemmas := rs₁.localNormSimpLemmas ++ rs₂.localNormSimpLemmas
+  unfoldRules := rs₁.unfoldRules.mergeWith rs₂.unfoldRules
+    λ _ unfoldThm?₁ _ => unfoldThm?₁
   ruleNames :=
     rs₁.ruleNames.mergeWith rs₂.ruleNames λ _ ns₁ ns₂ =>
       ns₁ ++ ns₂
   erased :=
     -- Add the erased rules from `rs₁` to `init`, except those rules which are
     -- present (and not erased) in `rs₂`.
-    let go (rs₁ rs₂ : RuleSet) (init : PHashSet RuleName) : PHashSet RuleName :=
+    let go (rs₁ rs₂ : RuleSet) (init : HashSet RuleName) : HashSet RuleName :=
       rs₁.erased.fold (init := init) λ x n =>
         match rs₂.ruleNames.find? n.toRuleIdent with
         | none => x.insert n
@@ -154,14 +168,17 @@ def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
     { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
   | .safeRule r =>
     { rs with safeRules := rs.safeRules.add r r.indexingMode }
-  | .normSimpRule r =>
-    { rs with
+  | .normSimpRule r => {
+      rs with
       normSimpLemmas :=
         r.entries.foldl (init := rs.normSimpLemmas) λ simpLemmas e =>
           simpLemmas.addSimpEntry e
-      normSimpLemmaDescrs := rs.normSimpLemmaDescrs.insert r.name r.entries }
+      normSimpLemmaDescrs := rs.normSimpLemmaDescrs.insert r.name r.entries
+    }
   | .localNormSimpRule r =>
     { rs with localNormSimpLemmas := rs.localNormSimpLemmas.push r }
+  | .unfoldRule r =>
+    { rs with unfoldRules := rs.unfoldRules.insert r.decl r.unfoldThm? }
 
 def addArray (rs : RuleSet) (ra : Array RuleSetMember) : RuleSet :=
   ra.foldl add rs
@@ -190,15 +207,21 @@ def erase (rs : RuleSet) (f : RuleNameFilter) : RuleSet × Bool :=
       let mut erased := rs.erased
       let mut normSimpLemmaDescrs := rs.normSimpLemmaDescrs
       let mut normSimpLemmas := rs.normSimpLemmas
+      let mut localNormSimpLemmas := rs.localNormSimpLemmas
+      let mut unfoldRules := rs.unfoldRules
       for r in toErase do
-        erased := erased.insert r
-        if let (some simpEntries) := normSimpLemmaDescrs.find? r then
-          normSimpLemmaDescrs := normSimpLemmaDescrs.erase r
-          for e in simpEntries do
-            normSimpLemmas := normSimpLemmas.eraseSimpEntry e
-
-      let localNormSimpLemmas := rs.localNormSimpLemmas.filter λ r =>
-        ! toErase.contains r.name
+        if r.builder == .simp then
+          if r.scope == .global then
+            if let (some simpEntries) := normSimpLemmaDescrs.find? r then
+              normSimpLemmaDescrs := normSimpLemmaDescrs.erase r
+              for e in simpEntries do
+                normSimpLemmas := normSimpLemmas.eraseSimpEntry e
+          else
+            localNormSimpLemmas := localNormSimpLemmas.filter λ l => l.name != r
+        else if r.builder == .unfold then
+          unfoldRules := unfoldRules.erase r.name
+        else
+          erased := erased.insert r
 
       let res := {
         rs with
@@ -244,7 +267,11 @@ def foldM [Monad m] (rs : RuleSet) (f : σ → RuleSetMember → m σ) (init : �
   s ← rs.normSimpLemmaDescrs.foldlM (init := s) λ s n es =>
         f s (.normSimpRule { name := n, entries := es })
         -- Erased rules are removed from `normSimpLemmaDescrs`, so we do not
-        -- need to filter here.
+        -- need to filter here. Same for the next steps.
+  s ← rs.localNormSimpLemmas.foldlM (init := s) λ s r =>
+    f s (.localNormSimpRule r)
+  s ← rs.unfoldRules.foldlM (init := s) λ s decl unfoldThm? =>
+    f s (.unfoldRule { decl, unfoldThm? })
   return s
   where
     @[inline]

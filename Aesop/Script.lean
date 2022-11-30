@@ -398,6 +398,12 @@ def renameInaccessibleFVars (goal : MVarId) (renamedFVars : Array FVarId) :
         `(binderIdent| $userName:ident)
       `(tactic| rename_i $ids:binderIdent*)
 
+def unfoldManyStar (usedDecls : HashSet Name) : ScriptBuilder MetaM :=
+  if usedDecls.isEmpty then
+    .id
+  else
+    .ofTactic 1 `(tactic| aesop_unfold [$(usedDecls.toArray.map mkIdent):ident,*])
+
 end ScriptBuilder
 
 abbrev RuleTacScriptBuilder := ScriptBuilder MetaM
@@ -436,6 +442,12 @@ def _root_.Lean.MVarId.renameInaccessibleFVarsWithSyntax (goal : MVarId) :
     MetaM (MVarId × Array FVarId × ScriptBuilder MetaM) := do
   let (goal, renamedFVars) ← goal.renameInaccessibleFVars
   return (goal, renamedFVars, .renameInaccessibleFVars goal renamedFVars)
+
+def _root_.Lean.MVarId.unfoldManyStarWithSyntax (goal : MVarId)
+    (unfold? : Name → Option (Option Name)) :
+    MetaM (UnfoldResult × ScriptBuilder MetaM) := do
+  let result ← goal.unfoldManyStar unfold?
+  return (result, .unfoldManyStar result.usedDecls)
 
 
 -- TODO rename to `TacticInvocation`

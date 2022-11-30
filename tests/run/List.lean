@@ -89,7 +89,7 @@ instance : Membership α (Option α) :=
 
 @[simp]
 theorem mem_spec {o : Option α} : a ∈ o ↔ o = some a := by
-  aesop (add norm unfold Membership.mem)
+  aesop (add norm simp Membership.mem)
 
 @[simp]
 theorem mem_none : a ∈ none ↔ False := by
@@ -489,7 +489,7 @@ attribute [-simp] cons_subset
 @[simp] theorem X.cons_subset {a : α} {l m : List α} :
   a::l ⊆ m ↔ a ∈ m ∧ l ⊆ m := by
   set_option aesop.check.script false in -- TODO
-  aesop (add norm unfold [HasSubset.Subset, List.Subset])
+  aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 theorem cons_subset_of_subset_of_mem {a : α} {l m : List α}
     (ainm : a ∈ m) (lsubm : l ⊆ m) : a::l ⊆ m := by
@@ -498,12 +498,12 @@ theorem cons_subset_of_subset_of_mem {a : α} {l m : List α}
 theorem append_subset_of_subset_of_subset {l₁ l₂ l : List α} (l₁subl : l₁ ⊆ l) (l₂subl : l₂ ⊆ l) :
   l₁ ++ l₂ ⊆ l := by
   set_option aesop.check.script false in -- TODO
-  aesop (add norm unfold [HasSubset.Subset, List.Subset])
+  aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 @[simp] theorem append_subset_iff {l₁ l₂ l : List α} :
     l₁ ++ l₂ ⊆ l ↔ l₁ ⊆ l ∧ l₂ ⊆ l := by
   set_option aesop.check.script false in -- TODO
-  aesop (add norm unfold [HasSubset.Subset, List.Subset])
+  aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 @[aesop safe destruct]
 theorem eq_nil_of_subset_nil {l : List α} : l ⊆ [] → l = [] := by
@@ -516,7 +516,7 @@ theorem X.eq_nil_iff_forall_not_mem {l : List α} : l = [] ↔ ∀ a, a ∉ l :=
 -- attribute [-simp] map_subset
 theorem X.map_subset {l₁ l₂ : List α} (f : α → β) (H : l₁ ⊆ l₂) : map f l₁ ⊆ map f l₂ := by
   set_option aesop.check.script false in -- TODO
-  aesop (add norm unfold [HasSubset.Subset, List.Subset])
+  aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 theorem map_subset_iff {l₁ l₂ : List α} (f : α → β) (h : Injective f) :
     map f l₁ ⊆ map f l₂ ↔ l₁ ⊆ l₂ := by
@@ -661,7 +661,7 @@ theorem replicate_add (a : α) (m n) : replicate (m + n) a = replicate m a ++ re
 
 theorem replicate_subset_singleton (a : α) (n) : replicate n a ⊆ [a] := by
   set_option aesop.check.script false in -- TODO
-  aesop (add norm unfold [HasSubset.Subset, List.Subset])
+  aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 theorem subset_singleton_iff {a : α} {L : List α} : L ⊆ [a] ↔ ∃ n, L = replicate n a :=
   ADMIT -- Nontrivial existential.
@@ -705,7 +705,7 @@ theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) :
 theorem mem_pure {α} (x y : α) :
     x ∈ (pure y : List α) ↔ x = y := by
   set_option aesop.check.script false in -- TODO
-  aesop (add norm unfold pure)
+  aesop (add norm simp pure)
 
 /-! ### bind -/
 
@@ -857,7 +857,7 @@ theorem empty_iff_eq_nil {l : List α} : Empty l ↔ l = [] := by
   | [_] => by aesop
   | (_ :: y :: zs) => by
     have ih := length_init (y :: zs)
-    aesop (add norm unfold [init], norm simp [Nat.add_sub_cancel])
+    aesop (add norm simp [init, Nat.add_sub_cancel])
 
 /-! ### last -/
 
@@ -886,14 +886,14 @@ theorem init_append_last : ∀ {l : List α} (h : l ≠ []), init l ++ [last l h
   | [_] => by aesop
   | x :: y :: zs => by
     have ih := init_append_last (l := y :: zs)
-    aesop (add norm unfold [init, last])
+    aesop (add norm simp [init, last])
 
 theorem last_congr {l₁ l₂ : List α} (h₁ : l₁ ≠ []) (h₂ : l₂ ≠ []) (h₃ : l₁ = l₂) :
   last l₁ h₁ = last l₂ h₂ := by
   aesop
 
 theorem last_mem : ∀ {l : List α} (h : l ≠ []), last l h ∈ l := by
-  intro l; induction l <;> aesop (add norm unfold last, 1% cases List)
+  intro l; induction l <;> aesop (add norm simp last, 1% cases List)
 
 theorem last_replicate_succ (a m : Nat) :
   (replicate m.succ a).last
@@ -924,7 +924,7 @@ theorem mem_last'_eq_last : ∀ {l : List α} {x : α}, x ∈ l.last' → ∃ h,
   | [_], _, h => by aesop
   | a :: a' :: as, x, h => by
     have ih := mem_last'_eq_last (l := a' :: as) (x := x)
-    aesop (add norm unfold last')
+    aesop (add norm simp last')
 
 theorem last'_eq_last_of_ne_nil : ∀ {l : List α} (h : l ≠ []), l.last' = some (l.last h)
   | [], h => by aesop
@@ -949,7 +949,7 @@ theorem init_append_last' : ∀ {l : List α} {a}, a ∈ l.last' → init l ++ [
   | [_], _ => by aesop
   | x :: y :: zs, a => by
     have ih := init_append_last' (l := y :: zs) (a := a)
-    aesop (add norm unfold init)
+    aesop (add norm simp init)
 
 theorem ilast_eq_last' [Inhabited α] : ∀ l : List α, l.ilast = l.last'.iget
   | [] => by aesop

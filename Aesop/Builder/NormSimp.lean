@@ -11,21 +11,6 @@ open Lean.Meta
 
 namespace Aesop.RuleBuilder
 
-def normSimpUnfold : RuleBuilder :=
-  ofGlobalRuleBuilder builderName λ _ decl => do
-    try {
-      let thms : SimpTheorems := {}
-      let thms ← thms.addDeclToUnfold decl
-      return .globalSimp {
-        builder := builderName
-        entries := thms.simpEntries
-      }
-    } catch e => {
-      throwError "aesop: unfold builder: exception while trying to add {decl} as declaration to unfold:{indentD e.toMessageData}"
-    }
-  where
-    builderName := BuilderName.unfold
-
 private def getSimpEntriesFromPropConst (decl : Name) :
     MetaM (Array SimpEntry) := do
   let thms ← ({} : SimpTheorems).addConst decl
@@ -40,12 +25,12 @@ private def getSimpEntriesForConst (decl : Name) : MetaM (Array SimpEntry) := do
     thms ← thms.addDeclToUnfold decl
   return thms.simpEntries
 
-def normSimpLemmas : RuleBuilder := λ input => do
+def simp : RuleBuilder := λ input => do
   match input.kind with
   | .global decl =>
     try {
       let entries ← getSimpEntriesForConst decl
-      return .global $ .globalSimp { builder := builderName, entries }
+      return .global $ .globalSimp entries
     } catch e => {
       throwError "aesop: simp builder: exception while trying to add {decl} as a simp theorem:{indentD e.toMessageData}"
     }
@@ -54,8 +39,6 @@ def normSimpLemmas : RuleBuilder := λ input => do
       let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
       unless ← isProp type do
         throwError "aesop: simp builder: simp rules must be propositions but {fvarUserName} has type{indentExpr type}"
-      return .«local» goal (.localSimp { builder := builderName, fvarUserName })
-  where
-    builderName := BuilderName.simp
+      return .«local» goal (.localSimp fvarUserName)
 
 end Aesop.RuleBuilder

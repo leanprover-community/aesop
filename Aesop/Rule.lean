@@ -172,7 +172,6 @@ end NormSimpRule
 -- hypothesis to the simp set. This must be done for each goal individually
 -- since the `FVarId` of the hypothesis is not guaranteed to be stable.
 structure LocalNormSimpRule where
-  name : RuleName
   fvarUserName : Name
   deriving Inhabited
 
@@ -184,4 +183,26 @@ instance : BEq NormSimpRule where
 instance : Hashable NormSimpRule where
   hash r := hash r.name
 
+def name (r : LocalNormSimpRule) : RuleName :=
+  { name := r.fvarUserName, scope := .local, builder := .simp, phase := .norm }
+
 end LocalNormSimpRule
+
+
+structure UnfoldRule where
+  decl : Name
+  unfoldThm? : Option Name
+  deriving Inhabited
+
+namespace UnfoldRule
+
+instance : BEq UnfoldRule where
+  beq r s := r.decl == s.decl
+
+instance : Hashable UnfoldRule where
+  hash r := hash r.decl
+
+def name (r : UnfoldRule) : RuleName :=
+  { name := r.decl, builder := .unfold, phase := .norm, scope := .global }
+
+end Aesop.UnfoldRule
