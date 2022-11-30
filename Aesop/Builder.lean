@@ -12,3 +12,4 @@ import Aesop.Builder.Default
 import Aesop.Builder.Forward
 import Aesop.Builder.NormSimp
 import Aesop.Builder.Tactic
+import Aesop.Builder.Unfold

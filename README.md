@@ -227,7 +227,7 @@ Next, we prove another simple theorem about `NonEmpty`:
 
 ``` lean
 theorem nil_not_nonEmpty (xs : MyList α) : xs = nil → ¬ NonEmpty xs := by
-  aesop (add 10% cases MyList, norm unfold Not)
+  aesop (add 10% cases MyList, norm simp Not)
 ```
 
 Here we add two rules in an **`add`** clause. These rules are not part of a
@@ -243,10 +243,10 @@ that Aesop applies other rules if possible.
 We also add a **norm** or **normalisation** rule. As mentioned above, these
 rules are used to normalise the goal before any other rules are applied. As part
 of this normalisation process, we run a variant of `simp_all` with the global
-`simp` set plus Aesop-specific `simp` lemmas. The **`unfold`** builder adds such
+`simp` set plus Aesop-specific `simp` lemmas. The **`simp`** builder adds such
 an Aesop-specific `simp` lemma which unfolds the `Not` definition. (There is
 also a built-in rule which performs the same unfolding, so this rule is
-redundant, but I wanted to talk about normalisation rules.)
+redundant.)
 
 Here are some other examples where normalisation comes in handy:
 
@@ -291,7 +291,7 @@ A rule is a tactic plus some associated metadata. Rules come in three flavours:
   the normalisation algorithm.
 
   Normalisation rules can also be simp lemmas. These are constructed with the
-  `unfold` or `simp` builder. They are used by a special `simp` call during
+  `simp` builder. They are used by a special `simp` call during
   the normalisation process.
 
 - **Safe rules** (keyword `safe`) are applied after normalisation but before any
@@ -494,9 +494,15 @@ an Aesop rule. Currently available builders are:
   `eq` as a simp lemma for the built-in simp pass during normalisation. As such,
   this builder can only build normalisation rules.
 - **`unfold`**: when applied to a definition or `let` hypothesis `f`, registers
-  `f` to be unfolded (i.e. replaced with its definition) by the built-in simp
-  pass during normalisation. As such, this builder can only build normalisation
-  rules.
+  `f` to be unfolded (i.e. replaced with its definition) during normalisation.
+  As such, this builder can only build normalisation rules. The unfolding
+  happens in a separate `simp` pass.
+
+  The `simp` builder can also be used to unfold definitions. The difference is
+  that `simp` rules perform smart unfolding (like the `simp` tactic) and
+  `unfold` rules perform non-smart unfolding (like the `unfold` tactic).
+  Non-smart unfolding unfolds functions even when none of their equations
+  match, so `unfold` rules for recursive functions generally lead to looping.
 - **`tactic`**: takes a tactic and directly turns it into a rule. The given
   declaration (the builder does not work for hypotheses) must have type `TacticM
   Unit`, `Aesop.SimpleRuleTac` or `Aesop.RuleTac`. The latter are Aesop data

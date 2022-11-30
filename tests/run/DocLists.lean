@@ -52,7 +52,7 @@ example {α : Type _} {xs : MyList α} ys zs :
   aesop
 
 theorem nil_not_nonEmpty (xs : MyList α) : xs = nil → ¬ NonEmpty xs := by
-  aesop (add unsafe 10% cases MyList, norm unfold Not)
+  aesop (add unsafe 10% cases MyList, norm simp Not)
 
 @[simp]
 theorem append_nil {xs : MyList α} :

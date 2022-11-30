@@ -71,4 +71,20 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
       let mvarIdNew ← mvarIdNew.tryClearMany toClear
       return .simplified mvarIdNew usedSimps
 
+def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
+    (discharge? : Option Simp.Discharge := none)
+    (simplifyTarget : Bool := true)
+    (usedSimps : UsedSimps := {})
+    (disabledTheorems : HashMap FVarId Origin := {}) :
+    MetaM SimpResult :=
+  mvarId.withContext do
+    let lctx ← getLCtx
+    let mut fvarIdsToSimp := Array.mkEmpty lctx.decls.size
+    for ldecl in lctx do
+      if ldecl.isImplementationDetail then
+        continue
+      fvarIdsToSimp := fvarIdsToSimp.push ldecl.fvarId
+    Aesop.simpGoal mvarId ctx discharge? simplifyTarget fvarIdsToSimp usedSimps
+      disabledTheorems
+
 end Aesop

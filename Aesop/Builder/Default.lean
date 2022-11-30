@@ -41,7 +41,7 @@ def default : RuleBuilder := λ input =>
   | PhaseName.norm =>
     constructorsDef input <|>
     tacticDef input <|>
-    normSimpLemmas input <|>
+    simp input <|>
     applyDef input <|>
     err "a norm" input
   where

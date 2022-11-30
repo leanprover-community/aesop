@@ -14,6 +14,7 @@ namespace Aesop
 
 inductive RuleProfileName
   | normSimp
+  | normUnfold
   | rule (name : RuleName)
   deriving Inhabited, BEq, Ord
 
@@ -23,11 +24,13 @@ instance : ToString RuleProfileName where
   toString
     | rule name => toString name
     | normSimp => "<norm simp>"
+    | normUnfold => "<norm unfold>"
 
 instance : Hashable RuleProfileName where
   hash
     | rule name => mixHash (hash name) 4589
     | normSimp => 788009
+    | normUnfold => 145389
 
 end RuleProfileName
 

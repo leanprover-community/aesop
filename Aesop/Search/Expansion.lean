@@ -160,20 +160,12 @@ def normSimpCore (ctx : NormSimpContext)
         for localRule in localSimpRules do
           let (some ldecl) := lctx.findFromUserName? localRule.fvarUserName
             | continue
-          let origin := Origin.fvar ldecl.fvarId
           let (some simpTheorems') ← observing? $
-            simpTheorems.addTheorem origin ldecl.toExpr
+            simpTheorems.addTheorem (.fvar ldecl.fvarId) ldecl.toExpr
             | continue
           simpTheorems := simpTheorems'
         let ctx := { ctx with simpTheorems }
-        let mut fvarIdsToSimp := Array.mkEmpty lctx.decls.size
-        for ldecl in lctx do
-          -- TODO exclude non-prop and dependent hyps?
-          if ldecl.isImplementationDetail then
-            continue
-          fvarIdsToSimp := fvarIdsToSimp.push ldecl.fvarId
-        Aesop.simpGoal goal ctx (fvarIdsToSimp := fvarIdsToSimp)
-          (disabledTheorems := {})
+        Aesop.simpGoalWithAllHypotheses goal ctx
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
     -- unassigned. In this case, we treat the goal as unchanged.
@@ -187,6 +179,26 @@ def normSimpCore (ctx : NormSimpContext)
         return result
     return result
 
+@[inline]
+def checkSimp (name : String) (mayCloseGoal : Bool) (goal : MVarId)
+    (newGoal? : α → Option MVarId) (x : MetaM α) : MetaM α := do
+  let preMetaState ← saveState
+  let result ← x
+  let newGoal? := newGoal? result
+  let postMetaState ← saveState
+  let introduced :=
+    (← getIntroducedExprMVars preMetaState postMetaState).filter
+      (some · != newGoal?)
+  unless introduced.isEmpty do throwError
+    "{Check.rules.name}: {name} introduced metas:{introduced.map (·.name)}"
+  let assigned :=
+    (← getAssignedExprMVars preMetaState postMetaState).filter (· != goal)
+  unless assigned.isEmpty do throwError
+    "{Check.rules.name}: {name} assigned metas:{introduced.map (·.name)}"
+  if ← pure (! mayCloseGoal && newGoal?.isNone) <&&> goal.isAssigned then
+    throwError "{Check.rules.name}: {name} solved the goal"
+  return result
+
 -- NOTE: Must be run in the MetaM context of the relevant goal.
 def normSimp (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (ctx : NormSimpContext) (localSimpRules : Array LocalNormSimpRule) :
@@ -194,33 +206,40 @@ def normSimp (goal : MVarId) (mvars : UnorderedArraySet MVarId)
   profiling go λ _ elapsed =>
     recordAndTraceRuleProfile { rule := .normSimp, elapsed, successful := true }
   where
+    @[inline]
+    normSimp : MetaM SimpResult :=
+      normSimpCore ctx localSimpRules goal mvars
+
+    @[inline]
     go : MetaM SimpResult := do
-      if ← Check.rules.isEnabled then
-        let preMetaState ← saveState
-        let result ← normSimpCore ctx localSimpRules goal mvars
-        let postMetaState ← saveState
-        let introduced :=
-          (← getIntroducedExprMVars preMetaState postMetaState).filter
-            (some · != result.newGoal?)
-        unless introduced.isEmpty do throwError
-          "{Check.rules.name}: norm simp introduced metas:{introduced.map (·.name)}"
-        let assigned :=
-          (← getAssignedExprMVars preMetaState postMetaState).filter (· != goal)
-        unless assigned.isEmpty do throwError
-          "{Check.rules.name}: norm simp assigned metas:{introduced.map (·.name)}"
-        match result with
-        | .unchanged newGoal =>
-          if ← newGoal.isAssignedOrDelayedAssigned then throwError
-            "{Check.rules.name}: norm simp reports unchanged goal but returned mvar {newGoal.name} is already assigned"
-        | .simplified newGoal .. =>
-          if ← newGoal.isAssignedOrDelayedAssigned then throwError
-            "{Check.rules.name}: norm simp reports simplified goal but returned mvar {newGoal.name} is already assigned"
-        | .solved .. =>
-          if ! (← goal.isAssignedOrDelayedAssigned) then throwError
-            "{Check.rules.name}: norm simp solved the goal but did not assign the goal metavariable {goal.name}"
-        return result
-      else
-        normSimpCore ctx localSimpRules goal mvars
+      try
+        if ← Check.rules.isEnabled then
+          checkSimp "norm simp" (mayCloseGoal := true) goal (·.newGoal?)
+            normSimp
+        else
+          normSimp
+      catch e =>
+        throwError "aesop: error in norm simp: {e.toMessageData}"
+
+def normUnfold (unfoldRules : PHashMap Name (Option Name)) (goal : MVarId) :
+    ProfileT MetaM (UnfoldResult × ScriptBuilder MetaM) :=
+  profiling go λ _ elapsed =>
+    recordAndTraceRuleProfile { rule := .normUnfold, elapsed, successful := true }
+  where
+    @[inline]
+    unfold : MetaM (UnfoldResult × ScriptBuilder MetaM) :=
+      goal.unfoldManyStarWithSyntax (unfoldRules.find? ·)
+
+    @[inline]
+    go : MetaM (UnfoldResult × ScriptBuilder MetaM) := do
+      try
+        if ← Check.rules.isEnabled then
+          checkSimp "unfold simp" (mayCloseGoal := false) goal (·.fst.newGoal?)
+            unfold
+        else
+          unfold
+      catch e =>
+        throwError "aesop: error in norm unfold: {e.toMessageData}"
 
 private def mkNormSimpScriptStep (ctx : NormSimpContext)
     (inGoal : MVarId) (outGoal? : Option GoalWithMVars)
@@ -263,38 +282,53 @@ partial def normalizeGoalMVar (rs : RuleSet) (normSimpContext : NormSimpContext)
       | .succeeded outGoal bs scriptStep =>
         go (iteration + 1) outGoal bs (script.push scriptStep)
       | .failed =>
-        let simpResult ←
-          if normSimpContext.enabled then
-            aesop_trace[stepsNormalization] "Running normalisation simp"
-            normSimp goal mvars normSimpContext rs.localNormSimpLemmas
-          else
-            aesop_trace[stepsNormalization] "Skipping normalisation simp"
-            pure (.unchanged goal)
-        match simpResult with
-        | .solved usedTheorems =>
-          let scriptStep ←
-            mkNormSimpScriptStep normSimpContext goal none usedTheorems
-          return (none, script.push scriptStep)
-        | .simplified goal' usedTheorems =>
-          aesop_trace[stepsNormalization] "Goal after normalisation simp:{indentD $ MessageData.ofGoal goal}"
-          let mvars' := .ofArray mvars.toArray
-          let scriptStep ←
-            mkNormSimpScriptStep normSimpContext goal (some ⟨goal', mvars'⟩)
-              usedTheorems
+        aesop_trace[stepsNormalization] "Running normalisation unfold"
+        let (unfoldResult, unfoldScriptBuilder) ← normUnfold rs.unfoldRules goal
+        match unfoldResult with
+        | .changed goal' _ =>
+          aesop_trace[stepsNormalization] "Goal after normalisation unfold:{indentD goal'}"
+          let scriptStep := {
+            tacticSeq := ← unfoldScriptBuilder.unstructured.run
+            inGoal := goal
+            outGoals := #[⟨goal', .ofArray mvars.toArray⟩]
+            otherSolvedGoals := {}
+          }
           go (iteration + 1) goal' bs (script.push scriptStep)
-        | .unchanged goal' =>
-          aesop_trace[stepsNormalization] "Goal unchanged after normalisation simp."
-          let mvars' := .ofArray mvars.toArray
-          let script := script.push $ .dummy goal ⟨goal', mvars'⟩
-          let postSimpResult ←
-            runFirstNormRule goal' mvars bs options postSimpRules
-          match postSimpResult with
-          | .proven scriptStep =>
+        | .unchanged =>
+          aesop_trace[stepsNormalization] "Goal unchanged after normalisation unfold."
+          let simpResult ←
+            if normSimpContext.enabled then
+              aesop_trace[stepsNormalization] "Running normalisation simp"
+              normSimp goal mvars normSimpContext rs.localNormSimpLemmas
+            else
+              aesop_trace[stepsNormalization] "Skipping normalisation simp"
+              pure (.unchanged goal)
+          match simpResult with
+          | .solved usedTheorems =>
+            let scriptStep ←
+              mkNormSimpScriptStep normSimpContext goal none usedTheorems
             return (none, script.push scriptStep)
-          | .succeeded goal' bs scriptStep =>
+          | .simplified goal' usedTheorems =>
+            aesop_trace[stepsNormalization] "Goal after normalisation simp:{indentD goal'}"
+            let mvars' := .ofArray mvars.toArray
+            let scriptStep ←
+              mkNormSimpScriptStep normSimpContext goal (some ⟨goal', mvars'⟩)
+                usedTheorems
             go (iteration + 1) goal' bs (script.push scriptStep)
-          | .failed =>
-            return (some (goal', bs), script)
+          | .unchanged goal' =>
+            aesop_trace[stepsNormalization] "Goal unchanged after normalisation simp."
+            let mvars' := .ofArray mvars.toArray
+            let script := script.push $ .dummy goal ⟨goal', mvars'⟩
+            let postSimpResult ←
+              runFirstNormRule goal' mvars bs options postSimpRules
+            match postSimpResult with
+            | .proven scriptStep =>
+              return (none, script.push scriptStep)
+            | .succeeded goal' _ scriptStep =>
+              aesop_trace[stepsNormalization] "Goal after normalisation simp:{indentD goal'}"
+              go (iteration + 1) goal' bs (script.push scriptStep)
+            | .failed =>
+              return (some (goal', bs), script)
 
 -- Returns true if the goal was solved by normalisation.
 def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Q Bool := do

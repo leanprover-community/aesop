@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Options
 import Aesop.Script
+import Aesop.RuleSet
 
 open Lean Lean.Meta
 open Simp (UsedSimps)
@@ -92,5 +93,13 @@ def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
   let stx ← inGoal.withContext do
     mkSimpOnly originalStx usedTheorems (includeFVars := includeFVars)
   return ⟨stx⟩
+
+def mkNormSimpContext (rs : RuleSet) (simpConfig : Aesop.SimpConfig) :
+    MetaM Simp.Context :=
+  return {
+    ← Simp.Context.mkDefault with
+    simpTheorems := #[rs.normSimpLemmas]
+    config := simpConfig.toConfig
+  }
 
 end Aesop
