@@ -58,15 +58,9 @@ example (h : A ∨ B) : B ∨ A := by
   cases h; [ | apply Or.inl]; [apply Or.inr; assumption | assumption]
 
 
--- FIXME move
-macro &"unhygienic " t:tacticSeq : tactic =>
-  `(tactic| set_option tactic.hygienic false in $t)
-
-
 @[inline]
 private def mkOneBasedNumLit (n : Nat) : NumLit :=
   Syntax.mkNumLit $ toString $ n + 1
-
 
 
 structure GoalWithMVars where
