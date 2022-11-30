@@ -709,7 +709,7 @@ end Lean.RBMap
 namespace Prod.Lex
 
 instance [αeq_dec : DecidableEq α] {r : α → α → Prop} [r_dec : DecidableRel r]
-    {s : β → β → Prop} [s_dec : DecidableRel s] : DecidableRel (Lex r s)
+    {s : β → β → Prop} [s_dec : DecidableRel s] : DecidableRel (Prod.Lex r s)
   | (a, b), (a', b') => by
     cases r_dec a a' with
     | isTrue raa' => exact isTrue $ left b b' raa'
