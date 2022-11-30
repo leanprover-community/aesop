@@ -41,7 +41,6 @@ private def findPathForAssignedMVars (assignedMVars : UnorderedArraySet MVarId)
   let unseen : IO.Ref (UnorderedArraySet MVarId) ← IO.mkRef assignedMVars
   let pathRapps : IO.Ref (Array RappRef) ← IO.mkRef #[]
   let pathGoals : IO.Ref (HashSet GoalId) ← IO.mkRef {}
-  let done ← IO.mkRef false
   preTraverseUp
     (λ gref => do
       let id := (← gref.get).originalGoalId
@@ -52,15 +51,19 @@ private def findPathForAssignedMVars (assignedMVars : UnorderedArraySet MVarId)
       for introducedMVar in (← rref.get).introducedMVars do
         unseen.modify (·.erase introducedMVar)
       if (← unseen.get).isEmpty then
-        done.set true
         return false
       else
         return true)
     (λ _ =>
       return true)
     (TreeRef.goal start)
-  if ! (← done.get) then
-    throwError "aesop: internal error: introducing rapps not found for these mvars: {(← unseen.get).toArray.map (·.name)}"
+  let unseen ← unseen.get
+  if ! unseen.isEmpty then
+    let rootGoalMVars := (← (← getRootGoal).get).mvars
+    if unseen.any (! rootGoalMVars.contains ·) then
+      let reallyUnseen :=
+        unseen.toArray.filter (! rootGoalMVars.contains ·) |>.map (·.name)
+      throwError "aesop: internal error: introducing rapps not found for these mvars: {reallyUnseen}"
   return (← pathRapps.get, ← pathGoals.get)
 
 private def getGoalsToCopy (assignedMVars : UnorderedArraySet MVarId)

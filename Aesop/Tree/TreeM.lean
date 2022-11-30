@@ -20,9 +20,6 @@ structure Tree where
 
 def mkInitialTree (goal : MVarId) : MetaM Tree := do
   let mvars ← getGoalMVarDependencies goal
-  unless mvars.isEmpty do
-    throwError "aesop: the goal contains metavariables, which is not currently supported."
-    -- TODO support this
   let rootClusterRef ← IO.mkRef $ MVarCluster.mk {
     parent? := none
     goals := #[] -- patched up below
@@ -40,7 +37,7 @@ def mkInitialTree (goal : MVarId) : MetaM Tree := do
     isForcedUnprovable := false
     preNormGoal := goal
     normalizationState := NormalizationState.notNormal
-    mvars := {} -- TODO update when we allow metas in the inital goal
+    mvars := .ofHashSet mvars
     successProbability := Percent.hundred
     addedInIteration := Iteration.one
     lastExpandedInIteration := Iteration.none
