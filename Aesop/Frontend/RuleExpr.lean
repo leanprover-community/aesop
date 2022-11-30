@@ -122,7 +122,7 @@ end Parser
 
 inductive DBuilderName
   | regular (b : BuilderName)
-  | dflt
+  | «default»
   deriving Inhabited
 
 namespace DBuilderName
@@ -137,13 +137,13 @@ def «elab» (stx : Syntax) : ElabM DBuilderName :=
     | `(builder_name| forward) => return regular .forward
     | `(builder_name| destruct) => return regular .destruct
     | `(builder_name| cases) => return regular .cases
-    | `(builder_name| default) => return dflt
+    | `(builder_name| default) => return «default»
     | _ => throwUnsupportedSyntax
 
 instance : ToString DBuilderName where
   toString
     | regular b => toString b
-    | dflt => "default"
+    | default => "default"
 
 def toBuilderName? : DBuilderName → Option BuilderName
   | regular b => some b
@@ -332,33 +332,10 @@ inductive Builder
   | constructors (opts : RegularBuilderOptions)
   | forward (opts : ForwardBuilderOptions)
   | cases (opts : CasesBuilderOptions)
-  | dflt
+  | «default»
   deriving Inhabited
 
 namespace Builder
-
-private def tacticBuilderOptionsToString (opts : TacticBuilderOptions) : String :=
-  if opts.usesBranchState then "" else "(uses_branch_state := false)"
-
-private def forwardBuilderOptionsToString (opts : ForwardBuilderOptions) : String :=
-  if let (some immediate) := opts.immediateHyps then
-    s!"(immediate := {immediate})"
-  else
-    ""
-
--- FIXME does not display some options
-instance : ToString Builder where
-  toString
-    | apply .. => "apply"
-    | simp => "simp"
-    | unfold => "unfold"
-    | tactic opts =>
-      "(" ++ String.joinSep " " #["tactic", tacticBuilderOptionsToString opts] ++ ")"
-    | constructors .. => "constructors"
-    | forward opts =>
-      "(" ++ String.joinSep " " #["forward", forwardBuilderOptionsToString opts] ++ ")"
-    | cases .. => "cases"
-    | dflt => "default"
 
 def elabOptions (b : DBuilderName) (opts : Syntax) : ElabM Builder := do
   match b with
@@ -370,7 +347,7 @@ def elabOptions (b : DBuilderName) (opts : Syntax) : ElabM Builder := do
   | .regular .forward => forward <$> BuilderOptions.forward.elab opts
   | .regular .destruct => forward <$> BuilderOptions.destruct.elab opts
   | .regular .cases => «cases» <$> BuilderOptions.cases.elab opts
-  | .dflt => checkNoOptions; return default
+  | .default => checkNoOptions; return default
   where
     checkNoOptions := BuilderOptions.none b |>.«elab» opts
     getRegularOptions builderName :=
@@ -392,7 +369,7 @@ def toRuleBuilder : Builder → RuleBuilder
   | constructors opts => RuleBuilder.constructors opts
   | forward opts => RuleBuilder.forward opts
   | cases opts => RuleBuilder.cases opts
-  | dflt => RuleBuilder.default
+  | «default» => RuleBuilder.default
 
 open DBuilderName in
 def toDBuilderName : Builder → DBuilderName
@@ -403,7 +380,7 @@ def toDBuilderName : Builder → DBuilderName
   | constructors .. => regular .constructors
   | forward .. => regular .forward
   | cases .. => regular .cases
-  | dflt => .dflt
+  | .«default» => .default
 
 end Builder
 
@@ -418,9 +395,6 @@ structure RuleSets where
   deriving Inhabited
 
 namespace RuleSets
-
-instance : ToString RuleSets where
-  toString rs := s!"(rule_sets [{String.joinSep ", " $ rs.ruleSets.map toString}])"
 
 def «elab» (stx : Syntax) : ElabM RuleSets :=
   withRefThen stx λ
@@ -457,14 +431,6 @@ inductive Feature
   deriving Inhabited
 
 namespace Feature
-
-instance : ToString Feature where
-  toString
-    | phase p => toString p
-    | priority p => toString p
-    | builder b => toString b
-    | ident i => toString i
-    | ruleSets rs => toString rs
 
 private def elabRuleIdent (stx : Syntax) : ElabM RuleIdent :=
   resolveLocal <|> resolveGlobal <|> throwError
@@ -521,21 +487,6 @@ inductive RuleExpr
 
 namespace RuleExpr
 
-protected partial def toString : RuleExpr → String
-  | node f children =>
-    let cont :=
-      if children.isEmpty then
-        ""
-      else if h : children.size = 1 then
-        let h : 0 < Array.size children := by simp [h]
-        RuleExpr.toString (children[0])
-      else
-        "[" ++ String.joinSep ", " (children.map RuleExpr.toString) ++ "]"
-    String.joinSep " " #[toString f, cont]
-
-instance : ToString RuleExpr :=
-  ⟨RuleExpr.toString⟩
-
 partial def «elab» (stx : Syntax) : ElabM RuleExpr :=
   withRefThen stx λ
     | `(rule_expr| $f:Aesop.feature $e:Aesop.rule_expr) => do
@@ -571,23 +522,6 @@ structure RuleConfig (f : Type → Type) where
   ruleSets : RuleSets
 
 namespace RuleConfig
-
-def toStringOption (c : RuleConfig Option) : String :=
-  String.joinSep " " #[
-    optionToString c.ident,
-    optionToString c.phase,
-    optionToString c.priority,
-    optionToString c.builder,
-    toString c.ruleSets
-  ]
-  where
-    optionToString {α} [ToString α] : Option α → String
-      | none => ""
-      | some a => toString a
-
-def toStringId (c : RuleConfig Id) : String :=
-  String.joinSep " "
-    #[toString c.ident, toString c.phase, toString c.builder, toString c.ruleSets]
 
 def getPenalty (phase : PhaseName) (c : RuleConfig Id) : m Int := do
   let (some penalty) := c.priority.toInt? | throwError
@@ -669,7 +603,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
     runRegularBuilder (goal : MVarId) (phase : PhaseName) (b : Builder) :
         MetaM (MVarId × RegularRuleBuilderResult) := do
       let (goal, RuleBuilderResult.regular r) ← runBuilder goal phase b
-        | throwError "builder {b} cannot be used for {phase} rules"
+        | throwError "builder {b.toDBuilderName} cannot be used for {phase} rules"
       return (goal, r)
 
 -- Precondition: `c.ident = RuleIdent.const _`.
@@ -720,7 +654,7 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
         return { r with priority := some p }
       | .builder b => do
         if let (some previous) := r.builder then throwError
-          "duplicate builder declaration: '{b}'\n(previous declaration: '{previous}')"
+          "duplicate builder declaration: '{b.toDBuilderName}'\n(previous declaration: '{previous.toDBuilderName}')"
         return { r with builder := some b }
       | .ident ident => do
         if let (some previous) := r.ident then throwError
@@ -755,7 +689,7 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
       let (some ident) := c.ident | throwError
         "rule name not specified"
       let (phase, priority) ← getPhaseAndPriority c
-      let builder := c.builder.getD Builder.dflt
+      let builder := c.builder.getD .default
       let ruleSets :=
         if c.ruleSets.ruleSets.isEmpty then
           ⟨#[defaultRuleSet]⟩
@@ -826,7 +760,7 @@ def toRuleNameFilters (e : RuleExpr) :
         return { r with ident }
       | .builder b => do
         if let (some previous) := r.builder then throwError
-          "duplicate builder declaration: '{b}'\n(previous declaration: '{previous}')"
+          "duplicate builder declaration: '{b.toDBuilderName}'\n(previous declaration: '{previous.toDBuilderName}')"
         return { r with builder := some b }
       | .ruleSets newRuleSets =>
         have ord : Ord RuleSetName := ⟨Name.quickCmp⟩
