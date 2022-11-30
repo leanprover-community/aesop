@@ -24,7 +24,6 @@ def evalAesop : Tactic := λ stx =>
         let goal ← getMainGoal
         let ((goal, ruleSet), ruleSetConstructionTime) ← IO.time $
           config.getRuleSet goal
-        replaceMainGoal [goal]
         let profile := { profile with ruleSetConstruction := ruleSetConstructionTime }
         aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
         let (goals, profile) ←
