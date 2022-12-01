@@ -75,19 +75,6 @@ def compareOpposite (cmp : α → α → Ordering) (x y : α) : Ordering :=
   cmp x y |>.opposite
 
 
-namespace Ord
-
-@[inline]
-def lexicographic (o₁ : Ord α) (o₂ : Ord α) : Ord α :=
-  ⟨compareLexicographic o₁.compare o₂.compare⟩
-
-@[inline]
-def opposite (o : Ord α) : Ord α :=
-  ⟨compareOpposite o.compare⟩
-
-end Ord
-
-
 namespace Subarray
 
 protected def empty : Subarray α where
@@ -338,11 +325,10 @@ def joinSepArray (ms : Array MessageData) (sep : MessageData) :
   let mut result := nil
   let last := ms.size - 1
   for h : i in [0:ms.size] do
-    have h : i < ms.size := by simp_all [Membership.mem]
     if i ≥ last then
-      result := result ++ ms[i]
+      result := result ++ ms[i]'h.2
     else
-      result := result ++ ms[i] ++ sep
+      result := result ++ ms[i]'h.2 ++ sep
   return result
 
 @[inline]
