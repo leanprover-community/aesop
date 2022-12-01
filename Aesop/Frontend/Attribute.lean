@@ -30,7 +30,8 @@ structure AttrConfig where
 namespace AttrConfig
 
 def «elab» (stx : Syntax) : TermElabM AttrConfig :=
-  withRefThen stx λ
+  withRef stx do
+    match stx with
     | `(attr| aesop $e:Aesop.rule_expr) => do
       let r ← RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
       return { rules := #[r] }
