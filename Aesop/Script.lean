@@ -29,35 +29,6 @@ elab (name := Parser.onGoal) &"on_goal " n:num " => " ts:tacticSeq : tactic => d
   else
     throwError "on_goal: tried to select goal {n} but there are only {gs.size} goals"
 
--- FIXME move
-syntax optTacticSeq := (tacticSeq)?
-
-/--
-`[ts₁ | ts₂ | ... | tsₙ] executes the tactic sequence `ts₁` on the first
-goal, `ts₂` on the second goal, etc. TODO describe corner cases
--/
-elab (name := Parser.focusEach) "[" ts:sepBy(optTacticSeq, " | ") "]" : tactic => do
-  let mut newGoals := #[]
-  let ts : Array (TSyntax ``optTacticSeq) := ts
-  let gs ← getGoals
-  for t? in ts, g in gs do
-    match t? with
-    | `(optTacticSeq| $t:tacticSeq) =>
-      setGoals [g]
-      evalTactic t
-      newGoals := newGoals ++ (← getUnsolvedGoals)
-    | _ =>
-      newGoals := newGoals.push g
-  newGoals := newGoals ++ gs.drop ts.size
-  setGoals newGoals.toList
-
-example (h : A ∨ B) : B ∨ A := by
-  cases h; [apply Or.inr; assumption | apply Or.inl; assumption]
-
-example (h : A ∨ B) : B ∨ A := by
-  cases h; [ | apply Or.inl]; [apply Or.inr; assumption | assumption]
-
-
 @[inline]
 private def mkOneBasedNumLit (n : Nat) : NumLit :=
   Syntax.mkNumLit $ toString $ n + 1
@@ -230,42 +201,42 @@ def ofTactic (t : m Syntax.Tactic) : UnstructuredScriptBuilder m :=
   return #[← t]
 
 @[inline]
+def seq (b₁ b₂ : UnstructuredScriptBuilder m) : UnstructuredScriptBuilder m :=
+  return (← b₁.run) ++ (← b₂.run)
+
+@[inline]
 def focusAndDoneEach (bs : Array (UnstructuredScriptBuilder m)) :
     UnstructuredScriptBuilder m := do
   bs.mapM λ b => do `(tactic| { $(← b.run):tactic* })
 
 @[inline]
-def focusEach (bs : Array (UnstructuredScriptBuilder m)) :
-    UnstructuredScriptBuilder m := do
-  if bs.size == 0 then
-    return #[]
-  let ts ← bs.mapM (·.run)
-  if ts.all (·.isEmpty) then
-    return #[]
-  if h : ts.size = 1 then
-    let t := ts[0]'(by simp [h])
-    return #[← `(tactic| focus $t:tactic*)]
-  else
-    let ts ← ts.mapM λ (t : Array Syntax.Tactic) =>
-      if t.isEmpty then
-        `(optTacticSeq| )
-      else
-        `(optTacticSeq| $t:tactic*)
-    return #[← `(tactic| [ $[$ts]|* ])]
-
-@[inline]
-def seq (b₁ b₂ : UnstructuredScriptBuilder m) : UnstructuredScriptBuilder m :=
-  return (← b₁.run) ++ (← b₂.run)
-
-@[inline]
-def seqFocusEach (b : UnstructuredScriptBuilder m)
-    (bs : Array (UnstructuredScriptBuilder m)) : UnstructuredScriptBuilder m :=
-  b.seq (.focusEach bs)
-
-@[inline]
-def seqFocusAndDoneEach (b : UnstructuredScriptBuilder m)
+def seqFocusAndDone (b : UnstructuredScriptBuilder m)
     (bs : Array (UnstructuredScriptBuilder m)) : UnstructuredScriptBuilder m :=
   b.seq (.focusAndDoneEach bs)
+
+@[inline]
+def seqFocus (b : UnstructuredScriptBuilder m)
+    (bs : Array (UnstructuredScriptBuilder m)) :
+    UnstructuredScriptBuilder m := do
+  let ts ← b.run
+  if bs.size == 0 then
+    return ts
+  let tss ← bs.mapM (·.run)
+  if tss.all (·.isEmpty) then
+    return ts
+  if h : tss.size = 1 then
+    let ts₂ := tss[0]'(by simp [h])
+    return ts.push (← `(tactic| focus $ts₂:tactic*))
+  else
+    let tss ← tss.mapM λ (ts₂ : Array Syntax.Tactic) =>
+      if ts₂.isEmpty then
+        `(tactic| skip)
+      else
+        `(tactic| ($ts₂:tactic*))
+    if let (some t) := ts[ts.size - 1]? then
+      return ts.pop.push (← `(tactic| $t:tactic <;> [ $tss,* ]))
+    else
+      return #[← `(tactic| skip <;> [ $tss,* ])]
 
 @[inline]
 protected def id : UnstructuredScriptBuilder m :=
@@ -314,7 +285,7 @@ def ofTactics (subgoals : Nat) (ts : m (Array Syntax.Tactic)) :
     else if h : subgoals = 1 then
       UnstructuredScriptBuilder.ofTactics ts |>.seq (conts[0]'(by simp [*]))
     else
-      UnstructuredScriptBuilder.ofTactics ts |>.seqFocusAndDoneEach conts
+      UnstructuredScriptBuilder.ofTactics ts |>.seqFocusAndDone conts
 
 @[inline]
 def ofUnstructuredScriptBuilder (subgoals : Nat)
@@ -390,7 +361,7 @@ def error (msg : MessageData) : ScriptBuilder m where
 
 def seq (b : ScriptBuilder m) (bs : Array (ScriptBuilder m)) :
     ScriptBuilder m where
-  unstructured := b.unstructured.seqFocusEach $ bs.map (·.unstructured)
+  unstructured := b.unstructured.seqFocus $ bs.map (·.unstructured)
   structured := b.structured.seq $ bs.map (·.structured)
 
 def unknown (tactic : Name) : ScriptBuilder m :=
