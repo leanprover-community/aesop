@@ -115,7 +115,7 @@ set_option linter.unusedVariables false in
 @[specialize]
 def applicableRules [ord : Ord α] (ri : Index α) (goal : MVarId)
     (include? : α → Bool) : MetaM (Array (IndexMatchResult α)) := do
-  instantiateMVarsInGoal goal
+  goal.instantiateMVars
   let mut result := mkRBMap α (Array IndexMatchLocation) compare
   result := insertIndexMatchResults result
     (← applicableByTargetRules ri goal include?)

@@ -16,7 +16,8 @@ def assumption : RuleTac := λ input => do
   let goal := input.goal
   goal.withContext do
     goal.checkNotAssigned `Aesop.BuiltinRules.assumption
-    let tgt ← instantiateMVarsInMVarType goal
+    goal.instantiateMVars
+    let tgt ← goal.getType
     let initialState ← saveState
     let mut applications := #[]
     for ldecl in ← getLCtx do

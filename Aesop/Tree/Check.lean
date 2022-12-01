@@ -144,7 +144,7 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit :=
     checkAssignedMVars (r : Rapp) : MetaM Unit := do
       let (parentPostNormGoal, parentPostNormState) ← getParentInfo r
       let actualAssigned :=
-        (← assignedExprMVars parentPostNormState r.metaState).erase
+        (← getAssignedExprMVars parentPostNormState r.metaState).erase
           parentPostNormGoal
       unless actualAssigned.equalSet r.assignedMVars.toArray do throwError
         "{Check.tree.name}: rapp {r.id} reports incorrect assigned mvars.\n  reported: {r.assignedMVars.toArray.map (·.name)}\n  actual: {actualAssigned.map (·.name)}"
@@ -163,8 +163,8 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit :=
 
     checkGoalMVars (g : Goal) : MetaM Unit := do
       checkNormMVars g
-      let actualPreNormMVars ← g.runMetaMInParentState' $
-        getGoalMVarDependencies g.preNormGoal
+      let actualPreNormMVars ← g.runMetaMInParentState'
+        g.preNormGoal.getMVarDependencies
       let expectedMVars := HashSet.ofArray g.mvars.toArray
       unless actualPreNormMVars == expectedMVars do throwError
         "{Check.tree.name}: goal {g.id} reports incorrect unassigned mvars.\n  reported: {g.mvars.toArray.map (·.name)}\n  actual: {actualPreNormMVars.toArray.map (·.name)}"
@@ -175,19 +175,21 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit :=
         unless introduced.isEmpty do throwError
           "{Check.tree.name}: normalisation of goal {g.id} introduced additional metavariables:{indentD $ toMessageData $ introduced.map (·.name)}"
         let assigned :=
-          (← assignedExprMVars parentMetaState postMetaState).erase g.preNormGoal
+          (← getAssignedExprMVars parentMetaState postMetaState).erase
+            g.preNormGoal
         unless assigned.isEmpty do throwError
           "{Check.tree.name}: normalisation of goal {g.id} assigned metavariables:{indentD $ toMessageData $ assigned.map (·.name)}"
       match g.normalizationState with
       | .notNormal => return
       | .provenByNormalization postMetaState .. =>
         let parentMetaState ← g.parentMetaState
-        let introduced ← introducedExprMVars parentMetaState postMetaState
+        let introduced ← getIntroducedExprMVars parentMetaState postMetaState
         go parentMetaState postMetaState introduced
       | .normal postGoal postMetaState .. =>
         let parentMetaState ← g.parentMetaState
         let introduced :=
-          (← introducedExprMVars parentMetaState postMetaState).erase postGoal
+          (← getIntroducedExprMVars parentMetaState postMetaState).erase
+            postGoal
         go parentMetaState postMetaState introduced
 
 def checkInvariants (root : MVarClusterRef) : MetaM Unit := do

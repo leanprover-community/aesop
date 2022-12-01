@@ -77,7 +77,7 @@ instance : BEq GoalWithMVars :=
 
 
 def GoalWithMVars.ofMVarId (goal : MVarId) : MetaM GoalWithMVars := do
-  return { goal, mvars := ← getGoalMVarDependencies goal }
+  return { goal, mvars := ← goal.getMVarDependencies }
 
 /-
 Invariant: goals occurring in `solvedGoals` do not occur in `goals`.
@@ -158,7 +158,7 @@ def initial (goals : Array GoalWithMVars) : TacticState where
   solvedGoals := {}
 
 def ofGoals (goals : Array MVarId) : MetaM TacticState := do
-  let goals ← goals.mapM λ g => return ⟨g, ← getGoalMVarDependencies g⟩
+  let goals ← goals.mapM λ g => return ⟨g, ← g.getMVarDependencies⟩
   return { goals, solvedGoals := {} }
 
 instance : EmptyCollection TacticState :=

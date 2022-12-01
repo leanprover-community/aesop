@@ -57,7 +57,7 @@ def Goal.runMetaMInPostNormState' (x : MVarId → MetaM α) (g : Goal) : MetaM �
 def Goal.runMetaMInParentState (x : MetaM α) (g : Goal) :
     MetaM (α × Meta.SavedState) := do
   match ← g.parentRapp? with
-  | none => runMetaMObservingFinalState x
+  | none => withoutModifyingState' x
   | some rref => (← rref.get).runMetaM x
 
 def Goal.runMetaMInParentState' (x : MetaM α) (g : Goal) :

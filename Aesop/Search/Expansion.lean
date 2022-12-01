@@ -104,8 +104,7 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
       aesop_trace![stepsNormalization] "Rule succeeded. New goal:{indentD $ .ofGoal g}"
       aesop_trace[stepsBranchStates] "Branch state after rule application: {postBranchState.find? rule}"
     -- FIXME redundant computation?
-    let mvars ← rapp.postState.runMetaM' do
-      getGoalMVarDependencies g
+    let mvars ← rapp.postState.runMetaM' g.getMVarDependencies
     let step ←
       mkNormRuleScriptStep rapp.scriptBuilder input.goal (some ⟨g, mvars⟩)
     return .succeeded g postBranchState step
@@ -177,9 +176,7 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
     -- It can happen that simp 'solves' the goal but leaves some mvars
     -- unassigned. In this case, we treat the goal as unchanged.
     if let .solved .. := result then
-      let anyMVarDropped ← mvars.anyM λ mvarId =>
-        return ! (← mvarId.isAssigned) &&
-                ! (← mvarId.isDelayedAssigned)
+      let anyMVarDropped ← mvars.anyM (notM ·.isAssignedOrDelayedAssigned)
       if anyMVarDropped then
         aesop_trace[stepsNormalization] "Normalisation simp solved the goal but dropped some metavariables. Skipping normalisation simp."
         return .unchanged goal
@@ -200,12 +197,12 @@ def normSimp (goal : MVarId) (mvars : UnorderedArraySet MVarId) (useHyps : Bool)
         let result ← normSimpCore useHyps ctx localSimpRules goal mvars
         let postMetaState ← saveState
         let introduced :=
-          (← introducedExprMVars preMetaState postMetaState).filter
+          (← getIntroducedExprMVars preMetaState postMetaState).filter
             (some · != result.newGoal?)
         unless introduced.isEmpty do throwError
           "{Check.rules.name}: norm simp introduced metas:{introduced.map (·.name)}"
         let assigned :=
-          (← assignedExprMVars preMetaState postMetaState).filter (· != goal)
+          (← getAssignedExprMVars preMetaState postMetaState).filter (· != goal)
         unless assigned.isEmpty do throwError
           "{Check.rules.name}: norm simp assigned metas:{introduced.map (·.name)}"
         return result

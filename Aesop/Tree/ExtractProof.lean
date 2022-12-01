@@ -86,16 +86,16 @@ private def copyMatchEqnsExtState (oldEnv newEnv : Environment) : CoreM Unit := 
 
 private partial def copyExprMVar (s : Meta.SavedState) (mvarId : MVarId) :
     MetaM Unit := do
-  if ← mvarId.isAssigned <||> mvarId.isDelayedAssigned then
+  if ← mvarId.isAssignedOrDelayedAssigned then
     return
-  unless ← isExprMVarDeclared mvarId do
+  unless ← mvarId.isDeclared do
     let decl ← s.runMetaM' $ do
-      instantiateMVarsInGoal mvarId
+      mvarId.instantiateMVars
       let decl ← mvarId.getDecl
       aesop_trace[extraction] "declare ?{mvarId.name}:{indentD $ toMessageData mvarId}"
       pure decl
     modifyMCtx λ mctx => { mctx with decls := mctx.decls.insert mvarId decl }
-    let depMVarIds ← getGoalMVarDependencies mvarId (includeDelayed := true)
+    let depMVarIds ← mvarId.getMVarDependencies (includeDelayed := true)
     for depMVarId in depMVarIds do
       copyExprMVar s depMVarId
   let assignment? ← s.runMetaM' do
@@ -115,7 +115,7 @@ private partial def copyExprMVar (s : Meta.SavedState) (mvarId : MVarId) :
     for mvarId in ← getMVars (mkMVar d.mvarIdPending) do
       copyExprMVar s mvarId
     aesop_trace[extraction] "dassign ?{mvarId.name} := {d.fvars} => {d.mvarIdPending.name}"
-    delayedAssignMVar mvarId d
+    mvarId.delayedAssign d
   | none => return
 
 -- ## Main Functions

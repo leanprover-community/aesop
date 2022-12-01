@@ -19,7 +19,6 @@ structure Tree where
   nextRappId : RappId
 
 def mkInitialTree (goal : MVarId) : MetaM Tree := do
-  let mvars ← getGoalMVarDependencies goal
   let rootClusterRef ← IO.mkRef $ MVarCluster.mk {
     parent? := none
     goals := #[] -- patched up below
@@ -37,7 +36,7 @@ def mkInitialTree (goal : MVarId) : MetaM Tree := do
     isForcedUnprovable := false
     preNormGoal := goal
     normalizationState := NormalizationState.notNormal
-    mvars := .ofHashSet mvars
+    mvars := .ofHashSet (← goal.getMVarDependencies)
     successProbability := Percent.hundred
     addedInIteration := Iteration.one
     lastExpandedInIteration := Iteration.none

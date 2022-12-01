@@ -224,7 +224,7 @@ def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
      MetaM (Array MVarId × Profile) := do
   goal.checkNotAssigned `aesop
   let originalMetaState ← saveState
-  let mvars ← getGoalMVarDependencies goal
+  let mvars ← goal.getMVarDependencies
   let originalGoal := goal
   let (goal, preprocessingScript) ← preprocessGoal goal mvars
   let ruleSet ←

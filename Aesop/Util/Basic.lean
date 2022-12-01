@@ -734,46 +734,8 @@ partial def saturate1 (goal : MVarId)
         | none => modify λ s => s.push goal
         | some goals => goals.forM go
 
-def instantiateMVarsInMVarType (mvarId : MVarId) : MetaM Expr := do
-  let type ← mvarId.getType
-  if type.hasMVar then
-    let type ← instantiateMVars type
-    mvarId.setType type
-    return type
-  else
-    return type
-
-def instantiateMVarsInLocalDeclType (mvarId : MVarId) (fvarId : FVarId) :
-    MetaM Expr := do
-  let mdecl ← mvarId.getDecl
-  let (some ldecl) := mdecl.lctx.find? fvarId | throwError
-    "unknown local constant {fvarId.name} (in local context of metavariable ?{mvarId.name})"
-  let type ← instantiateMVars ldecl.type
-  let mdecl :=
-    { mdecl with
-      lctx := mdecl.lctx.modifyLocalDecl fvarId λ ldecl => ldecl.setType type }
-  modify λ s =>
-    { s with mctx := { s.mctx with decls := s.mctx.decls.insert mvarId mdecl } }
-  return type
-
-def instantiateMVarsInGoal (mvarId : MVarId) : MetaM Unit := do
-  discard $ mvarId.getDecl
-    -- The line above throws an error if the `mvarId` is not declared. The line
-    -- below panics.
-  instantiateMVarDeclMVars mvarId
-
-def setFVarBinderInfos (mvarId : MVarId) (fvars : Array FVarId)
-    (bi : BinderInfo) : MetaM Unit := do
-  let decl ← mvarId.getDecl
-  let mut lctx := decl.lctx
-  for fvar in fvars do
-    lctx := lctx.setBinderInfo fvar bi
-  let mctx ← getMCtx
-  let newDecl := { decl with lctx := lctx }
-  setMCtx { mctx with decls := mctx.decls.insert mvarId newDecl }
-
-partial def getGoalMVarDependencies (mvarId : MVarId) (includeDelayed := false):
-    MetaM (HashSet MVarId) :=
+partial def _root_.Lean.MVarId.getMVarDependencies (mvarId : MVarId)
+    (includeDelayed := false) : MetaM (HashSet MVarId) :=
   return (← go mvarId |>.run {}).snd
   where
     addMVars (e : Expr) : StateRefT (HashSet MVarId) MetaM Unit := do
@@ -788,7 +750,7 @@ partial def getGoalMVarDependencies (mvarId : MVarId) (includeDelayed := false):
 
     go (mvarId : MVarId) : StateRefT (HashSet MVarId) MetaM Unit :=
       withIncRecDepth do
-        instantiateMVarsInGoal mvarId
+        mvarId.instantiateMVars
         let mdecl ← mvarId.getDecl
         addMVars mdecl.type
         for ldecl in mdecl.lctx do
@@ -797,57 +759,9 @@ partial def getGoalMVarDependencies (mvarId : MVarId) (includeDelayed := false):
             addMVars val
         if let (some ass) ← getDelayedMVarAssignment? mvarId then
           let pendingMVarId := ass.mvarIdPending
-          if ! (← pendingMVarId.isAssigned) &&
-             ! (← pendingMVarId.isDelayedAssigned) then
+          if ← notM pendingMVarId.isAssignedOrDelayedAssigned then
             modify (·.insert pendingMVarId)
           go pendingMVarId
-
-def isExprMVarDeclared [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Bool :=
-  return (← getMCtx).decls.contains mvarId
-
-def isLevelMVarDeclared [Monad m] [MonadMCtx m] (mvarId : LMVarId) : m Bool :=
-  return (← getMCtx).lDepth.contains mvarId
-
-def delayedAssignMVar [Monad m] [MonadMCtx m] (mvarId : MVarId)
-    (ass : DelayedMetavarAssignment) : m Unit :=
-  modifyMCtx λ mctx =>
-    { mctx with dAssignment := mctx.dAssignment.insert mvarId ass }
-
-def eraseExprMVarAssignment [Monad m] [MonadMCtx m] (mvarId : MVarId) : m Unit :=
-  modifyMCtx λ mctx => { mctx with
-    eAssignment := mctx.eAssignment.erase mvarId
-    dAssignment := mctx.dAssignment.erase mvarId
-  }
-
-def unassignedExprMVarsNoDelayed : MetaM (Array MVarId) := do
-  let mctx ← getMCtx
-  let mut result := #[]
-  for (mvarId, _) in mctx.decls do
-    if ← notM mvarId.isAssigned <&&> notM mvarId.isDelayedAssigned then
-      result := result.push mvarId
-  return result
-
--- TODO generalise
-def runMetaMObservingFinalState (x : MetaM α) : MetaM (α × Meta.SavedState) :=
-  withoutModifyingState do
-    let result ← x
-    let finalState ← saveState
-    return (result, finalState)
-
--- Returns the mvars that are not declared in `preState`, but declared and
--- unassigned in `postState`. Delayed-assigned mvars are considered assigned.
-def introducedExprMVars (preState postState : SavedState) :
-    MetaM (Array MVarId) := do
-  let unassignedPost ← postState.runMetaM' unassignedExprMVarsNoDelayed
-  preState.runMetaM' do unassignedPost.filterM (notM ∘ isExprMVarDeclared)
-
--- Returns the mvars that are declared but unassigned in `preState`, and
--- assigned in `postState`. Delayed-assigned mvars are considered assigned.
-def assignedExprMVars (preState postState : SavedState) :
-    MetaM (Array MVarId) := do
-  let unassignedPre ← preState.runMetaM' unassignedExprMVarsNoDelayed
-  postState.runMetaM' do
-    unassignedPre.filterM λ m => m.isAssigned <||> m.isDelayedAssigned
 
 def matchAppOf (f : Expr) (e : Expr) : MetaM (Option (Array Expr)) := do
   let type ← inferType f
@@ -878,40 +792,6 @@ def runTermElabMAsCoreM (x : Elab.TermElabM α) : CoreM α :=
 
 end Lean
 
-
-namespace String
-
-def dropPrefix (s : String) (pre : String) : Option Substring :=
-  let s := s.toSubstring
-  if s.take pre.length == pre.toSubstring then
-    s.drop pre.length
-  else
-    none
-
-end String
-
-
-namespace Substring
-
-def parseIndexSuffix (s : Substring) : Option Nat :=
-  if s.isEmpty then
-    none
-  else if s.front == '_' then
-    s.drop 1 |>.toNat?
-  else
-    none
-
-end Substring
-
-
-namespace Lean.LocalContext
-
-private inductive MatchUpToIndexSuffix
-| exactMatch
-| noMatch
-| suffixMatch (i : Nat)
-
-end Lean.LocalContext
 
 namespace Lean.Meta
 

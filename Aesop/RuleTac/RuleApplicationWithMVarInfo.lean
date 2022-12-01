@@ -48,7 +48,7 @@ protected def check (preState : Meta.SavedState) (parentGoal : MVarId)
   let mut actualIntroducedMVars : HashSet MVarId := {}
   for (_, mvars) in r.goals do
     for mvarId in mvars do
-      unless ← preState.runMetaM' $ return (← isExprMVarDeclared mvarId) do
+      unless ← preState.runMetaM' mvarId.isDeclared do
         actualIntroducedMVars := actualIntroducedMVars.insert mvarId
   let unreportedIntroducedMVars :=
     actualIntroducedMVars.toArray.filter (! r.introducedMVars.contains ·)
@@ -61,7 +61,7 @@ protected def check (preState : Meta.SavedState) (parentGoal : MVarId)
 
   -- Check assigned mvars
   let actualAssignedMVars :=
-    (← assignedExprMVars preState r.postState).erase parentGoal
+    (← getAssignedExprMVars preState r.postState).erase parentGoal
   unless actualAssignedMVars.equalSet r.assignedMVars.toArray do
     return m!"rule reported wrong assigned mvars.\n  reported: {r.assignedMVars.toArray.map (·.name)}\n  actual: {actualAssignedMVars.map (·.name)}"
   return none
@@ -75,14 +75,13 @@ def RuleApplication.toRuleApplicationWithMVarInfo
   r.postState.runMetaM' do
     -- Get assigned mvars
     r.postState.runMetaM' do
-    let assignedMVars ← parentMVars.filterM λ mvarId =>
-        mvarId.isAssigned <||> mvarId.isDelayedAssigned
+    let assignedMVars ← parentMVars.filterM (·.isAssignedOrDelayedAssigned)
 
     -- Get goals and mvars
     let mut goalsAndMVars := #[]
     let mut mvars := {}
     for g in r.goals do
-      let gMVars ← .ofHashSet <$> getGoalMVarDependencies g
+      let gMVars ← .ofHashSet <$> g.getMVarDependencies
       mvars := mvars.merge gMVars
       goalsAndMVars := goalsAndMVars.push (g, gMVars)
     let goals :=
