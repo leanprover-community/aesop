@@ -52,7 +52,7 @@ namespace SearchM
 
 -- Generate specialized pure/bind implementations so we don't need to optimise
 -- them on the fly at each use site.
-instance [Monad m] : Monad (SearchM Q) :=
+instance : Monad (SearchM Q) :=
   { inferInstanceAs (Monad (SearchM Q)) with }
 
 instance : Inhabited (SearchM Q α) where
