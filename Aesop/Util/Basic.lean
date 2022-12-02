@@ -32,21 +32,6 @@ def forM [Monad m] (f : α → m Unit) : Option α → m Unit
 
 end Option
 
-
-namespace Nat
-
-theorem sub_add_lt_sub {n m k : Nat} (h₁ : m + k ≤ n) (h₂ : k ≠ 0) :
-    n - (m + k) < n - m :=
-  match k with
-  | zero => h₂ rfl |>.elim
-  | succ _ =>
-    Nat.lt_of_lt_of_le
-      (pred_lt (Nat.ne_of_lt $ Nat.sub_pos_of_lt $ lt_of_succ_le h₁).symm)
-      (Nat.sub_le_sub_left _ $ Nat.le_add_right _ _)
-
-end Nat
-
-
 namespace Ordering
 
 def isLT : Ordering → Bool
@@ -208,7 +193,7 @@ def mergeSortedMergingDuplicates [ord : Ord α] (xs ys : Array α)
         | Ordering.eq =>
           have : xs.size + ys.size - (i + 1 + (j + 1)) < xs.size + ys.size - (i + j) := by
             rw [show i + 1 + (j + 1) = i + j + 2 by simp_arith]
-            apply Nat.sub_add_lt_sub _ (λ contra => by cases contra)
+            apply Nat.sub_add_lt_sub _ (by simp_arith)
             rw [show i + j + 2 = (i + 1) + (j + 1) by simp_arith]
             exact Nat.add_le_add hi hj
           go (acc.push (merge x y)) (i + 1) (j + 1)
@@ -741,35 +726,6 @@ protected def toMessageData (s : SimpTheorems) : MessageData :=
 
 end Lean.Meta.SimpTheorems
 
-
-def Lean.LocalDecl.setKind : LocalDecl → LocalDeclKind → LocalDecl
-  | cdecl index fvarId userName type bi _, kind =>
-      cdecl index fvarId userName type bi kind
-  | ldecl index fvarId userName type value nonDep _, kind =>
-      ldecl index fvarId userName type value nonDep kind
-
-def Lean.LocalContext.setKind (lctx : LocalContext) (fvarId : FVarId)
-    (kind : LocalDeclKind) : LocalContext :=
-  lctx.modifyLocalDecl fvarId (·.setKind kind)
-
-open Lean in
-private def modifyLCtx [Monad m] [MonadMCtx m] (mvarId : MVarId)
-    (f : LocalContext → LocalContext) : m Unit :=
-  modifyMCtx λ mctx =>
-    let mdecl := mctx.getDecl mvarId
-    let lctx := mdecl |>.lctx |> f
-    let decls := mctx.decls.insert mvarId { mdecl with lctx }
-    { mctx with decls }
-
-def Lean.MVarId.setFVarKind [Monad m] [MonadMCtx m] (mvarId : MVarId)
-    (fvarId : FVarId) (kind : LocalDeclKind) : m Unit :=
-  modifyLCtx mvarId (·.setKind fvarId kind)
-
-def Lean.MVarId.setFVarBinderInfo [Monad m] [MonadMCtx m] (mvarId : MVarId)
-    (fvarId : FVarId) (bi : BinderInfo) : m Unit :=
-  modifyLCtx mvarId (·.setBinderInfo fvarId bi)
-
-
 namespace Lean.Meta
 
 def unhygienic [Monad m] [MonadWithOptions m] (x : m α) : m α :=
@@ -829,26 +785,6 @@ def setFVarBinderInfos (mvarId : MVarId) (fvars : Array FVarId)
   let mctx ← getMCtx
   let newDecl := { decl with lctx := lctx }
   setMCtx { mctx with decls := mctx.decls.insert mvarId newDecl }
-
-structure Hypothesis' extends Hypothesis where
-  binderInfo : BinderInfo
-  kind : LocalDeclKind
-
-def _root_.Lean.MVarId.assertHypotheses' (mvarId : MVarId)
-    (hs : Array Hypothesis') : MetaM (Array FVarId × MVarId) := do
-  if hs.isEmpty then
-    return (#[], mvarId)
-  else
-    let (fvarIds, mvarId) ← mvarId.assertHypotheses $ hs.map (·.toHypothesis)
-    modifyLCtx mvarId λ lctx => Id.run do
-      let mut lctx := lctx
-      for h : i in [:hs.size] do
-        let fvarId := fvarIds[i]!
-        let h := hs[i]'h.2
-        lctx := lctx.setKind fvarId h.kind
-        lctx := lctx.setBinderInfo fvarId h.binderInfo
-      return lctx
-    return (fvarIds, mvarId)
 
 partial def getGoalMVarDependencies (mvarId : MVarId) (includeDelayed := false):
     MetaM (HashSet MVarId) :=
@@ -912,17 +848,6 @@ def runMetaMObservingFinalState (x : MetaM α) : MetaM (α × Meta.SavedState) :
     let finalState ← saveState
     return (result, finalState)
 
-namespace SavedState
-
-def runMetaM (s : Meta.SavedState) (x : MetaM α) :
-    MetaM (α × Meta.SavedState) :=
-  runMetaMObservingFinalState (do restoreState s; x)
-
-def runMetaM' (s : Meta.SavedState) (x : MetaM α) : MetaM α :=
-  Prod.fst <$> s.runMetaM x
-
-end SavedState
-
 -- Returns the mvars that are not declared in `preState`, but declared and
 -- unassigned in `postState`. Delayed-assigned mvars are considered assigned.
 def introducedExprMVars (preState postState : SavedState) :
@@ -937,27 +862,6 @@ def assignedExprMVars (preState postState : SavedState) :
   let unassignedPre ← preState.runMetaM' unassignedExprMVarsNoDelayed
   postState.runMetaM' do
     unassignedPre.filterM λ m => m.isAssigned <||> m.isDelayedAssigned
-
-def sortFVarsByContextOrder [Monad m] [MonadLCtx m] (hyps : Array FVarId) :
-    m (Array FVarId) := do
-  let lctx ← getLCtx
-  let hyps := hyps.map λ fvarId =>
-    match lctx.fvarIdToDecl.find? fvarId with
-    | none => (0, fvarId)
-    | some ldecl => (ldecl.index, fvarId)
-  let hyps := hyps.qsort λ h i => h.fst < i.fst
-  return hyps.map (·.snd)
-
--- Returns, in addition to the new goal, the hypotheses that were cleared.
-def _root_.Lean.MVarId.tryClearMany' (goal : MVarId) (hyps : Array FVarId) :
-    MetaM (MVarId × Array FVarId) :=
-  goal.withContext do
-    let hyps ← sortFVarsByContextOrder hyps
-    hyps.foldrM (init := (goal, Array.mkEmpty hyps.size))
-      λ h (goal, cleared) => do
-        let goal' ← goal.tryClear h
-        let cleared := if goal == goal' then cleared else cleared.push h
-        return (goal', cleared)
 
 def matchAppOf (f : Expr) (e : Expr) : MetaM (Option (Array Expr)) := do
   let type ← inferType f
@@ -1021,114 +925,9 @@ private inductive MatchUpToIndexSuffix
 | noMatch
 | suffixMatch (i : Nat)
 
-private def matchUpToIndexSuffix (n : Name) (query : Name) :
-    MatchUpToIndexSuffix :=
-  match n, query with
-  | Name.str _ s₁, Name.str _ s₂ =>
-    match s₁.dropPrefix s₂ with
-    | none => MatchUpToIndexSuffix.noMatch
-    | some suffix =>
-      if suffix.isEmpty then
-        MatchUpToIndexSuffix.exactMatch
-      else
-        match suffix.parseIndexSuffix with
-        | none => MatchUpToIndexSuffix.noMatch
-        | some i => MatchUpToIndexSuffix.suffixMatch i
-  | n, query =>
-    if n == query then
-      MatchUpToIndexSuffix.exactMatch
-    else
-      MatchUpToIndexSuffix.noMatch
-
-private def getUnusedUserNameIndex (lctx : LocalContext) (suggestion : Name) :
-    Option Nat := Id.run do
-  let mut minSuffix := none
-  for ldecl in lctx do
-    let hypName := ldecl.userName
-    if hypName.hasMacroScopes then
-      continue
-    match matchUpToIndexSuffix ldecl.userName suggestion with
-    | MatchUpToIndexSuffix.exactMatch =>
-      minSuffix := updateMinSuffix minSuffix 1
-    | MatchUpToIndexSuffix.noMatch =>
-      continue
-    | MatchUpToIndexSuffix.suffixMatch i =>
-      minSuffix := updateMinSuffix minSuffix (i + 1)
-  minSuffix
-  where
-    @[inline]
-    updateMinSuffix : Option Nat → Nat → Option Nat
-      | none, j => some j
-      | some i, j => some $ i.max j
-
-private def applyUserNameIndex (i : Option Nat) (suggestion : Name) : Name :=
-  match i with
-  | none => suggestion
-  | some i => suggestion.appendIndexAfter i
-
-def getUnusedName' (lctx : LocalContext) (suggestion : Name) : Name :=
-  let suggestion := suggestion.eraseMacroScopes
-  applyUserNameIndex (lctx.getUnusedUserNameIndex suggestion) suggestion
-
-partial def getUnusedUserNames (lctx : LocalContext) (n : Nat) (suggestion : Name) :
-    Array Name :=
-  if n == 0 then
-    #[]
-  else
-    let suggestion := suggestion.eraseMacroScopes
-    let acc := Array.mkEmpty n
-    match lctx.getUnusedUserNameIndex suggestion with
-    | none => loop (acc.push suggestion) (n - 1) 1
-    | some i => loop acc n i
-  where
-    loop (acc : Array Name) (n i : Nat) : Array Name :=
-      match n with
-      | 0 => acc
-      | n + 1 => loop (acc.push $ suggestion.appendIndexAfter i) n (i + 1)
-
-def inaccessibleFVars (lctx : LocalContext) : Array LocalDecl :=
-  let (result, _) :=
-    lctx.foldr (β := Array LocalDecl × HashSet Name)
-      (init := (Array.mkEmpty lctx.numIndices, {}))
-      λ ldecl (result, seen) =>
-        if ldecl.isImplementationDetail then
-          (result, seen)
-        else
-          let result :=
-            if ldecl.userName.hasMacroScopes || seen.contains ldecl.userName then
-              result.push ldecl
-            else
-              result
-          (result, seen.insert ldecl.userName)
-  result.reverse
-
 end Lean.LocalContext
 
-
 namespace Lean.Meta
-
-def getUnusedUserName [Monad m] [MonadLCtx m] (suggestion : Name) : m Name :=
-  return (← getLCtx).getUnusedName' suggestion
-
-def getUnusedUserNames [Monad m] [MonadLCtx m] (n : Nat) (suggestion : Name) :
-    m (Array Name) :=
-  return (← getLCtx).getUnusedUserNames n suggestion
-
-def _root_.Lean.MVarId.renameInaccessibleFVars (mvarId : MVarId) :
-    MetaM (MVarId × Array FVarId) := do
-  let mdecl ← mvarId.getDecl
-  let mut lctx := mdecl.lctx
-  let inaccessibleFVars := lctx.inaccessibleFVars
-  if inaccessibleFVars.isEmpty then
-    return (mvarId, #[])
-  let mut renamedFVars := Array.mkEmpty lctx.decls.size
-  for ldecl in inaccessibleFVars do
-    let newName := lctx.getUnusedName' ldecl.userName
-    lctx := lctx.setUserName ldecl.fvarId newName
-    renamedFVars := renamedFVars.push ldecl.fvarId
-  let newMVarId ← mkFreshExprMVarAt lctx mdecl.localInstances mdecl.type
-  mvarId.assign newMVarId
-  return (newMVarId.mvarId!, renamedFVars)
 
 def mkFreshIdWithPrefix [Monad m] [MonadNameGenerator m] («prefix» : Name) :
     m Name := do
