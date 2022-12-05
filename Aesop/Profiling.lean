@@ -80,11 +80,17 @@ def ruleApplicationTotals (p : Profile) :
   let mut m := {}
   for rp in p.ruleApplications do
     if rp.successful then
-      m := m.insertWith rp.rule (λ _ => (rp.elapsed, 0))
-        λ (successful, failed) => (successful + rp.elapsed, failed)
+      m :=
+        match m.find? rp.rule with
+        | none => m.insert rp.rule (rp.elapsed, 0)
+        | some (successful, failed) =>
+          m.insert rp.rule (successful + rp.elapsed, failed)
     else
-      m := m.insertWith rp.rule (λ _ => (0, rp.elapsed))
-        λ (successful, failed) => (successful, failed + rp.elapsed)
+      m :=
+        match m.find? rp.rule with
+        | none => m.insert rp.rule (0, rp.elapsed)
+        | some (successful, failed) =>
+          m.insert rp.rule (successful, failed + rp.elapsed)
   return m
 
 open Lean.MessageData in

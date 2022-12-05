@@ -371,31 +371,15 @@ namespace Std.HashMap
 
 variable [BEq α] [Hashable α]
 
-def insertWith (m : HashMap α β) (a : α) (b : Unit → β) (f : β → β) :
-    HashMap α β :=
-  let b :=
-    match m.find? a with
-    | none => b ()
-    | some b' => f b'
-  m.insert a b
-
-def updateM [Monad m] (map : HashMap α β) (k : α) (f : β → m β) :
-    m (HashMap α β) :=
-  match map.find? k with
-  | some v => return map.insert k (← f v)
-  | none => return map
-
-@[inline]
-def update (m : HashMap α β) (a : α) (f : β → β) : HashMap α β :=
-  Id.run $ m.updateM a f
-
-def merge (m n : HashMap α β) (combine : α → β → β → β) : HashMap α β :=
+def merge (m n : HashMap α β) (f : α → β → β → β) : HashMap α β :=
   if m.size < n.size then loop m n else loop n m
   where
     @[inline]
     loop m n :=
-      m.fold (init := n) λ m a b =>
-        m.insertWith a (λ _ => b) (λ b' => combine a b b')
+      m.fold (init := n) λ map k v =>
+        match map.find? k with
+        | none => map.insert k v
+        | some v' => map.insert k $ f k v v'
 
 instance : ForIn m (HashMap α β) (α × β) where
   forIn m init f := do
@@ -438,30 +422,15 @@ namespace Lean.PersistentHashMap
 
 variable [BEq α] [Hashable α]
 
-def insertWith (m : PersistentHashMap α β) (k : α) (v : β) (f : β → β) :
-    PersistentHashMap α β :=
-  match m.find? k with
-  | some v' => m.insert k (f v')
-  | none => m.insert k v
-
-def updateM [Monad m] (map : PersistentHashMap α β) (k : α) (f : β → m β) :
-    m (PersistentHashMap α β) :=
-  match map.find? k with
-  | some v => return map.insert k (← f v)
-  | none => return map
-
-@[inline]
-def update (m : PersistentHashMap α β) (k : α) (f : β → β) :
-    PersistentHashMap α β :=
-  Id.run $ m.updateM k f
-
 def merge (m n : PersistentHashMap α β) (f : α → β → β → β) :
     PersistentHashMap α β :=
   if m.size < n.size then loop m n f else loop n m (λ a b b' => f a b' b)
   where
     @[inline]
     loop m n f := m.foldl (init := n) λ map k v =>
-      map.insertWith k v λ v' => f k v v'
+      match map.find? k with
+      | none => map.insert k v
+      | some v' => map.insert k $ f k v v'
 
 universe u v
 
@@ -469,18 +438,6 @@ def toArray (map : PersistentHashMap α β) : Array (α × β) :=
   map.foldl (init := Array.mkEmpty map.size) λ acc a b => acc.push (a, b)
 
 end Lean.PersistentHashMap
-
-
-namespace Lean.RBMap
-
-@[inline]
-def insertWith {cmp} (a : α) (b : β) (f : β → β) (m : RBMap α β cmp) :
-    RBMap α β cmp :=
-  match m.find? a with
-  | none => m.insert a b
-  | some b' => m.insert a (f b')
-
-end Lean.RBMap
 
 
 namespace Prod.Lex

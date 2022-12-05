@@ -131,6 +131,8 @@ def applicableRules [ord : Ord α] (ri : Index α) (goal : MVarId)
         (rs : Array (α × Array IndexMatchLocation)) :
         RBMap α (Array IndexMatchLocation) compare :=
       rs.foldl (init := m) λ m (rule, locs) =>
-        m.insertWith rule locs (· ++ locs)
+        match m.find? rule with
+        | none => m.insert rule locs
+        | some locs' => m.insert rule (locs' ++ locs)
 
 end Aesop.Index

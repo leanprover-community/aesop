@@ -136,8 +136,11 @@ def merge (rs₁ rs₂ : RuleSet) : RuleSet where
 def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
   let n := r.name
   let erased := rs.erased.erase n
-  let ruleNames := rs.ruleNames.insertWith n.toRuleIdent (.singleton n) λ ns =>
-    if ns.contains n then ns else ns.insert n
+  let ruleNames :=
+    let ident := n.toRuleIdent
+    match rs.ruleNames.find? ident with
+    | none => rs.ruleNames.insert ident $ .singleton n
+    | some ns => rs.ruleNames.insert ident $ ns.insert n
   let rs := { rs with erased := erased, ruleNames := ruleNames }
   match r with
   | .normRule r =>
