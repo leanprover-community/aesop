@@ -28,10 +28,10 @@ jobs:
     - name: Create nightly release tarball
       if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
       run: tar -caf aesop-linux-64.tar.gz -C build .
-    - name: Prepare nightly releas
+    - name: Push nightly release tag
       if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
       run: |
-        git remote add nightly https://foo:'${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}'@github.com/${{ github.repository_owner }}/aesop-nightlies.git
+        git remote add nightly "https://foo:${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}@github.com/${{ github.repository_owner }}/aesop-nightlies.git"
         git tag nightly-${{ github.sha }}
         git push nightly nightly-${{ github.sha }}
     - name: Release nightly
