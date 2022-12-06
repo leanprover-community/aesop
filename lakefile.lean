@@ -5,7 +5,8 @@ open Lake DSL
 package aesop {
   precompileModules := true
   preferReleaseBuild := true
-  buildArchive? := some "aesop"
+  buildArchive? := "aesop"
+  releaseRepo? := "https://github.com/JLimperg/aesop-nightlies"
 }
 
 @[default_target]
