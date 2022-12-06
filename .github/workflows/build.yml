@@ -25,10 +25,20 @@ jobs:
       run: lake build
     - name: Run tests
       run: ./test
+    - name: Create nightly release tarball
+      if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
+      run: tar -caf aesop-linux-64.tar.gz -C build .
     - name: Release nightly
       if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
-      env:
-          GH_TOKEN: ${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}
-      run: |
-        tar -caf aesop-linux-64.tar.gz -C build .
-        gh release create nightly-${{ github.sha }} -R JLimperg/aesop-nightlies --prerelease --notes "" aesop-linux-64.tar.gz
+      uses: ncipollo/release-action@v1.11.2
+      with:
+        repo: aesop-nightlies
+        token: ${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}
+        commit: ${{ github.sha }}
+        name: nightly-${{ github.sha }}
+        tag: nightly-${{ github.sha }}
+        artifacts:
+          - build/aesop-linux-64.tar.gz
+        artifactErrorsFailBuild: true
+        omitBody: true
+        prerelease: true
