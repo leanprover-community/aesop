@@ -37,8 +37,7 @@ jobs:
         commit: ${{ github.sha }}
         name: nightly-${{ github.sha }}
         tag: nightly-${{ github.sha }}
-        artifacts:
-          - build/aesop-linux-64.tar.gz
+        artifacts: build/aesop-linux-64.tar.gz
         artifactErrorsFailBuild: true
         omitBody: true
         prerelease: true
