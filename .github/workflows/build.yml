@@ -31,6 +31,7 @@ jobs:
     - uses: actions/upload-artifact@v3
       if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
       with:
+        name: release
         path: aesop-linux-64.tar.gz
         retention-days: 1
 
@@ -45,7 +46,7 @@ jobs:
         token: ${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}
     - uses: actions/download-artifact@v3
       with:
-        path: aesop-linux-64.tar.gz
+        name: release
     - name: Push nightly release tag
       run: |
         git remote add nightly "https://foo:${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}@github.com/${{ github.repository_owner }}/aesop-nightlies.git"
