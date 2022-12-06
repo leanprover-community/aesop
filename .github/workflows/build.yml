@@ -35,7 +35,9 @@ jobs:
         retention-days: 1
 
   release-nightly:
-    runs-on: ${{ matrix.os }}
+    if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
+    runs-on: ubuntu-latest
+    needs: build
     steps:
     - uses: actions/checkout@v3
       with:
@@ -45,13 +47,11 @@ jobs:
       with:
         path: aesop-linux-64.tar.gz
     - name: Push nightly release tag
-      if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
       run: |
         git remote add nightly "https://foo:${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}@github.com/${{ github.repository_owner }}/aesop-nightlies.git"
         git tag nightly-${{ github.sha }}
         git push nightly nightly-${{ github.sha }}
     - name: Release nightly
-      if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
       uses: ncipollo/release-action@v1.11.2
       with:
         repo: aesop-nightlies
