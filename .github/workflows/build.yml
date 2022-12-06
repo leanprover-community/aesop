@@ -24,3 +24,8 @@ jobs:
       run: lake build
     - name: Run tests
       run: ./test
+    - name: Release nightly
+      if: github.repository == 'JLimperg/aesop' && github.ref == 'refs/heads/master'
+      run: |
+        gh release create nightly-${{github.sha}} --prerelease --notes ""
+        lake upload nightly-${{github.sha}}
