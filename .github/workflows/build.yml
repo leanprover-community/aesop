@@ -28,6 +28,22 @@ jobs:
     - name: Create nightly release tarball
       if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
       run: tar -caf aesop-linux-64.tar.gz -C build .
+    - uses: actions/upload-artifact@v3
+      if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
+      with:
+        path: aesop-linux-64.tar.gz
+        retention-days: 1
+
+  release-nightly:
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}
+    - uses: actions/download-artifact@v3
+      with:
+        path: aesop-linux-64.tar.gz
     - name: Push nightly release tag
       if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
       run: |
@@ -42,7 +58,7 @@ jobs:
         token: ${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}
         tag: nightly-${{ github.sha }}
         name: nightly-${{ github.sha }}
-        artifacts: build/aesop-linux-64.tar.gz
+        artifacts: aesop-linux-64.tar.gz
         artifactErrorsFailBuild: true
         omitBody: true
         prerelease: true
