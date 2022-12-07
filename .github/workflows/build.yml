@@ -44,6 +44,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         token: ${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}
+        fetch-depth: 0 # required for pushing tags
     - name: Download release artifact
       uses: actions/download-artifact@v3
       with:
