@@ -28,16 +28,13 @@ jobs:
     - name: Create nightly release tarball
       if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
       run: tar -caf aesop-linux-64.tar.gz -C build .
-    - uses: actions/upload-artifact@v3
+    - name: Upload release artifact
+      uses: actions/upload-artifact@v3
       if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
       with:
         name: release
         path: aesop-linux-64.tar.gz
         retention-days: 1
-    - name: Tag nightly release
-      run: |
-        git tag nightly-${{ github.sha }}
-        git push origin nightly-${{ github.sha }}
 
   release-nightly:
     if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
@@ -46,15 +43,16 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with:
-        fetch-depth: 0
         token: ${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}
-    - uses: actions/download-artifact@v3
+    - name: Download release artifact
+      uses: actions/download-artifact@v3
       with:
         name: release
     - name: Push nightly release tag
       run: |
-        git remote add nightly "https://foo:${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}@github.com/${{ github.repository_owner }}/aesop-nightlies.git"
-        git push nightly nightly-${{ github.sha }}
+        git tag -f nightly-${{ github.sha }}
+        git push origin nightly-${{ github.sha }}
+        git push "https://foo:${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}@github.com/${{ github.repository_owner }}/aesop-nightlies.git" nightly-${{ github.sha }}
     - name: Release nightly
       uses: ncipollo/release-action@v1.11.2
       with:
