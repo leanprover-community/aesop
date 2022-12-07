@@ -34,6 +34,10 @@ jobs:
         name: release
         path: aesop-linux-64.tar.gz
         retention-days: 1
+    - name: Tag nightly release
+      run: |
+        git tag nightly-${{ github.sha }}
+        git push origin nightly-${{ github.sha }}
 
   release-nightly:
     if: github.repository == 'JLimperg/aesop' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci-experiments')
@@ -50,7 +54,6 @@ jobs:
     - name: Push nightly release tag
       run: |
         git remote add nightly "https://foo:${{ secrets.AESOP_NIGHTLY_RELEASE_TOKEN }}@github.com/${{ github.repository_owner }}/aesop-nightlies.git"
-        git tag nightly-${{ github.sha }}
         git push nightly nightly-${{ github.sha }}
     - name: Release nightly
       uses: ncipollo/release-action@v1.11.2
