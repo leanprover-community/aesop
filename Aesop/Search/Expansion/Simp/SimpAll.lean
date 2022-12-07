@@ -149,6 +149,7 @@ def simpAll (mvarId : MVarId) (ctx : Simp.Context)
     (disabledTheorems : HashMap FVarId Origin) (usedSimps : UsedSimps := {}) :
     MetaM SimpResult :=
   mvarId.withContext do
+    mvarId.checkNotAssigned `simp_all
     (·.fst) <$> main.run { mvarId, ctx, usedSimps, disabledTheorems }
 
 end Aesop

@@ -149,6 +149,7 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
     (localSimpRules : Array LocalNormSimpRule) (goal : MVarId)
     (mvars : UnorderedArraySet MVarId) : MetaM SimpResult := do
   goal.withContext do
+    let preState ← saveState
     let result ←
       if useHyps then
         Aesop.simpAll goal ctx (disabledTheorems := {})
@@ -179,6 +180,7 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
       let anyMVarDropped ← mvars.anyM (notM ·.isAssignedOrDelayedAssigned)
       if anyMVarDropped then
         aesop_trace[stepsNormalization] "Normalisation simp solved the goal but dropped some metavariables. Skipping normalisation simp."
+        restoreState preState
         return .unchanged goal
       else
         return result
@@ -205,6 +207,16 @@ def normSimp (goal : MVarId) (mvars : UnorderedArraySet MVarId) (useHyps : Bool)
           (← getAssignedExprMVars preMetaState postMetaState).filter (· != goal)
         unless assigned.isEmpty do throwError
           "{Check.rules.name}: norm simp assigned metas:{introduced.map (·.name)}"
+        match result with
+        | .unchanged newGoal =>
+          if ← newGoal.isAssignedOrDelayedAssigned then throwError
+            "{Check.rules.name}: norm simp reports unchanged goal but returned mvar {newGoal.name} is already assigned"
+        | .simplified newGoal .. =>
+          if ← newGoal.isAssignedOrDelayedAssigned then throwError
+            "{Check.rules.name}: norm simp reports simplified goal but returned mvar {newGoal.name} is already assigned"
+        | .solved .. =>
+          if ! (← goal.isAssignedOrDelayedAssigned) then throwError
+            "{Check.rules.name}: norm simp solved the goal but did not assign the goal metavariable {goal.name}"
         return result
       else
         normSimpCore useHyps ctx localSimpRules goal mvars
