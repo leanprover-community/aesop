@@ -1,7 +1,7 @@
 /-
-Copyright <redacted>
+Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: <redacted>
+Authors: Jannis Limperg
 -/
 
 -- This file tests the builtin rules that destruct hypotheses with product-like
