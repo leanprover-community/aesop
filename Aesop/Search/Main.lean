@@ -125,7 +125,7 @@ def traceScript : SearchM Q Unit := do
     let script ← script.toStructuredScript tacticState
     let script ← script.render tacticState
     if options.traceScript then
-      let scriptMsg := MessageData.joinSepArray (script.map toMessageData) "\n"
+      let scriptMsg := .unlines $ script.map toMessageData
       withPPAnalyze do
         logInfo m!"Try this:{indentD scriptMsg}"
     -- FIXME remove

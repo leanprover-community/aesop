@@ -672,7 +672,7 @@ end Lean.Meta.SimpTheorems
 namespace Lean.Meta
 
 def unhygienic [Monad m] [MonadWithOptions m] (x : m α) : m α :=
-  withOptions (·.setBool `tactic.hygienic false) x
+  withOptions (tactic.hygienic.set · false) x
 
 -- Runs `tac` on `goal`, then on the subgoals created by `tac`, etc. Returns the
 -- goals to which `tac` does not apply any more. If `tac` applies infinitely
