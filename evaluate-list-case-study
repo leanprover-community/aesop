@@ -8,14 +8,18 @@ total=$(echo "$text" | grep -E "$THEOREM_REGEX" | wc -l)
 skipped_trivial=$(echo "$text" | grep -E "SKIP TRIV" | wc -l)
 skipped_not_applicable=$(echo "$text" | grep -E "SKIP NA" | wc -l)
 successful_only_with_induction=$(echo "$text" | grep -E "IND" | wc -l)
+local_rules=$(echo "$text" | grep -E "LOCAL" | wc -l)
+local_cases_rule=$(echo "$text" | grep -E "LOCAL_CASES" | wc -l)
 unsuccessful=$(echo "$text" | grep -E "ADMIT" | wc -l)
-unsuccessful=$(($unsuccessful - 1))
+use_hyps_false=$(echo "$text" | grep -E "NOHYPS" | wc -l)
 
 candidates=$(($total - $skipped_trivial - $skipped_not_applicable))
 successful_with_induction=$(($candidates - $unsuccessful))
 successful_without_induction=$(($successful_with_induction - $successful_only_with_induction))
 success_rate_without_induction=$(echo "$successful_without_induction / $candidates" | bc -l)
 success_rate_with_induction=$(echo "$successful_with_induction / $candidates" | bc -l)
+local_rule_rate=$(echo "$local_rules / $successful_with_induction" | bc -l)
+local_cases_rule_rate=$(echo "$local_cases_rule / $successful_with_induction" | bc -l)
 
 echo "Total number of 'theorem'/'instance' commands (outside of the prelude): $total"
 echo "Skipped trivial commands: $skipped_trivial"
@@ -27,3 +31,28 @@ echo "Goals which Aesop can solve without induction: $successful_without_inducti
 echo "Success rate without induction: $success_rate_without_induction"
 echo "Goals which Aesop can solve with induction: $successful_with_induction"
 echo "Success rate with induction: $success_rate_with_induction"
+echo "Goals which require local rules: $local_rules"
+echo "Goals with local rules (as a proportion of successful goals): $local_rule_rate"
+echo "Goals which require a local cases rule: $local_cases_rule"
+echo "Goals with a local cases rule (as a proportion of successful goals): $local_cases_rule_rate"
+echo "Goals which require 'useHyps := false': $use_hyps_false"
+
+echo ""
+echo "=== Benchmark"
+echo ""
+
+function bm {
+  file="$1"
+  echo "Warmup for $file: 3 runs"
+  for i in {1..3}; do
+    lake env lean "$file" || exit 1
+  done
+
+  echo "Running $file: 10 runs"
+  for i in {1..10}; do
+    /usr/bin/time -f "%e" lake env lean "$file" || exit 1
+  done
+}
+
+bm "tests/run/ListWithoutAesop.lean"
+bm "tests/run/List.lean"
