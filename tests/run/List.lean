@@ -257,10 +257,11 @@ theorem _root_.decidable.list.eq_or_ne_mem_of_mem [deq : DecidableEq α]
   ADMIT
   -- cases deq a b <;> aesop
 
+-- LOCAL
 -- attribute [-simp] eq_or_ne_mem_of_mem
 theorem X.eq_or_ne_mem_of_mem {a b : α} {l : List α} : a ∈ b :: l → a = b ∨ (a ≠ b ∧ a ∈ l) := by
   open Classical in
-  aesop (add safe [_root_.decidable.list.eq_or_ne_mem_of_mem])
+  aesop (add safe [decidable.list.eq_or_ne_mem_of_mem])
 
 -- IND
 theorem not_mem_append {a : α} {s t : List α} (h₁ : a ∉ s) (h₂ : a ∉ t) : a ∉ s ++ t := by
@@ -354,7 +355,7 @@ theorem X.mem_bind_of_mem {l : List α} :
 -- IND
 -- attribute [-simp] bind_map
 theorem X.bind_map {g : α → List β} {f : β → γ} :
-  ∀(l : List α), map f (l.bind g) = l.bind (λa => (g a).map f) := by
+  ∀ l : List α, map f (l.bind g) = l.bind (λa => (g a).map f) := by
   intro l; induction l <;> aesop
 
 -- IND
@@ -460,8 +461,8 @@ theorem X.empty_eq : (∅ : List α) = [] := rfl
 
 /-! ### bounded quantifiers over lists -/
 
--- Note: the notation used in Lean 3 (`∀ x ∈ xs, P x` and `∃ x ∈ xs, P x`) does
--- not exist in Lean 4. I've expanded it manually.
+-- The notation used in Lean 3 (`∀ x ∈ xs, P x` and `∃ x ∈ xs, P x`) does not
+-- exist in Lean 4. We've expanded it manually.
 
 -- attribute [-simp] forall_mem_nil
 theorem X.forall_mem_nil (p : α → Prop) : ∀ x, x ∈ @nil α → p x := by
@@ -649,7 +650,6 @@ theorem X.append_inj_right' {s₁ s₂ t₁ t₂ : List α} (h : s₁ ++ t₁ = 
     (hl : length t₁ = length t₂) : t₁ = t₂ := by
   aesop
 
--- LOCAL
 -- attribute [-simp] append_inj_left'
 theorem X.append_inj_left' {s₁ s₂ t₁ t₂ : List α} (h : s₁ ++ t₁ = s₂ ++ t₂)
     (hl : length t₁ = length t₂) : s₁ = s₂ := by
@@ -699,7 +699,7 @@ theorem X.map_eq_append_split {f : α → β} {l : List α} {s₁ s₂ : List β
 theorem X.eq_of_mem_replicate {a b : α} {n} (h : b ∈ replicate n a) : b = a := by
   aesop
 
--- LOCAL NOHYPS
+-- IND LOCAL_NOHYPS
 theorem eq_replicate_of_mem {a : α} {l : List α} : (∀ b, b ∈ l → b = a) → l = replicate l.length a := by
   induction l <;> aesop (simp_options := { useHyps := false })
 
@@ -751,9 +751,9 @@ theorem replicate_left_injective {n : Nat} (hn : n ≠ 0) :
   ∀ {n}, replicate n a = replicate n b ↔ n = 0 ∨ a = b := by
   intro n; induction n <;> aesop
 
--- IND LOCAL NOHYPS
+-- IND LOCAL_NOHYPS
 theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) := by
-  simp only [Injective]; intro x y
+  unfold Injective; intro x y
   induction x generalizing y <;> induction y <;>
     aesop (simp_options := { useHyps := false })
 
@@ -811,7 +811,7 @@ theorem bind_assoc {α β γ : Type u} (l : List α) (f : α → List β) (g : �
 @[simp] theorem concat_cons (a b : α) (l : List α) : concat (a :: l) b = a :: concat l b := rfl
 
 -- IND
--- attribute [-simp] concat_eq_append
+attribute [-simp] concat_eq_append
 @[simp] theorem X.concat_eq_append (a : α) (l : List α) : concat l a = l ++ [a] := by
   induction l <;> aesop
 
@@ -851,6 +851,7 @@ attribute [-simp] reverse_cons
 
 -- IND
 -- Note: reverse_core is called reverseAux in Lean 4.
+-- attribute [-simp] reverseAux_eq
 @[simp]
 theorem reverse_core_eq (l₁ l₂ : List α) : reverseAux l₁ l₂ = reverse l₁ ++ l₂ := by
   induction l₁ generalizing l₂ <;> aesop
@@ -912,6 +913,7 @@ attribute [-simp] length_reverse
 theorem map_reverse (f : α → β) (l : List α) : map f (reverse l) = reverse (map f l) := by
   induction l <;> aesop
 
+-- attribute [-simp] map_reverseAux
 theorem map_reverse_core (f : α → β) (l₁ l₂ : List α) :
   map f (reverseAux l₁ l₂) = reverseAux (map f l₁) (map f l₂) := by
   aesop
@@ -984,8 +986,10 @@ theorem last_mem : ∀ {l : List α} (h : l ≠ []), last l h ∈ l := by
 
 -- IND
 theorem last_replicate_succ (a m : Nat) :
-  (replicate m.succ a).last (ne_nil_of_length_eq_succ
-  (show (replicate m.succ a).length = m.succ by rw [length_replicate])) = a := by
+  (replicate m.succ a).last
+    (ne_nil_of_length_eq_succ
+      (show (replicate m.succ a).length = m.succ by rw [length_replicate])) =
+  a := by
   induction m <;> aesop
 
 /-! ### last' -/
@@ -1083,6 +1087,7 @@ theorem last'_append {l₁ l₂ : List α} {x : α} (h : x ∈ l₂.last') :
 -- Note: Lean 3 head is Lean 4 ihead.
 
 -- LOCAL_CASES
+-- attribute [-simp] ihead_eq_head'
 theorem head_eq_head' [Inhabited α] (l : List α) : ihead l = (head' l).iget := by
   aesop (add 1% cases List)
 
@@ -1091,8 +1096,8 @@ theorem mem_of_mem_head' {x : α} : ∀ {l : List α}, x ∈ l.head' → x ∈ l
   intro l; induction l <;> aesop
 
 -- SKIP TRIV
-attribute [-simp] head_cons
-@[simp] theorem X.head_cons [Inhabited α] (a : α) (l : List α) : head' (a::l) = a := rfl
+-- attribute [-simp] head'_cons
+@[simp] theorem X.head'_cons [Inhabited α] (a : α) (l : List α) : head' (a::l) = a := rfl
 
 -- SKIP TRIV
 attribute [-simp] tail_nil
@@ -1102,6 +1107,8 @@ attribute [-simp] tail_nil
 attribute [-simp] tail_cons
 @[simp] theorem X.tail_cons (a : α) (l : List α) : tail (a::l) = l := rfl
 
+-- LOCAL_CASES
+-- attribute [-simp] ihead_append
 @[simp] theorem head_append [Inhabited α] (t : List α) {s : List α} (h : s ≠ []) :
   ihead (s ++ t) = ihead s := by
   aesop (add 1% cases List)
@@ -1124,9 +1131,11 @@ theorem tail_append_singleton_of_ne_nil {a : α} {l : List α} (h : l ≠ nil) :
 theorem cons_head'_tail : ∀ {l : List α} {a : α} (_ : a ∈ head' l), a :: tail l = l := by
   aesop
 
+-- attribute [-simp] ihead_mem_head'
 theorem head_mem_head' [Inhabited α] : ∀ {l : List α} (_ : l ≠ []), ihead l ∈ head' l := by
   aesop
 
+-- attribute [-simp] cons_ihead_tail
 theorem cons_head_tail [Inhabited α] {l : List α} (h : l ≠ []) : (ihead l)::(tail l) = l := by
   aesop
 
