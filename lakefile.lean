@@ -4,8 +4,6 @@ open Lake DSL
 
 package aesop {
   precompileModules := true
-  preferReleaseBuild := true
-  buildArchive? := some "aesop"
 }
 
 @[default_target]
