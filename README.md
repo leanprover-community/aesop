@@ -45,6 +45,9 @@ I only occasionally update this README, so details may be out of date. If you
 have questions, please create an issue or ping me (Jannis Limperg) on the [Lean
 Zulip](https://leanprover.zulipchat.com). Pull requests are very welcome!
 
+There's also [a paper about Aesop](https://zenodo.org/record/7430233) which
+covers many of the topics discussed here, sometimes in more detail.
+
 ## Building
 
 With [elan](https://github.com/leanprover/elan) installed, `lake build`
@@ -817,12 +820,51 @@ help to set the option `aesop.check.all` (or the more fine-grained
 tactic is running. These checks are somewhat expensive, so remember to unset the
 option after you've reported the bug.
 
-### Advanced Features of the Search Algorithm
+### Handling Metavariables
 
-#### Branch State
+Rules which create metavariables must be handled specially by Aesop. For
+example, suppose we register transitivity of `<` as an Aesop rule. Then we may
+get a goal state of this form:
 
-TODO
+``` lean
+n k : Nat
+⊢ n < ?m
 
-#### Metavariables
+n k : Nat
+⊢ ?m < k
+```
 
-TODO
+We may now solve the first goal by applying different rules. We could, for
+example, apply the theorem `∀ n, n < n + 1`. We could also use an assumption `n
+< a`. Both proofs close the first goal, but crucially, they modify the second
+goal: in the first case, it becomes `n + 1 < k`; in the second case, `a < k`.
+And of course one of these could be provable while the other is not. In other
+words, the second subgoal now depends on the *proof* of the first subgoal
+(whereas usually we don't care *how* a goal was proven, only *that* it was
+proven). Aesop could also decide to work on the second subgoal first, in which
+case the situation is symmetric.
+
+Due to this dependency, Aesop in effect treats the instantiations of the second
+subgoal as *additional goals*. Thus, when we apply the theorem `∀ n, n < n + 1`,
+which closes the first goal, Aesop realises that because this theorem was
+applied, we must now prove `n + 1 < k` as well. So it adds this goal as an
+additional subgoal of the rule application `∀ n, n < n + 1` (which otherwise
+would not have any subgoals). Similarly, when the assumption `n < a` is applied,
+its rule application gains an additional subgoal `a < k`.
+
+This mechanism makes sure that we consider all potential proofs. The downside is
+that it's quite explosive: when there are multiple metavariables in multiple
+goals, which Aesop may visit in any order, Aesop may spend a lot of time copying
+goals with shared metavariables. It may even try to prove the same goal more
+than once since different rules may yield the same metavariable instantiations.
+For these reasons, rules which create metavariables are best kept out of the
+global rule set and added to individual Aesop calls on an ad-hoc basis.
+
+It is also worth noting that when a safe rule assigns a metavariable, it is
+treated as an unsafe rule (with success probability 90%). This is because
+assigning metavariables is almost never safe, for the same reason as above: the
+usually perfectly safe rule `∀ n, n < n + 1` would, if treated as safe, force us
+to commit to one particular instantiation of the metavariable `?m`.
+
+For more details on the handling of metavariables, see the [Aesop
+paper](https://zenodo.org/record/7430233).
