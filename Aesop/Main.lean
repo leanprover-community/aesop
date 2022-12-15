@@ -14,7 +14,7 @@ open Lean.Elab.Tactic
 
 namespace Aesop
 
-@[tactic Frontend.Parser.aesopTactic, tactic Frontend.Parser.aesopTactic?]
+@[tactic Frontend.Parser.aesopTacticNoCheckpoint, tactic Frontend.Parser.aesopTacticNoCheckpoint?]
 def evalAesop : Tactic := λ stx =>
   withMainContext do
     let (profile, totalTime) ← IO.time do
@@ -34,5 +34,11 @@ def evalAesop : Tactic := λ stx =>
       pure { profile with search := searchTime }
     let profile := { profile with total := totalTime }
     aesop_trace[profile] toMessageData profile
+
+macro_rules
+  | `(tactic| aesop $cs:Aesop.tactic_clause*) =>
+    `(tactic| checkpoint aesop_no_checkpoint $cs:Aesop.tactic_clause*)
+  | `(tactic| aesop? $cs:Aesop.tactic_clause*) =>
+    `(tactic| checkpoint aesop_no_checkpoint? $cs:Aesop.tactic_clause*)
 
 end Aesop
