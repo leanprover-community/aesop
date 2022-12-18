@@ -63,10 +63,10 @@ instance : MonadLift TreeM (SearchM Q) where
     let ctx := { currentIteration := (← get).iteration }
     liftM $ ReaderT.run x ctx
 
-instance (priority := high) : MonadState (State Q) (SearchM Q) :=
+instance : MonadState (State Q) (SearchM Q) :=
   { inferInstanceAs (MonadStateOf (State Q) (SearchM Q)) with }
 
-instance (priority := high) : MonadReader Context (SearchM Q) :=
+instance : MonadReader Context (SearchM Q) :=
   { inferInstanceAs (MonadReaderOf Context (SearchM Q)) with }
 
 instance : MonadReaderOf ProfileT.Context (SearchM Q) where
