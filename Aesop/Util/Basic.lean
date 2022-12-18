@@ -16,10 +16,6 @@ def BEq.ofOrd (ord : Ord α) : BEq α where
     | Ordering.eq => true
     | _ => false
 
-instance (priority := low) [ord : Ord α] : BEq α :=
-  BEq.ofOrd ord
-
-
 namespace Option
 
 def toArray : Option α → Array α
@@ -227,7 +223,7 @@ def deduplicateSorted [eq : BEq α] (xs : Array α) : Array α :=
   xs.mergeAdjacentDuplicates (λ x _ => x)
 
 set_option linter.unusedVariables false in
-def deduplicate [Inhabited α] [ord : Ord α] (xs : Array α) : Array α :=
+def deduplicate [Inhabited α] [BEq α] [ord : Ord α] (xs : Array α) : Array α :=
   deduplicateSorted $ xs.qsort λ x y => compare x y |>.isLT
 
 def equalSet [BEq α] (xs ys : Array α) : Bool :=

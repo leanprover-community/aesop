@@ -66,7 +66,7 @@ namespace TreeM
 instance : Monad TreeM :=
   { inferInstanceAs (Monad TreeM) with }
 
-instance (priority := low) : Inhabited (TreeM α) where
+instance : Inhabited (TreeM α) where
   default := failure
 
 def run' (ctx : TreeM.Context) (t : Tree) (x : TreeM α) :
