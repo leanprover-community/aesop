@@ -1,9 +1,3 @@
-import Lean
-
-open Lean
-open Lean.Meta
-open Lean.Elab.Term
-
 namespace Aesop
 
 inductive Strategy

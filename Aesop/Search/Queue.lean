@@ -8,7 +8,7 @@ import Aesop.Options
 import Aesop.Tracing
 import Aesop.Tree
 import Aesop.Search.Queue.Class
-import Std
+import Std.Data.BinomialHeap
 
 open Lean
 open Std (BinomialHeap)

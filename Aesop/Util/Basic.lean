@@ -6,8 +6,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 
 import Aesop.Nanos
 import Aesop.Util.UnionFind
-import Lean
-import Std
+import Std.Lean.Meta.InstantiateMVars
 
 
 def BEq.ofOrd (ord : Ord α) : BEq α where

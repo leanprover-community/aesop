@@ -5,6 +5,8 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleTac.Basic
+import Std.Lean.Meta.UnusedNames
+import Std.Lean.Meta.AssertHypotheses
 
 open Lean
 open Lean.Meta
