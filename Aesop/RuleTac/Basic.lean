@@ -8,6 +8,7 @@ import Aesop.Index.Basic
 import Aesop.Rule.BranchState
 import Aesop.Script
 import Aesop.Util
+import Std.Lean.Meta.SavedState
 
 open Lean
 open Lean.Elab.Tactic

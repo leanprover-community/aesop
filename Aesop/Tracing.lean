@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Tracing.Init
+import Lean.Parser.Do
 
 open Lean
 

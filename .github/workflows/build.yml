@@ -22,5 +22,7 @@ jobs:
         echo "$HOME/.elan/bin" >> $GITHUB_PATH
     - name: Build
       run: lake build
+    - name: Build std4
+      run: lake build Std
     - name: Run tests
       run: ./test

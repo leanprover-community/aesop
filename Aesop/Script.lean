@@ -5,6 +5,8 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Util
+import Std.Lean.Meta.Clear
+import Std.Lean.Meta.Inaccessible
 
 open Lean
 open Lean.Elab.Tactic
