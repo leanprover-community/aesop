@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Index.Basic
+import Aesop.Options
 import Aesop.Rule.BranchState
 import Aesop.Script
 import Aesop.Util
@@ -34,6 +35,7 @@ structure RuleTacInput where
   mvars : UnorderedArraySet MVarId
   indexMatchLocations : UnorderedArraySet IndexMatchLocation
   branchState : RuleBranchState
+  options : Options
   deriving Inhabited
 
 /--
