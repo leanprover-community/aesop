@@ -3,7 +3,7 @@ import Lake
 open Lake DSL
 
 package aesop {
-  precompileModules := true
+  precompileModules := false -- workaround for #33
 }
 
 @[default_target]
