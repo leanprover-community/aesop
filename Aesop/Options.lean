@@ -1,3 +1,7 @@
+import Lean.Meta.TransparencyMode
+
+open Lean.Meta (TransparencyMode)
+
 namespace Aesop
 
 inductive Strategy
@@ -21,6 +25,13 @@ Options that modify Aesop's behaviour. Available options are:
 - `maxNormIterations`: maximum number of norm rules applied to a *single* goal.
   When this limit is exceeded, normalisation is likely stuck in an infinite loop
   so Aesop fails. 0 means no limit.
+- `introsTransparency?`: if `true`, the builtin `intros` rule unfolds the goal's
+  target with the given transparency to discover `∀` binders. For example, with
+  `def T := ∀ x y : Nat, x = y`, `introsTransparency? := some .default` and goal
+  `⊢ T`, the `intros` rule produces the goal `x, y : Nat ⊢ x = y`. With
+  `introsTransparency? := some .reducible`, it produces `⊢ T`. With
+  `introsTransparency? := none`, it only introduces arguments which are
+  syntactically bound by `∀` binders, so it also produces `⊢ T`.
 - `terminal`: if `true`, Aesop succeeds only if it proves the goal. If `false`,
   Aesop always succeeds and reports the goals remaining after safe rules were
   applied.
@@ -33,6 +44,7 @@ structure Options where
   maxRuleApplications := 200
   maxGoals := 0
   maxNormIterations := 100
+  introsTransparency? : Option TransparencyMode := none
   terminal := false
   warnOnNonterminal := true
   traceScript := false
