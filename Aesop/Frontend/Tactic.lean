@@ -38,7 +38,7 @@ end Parser
 -- Inspired by declare_config_elab
 unsafe def elabConfigUnsafe (type : Name) (stx : Syntax) : TermElabM α :=
   withRef stx do
-    let e ← withoutModifyingState <| withLCtx {} {} <| withSaveInfoContext <| Term.withSynthesize do
+    let e ← withoutModifyingStateWithInfoAndMessages <| withLCtx {} {} <| withSaveInfoContext <| Term.withSynthesize <| withoutErrToSorry do
       let e ← Term.elabTermEnsuringType stx (Lean.mkConst type)
       Term.synthesizeSyntheticMVarsNoPostponing
       instantiateMVars e
