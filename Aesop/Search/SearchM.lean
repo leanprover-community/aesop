@@ -28,7 +28,7 @@ structure Context where
     -- The goal before preprocessing.
   preprocessingScript : UnstructuredScript
     -- The script for tactics executed during preprocessing.
-  deriving Inhabited
+  deriving Nonempty
 
 def Context.normSimpConfig (ctx : Context) : SimpConfig where
   useHyps := ctx.normSimpUseHyps
