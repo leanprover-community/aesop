@@ -18,7 +18,6 @@ mutual
   variable
     (dummyGoalRef : GoalRef)
     (dummyMVarClusterRef : MVarClusterRef)
-    (dummyRappRef : RappRef)
 
   private partial def freeGoalRef (gref : GoalRef) : BaseIO Unit := do
     gref.modify λ g => g.setParent dummyMVarClusterRef
@@ -30,11 +29,11 @@ mutual
 
   private partial def freeMVarClusterRef (cref : MVarClusterRef) :
       BaseIO Unit := do
-    cref.modify λ c => c.setParent dummyRappRef
+    cref.modify λ c => c.setParent none
     (← cref.get).goals.forM freeGoalRef
 end
 
-private def mkDummyRefs : BaseIO (GoalRef × MVarClusterRef × RappRef) := do
+private def mkDummyRefs : BaseIO (GoalRef × MVarClusterRef) := do
   let cref ← IO.mkRef $ MVarCluster.mk {
     parent? := default
     goals := #[]
@@ -61,33 +60,19 @@ private def mkDummyRefs : BaseIO (GoalRef × MVarClusterRef × RappRef) := do
     branchState := default
     failedRapps := default
   }
-  let rref ← IO.mkRef $ Rapp.mk {
-    id := default
-    parent := gref
-    children := default
-    state := default
-    isIrrelevant := default
-    appliedRule := default
-    scriptBuilder := default
-    originalSubgoals := default
-    successProbability := default
-    metaState := default
-    introducedMVars := default
-    assignedMVars := default
-  }
-  return (gref, cref, rref)
+  return (gref, cref)
 
 def GoalRef.free (gref : GoalRef) : BaseIO Unit := do
-  let (dgref, dcref, drref) ← mkDummyRefs
-  freeGoalRef dgref dcref drref gref
+  let (dgref, dcref) ← mkDummyRefs
+  freeGoalRef dgref dcref gref
 
 def RappRef.free (rref : RappRef) : BaseIO Unit := do
-  let (dgref, dcref, drref) ← mkDummyRefs
-  freeRappRef dgref dcref drref rref
+  let (dgref, dcref) ← mkDummyRefs
+  freeRappRef dgref dcref rref
 
 def MVarClusterRef.free (cref : MVarClusterRef) : BaseIO Unit := do
-  let (dgref, dcref, drref) ← mkDummyRefs
-  freeMVarClusterRef dgref dcref drref cref
+  let (dgref, dcref) ← mkDummyRefs
+  freeMVarClusterRef dgref dcref cref
 
 def freeTree : TreeM Unit := do
   (← get).root.free

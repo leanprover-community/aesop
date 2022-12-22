@@ -18,7 +18,9 @@ private def Goal.isSafeExpanded (g : Goal) : BaseIO Bool :=
 mutual
   private partial def expandSafePrefixGoal (gref : GoalRef) :
       SearchM Q Unit :=
-    withIncRecDepth do
+    -- TODO this may or may not be necessary to prevent a stack overflow when
+    -- the safe rule set loops.
+    withIncRecDepth do withIncRecDepth do
       let g ← gref.get
       if g.state.isProven then
         aesop_trace[steps] "Skipping safe rule expansion of goal {g.id} since it is already proven."

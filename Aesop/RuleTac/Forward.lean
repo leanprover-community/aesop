@@ -17,7 +17,7 @@ private partial def makeForwardHyps (e : Expr)
     (immediate : UnorderedArraySet Nat) (collectUsedHyps : Bool) :
     MetaM (Array Expr × Array FVarId) :=
 
-  withNewMCtxDepth do
+  withNewMCtxDepth (allowLevelAssignments := true) do
     let (argMVars, binderInfos, _) ← forallMetaTelescopeReducing (← inferType e)
 
     let app := mkAppN e argMVars

@@ -322,27 +322,7 @@ structure GoalData (Rapp MVarCluster : Type) : Type where
   unsafeQueue : UnsafeQueue
   branchState : BranchState
   failedRapps : Array RegularRule
-
-instance [Nonempty MVarCluster] : Nonempty (GoalData Rapp MVarCluster) :=
-  ⟨{ id := default
-     parent := Classical.ofNonempty
-     children := default
-     origin := default
-     depth := default
-     state := default
-     isIrrelevant := default
-     isForcedUnprovable := default
-     preNormGoal := default
-     normalizationState := default
-     mvars := default
-     successProbability := default
-     addedInIteration := default
-     lastExpandedInIteration := default
-     unsafeRulesSelected := default
-     unsafeQueue := default
-     branchState := default
-     failedRapps := default }⟩
-
+  deriving Nonempty
 
 structure MVarClusterData (Goal Rapp : Type) : Type where
   parent? : Option (IO.Ref Rapp)
@@ -374,20 +354,7 @@ structure RappData (Goal MVarCluster : Type) : Type where
     -- this rapp. These are exactly the expr mvars that (a) are declared and
     -- unassigned in the meta state of the parent rapp of `parent` and (b) are
     -- assigned in `metaState`.
-
-instance [Nonempty Goal] : Nonempty (RappData Goal MVarCluster) :=
-  ⟨{ id := default
-     parent := Classical.ofNonempty
-     children := default
-     state := default
-     isIrrelevant := default
-     appliedRule := default
-     scriptBuilder := default
-     originalSubgoals := default
-     successProbability := default
-     metaState := default
-     introducedMVars := default
-     assignedMVars := default }⟩
+  deriving Nonempty
 
 mutual
   unsafe inductive GoalUnsafe
@@ -411,6 +378,10 @@ structure TreeSpec where
   introMVarCluster : MVarClusterData Goal Rapp → MVarCluster
   elimMVarCluster : MVarCluster → MVarClusterData Goal Rapp
 
+instance : Nonempty TreeSpec := by
+  refine' ⟨{ Goal := Unit, Rapp := Unit, MVarCluster := Unit, .. }⟩
+    <;> exact Classical.ofNonempty
+
 unsafe def treeImpl : TreeSpec where
   Goal := GoalUnsafe
   Rapp := RappUnsafe
@@ -423,17 +394,7 @@ unsafe def treeImpl : TreeSpec where
   elimMVarCluster | MVarClusterUnsafe.mk x => x
 
 @[implemented_by treeImpl]
-opaque tree : TreeSpec := {
-  Goal := Unit
-  Rapp := Unit
-  MVarCluster := Unit
-  introGoal := λ _ => default
-  elimGoal := λ _ => Classical.ofNonempty
-  introRapp := λ _ => default
-  elimRapp := λ _ => Classical.ofNonempty
-  introMVarCluster := λ _ => default
-  elimMVarCluster := λ _ => default
-}
+opaque tree : TreeSpec
 
 def Goal        := tree.Goal
 def Rapp        := tree.Rapp
