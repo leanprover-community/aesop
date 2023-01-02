@@ -50,4 +50,22 @@ structure Options where
   traceScript := false
   deriving Inhabited, BEq, Repr
 
+/--
+Options that modify the behaviour of the builtin `simp` normalisation rule.
+Extends `Lean.Meta.Simp.ConfigCtx`, so any option declared there is also valid
+here. For example, you can use `aesop (simp_config := { arith := true })` to get
+behaviour similar to `simp (config := { arith := true })` (aka `simp_arith`).
+-/
+structure SimpConfig extends Lean.Meta.Simp.ConfigCtx where
+  maxDischargeDepth := 1 -- We reduce the default max discharge depth from 2 to 1.
+  /--
+  If `true`, the `simp` normalisation rule works like `simp_all`. This means it
+  uses hypotheses which are propositions or equations to simplify other
+  hypotheses and the target.
+
+  If `false`, the `simp` normalisation rule works like `simp at *`. This means
+  hypotheses are simplified, but are not used to simplify other hypotheses and
+  the target. -/
+  useHyps := true
+
 end Aesop
