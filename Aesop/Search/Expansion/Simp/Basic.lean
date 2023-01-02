@@ -25,13 +25,9 @@ def newGoal? : SimpResult → Option MVarId
 
 end SimpResult
 
--- TODO move to core
-deriving instance BEq for Simp.ConfigCtx
-
 structure SimpConfig extends Simp.ConfigCtx where
   maxDischargeDepth := 1
   useHyps := true
-  deriving BEq
 
 variable [Monad m] [MonadQuotation m] [MonadError m]
 
