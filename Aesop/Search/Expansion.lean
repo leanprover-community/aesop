@@ -146,14 +146,14 @@ def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       return result
   return .failed
 
-def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
+def normSimpCore (ctx : NormSimpContext)
     (localSimpRules : Array LocalNormSimpRule) (goal : MVarId)
     (mvars : UnorderedArraySet MVarId) : MetaM SimpResult := do
   goal.withContext do
     let preState ← saveState
     let result ←
-      if useHyps then
-        Aesop.simpAll goal ctx (disabledTheorems := {})
+      if ctx.useHyps then
+        Aesop.simpAll goal ctx.toContext (disabledTheorems := {})
       else
         let lctx ← getLCtx
         let mut simpTheorems := ctx.simpTheorems
@@ -188,8 +188,8 @@ def normSimpCore (useHyps : Bool) (ctx : Simp.Context)
     return result
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-def normSimp (goal : MVarId) (mvars : UnorderedArraySet MVarId) (useHyps : Bool)
-    (ctx : Simp.Context) (localSimpRules : Array LocalNormSimpRule) :
+def normSimp (goal : MVarId) (mvars : UnorderedArraySet MVarId)
+    (ctx : NormSimpContext) (localSimpRules : Array LocalNormSimpRule) :
     ProfileT MetaM SimpResult :=
   profiling go λ _ elapsed =>
     recordAndTraceRuleProfile { rule := .normSimp, elapsed, successful := true }
@@ -197,7 +197,7 @@ def normSimp (goal : MVarId) (mvars : UnorderedArraySet MVarId) (useHyps : Bool)
     go : MetaM SimpResult := do
       if ← Check.rules.isEnabled then
         let preMetaState ← saveState
-        let result ← normSimpCore useHyps ctx localSimpRules goal mvars
+        let result ← normSimpCore ctx localSimpRules goal mvars
         let postMetaState ← saveState
         let introduced :=
           (← getIntroducedExprMVars preMetaState postMetaState).filter
@@ -220,14 +220,14 @@ def normSimp (goal : MVarId) (mvars : UnorderedArraySet MVarId) (useHyps : Bool)
             "{Check.rules.name}: norm simp solved the goal but did not assign the goal metavariable {goal.name}"
         return result
       else
-        normSimpCore useHyps ctx localSimpRules goal mvars
+        normSimpCore ctx localSimpRules goal mvars
 
-private def mkNormSimpScriptStep (inGoal : MVarId)
-    (outGoal? : Option GoalWithMVars) (normSimpUseHyps : Bool)
-    (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
+private def mkNormSimpScriptStep (ctx : NormSimpContext)
+    (inGoal : MVarId) (outGoal? : Option GoalWithMVars)
+    (usedTheorems : Simp.UsedSimps) :
     MetaM UnstructuredScriptStep := do
   let tactic ←
-    mkNormSimpOnlySyntax inGoal normSimpUseHyps configStx? usedTheorems
+    mkNormSimpOnlySyntax inGoal ctx.useHyps ctx.configStx? usedTheorems
   return {
     tacticSeq := #[tactic]
     otherSolvedGoals := #[]
@@ -236,8 +236,7 @@ private def mkNormSimpScriptStep (inGoal : MVarId)
   }
 
 -- NOTE: Must be run in the MetaM context of the relevant goal.
-partial def normalizeGoalMVar (rs : RuleSet) (normSimpUseHyps : Bool)
-    (normSimpContext : Simp.Context) (normSimpConfigSyntax? : Option Term)
+partial def normalizeGoalMVar (rs : RuleSet) (normSimpContext : NormSimpContext)
     (options : Options) (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (bs : BranchState) :
     ProfileT MetaM (Option (MVarId × BranchState) × UnstructuredScript) := do
@@ -264,22 +263,23 @@ partial def normalizeGoalMVar (rs : RuleSet) (normSimpUseHyps : Bool)
       | .succeeded outGoal bs scriptStep =>
         go (iteration + 1) outGoal bs (script.push scriptStep)
       | .failed =>
-        aesop_trace[stepsNormalization] "Running normalisation simp"
         let simpResult ←
-          normSimp goal mvars normSimpUseHyps normSimpContext
-            rs.localNormSimpLemmas
+          if normSimpContext.enabled then
+            aesop_trace[stepsNormalization] "Running normalisation simp"
+            normSimp goal mvars normSimpContext rs.localNormSimpLemmas
+          else
+            aesop_trace[stepsNormalization] "Skipping normalisation simp"
+            pure (.unchanged goal)
         match simpResult with
         | .solved usedTheorems =>
           let scriptStep ←
-            mkNormSimpScriptStep goal none (normSimpUseHyps := normSimpUseHyps)
-              normSimpConfigSyntax? usedTheorems
+            mkNormSimpScriptStep normSimpContext goal none usedTheorems
           return (none, script.push scriptStep)
         | .simplified goal' usedTheorems =>
           aesop_trace[stepsNormalization] "Goal after normalisation simp:{indentD $ MessageData.ofGoal goal}"
           let mvars' := .ofArray mvars.toArray
           let scriptStep ←
-            mkNormSimpScriptStep goal (some ⟨goal', mvars'⟩)
-              (normSimpUseHyps := normSimpUseHyps) normSimpConfigSyntax?
+            mkNormSimpScriptStep normSimpContext goal (some ⟨goal', mvars'⟩)
               usedTheorems
           go (iteration + 1) goal' bs (script.push scriptStep)
         | .unchanged goal' =>
@@ -309,9 +309,8 @@ def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Q Bool := do
   let profile ← getThe Profile
   let (((normResult?, script), profile), postState) ←
     (← gref.get).runMetaMInParentState do
-      normalizeGoalMVar ctx.ruleSet ctx.normSimpUseHyps ctx.normSimpContext
-        ctx.normSimpConfigSyntax? ctx.options g.preNormGoal g.mvars
-        g.branchState
+      normalizeGoalMVar ctx.ruleSet ctx.normSimpContext ctx.options
+        g.preNormGoal g.mvars g.branchState
       |>.run profilingEnabled profile
   modify λ s => { s with profile }
   match normResult? with

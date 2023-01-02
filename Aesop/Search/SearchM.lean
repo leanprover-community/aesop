@@ -13,13 +13,19 @@ import Aesop.RuleSet
 open Lean
 open Lean.Meta
 
-namespace Aesop.SearchM
+namespace Aesop
+
+structure NormSimpContext extends Simp.Context where
+  enabled : Bool
+  useHyps : Bool
+  configStx? : Option Term
+  deriving Inhabited
+
+namespace SearchM
 
 structure Context where
   ruleSet : RuleSet
-  normSimpContext : Simp.Context
-  normSimpConfigSyntax? : Option Term
-  normSimpUseHyps : Bool
+  normSimpContext : NormSimpContext
   options : Aesop.Options
   profilingEnabled : Bool
   originalMetaState : Meta.SavedState
@@ -31,7 +37,7 @@ structure Context where
   deriving Nonempty
 
 def Context.normSimpConfig (ctx : Context) : SimpConfig where
-  useHyps := ctx.normSimpUseHyps
+  useHyps := ctx.normSimpContext.useHyps
   toConfigCtx := { ctx.normSimpContext.config with }
 
 structure State (Q) [Aesop.Queue Q] where
@@ -85,7 +91,7 @@ def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
   return (a, σ, t)
 
 def run (ruleSet : RuleSet) (options : Aesop.Options)
-    (simpConfig : Aesop.SimpConfig) (simpConfigSyntax? : Option Term)
+    (simpConfig : Aesop.SimpConfig) (simpConfigStx? : Option Term)
     (goal : MVarId) (originalMetaState : Meta.SavedState)
     (originalGoal : MVarId) (preprocessingScript : UnstructuredScript)
     (profile : Profile) (x : SearchM Q α) : MetaM (α × State Q × Tree) := do
@@ -93,12 +99,13 @@ def run (ruleSet : RuleSet) (options : Aesop.Options)
   let profilingEnabled ← TraceOption.profile.isEnabled
   let normSimpContext := {
     (← Simp.Context.mkDefault) with
-    simpTheorems := #[ruleSet.normSimpLemmas]
     config := simpConfig.toConfig
+    simpTheorems := #[ruleSet.normSimpLemmas]
+    configStx? := simpConfigStx?
+    enabled := simpConfig.enabled
+    useHyps := simpConfig.useHyps
   }
   let ctx := {
-    normSimpUseHyps := simpConfig.useHyps
-    normSimpConfigSyntax? := simpConfigSyntax?
     ruleSet, options, profilingEnabled, normSimpContext, originalMetaState,
     originalGoal, preprocessingScript
   }

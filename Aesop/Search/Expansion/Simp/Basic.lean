@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Options
 import Aesop.Script
 
 open Lean Lean.Meta
@@ -83,7 +84,6 @@ def mkNormSimpSyntax (normSimpUseHyps : Bool)
     | some cfg =>
       `(tactic| simp (config := ($cfg : Aesop.SimpConfig).toConfig) at *)
 
--- FIXME minimised simp (`simp only`) does not work reliably
 def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
     (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
     MetaM Syntax.Tactic := do

@@ -92,7 +92,12 @@ here. For example, you can use `aesop (simp_config := { arith := true })` to get
 behaviour similar to `simp (config := { arith := true })` (aka `simp_arith`).
 -/
 structure SimpConfig extends Lean.Meta.Simp.ConfigCtx where
-  maxDischargeDepth := 1 -- We reduce the default max discharge depth from 2 to 1.
+   -- We reduce the default max discharge depth from 2 to 1.
+  maxDischargeDepth := 1
+  /--
+  If `false`, the builtin `simp` normalisation rule is not used at all.
+  -/
+  enabled := true
   /--
   If `true`, the `simp` normalisation rule works like `simp_all`. This means it
   uses hypotheses which are propositions or equations to simplify other
