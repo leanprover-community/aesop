@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Index.Basic
-import Std.Lean.Meta.DiscrTree
 import Std.Lean.Meta.InstantiateMVars
 
 open Lean
