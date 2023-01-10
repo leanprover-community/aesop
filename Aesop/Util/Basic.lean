@@ -11,6 +11,7 @@ import Std.Lean.Expr
 import Std.Lean.HashSet
 import Std.Lean.Meta.InstantiateMVars
 import Std.Lean.Meta.DiscrTree
+import Std.Lean.PersistentHashSet
 
 
 def BEq.ofOrd (ord : Ord α) : BEq α where
@@ -189,14 +190,6 @@ end Std.HashMap
 
 
 namespace Lean.PersistentHashSet
-
-@[inline]
-def merge [BEq α] [Hashable α] (s t : PersistentHashSet α) :
-    PersistentHashSet α :=
-  if s.size < t.size then loop s t else loop t s
-  where
-    @[inline]
-    loop s t := s.fold (init := t) λ s a => s.insert a
 
 -- Elements are returned in unspecified order.
 @[inline]
