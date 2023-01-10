@@ -75,23 +75,6 @@ def nodeFiltering (fs : Array (Option MessageData)) : MessageData :=
 end Lean.MessageData
 
 
-namespace Std.HashMap
-
-variable [BEq α] [Hashable α]
-
-instance [BEq α] [Hashable α] : ForIn m (HashMap α β) (α × β) where
-  forIn m init f := do
-    let mut acc := init
-    for buckets in m.val.buckets.val do
-      for d in buckets do
-        match ← f d acc with
-        | .done b => return b
-        | .yield b => acc := b
-    return acc
-
-end Std.HashMap
-
-
 namespace Lean.PersistentHashSet
 
 -- Elements are returned in unspecified order.
