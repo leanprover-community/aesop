@@ -6,9 +6,10 @@ Authors: Jannis Limperg, Asta Halkjær From
 
 import Aesop.Nanos
 import Aesop.Util.UnionFind
+import Std.Data.Prod.Lex
+import Std.Lean.HashSet
 import Std.Lean.Meta.InstantiateMVars
 import Std.Lean.Meta.DiscrTree
-import Std.Lean.HashSet
 
 
 def BEq.ofOrd (ord : Ord α) : BEq α where
@@ -164,6 +165,7 @@ def nodeFiltering (fs : Array (Option MessageData)) : MessageData :=
 
 end Lean.MessageData
 
+
 namespace Std.HashMap
 
 variable [BEq α] [Hashable α]
@@ -230,27 +232,6 @@ def merge (m n : PersistentHashMap α β) (f : α → β → β → β) :
       | some v' => map.insert k $ f k v v'
 
 end Lean.PersistentHashMap
-
-
-namespace Prod.Lex
-
-instance [αeq_dec : DecidableEq α] {r : α → α → Prop} [r_dec : DecidableRel r]
-    {s : β → β → Prop} [s_dec : DecidableRel s] : DecidableRel (Prod.Lex r s)
-  | (a, b), (a', b') => by
-    cases r_dec a a' with
-    | isTrue raa' => exact isTrue $ left b b' raa'
-    | isFalse nraa' =>
-      cases αeq_dec a a' with
-      | isTrue eq =>
-        subst eq
-        cases s_dec b b' with
-        | isTrue sbb' => exact isTrue $ right a sbb'
-        | isFalse nsbb' =>
-          apply isFalse; intro contra; cases contra <;> contradiction
-      | isFalse neqaa' =>
-        apply isFalse; intro contra; cases contra <;> contradiction
-
-end Prod.Lex
 
 
 namespace Lean.Meta.DiscrTree
