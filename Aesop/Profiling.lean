@@ -8,8 +8,7 @@ import Aesop.Nanos
 import Aesop.Tree.Data
 import Aesop.Tracing
 
-open Lean hiding HashMap
-open Std (HashMap)
+open Lean
 
 namespace Aesop
 
@@ -108,18 +107,18 @@ protected def toMessageData (p : Profile) : MessageData :=
           node (displayRuleApplications p.ruleApplicationTotals)
   ]]]
   where
-    compareTimings : (x y : RuleProfileName × Nanos × Nanos) → Ordering :=
-      compareOpposite $
-        compareLexicographic
-          (compareOn (λ (_, s, f) => s + f))
-          (compareOn (λ (n, _, _) => n))
+    compareTimings (x y : RuleProfileName × Nanos × Nanos) : Ordering :=
+      compareLex
+        (compareOn (λ (_, s, f) => s + f))
+        (compareOn (λ (n, _, _) => n))
+        x y
+      |>.swap
 
     displayRuleApplications (apps : HashMap RuleProfileName (Nanos × Nanos)) :
         Array MessageData := Id.run do
-      let mut timings : Array (RuleProfileName × Nanos × Nanos) := #[]
-      for (n, (successful, failed)) in apps do
-        timings := timings.push (n, successful, failed)
-      timings := timings.qsortOrd (ord := ⟨compareTimings⟩)
+      let timings := apps.fold (init := Array.mkEmpty apps.size)
+        λ timings n (successful, failed) => timings.push (n, successful, failed)
+      let timings := timings.qsortOrd (ord := ⟨compareTimings⟩)
       let result := timings.map λ (n, s, f) =>
         m!"[{(s + f).printAsMillis} / {s.printAsMillis} / {f.printAsMillis}] {n}"
       return result

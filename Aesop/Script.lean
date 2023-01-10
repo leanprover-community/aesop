@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Util
 import Std.Lean.Meta.Clear
 import Std.Lean.Meta.Inaccessible
+import Std.Lean.HashSet
 
 open Lean
 open Lean.Elab.Tactic

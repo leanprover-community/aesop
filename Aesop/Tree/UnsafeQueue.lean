@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Constants
 import Aesop.Rule
+import Std.Data.Array.Merge
 
 open Lean
 
@@ -45,8 +46,8 @@ def name : UnsafeQueueEntry → RuleName
   | postponedSafeRule r => r.rule.name
 
 instance : Ord UnsafeQueueEntry :=
-  ⟨ compareLexicographic
-      (compareOpposite $ compareOn successProbability)
+  ⟨ compareLex
+      (λ x y => compareOn successProbability x y |>.swap)
       (compareOn name) ⟩
 
 end UnsafeQueueEntry
@@ -70,7 +71,7 @@ def initial (postponedSafeRules : Array PostponedSafeRule)
   let postponedSafeRules :=
     postponedSafeRules.map .postponedSafeRule
       |>.qsort (λ x y => compare x y |>.isLT)
-  postponedSafeRules.mergeSortedFilteringDuplicates unsafeRules |>.toSubarray
+  postponedSafeRules.mergeSortedDeduplicating unsafeRules |>.toSubarray
 
 def entriesToMessageData (q : UnsafeQueue) : Array MessageData :=
   q.toArray.map toMessageData
