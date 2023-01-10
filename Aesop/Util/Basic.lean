@@ -8,6 +8,7 @@ import Aesop.Nanos
 import Aesop.Util.UnionFind
 import Std.Lean.Meta.InstantiateMVars
 import Std.Lean.Meta.DiscrTree
+import Std.Lean.HashSet
 
 
 def BEq.ofOrd (ord : Ord α) : BEq α where
@@ -162,28 +163,6 @@ def nodeFiltering (fs : Array (Option MessageData)) : MessageData :=
   node $ fs.filterMap id
 
 end Lean.MessageData
-
-
-namespace Lean.HashSet
-
-protected def ofArray [BEq α] [Hashable α] (as : Array α) : HashSet α :=
-  HashSet.empty.insertMany as
-
-@[inline]
-def merge [BEq α] [Hashable α] (s t : HashSet α) : HashSet α :=
-  s.insertMany t
-
-def any [BEq α] [Hashable α] (s : HashSet α) (f : α → Bool) : Bool :=
-  s.fold (init := false) λ result a => result || f a
-
-def all [BEq α] [Hashable α] (s : HashSet α) (f : α → Bool) : Bool :=
-  s.fold (init := true) λ result a => result && f a
-
-instance [BEq α] [Hashable α] : BEq (HashSet α) where
-  beq s t := s.all (t.contains ·) && t.all (s.contains ·)
-
-end Lean.HashSet
-
 
 namespace Std.HashMap
 
