@@ -15,36 +15,11 @@ def BEq.ofOrd (ord : Ord α) : BEq α where
     | Ordering.eq => true
     | _ => false
 
-namespace Option
-
-def toArray : Option α → Array α
-  | none => #[]
-  | some a => #[a]
-
-def forM [Monad m] (f : α → m Unit) : Option α → m Unit
-  | none => pure ()
-  | some a => f a
-
-end Option
-
 namespace Ordering
-
-def isLT : Ordering → Bool
-  | lt => true
-  | _ => false
 
 def isEQ : Ordering → Bool
   | eq => true
   | _ => false
-
-def isGT : Ordering → Bool
-  | gt => true
-  | _ => false
-
-def isGE : Ordering → Bool
-  | lt => false
-  | eq => true
-  | gt => true
 
 def opposite : Ordering → Ordering
   | lt => gt
@@ -62,34 +37,11 @@ def compareLexicographic (cmp₁ : α → α → Ordering) (cmp₂ : α → α �
   | ord => ord
 
 @[inline]
-def compareOn [ord : Ord β] (f : α → β) (x y : α) : Ordering :=
-  compare (f x) (f y)
-
-@[inline]
 def compareOpposite (cmp : α → α → Ordering) (x y : α) : Ordering :=
   cmp x y |>.opposite
 
 
 namespace Subarray
-
-protected def empty : Subarray α where
-  as := #[]
-  start := 0
-  stop := 0
-  h₁ := Nat.le_refl 0
-  h₂ := Nat.le_refl 0
-
-instance : EmptyCollection (Subarray α) :=
-  ⟨Subarray.empty⟩
-
-instance : Inhabited (Subarray α) :=
-  ⟨{}⟩
-
-def isEmpty (as : Subarray α) : Bool :=
-  as.start == as.stop
-
-def contains [BEq α] (as : Subarray α) (a : α) : Bool :=
-  as.any (· == a)
 
 def popFront? (as : Subarray α) : Option (α × Subarray α) :=
   if h : as.start < as.stop
@@ -225,50 +177,11 @@ set_option linter.unusedVariables false in
 def deduplicate [Inhabited α] [BEq α] [ord : Ord α] (xs : Array α) : Array α :=
   deduplicateSorted $ xs.qsort λ x y => compare x y |>.isLT
 
-def equalSet [BEq α] (xs ys : Array α) : Bool :=
-  xs.all (ys.contains ·) && ys.all (xs.contains ·)
-
-set_option linter.unusedVariables false in
-def qsortOrd [Inhabited α] [ord : Ord α] (xs : Array α) : Array α :=
-  xs.qsort λ x y => compare x y |>.isLT
-
-set_option linter.unusedVariables false in
-@[inline]
-protected def maxD [ord : Ord α] (d : α) (xs : Array α) (start := 0)
-    (stop := xs.size) : α :=
-  xs.foldl (init := d) (start := start) (stop := stop) λ max x =>
-    if compare x max |>.isLT then max else x
-
-set_option linter.unusedVariables false in
-@[inline]
-protected def max? [ord : Ord α] (xs : Array α) (start := 0)
-    (stop := xs.size) : Option α :=
-  if h : start < xs.size then
-    some $ xs.maxD (xs.get ⟨start, h⟩) start stop
-  else
-    none
-
 set_option linter.unusedVariables false in
 @[inline]
 protected def max [ord : Ord α] [Inhabited α] (xs : Array α) (start := 0)
     (stop := xs.size) : α :=
   xs.maxD default start stop
-
-set_option linter.unusedVariables false in
-@[inline]
-protected def minD [ord : Ord α] (d : α) (xs : Array α) (start := 0)
-    (stop := xs.size) : α :=
-  xs.foldl (init := d) (start := start) (stop := stop) λ min x =>
-    if compare x min |>.isGE then min else x
-
-set_option linter.unusedVariables false in
-@[inline]
-protected def min? [ord : Ord α] (xs : Array α) (start := 0)
-    (stop := xs.size) : Option α :=
-  if h : start < xs.size then
-    some $ xs.minD (xs.get ⟨start, h⟩) start stop
-  else
-    none
 
 set_option linter.unusedVariables false in
 @[inline]
@@ -666,55 +579,6 @@ end Lean.Meta.SimpTheorems
 
 namespace Lean.Meta
 
-def unhygienic [Monad m] [MonadWithOptions m] (x : m α) : m α :=
-  withOptions (tactic.hygienic.set · false) x
-
--- Runs `tac` on `goal`, then on the subgoals created by `tac`, etc. Returns the
--- goals to which `tac` does not apply any more. If `tac` applies infinitely
--- often, `saturate1` diverges. If `tac` does not apply to `goal`, `none` is
--- returned.
-partial def saturate1 (goal : MVarId)
-    (tac : MVarId → MetaM (Option (Array MVarId))) :
-    MetaM (Option (Array MVarId)) := do
-  match ← tac goal with
-  | none => return none
-  | some goals => return some (← goals.forM go |>.run #[]).snd
-  where
-    go (goal : MVarId) : StateRefT (Array MVarId) MetaM Unit :=
-      withIncRecDepth do
-        match ← tac goal with
-        | none => modify λ s => s.push goal
-        | some goals => goals.forM go
-
-partial def _root_.Lean.MVarId.getMVarDependencies (mvarId : MVarId)
-    (includeDelayed := false) : MetaM (HashSet MVarId) :=
-  return (← go mvarId |>.run {}).snd
-  where
-    addMVars (e : Expr) : StateRefT (HashSet MVarId) MetaM Unit := do
-      let mvars ← getMVars e
-      let mut s ← get
-      set ({} : HashSet MVarId) -- Ensure that `s` is not shared.
-      for mvarId in mvars do
-        if ← pure includeDelayed <||> notM (mvarId.isDelayedAssigned) then
-          s := s.insert mvarId
-      set s
-      mvars.forM go
-
-    go (mvarId : MVarId) : StateRefT (HashSet MVarId) MetaM Unit :=
-      withIncRecDepth do
-        mvarId.instantiateMVars
-        let mdecl ← mvarId.getDecl
-        addMVars mdecl.type
-        for ldecl in mdecl.lctx do
-          addMVars ldecl.type
-          if let (some val) := ldecl.value? then
-            addMVars val
-        if let (some ass) ← getDelayedMVarAssignment? mvarId then
-          let pendingMVarId := ass.mvarIdPending
-          if ← notM pendingMVarId.isAssignedOrDelayedAssigned then
-            modify (·.insert pendingMVarId)
-          go pendingMVarId
-
 def matchAppOf (f : Expr) (e : Expr) : MetaM (Option (Array Expr)) := do
   let type ← inferType f
   let (mvars, _, _) ← forallMetaTelescope type
@@ -743,15 +607,3 @@ def runTermElabMAsCoreM (x : Elab.TermElabM α) : CoreM α :=
   runMetaMAsCoreM x.run'
 
 end Lean
-
-
-namespace Lean.Meta
-
-def mkFreshIdWithPrefix [Monad m] [MonadNameGenerator m] («prefix» : Name) :
-    m Name := do
-  let ngen ← getNGen
-  let r := { ngen with namePrefix := «prefix» }.curr
-  setNGen ngen.next
-  pure r
-
-end Lean.Meta
