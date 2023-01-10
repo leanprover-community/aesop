@@ -5,6 +5,8 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Index.Basic
+import Std.Lean.Meta.DiscrTree
+import Std.Lean.Meta.InstantiateMVars
 
 open Lean
 open Lean.Meta
@@ -37,8 +39,8 @@ instance : EmptyCollection (Index α) where
   }
 
 def merge (ri₁ ri₂ : Index α) : Index α where
-  byTarget := ri₁.byTarget.merge ri₂.byTarget
-  byHyp := ri₁.byHyp.merge ri₂.byHyp
+  byTarget := ri₁.byTarget.mergePreservingDuplicates ri₂.byTarget
+  byHyp := ri₁.byHyp.mergePreservingDuplicates ri₂.byHyp
   unindexed := ri₁.unindexed.merge ri₂.unindexed
 
 @[specialize]

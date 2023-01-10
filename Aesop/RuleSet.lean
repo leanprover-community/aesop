@@ -115,12 +115,12 @@ def merge (rs₁ rs₂ : RuleSet) : RuleSet where
   unsafeRules := rs₁.unsafeRules.merge rs₂.unsafeRules
   safeRules := rs₁.safeRules.merge rs₂.safeRules
   normSimpLemmaDescrs :=
-    rs₁.normSimpLemmaDescrs.merge rs₂.normSimpLemmaDescrs λ _ nsd₁ _ => nsd₁
+    rs₁.normSimpLemmaDescrs.mergeWith rs₂.normSimpLemmaDescrs λ _ nsd₁ _ => nsd₁
     -- We can merge left-biased here because `nsd₁` and `nsd₂` should be equal
     -- anyway.
   localNormSimpLemmas := rs₁.localNormSimpLemmas ++ rs₂.localNormSimpLemmas
   ruleNames :=
-    rs₁.ruleNames.merge rs₂.ruleNames λ _ ns₁ ns₂ =>
+    rs₁.ruleNames.mergeWith rs₂.ruleNames λ _ ns₁ ns₂ =>
       ns₁ ++ ns₂
   erased :=
     -- Add the erased rules from `rs₁` to `init`, except those rules which are

@@ -46,7 +46,7 @@ set_option linter.unusedVariables false in
 /-- O(n*log(n)) -/
 protected def ofArray [ord : Ord α] [Inhabited α] (xs : Array α) :
     UnorderedArraySet α :=
-  ⟨xs.deduplicate⟩
+  ⟨xs.sortAndDeduplicate⟩
 
 /-- O(n^2) -/
 protected def ofArraySlow (xs : Array α) : UnorderedArraySet α :=
@@ -76,7 +76,7 @@ def filter (p : α → Bool) (s : UnorderedArraySet α) : UnorderedArraySet α :
 
 /-- O(n*m) -/
 def merge (s t : UnorderedArraySet α) : UnorderedArraySet α :=
-  ⟨s.rep.mergeUnsortedFilteringDuplicates t.rep⟩
+  ⟨s.rep.mergeUnsortedDeduplicating t.rep⟩
 
 instance : Append (UnorderedArraySet α) :=
   ⟨merge⟩

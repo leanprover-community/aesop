@@ -47,7 +47,7 @@ def getImmediatePremises (name : Name) (type : Expr) : Option (Array Name) →
     -- If immediate names are given, we check that corresponding arguments
     -- exists and record these arguments' positions.
     forallTelescopeReducing type λ args _ => do
-      let mut unseen := immediate.deduplicate (ord := ⟨Name.quickCmp⟩)
+      let mut unseen := immediate.sortAndDeduplicate (ord := ⟨Name.quickCmp⟩)
       let mut result := #[]
       for h : i in [:args.size] do
         have h : i < args.size := by simp_all [Membership.mem]

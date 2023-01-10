@@ -6,44 +6,9 @@ Authors: Jannis Limperg, Asta Halkjær From
 
 import Aesop.Nanos
 import Aesop.Util.UnionFind
-import Std.Data.Prod.Lex
 import Std.Lean.Expr
-import Std.Lean.HashSet
-import Std.Lean.Meta.InstantiateMVars
 import Std.Lean.Meta.DiscrTree
 import Std.Lean.PersistentHashSet
-
-
-def BEq.ofOrd (ord : Ord α) : BEq α where
-  beq x y :=
-    match ord.compare x y with
-    | Ordering.eq => true
-    | _ => false
-
-namespace Ordering
-
-def isEQ : Ordering → Bool
-  | eq => true
-  | _ => false
-
-def opposite : Ordering → Ordering
-  | lt => gt
-  | eq => eq
-  | gt => lt
-
-end Ordering
-
-
-@[inline]
-def compareLexicographic (cmp₁ : α → α → Ordering) (cmp₂ : α → α → Ordering)
-    (x y : α) : Ordering :=
-  match cmp₁ x y with
-  | Ordering.eq => cmp₂ x y
-  | ord => ord
-
-@[inline]
-def compareOpposite (cmp : α → α → Ordering) (x y : α) : Ordering :=
-  cmp x y |>.opposite
 
 
 namespace Subarray
@@ -63,49 +28,6 @@ def popFront? (as : Subarray α) : Option (α × Subarray α) :=
 end Subarray
 
 
-namespace Array
-
-
-set_option linter.unusedVariables false in
-def mergeSortedFilteringDuplicates [ord : Ord α] (xs ys : Array α) :
-    Array α :=
-  mergeSortedMergingDuplicates xs ys λ x _ => x
-
--- Merge `xs` and `ys`, which do not need to be sorted. Elements which occur in
--- both `xs` and `ys` are only added once. If `xs` and `ys` do not contain
--- duplicates, then neither does the result. O(n*m)!
-set_option linter.unusedVariables false in
-def mergeUnsortedFilteringDuplicates [eq : BEq α] (xs ys : Array α) :
-    Array α :=
-  -- Ideally we would check whether `xs` or `ys` have spare capacity, to prevent
-  -- copying if possible. But Lean arrays don't expose their capacity.
-  if xs.size < ys.size then go ys xs else go xs ys
-  where
-    @[inline]
-    go (xs ys : Array α) :=
-      let xsSize := xs.size
-      ys.foldl (init := xs) λ xs y =>
-        if xs[:xsSize].contains y then xs else xs.push y
-
-set_option linter.unusedVariables false in
-def deduplicate [Inhabited α] [BEq α] [ord : Ord α] (xs : Array α) : Array α :=
-  deduplicateSorted $ xs.qsort λ x y => compare x y |>.isLT
-
-set_option linter.unusedVariables false in
-@[inline]
-protected def max [ord : Ord α] [Inhabited α] (xs : Array α) (start := 0)
-    (stop := xs.size) : α :=
-  xs.maxD default start stop
-
-set_option linter.unusedVariables false in
-@[inline]
-protected def min [ord : Ord α] [Inhabited α] (xs : Array α) (start := 0)
-    (stop := xs.size) : α :=
-  xs.minD default start stop
-
-end Array
-
-
 namespace IO
 
 @[inline]
@@ -123,15 +45,6 @@ def time' [Monad m] [MonadLiftT BaseIO m] (x : m Unit) : m Aesop.Nanos := do
   return ⟨stop - start⟩
 
 end IO
-
-
-namespace Lean.Expr
-
-def arity : Expr → Nat
-  | forallE _ _ body _ => 1 + arity body
-  | _ => 0
-
-end Lean.Expr
 
 
 namespace Lean.MessageData
@@ -166,17 +79,7 @@ namespace Std.HashMap
 
 variable [BEq α] [Hashable α]
 
-def merge (m n : HashMap α β) (f : α → β → β → β) : HashMap α β :=
-  if m.size < n.size then loop m n else loop n m
-  where
-    @[inline]
-    loop m n :=
-      m.fold (init := n) λ map k v =>
-        match map.find? k with
-        | none => map.insert k v
-        | some v' => map.insert k $ f k v v'
-
-instance : ForIn m (HashMap α β) (α × β) where
+instance [BEq α] [Hashable α] : ForIn m (HashMap α β) (α × β) where
   forIn m init f := do
     let mut acc := init
     for buckets in m.val.buckets.val do
@@ -205,45 +108,7 @@ def toArray [BEq α] [Hashable α] (s : PersistentHashSet α) : Array α :=
 end Lean.PersistentHashSet
 
 
-namespace Lean.PersistentHashMap
-
-variable [BEq α] [Hashable α]
-
-def merge (m n : PersistentHashMap α β) (f : α → β → β → β) :
-    PersistentHashMap α β :=
-  if m.size < n.size then loop m n f else loop n m (λ a b b' => f a b' b)
-  where
-    @[inline]
-    loop m n f := m.foldl (init := n) λ map k v =>
-      match map.find? k with
-      | none => map.insert k v
-      | some v' => map.insert k $ f k v v'
-
-end Lean.PersistentHashMap
-
-
 namespace Lean.Meta.DiscrTree
-
-namespace Trie
-
-partial def merge : Trie α s → Trie α s → Trie α s
-  | node vs₁ cs₁, node vs₂ cs₂ =>
-    node (mergeValues vs₁ vs₂) (mergeChildren cs₁ cs₂)
-  where
-    mergeValues (vs₁ vs₂ : Array α) : Array α :=
-      if vs₁.size > vs₂.size then vs₁ ++ vs₂ else vs₂ ++ vs₁
-
-    mergeChildren (cs₁ cs₂ : Array (Key s × Trie α s)) :
-        Array (Key s × Trie α s) :=
-      Array.mergeSortedMergingDuplicates
-        (ord := ⟨λ (k₁, _) (k₂, _) => compare k₁ k₂⟩) cs₁ cs₂
-        (λ (k₁, t₁) (_, t₂) => (k₁, merge t₁ t₂))
-
-end Trie
-
-@[inline]
-def merge [BEq α] (t u : DiscrTree α s) : DiscrTree α s :=
-  { root := t.root.merge u.root λ _ trie₁ trie₂ => trie₁.merge trie₂ }
 
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
 -- `n` stars).
@@ -260,7 +125,7 @@ def getConclusionKeys (type : Expr) :
 def getConstKeys (decl : Name) : MetaM (Array (Key s)) := do
   let (some info) ← getConst? decl
     | throwUnknownConstant decl
-  let arity := info.type.arity
+  let arity := info.type.forallArity
   let mut keys := Array.mkEmpty (arity + 1)
   keys := keys.push $ .const decl arity
   for _ in [0:arity] do
@@ -311,11 +176,11 @@ def simpEntries (thms : SimpTheorems) : Array SimpEntry :=
   thms.foldSimpEntries (init := #[]) λ s thm => s.push thm
 
 def merge (s t : SimpTheorems) : SimpTheorems := {
-    pre := s.pre.merge t.pre
-    post := s.post.merge t.post
+    pre := s.pre.mergePreservingDuplicates t.pre
+    post := s.post.mergePreservingDuplicates t.post
     lemmaNames := s.lemmaNames.merge t.lemmaNames
     toUnfold := s.toUnfold.merge t.toUnfold
-    toUnfoldThms := s.toUnfoldThms.merge t.toUnfoldThms
+    toUnfoldThms := s.toUnfoldThms.mergeWith t.toUnfoldThms
       (λ _ thms₁ _ => thms₁)
       -- We can ignore collisions here because the theorems should always be the
       -- same.

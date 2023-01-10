@@ -673,7 +673,7 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
       | .ruleSets newRuleSets =>
         have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
         let ruleSets :=
-          ⟨Array.mergeSortedFilteringDuplicates r.ruleSets.ruleSets $
+          ⟨Array.mergeSortedDeduplicating r.ruleSets.ruleSets $
             newRuleSets.ruleSets.qsortOrd⟩
         return { r with ruleSets }
 
@@ -775,7 +775,7 @@ def toRuleNameFilters (e : RuleExpr) :
       | .ruleSets newRuleSets =>
         have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
         let ruleSets :=
-          ⟨Array.mergeSortedFilteringDuplicates r.ruleSets.ruleSets $
+          ⟨Array.mergeSortedDeduplicating r.ruleSets.ruleSets $
             newRuleSets.ruleSets.qsortOrd⟩
         return { r with ruleSets }
 
