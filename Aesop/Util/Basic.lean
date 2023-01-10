@@ -7,6 +7,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Aesop.Nanos
 import Aesop.Util.UnionFind
 import Std.Lean.Meta.InstantiateMVars
+import Std.Lean.Meta.DiscrTree
 
 
 def BEq.ofOrd (ord : Ord α) : BEq α where
@@ -60,78 +61,6 @@ end Subarray
 
 namespace Array
 
-/--
-Merge arrays `xs` and `ys`, which must be sorted according to `compare`. The
-result is sorted as well. If two (or more) elements are equal according to
-`compare`, they are preserved.
--/
-def mergeSortedPreservingDuplicates [ord : Ord α] (xs ys : Array α) :
-    Array α :=
-  let acc := Array.mkEmpty (xs.size + ys.size)
-  go acc 0 0
-  where
-    go (acc : Array α) (i j : Nat) : Array α :=
-      if hi : i ≥ xs.size then
-        acc ++ ys[j:]
-      else if hj : j ≥ ys.size then
-        acc ++ xs[i:]
-      else
-        have hi : i < xs.size := Nat.lt_of_not_le hi
-        have hj : j < ys.size := Nat.lt_of_not_le hj
-        have hij : i + j < xs.size + ys.size := Nat.add_lt_add hi hj
-        let x := xs.get ⟨i, hi⟩
-        let y := ys.get ⟨j, hj⟩
-        if compare x y |>.isLE then
-          have : xs.size + ys.size - (i + 1 + j) < xs.size + ys.size - (i + j) := by
-            rw [show i + 1 + j = i + j + 1 by simp_arith]
-            exact Nat.sub_succ_lt_self _ _ hij
-          go (acc.push x) (i + 1) j
-        else
-          have : xs.size + ys.size - (i + j + 1) < xs.size + ys.size - (i + j) :=
-            Nat.sub_succ_lt_self _ _ hij
-          go (acc.push y) i (j + 1)
-    termination_by _ => xs.size + ys.size - (i + j)
-
-/--
-Merge arrays `xs` and `ys`, which must be sorted according to `compare` and must
-not contain duplicates. The result is sorted as well. Equal elements are merged
-using `merge`. If `xs` and `ys` do not contain duplicates according to
-`compare`, then neither does the result.
--/
-def mergeSortedMergingDuplicates [ord : Ord α] (xs ys : Array α)
-    (merge : α → α → α) : Array α :=
-  let acc := Array.mkEmpty (xs.size + ys.size)
-  go acc 0 0
-  where
-    go (acc : Array α) (i j : Nat) : Array α :=
-      if hi : i ≥ xs.size then
-        acc ++ ys[j:]
-      else if hj : j ≥ ys.size then
-        acc ++ xs[i:]
-      else
-        have hi : i < xs.size := Nat.lt_of_not_le hi
-        have hj : j < ys.size := Nat.lt_of_not_le hj
-        have hij : i + j < xs.size + ys.size := Nat.add_lt_add hi hj
-        let x := xs.get ⟨i, hi⟩
-        let y := ys.get ⟨j, hj⟩
-        match compare x y with
-        | Ordering.lt =>
-          have : xs.size + ys.size - (i + 1 + j) < xs.size + ys.size - (i + j) := by
-            rw [show i + 1 + j = i + j + 1 by simp_arith]
-            exact Nat.sub_succ_lt_self _ _ hij
-          go (acc.push x) (i + 1) j
-        | Ordering.gt =>
-          have : xs.size + ys.size - (i + j + 1) < xs.size + ys.size - (i + j) :=
-            Nat.sub_succ_lt_self _ _ hij
-          go (acc.push y) i (j + 1)
-        | Ordering.eq =>
-          have : xs.size + ys.size - (i + 1 + (j + 1)) < xs.size + ys.size - (i + j) := by
-            rw [show i + 1 + (j + 1) = i + j + 2 by simp_arith]
-            apply Nat.sub_add_lt_sub _ (by simp_arith)
-            rw [show i + j + 2 = (i + 1) + (j + 1) by simp_arith]
-            exact Nat.add_le_add hi hj
-          go (acc.push (merge x y)) (i + 1) (j + 1)
-    termination_by _ => xs.size + ys.size - (i + j)
 
 set_option linter.unusedVariables false in
 def mergeSortedFilteringDuplicates [ord : Ord α] (xs ys : Array α) :
@@ -153,25 +82,6 @@ def mergeUnsortedFilteringDuplicates [eq : BEq α] (xs ys : Array α) :
       let xsSize := xs.size
       ys.foldl (init := xs) λ xs y =>
         if xs[:xsSize].contains y then xs else xs.push y
-
-def mergeAdjacentDuplicates [eq : BEq α] (f : α → α → α) (xs : Array α) :
-    Array α :=
-  if h : 0 < xs.size then loop #[] 1 (xs.get ⟨0, h⟩) else xs
-  where
-    loop (acc : Array α) (i : Nat) (hd : α) :=
-      if h : i < xs.size then
-        let x := xs.get ⟨i, h⟩
-        if x == hd then
-          loop acc (i + 1) (f hd x)
-        else
-          loop (acc.push hd) (i + 1) x
-      else
-        acc.push hd
-    termination_by _ i _ => xs.size - i
-
-set_option linter.unusedVariables false in
-def deduplicateSorted [eq : BEq α] (xs : Array α) : Array α :=
-  xs.mergeAdjacentDuplicates (λ x _ => x)
 
 set_option linter.unusedVariables false in
 def deduplicate [Inhabited α] [BEq α] [ord : Ord α] (xs : Array α) : Array α :=
@@ -340,11 +250,6 @@ def merge (m n : PersistentHashMap α β) (f : α → β → β → β) :
       | none => map.insert k v
       | some v' => map.insert k $ f k v v'
 
-universe u v
-
-def toArray (map : PersistentHashMap α β) : Array (α × β) :=
-  map.foldl (init := Array.mkEmpty map.size) λ acc a b => acc.push (a, b)
-
 end Lean.PersistentHashMap
 
 
@@ -371,63 +276,7 @@ end Prod.Lex
 
 namespace Lean.Meta.DiscrTree
 
-namespace Key
-
--- TODO could be more efficient.
-protected def cmp (k l : Key s) : Ordering :=
-  if lt k l then
-    Ordering.lt
-  else if lt l k then
-    Ordering.gt
-  else
-    Ordering.eq
-
-instance : Ord (Key s) :=
-  ⟨Key.cmp⟩
-
-end Key
-
 namespace Trie
-
--- This is just a partial function, but Lean doesn't realise that its type is
--- inhabited.
-unsafe def foldMUnsafe [Monad m] (initialKeys : Array (Key s))
-    (f : σ → Array (Key s) → α → m σ) (init : σ) : Trie α s → m σ
-  | Trie.node vs children => do
-    let s ← vs.foldlM (init := init) λ s v => f s initialKeys v
-    children.foldlM (init := s) λ s (k, t) =>
-      t.foldMUnsafe (initialKeys.push k) f s
-
-@[implemented_by foldMUnsafe]
-opaque foldM [Monad m] (initalKeys : Array (Key s))
-    (f : σ → Array (Key s) → α → m σ) (init : σ) (t : Trie α s) : m σ :=
-  pure init
-
-@[inline]
-def fold (initialKeys : Array (Key s)) (f : σ → Array (Key s) → α → σ)
-    (init : σ) (t : Trie α s) : σ :=
-  Id.run $ t.foldM initialKeys (init := init) λ s k a => return f s k a
-
--- This is just a partial function, but Lean doesn't realise that its type is
--- inhabited.
-unsafe def foldValuesMUnsafe [Monad m] (f : σ → α → m σ) (init : σ) :
-    Trie α s → m σ
-| node vs children => do
-  let s ← vs.foldlM (init := init) f
-  children.foldlM (init := s) λ s (_, c) => c.foldValuesMUnsafe (init := s) f
-
-@[implemented_by foldValuesMUnsafe]
-opaque foldValuesM [Monad m] (f : σ → α → m σ) (init : σ) (t : Trie α s) :
-    m σ :=
-  pure init
-
-@[inline]
-def foldValues (f : σ → α → σ) (init : σ) (t : Trie α s) : σ :=
-  Id.run $ t.foldValuesM (init := init) f
-
-partial def size : Trie α s → Nat
-  | Trie.node vs children =>
-    children.foldl (init := vs.size) λ n (_, c) => n + size c
 
 partial def merge : Trie α s → Trie α s → Trie α s
   | node vs₁ cs₁, node vs₂ cs₂ =>
@@ -443,33 +292,6 @@ partial def merge : Trie α s → Trie α s → Trie α s
         (λ (k₁, t₁) (_, t₂) => (k₁, merge t₁ t₂))
 
 end Trie
-
-@[inline]
-def foldM [Monad m] (f : σ → Array (Key s) → α → m σ) (init : σ)
-    (t : DiscrTree α s) : m σ :=
-  t.root.foldlM (init := init) λ s k t => t.foldM #[k] (init := s) f
-
-@[inline]
-def fold (f : σ → Array (Key s) → α → σ) (init : σ) (t : DiscrTree α s) : σ :=
-  Id.run $ t.foldM (init := init) λ s keys a => return f s keys a
-
-@[inline]
-def foldValuesM [Monad m] (f : σ → α → m σ) (init : σ) (t : DiscrTree α s) :
-    m σ :=
-  t.root.foldlM (init := init) λ s _ t => t.foldValuesM (init := s) f
-
-@[inline]
-def foldValues (f : σ → α → σ) (init : σ) (t : DiscrTree α s) : σ :=
-  Id.run $ t.foldValuesM (init := init) f
-
-def values (t : DiscrTree α s) : Array α :=
-  t.foldValues (init := #[]) λ as a => as.push a
-
-def toArray (t : DiscrTree α s) : Array (Array (Key s) × α) :=
-  t.fold (init := #[]) λ as keys a => as.push (keys, a)
-
-def size (t : DiscrTree α s) : Nat :=
-  t.root.foldl (init := 0) λ n _ t => n + t.size
 
 @[inline]
 def merge [BEq α] (t u : DiscrTree α s) : DiscrTree α s :=
