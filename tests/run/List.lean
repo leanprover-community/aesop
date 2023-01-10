@@ -833,11 +833,6 @@ attribute [-simp] length_reverse
 theorem map_reverse (f : α → β) (l : List α) : map f (reverse l) = reverse (map f l) := by
   induction l <;> aesop
 
--- attribute [-simp] map_reverseAux
-theorem map_reverse_core (f : α → β) (l₁ l₂ : List α) :
-  map f (reverseAux l₁ l₂) = reverseAux (map f l₁) (map f l₂) := by
-  aesop
-
 attribute [-simp] mem_reverse
 @[simp] theorem X.mem_reverse {a : α} {l : List α} : a ∈ reverse l ↔ a ∈ l := by
   induction l <;> aesop
