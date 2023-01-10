@@ -7,6 +7,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Aesop.Nanos
 import Aesop.Util.UnionFind
 import Std.Data.Prod.Lex
+import Std.Lean.Expr
 import Std.Lean.HashSet
 import Std.Lean.Meta.InstantiateMVars
 import Std.Lean.Meta.DiscrTree
@@ -128,12 +129,6 @@ namespace Lean.Expr
 def arity : Expr → Nat
   | forallE _ _ body _ => 1 + arity body
   | _ => 0
-
-def isAppOf' : Expr → Name → Bool
-  | mdata _ b, d => isAppOf' b d
-  | const c _, d => c == d
-  | app f _,   d => isAppOf' f d
-  | _,         _ => false
 
 end Lean.Expr
 
