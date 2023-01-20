@@ -630,6 +630,15 @@ where `feature` is a phase, priority, builder or `rule_sets` clause. This
 grammar yields one or more trees of features and each branch of these trees
 specifies one rule. (A branch is a list of features.)
 
+### Adding External Rules
+
+You can use the `attribute` command to add rules for constants which were
+declared previously, either in your own development or in a package you import:
+
+```
+attribute [aesop norm unfold] List.all -- List.all is from Init
+```
+
 ### Erasing Rules
 
 There are two ways to erase rules. Usually it suffices to remove the `@[aesop]`
@@ -642,7 +651,8 @@ attribute [-aesop] foo
 This will remove all rules associated with the declaration `foo` from all rule
 sets.
 
-When you want to remove only certain rules, you can use a command:
+If you want to remove only certain rules, you can use the `erase_aesop_rules`
+command:
 
 ``` lean
 erase_aesop_rules [safe apply foo, bar (rule_sets [A])]
@@ -699,7 +709,7 @@ Here we add some rules with an `add` clause, erase other rules with an `erase`
 clause, limit the used rule sets and set some options. Each of these clauses
 is discussed in more detail below.
 
-#### Adding Rules
+#### Adding Rules to an Aesop Call
 
 Rules can be added to an Aesop call with an `add` clause. This won't affect any
 declared rule sets. The syntax of the `add` clause is
@@ -722,7 +732,7 @@ rule with penalty 5.
 The rule names can also refer to hypotheses in the goal context, but not all
 builders support this.
 
-#### Erasing Rules
+#### Erasing Rules From an Aesop Call
 
 Rules can be removed from an Aesop call with an `erase` clause. Again, this
 affects only the current Aesop call and not the declared rule sets. The syntax
