@@ -76,10 +76,6 @@ example : α → α :=
   by aesop
 ```
 
-On Windows, you may get an error when you `import Aesop`. See [this issue](https://github.com/JLimperg/aesop/issues/28). As a workaround, you can
-remove the line `precompileModules := true` from Aesop's `lakefile.lean`. This
-will decrease Aesop's performance.
-
 ## Quickstart
 
 To get you started, I'll explain Aesop's major concepts with a series of
