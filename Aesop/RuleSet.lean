@@ -72,7 +72,7 @@ structure RuleSet where
     -- exactly the names of the rules in `normRules`, `normSimpLemmaDescrs`,
     -- `unsafeRules` and `safeRules`, minus the rules in `erased`. We use this
     -- cache to quickly determine whether a rule is present in the rule set.
-  erased : HashSet RuleName
+  erased : PHashSet RuleName
     -- The set of rules that were erased from `normRules`, `unsafeRules` and
     -- `safeRules`. When erasing a rule which is present in any of these three
     -- indices, the rule is not removed from the indices but just added to this
@@ -125,7 +125,7 @@ def merge (rs₁ rs₂ : RuleSet) : RuleSet where
   erased :=
     -- Add the erased rules from `rs₁` to `init`, except those rules which are
     -- present (and not erased) in `rs₂`.
-    let go (rs₁ rs₂ : RuleSet) (init : HashSet RuleName) : HashSet RuleName :=
+    let go (rs₁ rs₂ : RuleSet) (init : PHashSet RuleName) : PHashSet RuleName :=
       rs₁.erased.fold (init := init) λ x n =>
         match rs₂.ruleNames.find? n.toRuleIdent with
         | none => x.insert n
