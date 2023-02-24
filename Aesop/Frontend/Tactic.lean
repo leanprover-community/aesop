@@ -78,7 +78,7 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
     init (traceScript : Bool) : TacticConfig := {
       additionalRules := #[]
       erasedRules := #[]
-      enabledRuleSets := defaultEnabledRuleSets
+      enabledRuleSets := defaultEnabledRuleSetNames
       options := { traceScript }
       simpConfig := {}
       simpConfigSyntax? := none
@@ -143,9 +143,9 @@ def updateRuleSets (goal : MVarId) (rss : Aesop.RuleSets) (c : TacticConfig) :
 
 def getRuleSet (goal : MVarId) (c : TacticConfig) :
     MetaM (MVarId × Aesop.RuleSet) := do
-  let rss ← getDefaultRuleSets
+  let rss ← getRuleSets c.enabledRuleSets (includeGlobalSimpTheorems := true)
   let (goal, rss) ← c.updateRuleSets goal rss
-  return (goal, rss.makeMergedRuleSet c.enabledRuleSets)
+  return (goal, rss.getMergedRuleSet)
 
 end TacticConfig
 

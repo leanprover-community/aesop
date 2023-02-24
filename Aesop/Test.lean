@@ -8,6 +8,9 @@ Authors: Jannis Limperg
 -- can't put these in the test suite because imports don't work outside a
 -- package.
 
+import Aesop.Test.Persistence0
 import Aesop.Test.Persistence1
 import Aesop.Test.Persistence2
 import Aesop.Test.Persistence3
+import Aesop.Test.RuleSets0
+import Aesop.Test.RuleSets1

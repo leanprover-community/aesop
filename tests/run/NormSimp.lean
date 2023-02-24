@@ -31,17 +31,3 @@ example {α : Prop} (ha : α) : α := by
     (simp_options := { useHyps := false })
     (options := { terminal := true })
   aesop (rule_sets [-builtin,-default])
-
--- This test checks that the norm fixpoint loop is correctly reset when norm
--- simp changes the goal.
-declare_aesop_rule_sets [fixpoint]
-
-inductive Void
-
-@[aesop norm unfold (rule_sets [fixpoint])]
-def T := False → Void
-
-attribute [aesop norm -100 (rule_sets [fixpoint])] Aesop.BuiltinRules.intros
-
-example : T := by
-  aesop (rule_sets [-default,-builtin,fixpoint])

@@ -9,8 +9,8 @@ import Aesop.Test.Persistence2
 
 namespace Aesop
 
-@[aesop 50% (rule_sets [persistence2])]
+@[aesop 50% (rule_sets [test_persistence2])]
 def test (b : Bool) : NatOrBool := by
-  aesop (rule_sets [persistence1])
+  aesop (rule_sets [test_persistence1])
 
 end Aesop

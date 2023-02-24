@@ -43,6 +43,11 @@ structure RuleNameFilter where
 
 namespace RuleNameFilter
 
+def ofIdent (i : RuleIdent) : RuleNameFilter where
+  ident := i
+  builders := #[]
+  phases := #[]
+
 def «match» (f : RuleNameFilter) (n : RuleName) : Bool :=
   f.ident.name == n.name &&
   f.ident.scope == n.scope &&
@@ -161,6 +166,12 @@ def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
 def addArray (rs : RuleSet) (ra : Array RuleSetMember) : RuleSet :=
   ra.foldl add rs
 
+def rulesMatching (rs : RuleSet) (f : RuleNameFilter) :
+    UnorderedArraySet RuleName :=
+  match rs.ruleNames.find? f.ident with
+  | none => ∅
+  | some ns => ns.filter f.match
+
 -- Returns the updated rule set and `true` if at least one rule was erased.
 def erase (rs : RuleSet) (f : RuleNameFilter) : RuleSet × Bool :=
   match rs.ruleNames.find? f.ident with
@@ -197,7 +208,7 @@ def erase (rs : RuleSet) (f : RuleNameFilter) : RuleSet × Bool :=
       return (res, true)
 
 def eraseAllRulesWithIdent (rs : RuleSet) (i : RuleIdent) : RuleSet × Bool :=
-  rs.erase { ident := i, builders := #[], phases := #[] }
+  rs.erase (.ofIdent i)
 
 @[inline]
 private def isErased (rs : RuleSet) (n : RuleName) : Bool :=
@@ -238,7 +249,7 @@ def foldM [Monad m] (rs : RuleSet) (f : σ → RuleSetMember → m σ) (init : �
   where
     @[inline]
     go (s : σ) (r : RuleSetMember) : m σ :=
-      if rs.erased.contains r.name then pure s else f s r
+      if rs.isErased r.name then pure s else f s r
 
 @[inline]
 def fold (rs : RuleSet) (f : σ → RuleSetMember → σ) (init : σ) : σ :=
@@ -269,58 +280,67 @@ def builtinRuleSetName : RuleSetName := `builtin
 
 def localRuleSetName : RuleSetName := `local
 
-def defaultEnabledRuleSets : Array RuleSetName :=
+def builtinRuleSetNames : Array RuleSetName :=
   #[defaultRuleSetName, builtinRuleSetName, localRuleSetName]
 
-def RuleSetName.isReserved (n : RuleSetName) : Bool :=
-  n == defaultRuleSetName || n == builtinRuleSetName || n == localRuleSetName
+def defaultEnabledRuleSetNames := builtinRuleSetNames
 
+def RuleSetName.isReserved (n : RuleSetName) : Bool :=
+  builtinRuleSetNames.contains n
 
 structure RuleSetNameFilter where
-  ruleSetNames : Array Name -- #[] means 'match any rule set'
+  ns : Array RuleSetName -- #[] means 'match any rule set'
 
 namespace RuleSetNameFilter
 
+protected def all : RuleSetNameFilter :=
+  ⟨#[]⟩
+
+def matchesAll (f : RuleSetNameFilter) : Bool :=
+  f.ns.isEmpty
+
 def «match» (f : RuleSetNameFilter) (n : RuleSetName) : Bool :=
-  f.ruleSetNames.isEmpty || f.ruleSetNames.contains n
+  f.matchesAll || f.ns.contains n
+
+def matchedRuleSetNames (f : RuleSetNameFilter) : Option (Array RuleSetName) :=
+  if f.matchesAll then
+    none
+  else
+    some f.ns
 
 end RuleSetNameFilter
 
 
 structure RuleSets where
-  default : RuleSet
-  others : PersistentHashMap Name RuleSet
+  rs : HashMap RuleSetName RuleSet
   deriving Inhabited
 
 namespace RuleSets
 
 protected def empty : RuleSets where
-  default := {}
-  others :=
-    PersistentHashMap.empty
-    |>.insert builtinRuleSetName {}
-    |>.insert localRuleSetName {}
+  rs := ∅
 
 instance : EmptyCollection RuleSets :=
   ⟨RuleSets.empty⟩
 
-open MessageData in
 instance : ToMessageData RuleSets where
   toMessageData rss :=
-    let printRuleSet rsName rs := m!"{rsName}:{indentD $ toMessageData rs}"
-    let cmp (x y : RuleSetName × RuleSet) : Bool := x.fst.cmp y.fst |>.isLT
-    unlines $
-      #[ printRuleSet defaultRuleSetName rss.default ] ++
-      (rss.others.toArray.qsort cmp |>.map λ (rsName, rs) =>
-        printRuleSet rsName rs)
+    let lt (x y : RuleSetName × RuleSet) := x.fst.cmp y.fst |>.isLT
+    .unlines $
+      rss.rs.toArray.qsort lt |>.map λ (rsName, rs) =>
+        m!"{rsName}:{indentD $ toMessageData rs}"
 
 -- If a rule set with name `rsName` already exists, it is overwritten.
--- Precondition: `rsName ≠ defaultRuleSetName`.
 def addEmptyRuleSet (rss : RuleSets) (rsName : RuleSetName) : RuleSets :=
-  { rss with others := rss.others.insert rsName {} }
+  ⟨rss.rs.insert rsName {}⟩
+
+-- If a rule set with name `rsName` already exists, it is overwritten.
+def addRuleSet (rss : RuleSets) (rsName : RuleSetName) (rs : RuleSet) :
+    RuleSets :=
+  ⟨rss.rs.insert rsName rs⟩
 
 def containsRuleSet (rss : RuleSets) (name : RuleSetName) : Bool :=
-  name == defaultRuleSetName || rss.others.contains name
+  rss.rs.contains name
 
 -- Adds the rule set `name` if it is not already present in `rss`.
 def ensureRuleSet (rss : RuleSets) (name : RuleSetName) : RuleSets :=
@@ -329,37 +349,26 @@ def ensureRuleSet (rss : RuleSets) (name : RuleSetName) : RuleSets :=
   else
     rss.addEmptyRuleSet name
 
--- Precondition: `rsName ≠ defaultRuleSetName`. The default rule set cannot be
--- erased. If `rss` does not contain a rule set with name `rsName`, `rss` is
+-- If `rss` does not contain a rule set with name `rsName`, `rss` is
 -- returned unchanged.
 def eraseRuleSet (rss : RuleSets) (rsName : RuleSetName) : RuleSets :=
-  { rss with others := rss.others.erase rsName }
+  ⟨rss.rs.erase rsName⟩
 
 def getRuleSet? (rss : RuleSets) (rsName : RuleSetName) : Option RuleSet :=
-  if rsName == defaultRuleSetName then rss.default else rss.others.find? rsName
-
-@[inline]
-def foldM [Monad m] (f : σ → RuleSetName → RuleSet → m σ) (init : σ)
-    (rss : RuleSets) : m σ := do
-  let acc ← f init defaultRuleSetName rss.default
-  rss.others.foldlM (init := acc) f
-
-@[inline]
-def fold (f : σ → RuleSetName → RuleSet → σ) (init : σ) (rss : RuleSets) : σ :=
-  Id.run $ foldM f init rss
+  rss.rs.find? rsName
 
 -- If `rss` does not contain a rule set with name `rsName`, `rss` is returned
 -- unchanged.
+@[inline]
 def modifyRuleSetM [Monad m] (rss : RuleSets) (rsName : RuleSetName)
     (f : RuleSet → m RuleSet) : m RuleSets := do
-  if rsName == defaultRuleSetName then
-    return { rss with default := ← f rss.default }
-  else
-    let (some rs) := rss.others.find? rsName | return rss
-    return { rss with others := rss.others.insert rsName (← f rs) }
+  let (some rs) := rss.getRuleSet? rsName
+    | return rss
+  return ⟨rss.rs.insert rsName (← f rs)⟩
 
 -- If `rss` does not contain a rule set with name `rsName`, `rss` is returned
 -- unchanged.
+@[inline]
 def modifyRuleSet (rss : RuleSets) (rsName : RuleSetName)
     (f : RuleSet → RuleSet) : RuleSets :=
   Id.run $ rss.modifyRuleSetM rsName (λ rs => pure $ f rs)
@@ -371,71 +380,43 @@ def containsRule (rss : RuleSets) (rsName : RuleSetName) (rName : RuleName) :
   | some rs => rs.contains rName
 
 -- Precondition: a rule set with name `rsName` exists in `rss`.
-def addRuleCore (rss : RuleSets) (rsName : RuleSetName) (r : RuleSetMember) :
+def addRuleUnchecked (rss : RuleSets) (rsName : RuleSetName) (r : RuleSetMember) :
     RuleSets :=
   rss.modifyRuleSet rsName (·.add r)
-
-def addRule (rss : RuleSets) (rsName : RuleSetName) (r : RuleSetMember) :
-    RuleSets :=
-  rss.ensureRuleSet rsName |>.addRuleCore rsName r
 
 def addRuleChecked [Monad m] [MonadError m] (rss : RuleSets)
     (rsName : RuleSetName) (rule : RuleSetMember) : m RuleSets := do
   if ! rss.containsRuleSet rsName then throwError
-    "aesop: no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.)"
+    "aesop: no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.\n   Declared rule sets are not visible in the current file; they only become visible once you import the declaring file.)"
   if rss.containsRule rsName rule.name then throwError
-    "aesop: '{rule.name.name}' is already registered in rule set '{rsName}'"
-  return rss.addRuleCore rsName rule
+    "aesop: rule '{rule.name.name}' is already registered in rule set '{rsName}'"
+  return rss.addRuleUnchecked rsName rule
 
 -- Returns the updated rule sets and `true` if at least one rule was erased
 -- (from at least one rule set).
-def eraseRules (rss : RuleSets) (rsf : RuleSetNameFilter) (rf : RuleNameFilter) :
-    RuleSets × Bool := Id.run do
-  let mut result := rss
-  let mut erased := false
-  if rsf.match defaultRuleSetName then
-    let (defaultRs, defaultErased) := rss.default.erase rf
-    if defaultErased then
-      result := { result with default := defaultRs }
-      erased := true
-  for (rsName, rs) in rss.others do
+def eraseRules (rss : RuleSets) (rsf : RuleSetNameFilter)
+    (rf : RuleNameFilter) : RuleSets × Bool :=
+  rss.rs.fold (init := (rss, false)) λ (rss, anyErased) rsName rs =>
     if rsf.match rsName then
       let (rs, rsErased) := rs.erase rf
       if rsErased then
-        result := { result with others := result.others.insert rsName rs }
-        erased := true
-  return (result, erased)
+        (⟨rss.rs.insert rsName rs⟩, true)
+      else
+        (rss, anyErased)
+    else
+      (rss, anyErased)
 
 def eraseRulesChecked [Monad m] [MonadError m] (rss : RuleSets)
     (rsf : RuleSetNameFilter) (rf : RuleNameFilter) : m RuleSets := do
   let (rss, anyErased) := rss.eraseRules rsf rf
   unless anyErased do
-    let rsNames := rsf.ruleSetNames
-    if rsNames.isEmpty then
-      throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any rule set."
-    else
-      throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any of the rule sets {rsNames.map toString}."
+    let rsNames? := rsf.matchedRuleSetNames
+    match rsNames? with
+    | none => throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any rule set."
+    | some rsNames => throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any of the rule sets {rsNames.map toString}."
   return rss
 
--- If a name in `rsNames` does not appear in `rss`, it is silently skipped.
-def makeMergedRuleSet (rss : RuleSets)
-    (rsNames : Array RuleSetName) : RuleSet := Id.run do
-  let mut result :=
-    if rsNames.contains defaultRuleSetName then rss.default else {}
-  for name in rsNames do
-    if name == defaultRuleSetName then
-      continue
-    match rss.others.find? name with
-    | none => continue
-    | some rs => result := result.merge rs
-  return result
-
-def globalRules (rss : RuleSets) : Array (RuleSetName × RuleSetMember) :=
-  rss.fold (init := #[]) λ acc rsName rs =>
-    rs.fold (init := acc) λ acc r =>
-      if r.isGlobal then
-        acc.push (rsName, r)
-      else
-        acc
+def getMergedRuleSet (rss : RuleSets) : RuleSet :=
+  rss.rs.fold (init := ∅) λ result _ rs => result.merge rs
 
 end Aesop.RuleSets

@@ -8,13 +8,14 @@ import Aesop
 
 def Foo := True
 
-declare_aesop_rule_sets [test]
+example : Foo := by
+  fail_if_success aesop (options := { terminal := true })
+  simp [Foo]
 
 open Lean.Elab.Tactic in
-@[aesop safe (rule_sets [test])]
+@[aesop safe]
 def myTactic : TacticM Unit := do
   evalTactic $ ← `(tactic| rw [Foo])
 
 example : Foo := by
-  fail_if_success aesop (options := { terminal := true })
-  aesop (rule_sets [test])
+  aesop

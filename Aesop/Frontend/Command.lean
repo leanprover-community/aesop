@@ -10,25 +10,24 @@ open Lean
 
 namespace Aesop.Frontend.Parser
 
-syntax "declare_aesop_rule_sets" "[" ident,+,? "]" : command
-
-elab_rules : command
-  | `(declare_aesop_rule_sets [ $rsNames:ident,* ]) =>
-    (rsNames : Array Syntax).forM (declareRuleSet ·.getId)
+open Elab.Command in
+elab "declare_aesop_rule_sets" "[" ids:ident,+,? "]" : command => do
+  let rsNames := (ids : Array Ident).map (·.getId)
+  rsNames.forM checkRuleSetNotDeclared
+  elabCommand $ ← `(initialize ($(quote rsNames).forM declareRuleSetUnchecked))
 
 elab "erase_aesop_rules" "[" es:Aesop.rule_expr,* "]" : command => do
   let filters ← (es : Array _).mapM λ e => do
     let e ← Elab.Command.liftTermElabM $
       RuleExpr.elab e |>.run ElabOptions.forErasing
     e.toGlobalRuleNameFilters
-  modifyAttributeRuleSets λ rss => do
-    let mut rss := rss
-    for fs in filters do
-      for (rsFilter, rFilter) in fs do
-        rss ← rss.eraseRulesChecked rsFilter rFilter
-    return rss
+  for fs in filters do
+    for (rsFilter, rFilter) in fs do
+      eraseRules rsFilter rFilter (check := true)
 
 elab "#aesop_rules" : command => do
-  logInfo $ toMessageData (← getAttributeRuleSets)
+  let rss ← Elab.Command.liftTermElabM do
+    getAllRuleSets (includeGlobalSimpTheorems := true)
+  logInfo $ toMessageData rss
 
 end Aesop.Frontend.Parser

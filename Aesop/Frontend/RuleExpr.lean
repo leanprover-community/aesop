@@ -641,7 +641,7 @@ def toRuleNameFilter (c : RuleConfig Option) :
     | none => #[]
     | some p => #[p]
   let ruleSetNames := c.ruleSets.ruleSets
-  return ({ ruleSetNames }, { ident, builders, phases })
+  return ({ ns := ruleSetNames }, { ident, builders, phases })
 
 end RuleConfig
 
