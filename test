@@ -12,7 +12,7 @@ RESET="\e[0m"
 
 LEAN_OPTS="-D linter.unusedVariables=false"
 
-lake build
+lake build Aesop AesopTest
 [ "$?" -eq 0 ] || exit 1
 
 if [ -z "$1" ]; then

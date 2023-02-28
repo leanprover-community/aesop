@@ -4,13 +4,16 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Test.Persistence1
-import Aesop.Test.Persistence2
+import AesopTest.Persistence0
 
 namespace Aesop
 
-@[aesop 50% (rule_sets [test_persistence2])]
-def test (b : Bool) : NatOrBool := by
+@[aesop 50% constructors (rule_sets [test_persistence1])]
+inductive NatOrBool where
+  | ofNat (n : Nat)
+  | ofBool (b : Bool)
+
+example (b : Bool) : NatOrBool := by
   aesop (rule_sets [test_persistence1])
 
 end Aesop
