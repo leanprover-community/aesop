@@ -16,6 +16,8 @@ import Aesop.Frontend
 
 namespace Aesop.BuiltinRules
 
+attribute [aesop (rule_sets [builtin]) safe 0 apply] PUnit.unit
+
 -- Hypotheses of product type are split by a separate builtin rule because the
 -- `cases` builder currently cannot be used for norm rules.
 attribute [aesop (rule_sets [builtin]) safe 101 constructors]
@@ -38,7 +40,13 @@ attribute [aesop (rule_sets [builtin]) safe 100 constructors] Iff
 -- by the simplifier. Quantified negated hypotheses h : ∀ x : T, ¬ P x are also
 -- supported by the simplifier if the premises x can be discharged.
 @[aesop (rule_sets [builtin]) safe 0]
-theorem Not_intro (h : P → False) : ¬ P := h
+theorem not_intro (h : P → False) : ¬ P := h
+
+@[aesop (rule_sets [builtin]) norm destruct]
+theorem empty_false (h : Empty) : False := nomatch h
+
+@[aesop (rule_sets [builtin]) norm destruct]
+theorem pEmpty_false (h : PEmpty) : False := nomatch h
 
 attribute [aesop (rule_sets [builtin]) safe 0] Eq.refl HEq.refl
 
