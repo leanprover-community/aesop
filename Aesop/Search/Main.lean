@@ -167,12 +167,11 @@ def traceFinalTree : SearchM Q Unit := do
 -- sensitive to minor changes in, e.g., rule priority.
 def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
   aesop_trace[steps] "Search terminated unsuccessfully."
-  let err := m!"aesop: {err}"
   let opts := (← read).options
   if opts.terminal then
-    throwError err
+    throwTacticEx `aesop (← getRootMVarId) err
   if opts.warnOnNonterminal then
-    logWarning err
+    logWarning m!"aesop: {err}"
   expandSafePrefix
   let goals ← extractSafePrefix
   aesop_trace[proof] do
