@@ -8,9 +8,6 @@ import Aesop
 
 set_option aesop.check.all true
 
-attribute [aesop safe] Exists.intro Sigma.mk
--- TODO these should be default rules
-
 example (P : α → Prop) (a : α) (h : P a) : ∃ a, P a := by
   aesop
 

@@ -9,9 +9,6 @@ Authors: Jannis Limperg
 
 import Aesop
 
--- TODO add to builtin rule set
-attribute [aesop safe cases] Empty
-
 structure WalkingPair
 
 def WidePullbackShape A B := Sum A B
