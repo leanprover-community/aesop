@@ -445,18 +445,17 @@ an Aesop rule. Currently available builders are:
   When a forward rule has been successfully applied, it will not be tried again
   when processing its subgoals (and their subgoals, etc.). Without this limit,
   many forward rules would be applied infinitely often.
-- **`elim`**: works like `forward`, but after the rule has been applied,
-  hypotheses that were used as immediate arguments are cleared. As the name
-  suggests, this is useful when you want to eliminate a hypothesis. E.g. the
-  rule
+- **`destruct`**: works like `forward`, but after the rule has been applied,
+  hypotheses that were used as immediate arguments are cleared. This is useful
+  when you want to eliminate a hypothesis. E.g. the rule
   ```
-  @[aesop norm elim]
+  @[aesop norm destruct]
   theorem and_elim_right : α ∧ β → α := ...
   ```
   will cause the goal
   ```
   h₁ : (α ∧ β) ∧ γ
-  h₂ : δ ∧ ε
+  h₂ : δ ∧ ε
   ```
   to be transformed into
   ```
@@ -464,14 +463,14 @@ an Aesop rule. Currently available builders are:
   h₂ : δ
   ```
 
-  Unlike with `forward` rules, when an `elim` rule is successfully applied, it
-  may be applied again to the resulting subgoals (and their subgoals, etc.).
+  Unlike with `forward` rules, when an `destruct` rule is successfully applied,
+  it may be applied again to the resulting subgoals (and their subgoals, etc.).
   There is less danger of infinite cycles because the original hypothesis is
   cleared.
 
-  However, if the hypothesis or hypotheses to which the `elim` rule is applied
-  have dependencies, they are not cleared. In this case, you'll probably get
-  an infinite cycle. (TODO fix this.)
+  However, if the hypothesis or hypotheses to which the `destruct` rule is
+  applied have dependencies, they are not cleared. In this case, you'll probably
+  get an infinite cycle. (TODO fix this.)
 - **`constructors`**: when applied to an inductive type or structure `T`,
   generates a rule which tries to apply each constructor of `T` to the target.
   This is a multi-rule, so if multiple constructors apply, they are considered
