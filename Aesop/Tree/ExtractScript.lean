@@ -27,19 +27,27 @@ mutual
     let g ← gref.get
     match g.normalizationState with
     | .notNormal => throwError "expected goal {g.id} to be normalised"
-    | .provenByNormalization _ normScript =>
-      modify (· ++ normScript)
-    | .normal _ _ normScript =>
-      modify (· ++ normScript)
+    | .provenByNormalization _ normScript? =>
+      modify (· ++ (← getNormScript g.id normScript?))
+    | .normal _ _ normScript? =>
+      modify (· ++ (← getNormScript g.id normScript?))
       let (some rref) ← g.firstProvenRapp? | throwError
         m!"goal {g.id} does not have a proven rapp"
       rref.extractScriptCore g.currentGoal
+    where
+      @[inline, always_inline]
+      getNormScript (gid : GoalId) :
+          Except RuleName UnstructuredScript → ExtractScriptM UnstructuredScript
+        | .ok script => pure script
+        | .error rule => throwError "normalization rule {rule} (at goal {gid}) does not support tactic script generation"
 
   partial def RappRef.extractScriptCore (rref : RappRef) (inGoal : MVarId) : ExtractScriptM Unit := do
     let r ← rref.get
+    let (some scriptBuilder) := r.scriptBuilder?
+      | throwError "rule {r.appliedRule.name} (at rapp {r.id}) does not support tactic script generation"
     let tacticSeq ←
       try
-        r.metaState.runMetaM' r.scriptBuilder.unstructured.run
+        r.metaState.runMetaM' scriptBuilder.unstructured.run
       catch e =>
         throwError "script builder for rapp {r.id} reported error:{indentD $ e.toMessageData}"
     let otherSolvedGoals := r.assignedMVars.toArray

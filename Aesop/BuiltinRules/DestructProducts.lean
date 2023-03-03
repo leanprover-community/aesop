@@ -89,7 +89,9 @@ elab &"aesop_destruct_products" : tactic =>
                hyp Exists _, hyp Subtype _, hyp Sigma _, hyp PSigma _]))]
 partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let goal ← unhygienic $ destructProductsCore input.goal
-  let scriptBuilder := .ofTactic 1 `(tactic| unhygienic aesop_destruct_products)
-  return (#[goal], scriptBuilder)
+  let scriptBuilder? :=
+    mkScriptBuilder? input.options.generateScript $
+      .ofTactic 1 `(tactic| unhygienic aesop_destruct_products)
+  return (#[goal], scriptBuilder?)
 
 end Aesop.BuiltinRules

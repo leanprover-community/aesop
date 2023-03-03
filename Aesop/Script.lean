@@ -36,7 +36,6 @@ elab (name := Parser.onGoal) &"on_goal " n:num " => " ts:tacticSeq : tactic => d
 private def mkOneBasedNumLit (n : Nat) : NumLit :=
   Syntax.mkNumLit $ toString $ n + 1
 
-
 structure GoalWithMVars where
   goal : MVarId
   mvars : HashSet MVarId
@@ -248,10 +247,6 @@ protected def id : UnstructuredScriptBuilder m :=
 instance [Pure m] : Inhabited (UnstructuredScriptBuilder m) :=
   ⟨pure #[]⟩
 
-@[inline]
-def error [MonadError m] (e : MessageData) : UnstructuredScriptBuilder m :=
-  throwError e
-
 end UnstructuredScriptBuilder
 
 
@@ -358,17 +353,10 @@ def ofTactic (subgoals : Nat) (t : m Syntax.Tactic) : ScriptBuilder m where
   unstructured := .ofTactic t
   structured := .ofTactic subgoals t
 
-def error (msg : MessageData) : ScriptBuilder m where
-  unstructured := .error msg
-  structured := .error msg
-
 def seq (b : ScriptBuilder m) (bs : Array (ScriptBuilder m)) :
     ScriptBuilder m where
   unstructured := b.unstructured.seqFocus $ bs.map (·.unstructured)
   structured := b.structured.seq $ bs.map (·.structured)
-
-def unknown (tactic : Name) : ScriptBuilder m :=
-  .error m!"Don't know how to build syntax for tactic '{tactic}'"
 
 def assertHypotheses (goal : MVarId) (hs : Array Hypothesis) :
     ScriptBuilder MetaM :=
@@ -408,47 +396,65 @@ end ScriptBuilder
 
 abbrev RuleTacScriptBuilder := ScriptBuilder MetaM
 
-
-def _root_.Lean.MVarId.assertHypothesesWithSyntax (goal : MVarId)
-    (hs : Array Hypothesis) :
-    MetaM (Array FVarId × MVarId × ScriptBuilder MetaM) := do
-  let (fvarIds, goal') ← goal.assertHypotheses hs
-  return (fvarIds, goal', .assertHypotheses goal hs)
-
-def _root_.Lean.MVarId.clearWithSyntax (goal : MVarId) (fvarId : FVarId) :
-    MetaM (MVarId × ScriptBuilder MetaM) :=
-  return (← goal.clear fvarId, .clear goal #[fvarId])
-
-def _root_.Lean.MVarId.tryClearWithSyntax (goal : MVarId) (fvarId : FVarId) :
-    MetaM (MVarId × ScriptBuilder MetaM) := do
-  let goal' ← goal.tryClear fvarId
-  if goal' == goal then
-    return (goal', .id)
+@[inline, always_inline]
+def mkScriptBuilder? (generateScript : Bool)
+    (builder : ScriptBuilder MetaM) : Option (ScriptBuilder MetaM) :=
+  if generateScript then
+    some builder
   else
-    return (goal', .clear goal #[fvarId])
+    none
 
-def _root_.Lean.MVarId.tryClearManyWithSyntax (goal : MVarId)
-    (fvarIds : Array FVarId) :
-    MetaM (MVarId × Array FVarId × ScriptBuilder MetaM) := do
+def assertHypothesesWithScript (goal : MVarId)
+    (hs : Array Hypothesis) (generateScript : Bool) :
+    MetaM (Array FVarId × MVarId × Option (ScriptBuilder MetaM)) := do
+  let (fvarIds, goal') ← goal.assertHypotheses hs
+  let scriptBuilder? := mkScriptBuilder? generateScript $ .assertHypotheses goal hs
+  return (fvarIds, goal', scriptBuilder?)
+
+def clearWithScript (goal : MVarId) (fvarId : FVarId) (generateScript : Bool) :
+    MetaM (MVarId × Option (ScriptBuilder MetaM)) :=
+  let scriptBuilder? := mkScriptBuilder? generateScript $ .clear goal #[fvarId]
+  return (← goal.clear fvarId, scriptBuilder?)
+
+def tryClearWithScript (goal : MVarId) (fvarId : FVarId) (generateScript : Bool) :
+    MetaM (MVarId × Option (ScriptBuilder MetaM)) := do
+  let goal' ← goal.tryClear fvarId
+  let scriptBuilder? := mkScriptBuilder? generateScript $
+    if goal' == goal then
+      .id
+    else
+      .clear goal #[fvarId]
+  return (goal', scriptBuilder?)
+
+def tryClearManyWithScript (goal : MVarId) (fvarIds : Array FVarId)
+    (generateScript : Bool) :
+    MetaM (MVarId × Array FVarId × Option (ScriptBuilder MetaM)) := do
   let (goal', cleared) ← goal.tryClearMany' fvarIds
-  return (goal', cleared, .clear goal cleared)
+  let scriptBuilder? := mkScriptBuilder? generateScript $ .clear goal cleared
+  return (goal', cleared, scriptBuilder?)
 
-def _root_.Lean.MVarId.unhygienicCasesWithSyntax (goal : MVarId)
-    (fvarId : FVarId) : MetaM (Array CasesSubgoal × ScriptBuilder MetaM) := do
+def unhygienicCasesWithScript (goal : MVarId) (fvarId : FVarId)
+    (generateScript : Bool) :
+    MetaM (Array CasesSubgoal × Option (ScriptBuilder MetaM)) := do
   let goals ← unhygienic $ goal.cases fvarId
-  return (goals, .unhygienicAesopCases goal fvarId goals.size)
+  let scriptBuilder? := mkScriptBuilder? generateScript $
+    .unhygienicAesopCases goal fvarId goals.size
+  return (goals, scriptBuilder?)
 
-def _root_.Lean.MVarId.renameInaccessibleFVarsWithSyntax (goal : MVarId) :
-    MetaM (MVarId × Array FVarId × ScriptBuilder MetaM) := do
+def renameInaccessibleFVarsWithScript (goal : MVarId) (generateScript : Bool) :
+    MetaM (MVarId × Array FVarId × Option (ScriptBuilder MetaM)) := do
   let (goal, renamedFVars) ← goal.renameInaccessibleFVars
-  return (goal, renamedFVars, .renameInaccessibleFVars goal renamedFVars)
+  let scriptBuilder? := mkScriptBuilder? generateScript $
+    .renameInaccessibleFVars goal renamedFVars
+  return (goal, renamedFVars, scriptBuilder?)
 
-def _root_.Lean.MVarId.unfoldManyStarWithSyntax (goal : MVarId)
-    (unfold? : Name → Option (Option Name)) :
-    MetaM (UnfoldResult × ScriptBuilder MetaM) := do
+def unfoldManyStarWithScript (goal : MVarId)
+    (unfold? : Name → Option (Option Name)) (generateScript : Bool) :
+    MetaM (UnfoldResult × Option (ScriptBuilder MetaM)) := do
   let result ← goal.unfoldManyStar unfold?
-  return (result, .unfoldManyStar result.usedDecls)
-
+  let scriptBuilder? := mkScriptBuilder? generateScript $
+    .unfoldManyStar result.usedDecls
+  return (result, scriptBuilder?)
 
 -- TODO rename to `TacticInvocation`
 structure UnstructuredScriptStep where

@@ -100,8 +100,8 @@ def getForwardHypTypes : MetaM (HashSet Expr) := do
   return result
 
 def applyForwardRule (goal : MVarId) (e : Expr)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) :
-    MetaM (MVarId × RuleTacScriptBuilder) :=
+    (immediate : UnorderedArraySet Nat) (clear : Bool) (generateScript : Bool) :
+    MetaM (MVarId × Option RuleTacScriptBuilder) :=
   goal.withContext do
     let (newHypProofs, usedHyps) ←
       makeForwardHyps e immediate (collectUsedHyps := clear)
@@ -119,7 +119,8 @@ def applyForwardRule (goal : MVarId) (e : Expr)
       newHyps := newHyps.push { value := proof, type, userName }
     if newHyps.isEmpty then
       err
-    let (_, goal, assertStxb) ← goal.assertHypothesesWithSyntax newHyps
+    let (_, goal, assertScriptBuilder?) ←
+      assertHypothesesWithScript goal newHyps generateScript
     let implDetailHyps ← newHyps.mapM λ hyp =>
       return {
         hyp with
@@ -129,10 +130,13 @@ def applyForwardRule (goal : MVarId) (e : Expr)
       }
     let (_, goal) ← goal.assertHypotheses' implDetailHyps
     if clear then
-      let (goal, _, clearStxb) ← goal.tryClearManyWithSyntax usedHyps
-      return (goal, assertStxb.seq #[clearStxb])
+      let (goal, _, clearScriptBuilder?) ←
+        tryClearManyWithScript goal usedHyps generateScript
+      let scriptBuilder? :=
+        return (← assertScriptBuilder?).seq #[(← clearScriptBuilder?)]
+      return (goal, scriptBuilder?)
     else
-      return (goal, assertStxb)
+      return (goal, assertScriptBuilder?)
   where
     err {α} : MetaM α := throwError
       "found no instances of {e} (other than possibly those which had been previously added by forward rules)"
@@ -141,8 +145,10 @@ def applyForwardRule (goal : MVarId) (e : Expr)
 def forwardExpr (e : Expr) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => input.goal.withContext do
-    let (goal, stxb) ← applyForwardRule input.goal e immediate clear
-    return (#[goal], stxb)
+    let (goal, scriptBuilder?) ←
+      applyForwardRule input.goal e immediate (clear := clear)
+        (generateScript := input.options.generateScript)
+    return (#[goal], scriptBuilder?)
 
 def forwardConst (decl : Name) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac := λ input => do
@@ -152,6 +158,6 @@ def forwardFVar (userName : Name) (immediate : UnorderedArraySet Nat)
     (clear : Bool) : RuleTac := λ input =>
   input.goal.withContext do
     let ldecl ← getLocalDeclFromUserName userName
-    forwardExpr (mkFVar ldecl.fvarId) immediate clear input
+    forwardExpr (mkFVar ldecl.fvarId) immediate (clear := clear) input
 
 end Aesop.RuleTac

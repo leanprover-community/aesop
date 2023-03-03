@@ -17,6 +17,7 @@ def assumption : RuleTac := λ input => do
   goal.withContext do
     goal.checkNotAssigned `Aesop.BuiltinRules.assumption
     goal.instantiateMVars
+    let generateScript := input.options.generateScript
     let tgt ← goal.getType
     let initialState ← saveState
     let mut applications := #[]
@@ -25,7 +26,7 @@ def assumption : RuleTac := λ input => do
         continue
       restoreState initialState
       let (some (application, proofHasMVar)) ←
-        tryHyp goal tgt ldecl
+        tryHyp goal tgt ldecl generateScript
         | continue
       if ! tgt.hasMVar && ! proofHasMVar then
         applications := #[application]
@@ -39,17 +40,18 @@ def assumption : RuleTac := λ input => do
       postBranchState? := none
     }
   where
-    tryHyp (goal : MVarId) (tgt : Expr) (ldecl : LocalDecl) :
-        MetaM (Option (RuleApplication × Bool)) := do
+    tryHyp (goal : MVarId) (tgt : Expr) (ldecl : LocalDecl)
+        (generateScript : Bool) : MetaM (Option (RuleApplication × Bool)) := do
       if ! (← isDefEq ldecl.type tgt) then
         return none
       goal.assign ldecl.toExpr
       let postState ← saveState
-      let scriptBuilder :=
-        .ofTactic 0 `(tactic| exact $(mkIdent ldecl.userName))
+      let scriptBuilder? :=
+        mkScriptBuilder? generateScript $
+          .ofTactic 0 `(tactic| exact $(mkIdent ldecl.userName))
       let app := {
         goals := #[]
-        postState, scriptBuilder
+        postState, scriptBuilder?
       }
       let proofHasMVar := ldecl.type.hasMVar
       return some (app, proofHasMVar)

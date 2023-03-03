@@ -25,7 +25,7 @@ namespace RuleTac
 
 partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
-    match ← go #[] #[] input.goal with
+    match ← go #[] #[] input.goal input.options.generateScript with
     | none => throwError "No matching hypothesis found."
     | some x => return x
   where
@@ -49,17 +49,17 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
           else
             return none
 
-    go (newGoals : Array MVarId) (excluded : Array FVarId)
-        (goal : MVarId) : MetaM (Option (Array MVarId × RuleTacScriptBuilder)) := do
+    go (newGoals : Array MVarId) (excluded : Array FVarId) (goal : MVarId)
+        (generateScript : Bool) : MetaM (Option (Array MVarId × Option RuleTacScriptBuilder)) := do
       let (some hyp) ← findFirstApplicableHyp excluded goal
         | return none
-      let (goals, stxb) ←
+      let (goals, scriptBuilder?) ←
         try
-          commitIfNoEx $ goal.unhygienicCasesWithSyntax hyp
+          commitIfNoEx $ unhygienicCasesWithScript goal hyp generateScript
         catch _ =>
           return none
       let mut newGoals := newGoals
-      let mut newStxbs := Array.mkEmpty goals.size
+      let mut newScriptBuilders := #[]
       for g in goals do
         let excluded :=
           if ! isRecursiveType then
@@ -73,13 +73,15 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
               | (.fvar fvarId' ..) => some fvarId'
               | _ => none
             excluded ++ fields
-        match ← go newGoals excluded g.mvarId with
-        | some (newGoals', newStxb) =>
+        match ← go newGoals excluded g.mvarId generateScript with
+        | some (newGoals', newScriptBuilder?) =>
           newGoals := newGoals'
-          newStxbs := newStxbs.push newStxb
+          if let some newScriptBuilder := newScriptBuilder? then
+            newScriptBuilders := newScriptBuilders.push newScriptBuilder
         | none =>
           newGoals := newGoals.push g.mvarId
-          newStxbs := newStxbs.push .id
-      return some (newGoals, stxb.seq newStxbs)
+          if generateScript then
+            newScriptBuilders := newScriptBuilders.push .id
+      return some (newGoals, scriptBuilder?.bind (·.seq newScriptBuilders))
 
 end Aesop.RuleTac

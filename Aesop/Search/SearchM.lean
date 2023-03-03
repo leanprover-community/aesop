@@ -26,7 +26,7 @@ namespace SearchM
 structure Context where
   ruleSet : RuleSet
   normSimpContext : NormSimpContext
-  options : Aesop.Options
+  options : Aesop.Options'
   profilingEnabled : Bool
   originalMetaState : Meta.SavedState
     -- The MetaM state before preprocessing.
@@ -90,7 +90,7 @@ def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
   let ((a, σ), t) ← ReaderT.run x ctx |>.run σ |>.run t
   return (a, σ, t)
 
-def run (ruleSet : RuleSet) (options : Aesop.Options)
+def run (ruleSet : RuleSet) (options : Aesop.Options')
     (simpConfig : Aesop.SimpConfig) (simpConfigStx? : Option Term)
     (goal : MVarId) (originalMetaState : Meta.SavedState)
     (originalGoal : MVarId) (preprocessingScript : UnstructuredScript)

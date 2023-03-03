@@ -38,7 +38,7 @@ structure RuleApplicationWithMVarInfo where
   mvars : UnorderedArraySet MVarId
   introducedMVars : UnorderedArraySet MVarId
   assignedMVars : UnorderedArraySet MVarId
-  scriptBuilder : ScriptBuilder MetaM
+  scriptBuilder? : Option (ScriptBuilder MetaM)
 
 namespace RuleApplicationWithMVarInfo
 

@@ -113,9 +113,8 @@ def checkRenderedScript (script : Array Syntax.Tactic) : SearchM Q Unit := do
     "{Check.script.name}: error while executing generated script:{indentD e.toMessageData}"
 
 def traceScript : SearchM Q Unit := do
-  let doCheck ← Check.script.isEnabled
   let options := (← read).options
-  if ! options.traceScript && ! doCheck then
+  if ! options.generateScript then
     return
   try
     let script ←
@@ -128,14 +127,7 @@ def traceScript : SearchM Q Unit := do
       let scriptMsg := .unlines $ script.map toMessageData
       withPPAnalyze do
         logInfo m!"Try this:{indentD scriptMsg}"
-    -- FIXME remove
-    -- let hasOnGoal := script.any λ t =>
-    --   match t with
-    --   | `(tactic| on_goal $_ => $_) => true
-    --   | _ => false
-    -- if hasOnGoal then
-    --   throwError "GOTEM"
-    if doCheck then
+    if ← Check.script.isEnabled then
       checkRenderedScript script
   catch e =>
     logError m!"aesop: error while generating tactic script:{indentD e.toMessageData}"
@@ -205,16 +197,21 @@ partial def searchLoop : SearchM Q (Array MVarId) :=
     incrementIteration
     searchLoop
 
-def preprocessGoal (mvarId : MVarId) (mvars : HashSet MVarId) :
-    MetaM (MVarId × UnstructuredScript) := do
-  let (mvarId', _, scriptBuilder) ← mvarId.renameInaccessibleFVarsWithSyntax
-  let step := {
-    tacticSeq := ← scriptBuilder.unstructured.run
-    inGoal := mvarId
-    outGoals := #[⟨mvarId', mvars⟩]
-    otherSolvedGoals := {}
-  }
-  return (mvarId', #[step])
+def preprocessGoal (mvarId : MVarId) (mvars : HashSet MVarId)
+    (generateScript : Bool) : MetaM (MVarId × UnstructuredScript) := do
+  let (mvarId', _, scriptBuilder?) ←
+    renameInaccessibleFVarsWithScript mvarId generateScript
+  let script ←
+    if let some scriptBuilder := scriptBuilder? then
+      pure #[{
+        tacticSeq := ← scriptBuilder.unstructured.run
+        inGoal := mvarId
+        outGoals := #[⟨mvarId', mvars⟩]
+        otherSolvedGoals := {}
+      }]
+    else
+      pure #[]
+  return (mvarId', script)
 
 def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
      (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
@@ -225,7 +222,9 @@ def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
   let originalMetaState ← saveState
   let mvars ← goal.getMVarDependencies
   let originalGoal := goal
-  let (goal, preprocessingScript) ← preprocessGoal goal mvars
+  let options ← options.toOptions'
+  let (goal, preprocessingScript) ←
+    preprocessGoal goal mvars options.generateScript
   let ruleSet ←
     match ruleSet? with
     | none => Frontend.getDefaultRuleSet (includeGlobalSimpTheorems := true)

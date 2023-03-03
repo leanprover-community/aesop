@@ -36,10 +36,13 @@ def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
         input.goal.intros
     if newFVars.size == 0 then
       throwError "nothing to introduce"
-    goal.withContext do
-      let newFVarUserNames ← newFVars.mapM (mkIdent <$> ·.getUserName)
-      let scriptBuilder :=
-        .ofTactic 1 `(tactic| intro $newFVarUserNames:ident*)
-      return (#[goal], scriptBuilder)
+    let scriptBuilder? ←
+      if input.options.generateScript then
+        goal.withContext do
+          let newFVarUserNames ← newFVars.mapM (mkIdent <$> ·.getUserName)
+          pure $ some $ .ofTactic 1 `(tactic| intro $newFVarUserNames:ident*)
+      else
+        pure none
+    return (#[goal], scriptBuilder?)
 
 end Aesop.BuiltinRules

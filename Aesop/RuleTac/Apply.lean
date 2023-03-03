@@ -11,30 +11,36 @@ open Lean.Meta
 
 namespace Aesop.RuleTac
 
-private def applyExpr (goal : MVarId) (e : Expr) (n : Name) :
-    MetaM (Array MVarId × RuleTacScriptBuilder) := do
+private def applyExpr (goal : MVarId) (e : Expr) (n : Name)
+    (generateScript : Bool) : MetaM (Array MVarId × Option RuleTacScriptBuilder) := do
   let goals := (← goal.apply e).toArray
-  let scriptBuilder :=
-    ScriptBuilder.ofTactic goals.size `(tactic| apply $(mkIdent n))
-  return (goals, scriptBuilder)
+  let scriptBuilder? :=
+    mkScriptBuilder? generateScript $
+      .ofTactic goals.size `(tactic| apply $(mkIdent n))
+  return (goals, scriptBuilder?)
 
-def applyConst (decl : Name) : RuleTac := RuleTac.ofSingleRuleTac λ input => do
-  applyExpr input.goal (← mkConstWithFreshMVarLevels decl) decl
+def applyConst (decl : Name) : RuleTac :=
+  RuleTac.ofSingleRuleTac λ input => do
+    applyExpr input.goal (← mkConstWithFreshMVarLevels decl) decl
+      input.options.generateScript
 
-def applyFVar (userName : Name) : RuleTac := RuleTac.ofSingleRuleTac λ input =>
-  input.goal.withContext do
-    applyExpr input.goal (← getLocalDeclFromUserName userName).toExpr userName
+def applyFVar (userName : Name) : RuleTac :=
+  RuleTac.ofSingleRuleTac λ input =>
+    input.goal.withContext do
+      applyExpr input.goal (← getLocalDeclFromUserName userName).toExpr
+        userName input.options.generateScript
 
 -- Tries to apply each constant in `decls`. For each one that applies, a rule
 -- application is returned. If none applies, the tactic fails.
 def applyConsts (decls : Array Name) : RuleTac := λ input => do
   let initialState ← saveState
+  let generateScript := input.options.generateScript
   let apps ← decls.filterMapM λ decl => do
     try
       let e ← mkConstWithFreshMVarLevels decl
-      let (goals, scriptBuilder) ← applyExpr input.goal e decl
+      let (goals, scriptBuilder?) ← applyExpr input.goal e decl generateScript
       let postState ← saveState
-      return some { postState, goals, scriptBuilder }
+      return some { postState, goals, scriptBuilder? }
     catch _ =>
       return none
     finally

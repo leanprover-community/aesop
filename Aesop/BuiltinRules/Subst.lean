@@ -87,12 +87,15 @@ def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
     let (goal, substitutedUserNames, _) ← substFVars input.goal hyps
     if substitutedUserNames.size == 0 then
       throwError "no suitable hypothesis found"
-    let substitutedUserNames := substitutedUserNames.map mkIdent
-    let tactic :=
-      if h : substitutedUserNames.size = 1 then
-        let hypName := substitutedUserNames[0]'(by rw [h]; decide)
-        `(tactic| aesop_subst $hypName)
-      else
-        `(tactic| aesop_subst [ $substitutedUserNames:ident,* ])
-    return (#[goal], .ofTactic 1 tactic)
+    let scriptBuilder? :=
+      mkScriptBuilder? input.options.generateScript $
+        let substitutedUserNames := substitutedUserNames.map mkIdent
+        let tactic :=
+          if h : substitutedUserNames.size = 1 then
+            let hypName := substitutedUserNames[0]'(by rw [h]; decide)
+            `(tactic| aesop_subst $hypName)
+          else
+            `(tactic| aesop_subst [ $substitutedUserNames:ident,* ])
+        .ofTactic 1 tactic
+    return (#[goal], scriptBuilder?)
 end Aesop.BuiltinRules

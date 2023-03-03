@@ -16,8 +16,10 @@ def splitTarget : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let (some goals) ← splitTarget? input.goal | throwError
     "nothing to split in target"
   let goals := goals.toArray
-  let scriptBuilder := .ofTactic goals.size `(tactic| split)
-  return (goals, scriptBuilder)
+  let scriptBuilder? :=
+    mkScriptBuilder? input.options.generateScript $
+      .ofTactic goals.size `(tactic| split)
+  return (goals, scriptBuilder?)
 
 def splitFirstHypothesis (goal : MVarId) : MetaM (Option (Array MVarId)) :=
   goal.withContext do
@@ -39,7 +41,9 @@ elab &"aesop_split_hyps" : tactic =>
 def splitHypotheses : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let (some goals) ← splitHypothesesCore input.goal | throwError
     "no splittable hypothesis found"
-  let scriptBuilder := .ofTactic goals.size `(tactic| aesop_split_hyps)
-  return (goals, scriptBuilder)
+  let scriptBuilder? :=
+    mkScriptBuilder? input.options.generateScript $
+      .ofTactic goals.size `(tactic| aesop_split_hyps)
+  return (goals, scriptBuilder?)
 
 end Aesop.BuiltinRules

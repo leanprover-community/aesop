@@ -17,7 +17,7 @@ unsafe def tacticMImpl (decl : Name) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
     let tac ← evalConst (TacticM Unit) decl
     let goals ← run input.goal tac |>.run'
-    return (goals.toArray, .unknown decl)
+    return (goals.toArray, none)
 
 -- Precondition: `decl` has type `TacticM Unit`.
 @[implemented_by tacticMImpl]

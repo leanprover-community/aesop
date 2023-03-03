@@ -241,9 +241,12 @@ end GoalState
 inductive NormalizationState
   | notNormal
   | normal (postGoal : MVarId) (postState : Meta.SavedState)
-      (script : UnstructuredScript)
+      (script? : Except RuleName UnstructuredScript)
+      -- The `RuleName` indicates the first rule which failed to produce a
+      -- script step. If script tracing is turned off, this will be the first
+      -- rule. Ditto below.
   | provenByNormalization (postState : Meta.SavedState)
-      (script : UnstructuredScript)
+      (script? : Except RuleName UnstructuredScript)
   deriving Inhabited
 
 namespace NormalizationState
@@ -339,7 +342,7 @@ structure RappData (Goal MVarCluster : Type) : Type where
   state : NodeState
   isIrrelevant : Bool
   appliedRule : RegularRule
-  scriptBuilder : RuleTacScriptBuilder
+  scriptBuilder? : Option RuleTacScriptBuilder
   originalSubgoals : Array MVarId
   successProbability : Percent
   metaState : Meta.SavedState
@@ -675,8 +678,8 @@ def appliedRule (r : Rapp) : RegularRule :=
   r.elim.appliedRule
 
 @[inline]
-def scriptBuilder (r : Rapp) : RuleTacScriptBuilder :=
-  r.elim.scriptBuilder
+def scriptBuilder? (r : Rapp) : Option RuleTacScriptBuilder :=
+  r.elim.scriptBuilder?
 
 @[inline]
 def originalSubgoals (r : Rapp) : Array MVarId :=
@@ -723,9 +726,9 @@ def setAppliedRule (appliedRule : RegularRule) (r : Rapp) : Rapp :=
   r.modify λ r => { r with appliedRule }
 
 @[inline]
-def setScriptBuilder (scriptBuilder : RuleTacScriptBuilder)
+def setScriptBuilder? (scriptBuilder? : Option RuleTacScriptBuilder)
     (r : Rapp) : Rapp :=
-  r.modify λ r => { r with scriptBuilder }
+  r.modify λ r => { r with scriptBuilder? }
 
 @[inline]
 def setOriginalSubgoals (originalSubgoals : Array MVarId)
@@ -776,11 +779,6 @@ def postNormGoal? (g : Goal) : Option MVarId :=
 
 def currentGoal (g : Goal) : MVarId :=
   g.postNormGoal?.getD g.preNormGoal
-
-def normScript? (g : Goal) : Option UnstructuredScript :=
-  match g.normalizationState with
-  | .normal _ _ s => some s
-  | _ => none
 
 def parentRapp? (g : Goal) : BaseIO (Option RappRef) :=
   return (← g.parent.get).parent?
