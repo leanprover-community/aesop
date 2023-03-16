@@ -37,7 +37,7 @@ mutual
     where
       @[inline, always_inline]
       getNormScript (gid : GoalId) :
-          Except RuleName UnstructuredScript → ExtractScriptM UnstructuredScript
+          Except DisplayRuleName UnstructuredScript → ExtractScriptM UnstructuredScript
         | .ok script => pure script
         | .error rule => throwError "normalization rule {rule} (at goal {gid}) does not support tactic script generation"
 

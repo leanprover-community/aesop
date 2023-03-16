@@ -71,7 +71,7 @@ def _root_.Lean.MVarId.unfoldManyStar (goal : MVarId)
       if (← instantiateMVars r.expr) != ldecl.type then
         let some (_, goal') ←
           applySimpResultToLocalDecl goal ldecl.fvarId r (mayCloseGoal := false)
-          | unreachable!
+          | throwTacticEx `unfoldManyStar goal "internal error: unexpected result of applySimpResultToLocalDecl"
         goal := goal'
 
     if goal == initialGoal then
@@ -82,8 +82,7 @@ def _root_.Lean.MVarId.unfoldManyStar (goal : MVarId)
     @[inline]
     unfold (usedDecls : IO.Ref (HashSet Name)) (ctx : Simp.Context) (e : Expr) :
         MetaM Simp.Result :=
-      (·.fst) <$>
-        Simp.main e ctx (methods := { pre := pre usedDecls })
+      (·.fst) <$> Simp.main e ctx (methods := { pre := pre usedDecls })
 
     -- NOTE: once we succeed in unfolding something, we return `done`. This
     -- means that `simp` won't recurse into the unfolded expression, missing

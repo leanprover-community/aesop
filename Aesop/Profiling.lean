@@ -12,32 +12,10 @@ open Lean
 
 namespace Aesop
 
-inductive RuleProfileName
-  | normSimp
-  | normUnfold
-  | rule (name : RuleName)
-  deriving Inhabited, BEq, Ord
-
-namespace RuleProfileName
-
-instance : ToString RuleProfileName where
-  toString
-    | rule name => toString name
-    | normSimp => "<norm simp>"
-    | normUnfold => "<norm unfold>"
-
-instance : Hashable RuleProfileName where
-  hash
-    | rule name => mixHash (hash name) 4589
-    | normSimp => 788009
-    | normUnfold => 145389
-
-end RuleProfileName
-
 
 -- All times are in nanoseconds.
 structure RuleProfile where
-  rule : RuleProfileName
+  rule : DisplayRuleName
   elapsed : Nanos
   successful : Bool
   deriving Inhabited
@@ -78,7 +56,7 @@ instance : EmptyCollection Profile :=
 -- The returned map associates to each rule the total time spent on successful
 -- and failed applications of that rule.
 def ruleApplicationTotals (p : Profile) :
-    HashMap RuleProfileName (Nanos × Nanos) := Id.run do
+    HashMap DisplayRuleName (Nanos × Nanos) := Id.run do
   let mut m := {}
   for rp in p.ruleApplications do
     if rp.successful then
@@ -110,14 +88,14 @@ protected def toMessageData (p : Profile) : MessageData :=
           node (displayRuleApplications p.ruleApplicationTotals)
   ]]]
   where
-    compareTimings (x y : RuleProfileName × Nanos × Nanos) : Ordering :=
+    compareTimings (x y : DisplayRuleName × Nanos × Nanos) : Ordering :=
       compareLex
         (compareOn (λ (_, s, f) => s + f))
         (compareOn (λ (n, _, _) => n))
         x y
       |>.swap
 
-    displayRuleApplications (apps : HashMap RuleProfileName (Nanos × Nanos)) :
+    displayRuleApplications (apps : HashMap DisplayRuleName (Nanos × Nanos)) :
         Array MessageData := Id.run do
       let timings := apps.fold (init := Array.mkEmpty apps.size)
         λ timings n (successful, failed) => timings.push (n, successful, failed)
@@ -157,19 +135,19 @@ class abbrev MonadProfile (m : Type → Type _) :=
 
 variable [Monad m] [MonadProfile m]
 
-@[inline]
+@[inline, always_inline]
 def isProfilingEnabled [MonadProfile m] : m Bool :=
   return (← read).isProfilingEnabled
 
-@[inline]
+@[inline, always_inline]
 def recordRuleSelectionProfile (elapsed : Nanos) : m Unit :=
   modify λ p => { p with ruleSelection := p.ruleSelection + elapsed }
 
-@[inline]
+@[inline, always_inline]
 def recordRuleProfile (rp :  RuleProfile) : m Unit :=
   modify λ p => { p with ruleApplications := p.ruleApplications.push rp }
 
-@[inline]
+@[inline, always_inline]
 def profiling [MonadLiftT BaseIO m] (x : m α)
     (recordProfile : α → Nanos → m Unit) : m α := do
   if ← isProfilingEnabled then
@@ -183,13 +161,13 @@ section
 
 variable [MonadTrace m] [MonadOptions m] [MonadRef m] [AddMessageContext m]
 
-@[inline]
+@[inline, always_inline]
 def recordAndTraceRuleSelectionProfile (phase : PhaseName) (elapsed : Nanos) :
     m Unit := do
   aesop_trace[stepsProfile] "[{elapsed.printAsMillis}] {phase} rule selection"
   recordRuleSelectionProfile elapsed
 
-@[inline]
+@[inline, always_inline]
 def recordAndTraceRuleProfile (rp : RuleProfile) : m Unit := do
   aesop_trace[stepsProfile] toMessageData rp
   recordRuleProfile rp

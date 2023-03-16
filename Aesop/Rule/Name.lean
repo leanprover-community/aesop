@@ -130,6 +130,23 @@ instance : ToString RuleName where
 end RuleName
 
 
+inductive DisplayRuleName
+  | ruleName (n : RuleName)
+  | normSimp
+  | normUnfold
+  deriving Inhabited, BEq, Ord, Hashable
+
+namespace DisplayRuleName
+
+instance : ToString DisplayRuleName where
+  toString
+    | ruleName n => toString n
+    | normSimp => "<norm simp>"
+    | normUnfold => "<norm unfold>"
+
+end DisplayRuleName
+
+
 inductive RuleIdent
   | const (decl : Name)
   | fvar (userName : Name)

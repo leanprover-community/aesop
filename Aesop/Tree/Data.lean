@@ -241,12 +241,12 @@ end GoalState
 inductive NormalizationState
   | notNormal
   | normal (postGoal : MVarId) (postState : Meta.SavedState)
-      (script? : Except RuleName UnstructuredScript)
-      -- The `RuleName` indicates the first rule which failed to produce a
+      (script? : Except DisplayRuleName UnstructuredScript)
+      -- The `DisplayRuleName` indicates the first rule which failed to produce a
       -- script step. If script tracing is turned off, this will be the first
-      -- rule. Ditto below.
+      -- rule. Same below.
   | provenByNormalization (postState : Meta.SavedState)
-      (script? : Except RuleName UnstructuredScript)
+      (script? : Except DisplayRuleName UnstructuredScript)
   deriving Inhabited
 
 namespace NormalizationState
