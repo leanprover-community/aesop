@@ -12,8 +12,8 @@ RESET="\e[0m"
 
 LEAN_OPTS="-D linter.unusedVariables=false"
 
-lake build Aesop AesopTest
-[ "$?" -eq 0 ] || exit 1
+lake build std || exit 1 # required for tests/run/Aesop.lean
+lake build Aesop AesopTest || exit 1
 
 if [ -z "$1" ]; then
   files=(tests/run/*.lean)
@@ -21,8 +21,6 @@ if [ -z "$1" ]; then
 else
   files="$@"
 fi
-
-failed=0
 
 function run_run_test {
   lake env lean $LEAN_OPTS "$file"
@@ -43,6 +41,8 @@ function run_golden_test {
     return 0
   fi
 }
+
+failed=0
 
 for file in ${files[@]}; do
   echo -e "$GREEN$file$RESET"
