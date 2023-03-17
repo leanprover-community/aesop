@@ -27,7 +27,6 @@ structure RegularRuleBuilderResult where
   builder : BuilderName
   tac : RuleTacDescr
   indexingMode : IndexingMode
-  mayUseBranchState : Bool
   deriving Inhabited
 
 inductive RuleBuilderResult

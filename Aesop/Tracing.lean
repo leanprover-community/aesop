@@ -63,10 +63,6 @@ def stepsActiveGoalQueue : TraceOption :=
   { Init.stepsActiveGoalQueue with parentOption := steps.option }
 
 @[inline]
-def stepsBranchStates : TraceOption :=
-  { Init.stepsBranchStates with parentOption := steps.option }
-
-@[inline]
 def stepsNormalization : TraceOption :=
   { Init.stepsNormalization with parentOption := steps.option }
 

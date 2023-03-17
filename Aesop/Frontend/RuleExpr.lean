@@ -213,7 +213,6 @@ syntax builderOptions := Aesop.builder_option*
 end Parser
 
 inductive BuilderOption
-  | usesBranchState (b : Bool)
   | immediate (names : Array Name)
   | index (imode : IndexingMode)
   | patterns (pats : Array CasesPattern)
@@ -223,8 +222,6 @@ namespace BuilderOption
 def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
   withRef stx do
     match stx with
-    | `(builder_option| (uses_branch_state := $b:Aesop.bool_lit)) =>
-      usesBranchState <$> elabBoolLit b
     | `(builder_option| (immediate := [$ns:ident,*])) =>
       return immediate $ (ns : Array Syntax).map (·.getId)
     | `(builder_option| (index := [$imodes:Aesop.indexing_mode,*])) =>
@@ -234,16 +231,14 @@ def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
     | _ => throwUnsupportedSyntax
 
 protected def name : BuilderOption → String
-  | usesBranchState .. => "uses_branch_state"
   | immediate .. => "immediate"
   | index .. => "index"
   | patterns .. => "patterns"
 
 protected def toCtorIdx : BuilderOption → Nat
-  | usesBranchState .. => 0
-  | immediate .. => 1
-  | index .. => 2
-  | patterns .. => 3
+  | immediate .. => 0
+  | index .. => 1
+  | patterns .. => 2
 
 end BuilderOption
 
@@ -283,14 +278,6 @@ def regular (builderName : BuilderName) :
   builderName := .regular builderName
   init := .default
   add
-    | opts, .index imode => some { opts with indexingMode? := imode }
-    | _, _ => none
-
-def tactic : BuilderOptions TacticBuilderOptions where
-  builderName := .regular .tactic
-  init := .default
-  add
-    | opts, .usesBranchState b => some { opts with usesBranchState := b }
     | opts, .index imode => some { opts with indexingMode? := imode }
     | _, _ => none
 
@@ -334,7 +321,7 @@ inductive Builder
   | apply (opts : RegularBuilderOptions)
   | simp
   | unfold
-  | tactic (opts : TacticBuilderOptions)
+  | tactic (opts : RegularBuilderOptions)
   | constructors (opts : RegularBuilderOptions)
   | forward (opts : ForwardBuilderOptions)
   | cases (opts : CasesBuilderOptions)
@@ -348,7 +335,7 @@ def elabOptions (b : DBuilderName) (opts : Syntax) : ElabM Builder := do
   | .regular .apply => apply <$> getRegularOptions .apply
   | .regular .simp => checkNoOptions; return simp
   | .regular .unfold => checkNoOptions; return unfold
-  | .regular .tactic => tactic <$> BuilderOptions.tactic.elab opts
+  | .regular .tactic => tactic <$> getRegularOptions .tactic
   | .regular .constructors => constructors <$> getRegularOptions .constructors
   | .regular .forward => forward <$> BuilderOptions.forward.elab opts
   | .regular .destruct => forward <$> BuilderOptions.destruct.elab opts
@@ -553,7 +540,6 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
       name := c.ident.toRuleName phase res.builder
       tac := res.tac
       indexingMode := res.indexingMode
-      usesBranchState := res.mayUseBranchState
       extra := { penalty, safety := Safety.safe }
       -- TODO support 'almost safe' rules
     }
@@ -565,7 +551,6 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
       name := c.ident.toRuleName phase res.builder
       tac := res.tac
       indexingMode := res.indexingMode
-      usesBranchState := res.mayUseBranchState
       extra := { successProbability }
     }
     return (goal, rule, c.ruleSets.ruleSets)
@@ -577,7 +562,6 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
       | .regular res => .normRule {
           res with
           name := c.ident.toRuleName phase res.builder
-          usesBranchState := res.mayUseBranchState
           extra := { penalty }
         }
       | .globalSimp entries => .normSimpRule {

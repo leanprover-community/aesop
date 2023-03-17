@@ -69,7 +69,6 @@ def RuleBuilder.cases (opts : CasesBuilderOptions) : RuleBuilder :=
       builder := name
       tac := .cases target (isRecursiveType := inductInfo.isRec)
       indexingMode
-      mayUseBranchState := false
     }
   where
     name := BuilderName.cases

@@ -137,9 +137,6 @@ def name (r : RegularRule) : RuleName :=
 def indexingMode (r : RegularRule) : IndexingMode :=
   r.withRule (·.indexingMode)
 
-def usesBranchState (r : RegularRule) : Bool :=
-  r.withRule (·.usesBranchState)
-
 def tac (r : RegularRule) : RuleTacDescr :=
   r.withRule (·.tac)
 

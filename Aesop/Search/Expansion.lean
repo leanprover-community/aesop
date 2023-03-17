@@ -27,24 +27,20 @@ def RuleResult.isSuccessful
 
 def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
     (indexMatchLocations : UnorderedArraySet IndexMatchLocation)
-    (branchState : RuleBranchState) (options : Options') :
+    (options : Options') :
     MetaM (Sum Exception RuleTacOutput) := do
   let some (postNormGoal, postNormState) := goal.postNormGoalAndMetaState? | throwError
     "aesop: internal error: expected goal {goal.id} to be normalised (but not proven by normalisation)."
   let input := {
     goal := postNormGoal
     mvars := goal.mvars
-    indexMatchLocations, branchState, options
+    indexMatchLocations, options
   }
   runRuleTac tac ruleName postNormState input
 
 def addRapps (parentRef : GoalRef) (rule : RegularRule)
-    (rapps : Array RuleApplicationWithMVarInfo)
-    (postBranchState? : Option RuleBranchState) : SearchM Q RuleResult := do
+    (rapps : Array RuleApplicationWithMVarInfo) : SearchM Q RuleResult := do
   let parent ← parentRef.get
-  let postBranchState :=
-    rule.withRule λ r => parent.branchState.update r postBranchState?
-  aesop_trace[stepsBranchStates] "Updated branch state: {rule.withRule λ r => postBranchState.find? r}"
   let successProbability := parent.successProbability * rule.successProbability
 
   let mut rrefs := Array.mkEmpty rapps.size
@@ -55,7 +51,6 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
       rapp with
       parent := parentRef
       appliedRule := rule
-      branchState := postBranchState
       successProbability }
     rrefs := rrefs.push rref
     for cref in (← rref.get).children do
@@ -89,11 +84,9 @@ def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
     (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
     SearchM Q RuleResult := do
   let parent ← parentRef.get
-  let initialBranchState := rule.withRule λ r => parent.branchState.find r
-  aesop_trace[stepsBranchStates] "Initial branch state: {initialBranchState}"
   let ruleOutput? ←
     runRegularRuleTac parent rule.tac.run rule.name indexMatchLocations
-      initialBranchState (← read).options
+      (← read).options
   match ruleOutput? with
   | Sum.inl exc => onFailure exc.toMessageData
   | Sum.inr { applications := #[], .. } =>
@@ -108,7 +101,7 @@ def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
         aesop_trace[steps] "Safe rule assigned metavariables. Postponing it."
         return RuleResult.postponed ⟨rule, output⟩
     aesop_trace[steps] "Rule succeeded, producing {rapps.size} rule application(s)."
-    addRapps parentRef rule rapps output.postBranchState?
+    addRapps parentRef rule rapps
   where
     onFailure (msg : MessageData) : SearchM Q RuleResult := do
       aesop_trace[stepsRuleFailures] "Rule failed with message:{indentD msg}"
@@ -186,11 +179,9 @@ partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
       | .postponedSafeRule r =>
         aesop_trace[steps] "Applying postponed safe rule {r.rule}"
         let parentMVars := (← parentRef.get).mvars
-        let postBranchState? := r.output.postBranchState?
         let rapps ← r.output.applications.mapM
           (·.toRuleApplicationWithMVarInfo parentMVars)
-        let result ←
-          addRapps parentRef (.«unsafe» r.toUnsafeRule) rapps postBranchState?
+        let result ← addRapps parentRef (.«unsafe» r.toUnsafeRule) rapps
         return (queue, result)
 
 def expandGoal (gref : GoalRef) : SearchM Q Unit := do

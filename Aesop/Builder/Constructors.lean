@@ -18,7 +18,6 @@ def RuleBuilder.constructors (opts : RegularBuilderOptions) : RuleBuilder :=
       builder := name
       tac := .constructors info.ctors.toArray
       indexingMode := ← opts.getIndexingModeM $ getIndexingMode info
-      mayUseBranchState := false
     }
   where
     name := BuilderName.constructors

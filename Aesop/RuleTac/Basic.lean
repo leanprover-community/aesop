@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 
 import Aesop.Index.Basic
 import Aesop.Options
-import Aesop.Rule.BranchState
 import Aesop.Script
 import Aesop.Util
 import Std.Lean.Meta.SavedState
@@ -27,14 +26,11 @@ Input for a rule tactic. Contains:
 - `mvars`: the set of mvars which occur in `goal`.
 - `indexMatchLocations`: if the rule is indexed, the locations (e.g. hyps or the
   target) matched by the rule's index entries. Otherwise an empty set.
-- `branchState`: the current branch state for this rule. If the rule does not
-  use branch state, this is always `RuleBranchState.initial`.
 -/
 structure RuleTacInput where
   goal : MVarId
   mvars : UnorderedArraySet MVarId
   indexMatchLocations : UnorderedArraySet IndexMatchLocation
-  branchState : RuleBranchState
   options : Options'
   deriving Inhabited
 
@@ -67,16 +63,10 @@ def check (r : RuleApplication) : MetaM (Option MessageData) :=
 end RuleApplication
 
 /--
-The result of a rule tactic contains:
-
-- `applications`: a list of rule applications.
-- `postBranchState?`: an updated branch state. `none` signals that there were
-  no changes to the branch state, in which case the input branch state is
-  copied to all subgoals.
+The result of a rule tactic is a list of rule applications.
 -/
 structure RuleTacOutput where
   applications : Array RuleApplication
-  postBranchState? : Option RuleBranchState
   deriving Inhabited
 
 /--
@@ -88,8 +78,7 @@ instance : Inhabited RuleTac := by
   unfold RuleTac; exact inferInstance
 
 /--
-A `RuleTac` which generates only a single `RuleApplication` and does not use
-branch state.
+A `RuleTac` which generates only a single `RuleApplication`.
 -/
 def SingleRuleTac :=
   RuleTacInput → MetaM (Array MVarId × Option RuleTacScriptBuilder)
@@ -98,35 +87,10 @@ def SingleRuleTac :=
 def SingleRuleTac.toRuleTac (t : SingleRuleTac) : RuleTac := λ input => do
   let (goals, scriptBuilder?) ← t input
   let postState ← saveState
-  let app := { postState, goals, scriptBuilder? }
-  return { applications := #[app], postBranchState? := none }
+  return ⟨#[{ postState, goals, scriptBuilder? }]⟩
 
 @[inline]
 def RuleTac.ofSingleRuleTac := SingleRuleTac.toRuleTac
-
-
-/-! # Branch State -/
-
-namespace RuleTac
-
-@[inline]
-def withBranchState (check : RuleBranchState → MetaM Unit)
-    (modify : RuleBranchState → RuleBranchState) (r : RuleTac) :
-    RuleTac := λ input => do
-  let initialBranchState := input.branchState
-  check initialBranchState
-  let output ← r input
-  let newBranchState := modify $ output.postBranchState?.getD initialBranchState
-  return { output with postBranchState? := some newBranchState }
-
-def withApplicationLimit (n : Nat) : RuleTac → RuleTac :=
-  withBranchState
-    (λ bs => do
-      if bs.numApplications >= n then
-        throwError "Rule is limited to {n} application(s) per branch.")
-    (λ bs => { bs with numApplications := bs.numApplications + 1 })
-
-end RuleTac
 
 
 /-! # Rule Tactic Descriptions -/

@@ -42,7 +42,6 @@ def mkInitialTree (goal : MVarId) : MetaM Tree := do
     lastExpandedInIteration := Iteration.none
     unsafeRulesSelected := false
     unsafeQueue := {}
-    branchState := {}
     failedRapps := #[]
   }
   rootClusterRef.modify λ c => c.setGoals #[rootGoalRef]

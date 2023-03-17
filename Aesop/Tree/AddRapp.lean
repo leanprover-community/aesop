@@ -18,7 +18,6 @@ structure AddRapp extends RuleApplicationWithMVarInfo where
   parent : GoalRef
   appliedRule : RegularRule
   successProbability : Percent
-  branchState : BranchState
 
 private def clusterGoals (goals : Array Goal) : Array (Array Goal) := Id.run do
   let mut clusters := UnionFind.ofArray goals
@@ -115,16 +114,12 @@ private unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
       lastExpandedInIteration := Iteration.none
       unsafeRulesSelected := false
       unsafeQueue := {}
-      branchState := g.branchState
-        -- NOTE Copying the branch state gives weird semantics, but I don't
-        -- known what else could be reasonably done.
       failedRapps := #[]
     }
 
 private def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (parent : MVarClusterRef) (depth : Nat) (successProbability : Percent)
-    (branchState : BranchState) (origin : GoalOrigin):
-    TreeM Goal :=
+    (origin : GoalOrigin) : TreeM Goal :=
   return Goal.mk {
     id := ← getAndIncrementNextGoalId
     children := #[]
@@ -138,7 +133,7 @@ private def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     unsafeRulesSelected := false
     unsafeQueue := {}
     failedRapps := #[]
-    parent, branchState, origin, depth, mvars, successProbability
+    parent, origin, depth, mvars, successProbability
   }
 
 private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
@@ -193,7 +188,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     else
       let mvars ← r.postState.runMetaM' $ .ofHashSet <$> m.getMVarDependencies
       let g ← makeInitialGoal m mvars (unsafeCast ()) goalDepth
-        r.successProbability r.branchState .droppedMVar
+        r.successProbability .droppedMVar
         -- The parent (`unsafeCast ()`) will be patched up later.
       return some g
 
@@ -210,7 +205,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   -- Construct the subgoals
   let subgoals ← goals.mapM λ (goal, mvars) =>
     makeInitialGoal goal mvars (unsafeCast ()) goalDepth
-      r.successProbability r.branchState .subgoal
+      r.successProbability .subgoal
       -- The parent (`unsafeCast ()`) will be patched up later.
 
   let newGoals := subgoals ++ copiedGoals ++ droppedGoals

@@ -6,7 +6,6 @@ Authors: Jannis Limperg, Asta Halkjær From
 
 import Aesop.Constants
 import Aesop.Script
-import Aesop.Tree.BranchState
 import Aesop.Tree.UnsafeQueue
 
 open Lean
@@ -323,7 +322,6 @@ structure GoalData (Rapp MVarCluster : Type) : Type where
     -- Iteration 0 means the node has never been expanded.
   unsafeRulesSelected : Bool
   unsafeQueue : UnsafeQueue
-  branchState : BranchState
   failedRapps : Array RegularRule
   deriving Nonempty
 
@@ -549,10 +547,6 @@ def unsafeQueue? (g : Goal) : Option UnsafeQueue :=
   if g.unsafeRulesSelected then some g.unsafeQueue else none
 
 @[inline]
-def branchState (g : Goal) : BranchState :=
-  g.elim.branchState
-
-@[inline]
 def setId (id : GoalId) (g : Goal) : Goal :=
   g.modify λ g => { g with id }
 
@@ -617,10 +611,6 @@ def setUnsafeQueue (unsafeQueue : UnsafeQueue) (g : Goal) : Goal :=
 @[inline]
 def setState (state : GoalState) (g : Goal) : Goal :=
   g.modify λ g => { g with state }
-
-@[inline]
-def setBranchState (branchState : BranchState) (g : Goal) : Goal :=
-  g.modify λ g => { g with branchState }
 
 @[inline]
 def setFailedRapps (failedRapps : Array RegularRule) (g : Goal) : Goal :=

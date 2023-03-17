@@ -18,7 +18,7 @@ namespace Aesop
 variable [Aesop.Queue Q]
 
 inductive NormRuleResult
-  | succeeded (goal : MVarId) (branchState? : Option BranchState)
+  | succeeded (goal : MVarId)
       (scriptStep? : Except DisplayRuleName UnstructuredScriptStep)
   | proved (scriptStep? : Except DisplayRuleName UnstructuredScriptStep)
   | failed (scriptStep? : Option UnstructuredScriptStep)
@@ -30,10 +30,6 @@ def NormRuleResult.isSuccessful : NormRuleResult → Bool
 
 def NormRuleResult.newGoal? : NormRuleResult → Option MVarId
   | succeeded goal .. => goal
-  | proved .. | failed .. => none
-
-def NormRuleResult.newBranchState? : NormRuleResult → Option BranchState
-  | succeeded (branchState? := bs) .. => bs
   | proved .. | failed .. => none
 
 def mkNormRuleScriptStep (ruleName : RuleName)
@@ -55,7 +51,7 @@ def mkNormRuleScriptStep (ruleName : RuleName)
   catch e =>
     throwError "aesop: error while running script builder for rule {ruleName}:{indentD e.toMessageData}"
 
-def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
+def runNormRuleTac (rule : NormRule) (input : RuleTacInput) :
     MetaM NormRuleResult := do
   let preMetaState ← saveState
   let result? ← runRuleTac rule.tac.run rule.name preMetaState input
@@ -74,10 +70,7 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
       return .proved step?
     let (#[g]) := rapp.goals
       | err m!"rule produced more than one subgoal."
-    let postBranchState := bs.update rule result.postBranchState?
-    aesop_trace[stepsNormalization] do
-      aesop_trace![stepsNormalization] "Rule succeeded. New goal:{indentD $ .ofGoal g}"
-      aesop_trace[stepsBranchStates] "Branch state after rule application: {postBranchState.find? rule}"
+    aesop_trace[stepsNormalization] "Rule succeeded. New goal:{indentD g}"
     let mvars := .ofArray input.mvars.toArray
     if ← Check.rules.isEnabled then
       let actualMVars ← rapp.postState.runMetaM' g.getMVarDependencies
@@ -86,28 +79,25 @@ def runNormRuleTac (bs : BranchState) (rule : NormRule) (input : RuleTacInput) :
     let step? ←
       mkNormRuleScriptStep rule.name rapp.scriptBuilder? input.goal
         (some ⟨g, mvars⟩)
-    return .succeeded g postBranchState step?
+    return .succeeded g step?
   where
     err {α} (msg : MessageData) : MetaM α := throwError
       "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal input.goal}"
 
 def runNormRuleCore (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-    (bs : BranchState) (options : Options') (rule : IndexMatchResult NormRule) :
+    (options : Options') (rule : IndexMatchResult NormRule) :
     MetaM NormRuleResult := do
-  let branchState := bs.find rule.rule
-  aesop_trace[stepsNormalization] do
-    aesop_trace![stepsNormalization] "Running {rule.rule}"
-    aesop_trace[stepsBranchStates] "Branch state before rule application: {branchState}"
+  aesop_trace[stepsNormalization] "Running {rule.rule}"
   let ruleInput := {
     indexMatchLocations := rule.locations
-    goal, mvars, branchState, options
+    goal, mvars, options
   }
-  runNormRuleTac bs rule.rule ruleInput
+  runNormRuleTac rule.rule ruleInput
 
 def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-    (bs : BranchState) (options : Options') (rule : IndexMatchResult NormRule) :
+    (options : Options') (rule : IndexMatchResult NormRule) :
     ProfileT MetaM NormRuleResult :=
-  profiling (runNormRuleCore goal mvars bs options rule) λ result elapsed => do
+  profiling (runNormRuleCore goal mvars options rule) λ result elapsed => do
     let ruleProfile := {
       elapsed
       successful := result.isSuccessful
@@ -116,11 +106,10 @@ def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     recordAndTraceRuleProfile ruleProfile
 
 def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-    (branchState : BranchState) (options : Options')
-    (rules : Array (IndexMatchResult NormRule)) :
+    (options : Options') (rules : Array (IndexMatchResult NormRule)) :
     ProfileT MetaM NormRuleResult := do
   for rule in rules do
-    let result ← runNormRule goal mvars branchState options rule
+    let result ← runNormRule goal mvars options rule
     if result.isSuccessful then
       return result
   return .failed none
@@ -154,7 +143,7 @@ def SimpResult.toNormRuleResult (ruleName : DisplayRuleName)
     return .proved scriptStep?
   | .simplified newGoal usedTheorems => do
     let scriptStep? ← mkScriptStep? (some newGoal) usedTheorems
-    return .succeeded newGoal none scriptStep?
+    return .succeeded newGoal scriptStep?
   where
     @[inline, always_inline]
     mkScriptStep? (newGoal? : Option MVarId) (usedTheorems : Simp.UsedSimps) :
@@ -276,7 +265,7 @@ def normUnfoldCore (unfoldRules : PHashMap Name (Option Name))
           otherSolvedGoals := {}
         }
       | none => pure $ .error .normUnfold
-    return .succeeded newGoal none scriptStep?
+    return .succeeded newGoal scriptStep?
 
 def checkedNormUnfoldCore (unfoldRules : PHashMap Name (Option Name))
     (goal : MVarId) (goalMVars : HashSet MVarId) (generateScript : Bool) :
@@ -296,20 +285,19 @@ def normUnfold (unfoldRules : PHashMap Name (Option Name))
 
 inductive NormSeqResult where
   | proved (script? : Except DisplayRuleName UnstructuredScript)
-  | unproved (goal : MVarId) (branchState : BranchState)
+  | unproved (goal : MVarId)
       (script? : Except DisplayRuleName UnstructuredScript)
 
 abbrev NormStep :=
-  MVarId → BranchState → Array (IndexMatchResult NormRule) →
+  MVarId → Array (IndexMatchResult NormRule) →
   Array (IndexMatchResult NormRule) → ProfileT MetaM NormRuleResult
 
-def runNormSteps (rs : RuleSet) (goal : MVarId) (bs : BranchState)
-    (maxIterations : Nat) (steps : Array NormStep) (stepsNe : 0 < steps.size) :
+def runNormSteps (rs : RuleSet) (goal : MVarId) (maxIterations : Nat)
+    (steps : Array NormStep) (stepsNe : 0 < steps.size) :
     ProfileT MetaM NormSeqResult := do
   let mut iteration := 0
   let mut step : Fin steps.size := ⟨0, stepsNe⟩
   let mut goal := goal
-  let mut bs := bs
   let mut script? : Except DisplayRuleName UnstructuredScript := .ok #[]
   let mut preSimpRules := ∅
   let mut postSimpRules := ∅
@@ -320,11 +308,10 @@ def runNormSteps (rs : RuleSet) (goal : MVarId) (bs : BranchState)
         rules.partition λ r => r.rule.extra.penalty < (0 : Int)
       preSimpRules := preSimpRules'
       postSimpRules := postSimpRules'
-    match ← steps[step] goal bs preSimpRules postSimpRules with
-    | .succeeded newGoal branchState? scriptStep? =>
+    match ← steps[step] goal preSimpRules postSimpRules with
+    | .succeeded newGoal scriptStep? =>
       goal := newGoal
       script? := return (← script?).push (← scriptStep?)
-      bs := branchState?.getD bs
       iteration := iteration + 1
       step := ⟨0, stepsNe⟩
     | .proved scriptStep? =>
@@ -338,32 +325,30 @@ def runNormSteps (rs : RuleSet) (goal : MVarId) (bs : BranchState)
       if h : step.val + 1 < steps.size then
         step := ⟨step.val + 1, h⟩
       else
-        return .unproved goal bs script?
+        return .unproved goal script?
   throwError "aesop: exceeded maximum number of normalisation iterations ({maxIterations}). This means normalisation probably got stuck in an infinite loop."
 
 def NormStep.runPreSimpRules (options : Options')
-    (mvars : UnorderedArraySet MVarId) : NormStep :=
-  λ goal bs preSimpRules _ =>
-    runFirstNormRule goal mvars bs options preSimpRules
+    (mvars : UnorderedArraySet MVarId) : NormStep
+  | goal, preSimpRules, _ => runFirstNormRule goal mvars options preSimpRules
 
 def NormStep.runPostSimpRules (options : Options')
-    (mvars : UnorderedArraySet MVarId) : NormStep :=
-  λ goal bs _ postSimpRules =>
-    runFirstNormRule goal mvars bs options postSimpRules
+    (mvars : UnorderedArraySet MVarId) : NormStep
+  | goal, _, postSimpRules =>
+    runFirstNormRule goal mvars options postSimpRules
 
 def NormStep.unfold (rs : RuleSet) (options : Options')
-    (mvars : HashSet MVarId) : NormStep :=
-  λ goal _ _ _ =>
+    (mvars : HashSet MVarId) : NormStep
+  | goal, _, _ =>
     normUnfold rs.unfoldRules goal mvars options.generateScript
 
 def NormStep.simp (rs : RuleSet) (ctx : NormSimpContext) (options : Options')
-    (mvars : HashSet MVarId) : NormStep :=
-  λ goal _ _ _ =>
+    (mvars : HashSet MVarId) : NormStep
+  | goal, _, _ =>
     normSimp ctx rs.localNormSimpLemmas goal mvars options.generateScript
 
 partial def normalizeGoalMVar (rs : RuleSet) (normSimpContext : NormSimpContext)
-    (options : Options') (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-    (bs : BranchState) :
+    (options : Options') (goal : MVarId) (mvars : UnorderedArraySet MVarId) :
     ProfileT MetaM NormSeqResult := do
   aesop_trace[steps] "Goal before normalisation:{indentD goal}"
   let mvarsHashSet := .ofArray mvars.toArray
@@ -373,7 +358,7 @@ partial def normalizeGoalMVar (rs : RuleSet) (normSimpContext : NormSimpContext)
     NormStep.simp rs normSimpContext options mvarsHashSet,
     NormStep.runPostSimpRules options mvars
   ]
-  runNormSteps rs goal bs options.maxNormIterations normSteps (by simp)
+  runNormSteps rs goal options.maxNormIterations normSteps (by simp)
 
 -- Returns true if the goal was solved by normalisation.
 def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Q Bool := do
@@ -389,18 +374,16 @@ def normalizeGoalIfNecessary (gref : GoalRef) : SearchM Q Bool := do
   let ((normResult, profile), postState) ←
     (← gref.get).runMetaMInParentState do
       normalizeGoalMVar ctx.ruleSet ctx.normSimpContext ctx.options
-        g.preNormGoal g.mvars g.branchState
+        g.preNormGoal g.mvars
       |>.run profilingEnabled profile
   modify λ s => { s with profile }
   match normResult with
-  | .unproved postGoal postBranchState script? =>
-    gref.modify λ g =>
-      g.setNormalizationState (.normal postGoal postState script?)
-      |>.setBranchState postBranchState
+  | .unproved postGoal script? =>
+    gref.modify (·.setNormalizationState (.normal postGoal postState script?))
     return false
   | .proved script? =>
-    gref.modify λ g =>
-      g.setNormalizationState (.provenByNormalization postState script?)
+    gref.modify
+      (·.setNormalizationState (.provenByNormalization postState script?))
     gref.markProvenByNormalization
     return true
 

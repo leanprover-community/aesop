@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Tree.AddRapp
-import Aesop.Tree.BranchState
 import Aesop.Tree.Check
 import Aesop.Tree.Data
 import Aesop.Tree.ExtractProof

@@ -45,7 +45,7 @@ def default : RuleBuilder := λ input =>
     applyDef input <|>
     err "a norm" input
   where
-    tacticDef := tactic TacticBuilderOptions.default
+    tacticDef := tactic RegularBuilderOptions.default
     applyDef := apply RegularBuilderOptions.default
     constructorsDef := constructors RegularBuilderOptions.default
 

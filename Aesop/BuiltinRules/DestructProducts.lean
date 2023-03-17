@@ -84,7 +84,7 @@ elab &"aesop_destruct_products" : tactic =>
 -- of `cases`. We have this separate tactic because `cases` interacts badly with
 -- metavariables and therefore can't be used for norm rules.
 @[aesop norm 0 (rule_sets [builtin])
-  (tactic (uses_branch_state := false)
+  (tactic
     (index := [hyp And _ _, hyp Prod _ _, hyp PProd _ _, hyp MProd _ _,
                hyp Exists _, hyp Subtype _, hyp Sigma _, hyp PSigma _]))]
 partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do

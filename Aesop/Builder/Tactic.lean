@@ -12,15 +12,7 @@ open Lean.Elab.Tactic (TacticM)
 
 namespace Aesop
 
-structure TacticBuilderOptions extends RegularBuilderOptions where
-  usesBranchState : Bool
-  deriving Inhabited
-
-protected def TacticBuilderOptions.default : TacticBuilderOptions where
-  toRegularBuilderOptions := RegularBuilderOptions.default
-  usesBranchState := true
-
-def RuleBuilder.tactic (opts : TacticBuilderOptions) : RuleBuilder :=
+def RuleBuilder.tactic (opts : RegularBuilderOptions) : RuleBuilder :=
   ofGlobalRuleBuilder builderName λ _ decl => do
     let type := (← getConstInfo decl).type
     if ← isDefEq (mkApp (mkConst ``TacticM) (mkConst ``Unit)) type then
@@ -39,7 +31,6 @@ def RuleBuilder.tactic (opts : TacticBuilderOptions) : RuleBuilder :=
       return .regular {
         builder := builderName
         indexingMode := ← opts.getIndexingModeM $ pure IndexingMode.unindexed
-        mayUseBranchState := opts.usesBranchState
         tac
       }
 

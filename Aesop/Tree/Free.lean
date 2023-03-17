@@ -57,7 +57,6 @@ private def mkDummyRefs : BaseIO (GoalRef × MVarClusterRef) := do
     lastExpandedInIteration := default
     unsafeRulesSelected := default
     unsafeQueue := default
-    branchState := default
     failedRapps := default
   }
   return (gref, cref)

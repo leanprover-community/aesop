@@ -20,7 +20,7 @@ def applyHyp (hyp : FVarId) (goal : MVarId) (generateScript : Bool) :
       .ofTactic goals.size `(tactic| apply $(mkIdent $ ← hyp.getUserName))
     return { postState, goals, scriptBuilder? }
 
-@[aesop unsafe 75% (tactic (uses_branch_state := false)) (rule_sets [builtin])]
+@[aesop unsafe 75% tactic (rule_sets [builtin])]
 def applyHyps : RuleTac := λ input =>
   input.goal.withContext do
     let lctx ← getLCtx
@@ -34,9 +34,6 @@ def applyHyps : RuleTac := λ input =>
         rapps := rapps.push rapp
       catch _ => continue
       finally restoreState initialState
-    return {
-      applications := rapps
-      postBranchState? := none
-    }
+    return ⟨rapps⟩
 
 end Aesop.BuiltinRules

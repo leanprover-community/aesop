@@ -27,7 +27,7 @@ def introsUnfolding (mvarId : MVarId) : MetaM (Array FVarId × MVarId) := do
   let n ← getIntrosSizeUnfolding type
   mvarId.introN n
 
-@[aesop norm -100 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
+@[aesop norm -100 (rule_sets [builtin])]
 def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
     let (newFVars, goal) ← unhygienic $
       if let some md := input.options.introsTransparency? then

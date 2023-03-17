@@ -47,6 +47,6 @@ def applyConsts (decls : Array Name) : RuleTac := λ input => do
       restoreState initialState
   if apps.isEmpty then throwError
     "failed to apply any of these declarations:{MessageData.node $ decls.map toMessageData}"
-  return { applications := apps, postBranchState? := none }
+  return ⟨apps⟩
 
 end RuleTac

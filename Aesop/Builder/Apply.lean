@@ -30,7 +30,6 @@ def apply (opts : RegularBuilderOptions) : RuleBuilder := λ input =>
         tac := tac
         indexingMode := ← opts.getIndexingModeM $
           IndexingMode.targetMatchingConclusion type
-        mayUseBranchState := false
       }
 
 end Aesop.RuleBuilder

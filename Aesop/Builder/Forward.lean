@@ -93,7 +93,6 @@ def forward (opts : ForwardBuilderOptions) : RuleBuilder := λ input =>
         (immediate : UnorderedArraySet Nat) : MetaM RuleBuilderResult :=
       return .regular {
         builder := .forward
-        mayUseBranchState := false
         indexingMode := ← opts.getIndexingModeM $ getIndexingMode type immediate
         tac
       }

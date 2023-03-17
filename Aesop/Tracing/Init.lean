@@ -58,10 +58,6 @@ initialize Init.stepsActiveGoalQueue : TraceOption ←
   registerTraceOption `steps.activeGoalQueue false
     "(aesop) Print the active goal queue after each iteration of the search loop. Has no effect unless trace.aesop.steps is true."
 
-initialize Init.stepsBranchStates : TraceOption ←
-  registerTraceOption `steps.branchStates false
-    "(aesop) Print a rule's branch state before and after the rule is applied. Has no effect unless trace.aesop.steps is true."
-
 initialize Init.stepsNormalization : TraceOption ←
   registerTraceOption `steps.normalization false
     "(aesop) Print intermediate goals during normalization. Has no effect unless trace.aesop.steps is true."

@@ -78,7 +78,7 @@ elab &"aesop_subst " hyp:ident : tactic =>
   elabAesopSubst #[hyp]
 
 @[aesop (rule_sets [builtin]) norm -50
-  (tactic (uses_branch_state := false) (index := [hyp _ = _, hyp _ ↔ _]))]
+    (tactic (index := [hyp _ = _, hyp _ ↔ _]))]
 def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
   input.goal.withContext do
     let hyps ← input.indexMatchLocations.toArray.mapM λ

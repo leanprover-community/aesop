@@ -11,7 +11,7 @@ open Lean.Meta
 
 namespace Aesop.BuiltinRules
 
-@[aesop safe -50 (tactic (uses_branch_state := false)) (rule_sets [builtin])]
+@[aesop safe -50 (rule_sets [builtin])]
 def assumption : RuleTac := λ input => do
   let goal := input.goal
   goal.withContext do
@@ -35,10 +35,7 @@ def assumption : RuleTac := λ input => do
         applications := applications.push application
     if applications.isEmpty then
       throwTacticEx `Aesop.BuiltinRules.assumption goal "no matching assumption found"
-    return {
-      applications
-      postBranchState? := none
-    }
+    return ⟨applications⟩
   where
     tryHyp (goal : MVarId) (tgt : Expr) (ldecl : LocalDecl)
         (generateScript : Bool) : MetaM (Option (RuleApplication × Bool)) := do
