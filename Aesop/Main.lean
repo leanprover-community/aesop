@@ -15,7 +15,8 @@ open Lean.Elab.Tactic
 namespace Aesop
 
 @[tactic Frontend.Parser.aesopTacticNoCheckpoint, tactic Frontend.Parser.aesopTacticNoCheckpoint?]
-def evalAesop : Tactic := λ stx =>
+def evalAesop : Tactic := λ stx => do
+  profileitM Exception "aesop" (← getOptions) do
   withMainContext do
     let (profile, totalTime) ← IO.time do
       let (config, configParseTime) ← IO.time $ Frontend.TacticConfig.parse stx
