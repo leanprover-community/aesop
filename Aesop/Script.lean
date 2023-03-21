@@ -27,7 +27,7 @@ elab (name := Parser.onGoal) &"on_goal " n:num " => " ts:tacticSeq : tactic => d
     let g := gs[n - 1]
     setGoals [g]
     evalTactic ts
-    let gs := gs[:n - 1] ++ (← getUnsolvedGoals).toArray ++ gs[n:] -- FIXME off by one?
+    let gs := gs[:n - 1] ++ (← getUnsolvedGoals).toArray ++ gs[n:]
     setGoals gs.toList
   else
     throwError "on_goal: tried to select goal {n} but there are only {gs.size} goals"
@@ -317,7 +317,7 @@ def seq (b : StructuredScriptBuilder m)
       let mut start := 0
       for b' in bs do
         let «end» := start + b'.subgoals
-        let b'Conts := conts[start:«end»] -- FIXME off by one?
+        let b'Conts := conts[start:«end»]
         start := «end»
         bConts := bConts.push (b.elim b'Conts)
       b.elim bConts.toSubarray

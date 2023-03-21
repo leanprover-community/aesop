@@ -47,34 +47,6 @@ def time' [Monad m] [MonadLiftT BaseIO m] (x : m Unit) : m Aesop.Nanos := do
 end IO
 
 
-namespace Lean.MessageData
-
-def joinSepArray (ms : Array MessageData) (sep : MessageData) :
-    MessageData := Id.run do
-  let mut result := nil
-  let last := ms.size - 1
-  for h : i in [0:ms.size] do
-    if i ≥ last then
-      result := result ++ ms[i]'h.2
-    else
-      result := result ++ ms[i]'h.2 ++ sep
-  return result
-
-@[inline]
-def unlines (ms : Array MessageData) : MessageData :=
-  joinSepArray ms Format.line
-
--- TODO this is for compatibility with a previous version of the MessageData
--- API.
-def node (fs : Array MessageData) : MessageData :=
-  indentD (unlines fs)
-
-def nodeFiltering (fs : Array (Option MessageData)) : MessageData :=
-  node $ fs.filterMap id
-
-end Lean.MessageData
-
-
 namespace Lean.PersistentHashSet
 
 -- Elements are returned in unspecified order.
@@ -182,18 +154,8 @@ def merge (s t : SimpTheorems) : SimpTheorems := {
         else
           x.insert origin
 
-open MessageData in
-protected def toMessageData (s : SimpTheorems) : MessageData :=
-  node #[
-    "pre lemmas:" ++ node (s.pre.values.map toMessageData),
-    "post lemmas:" ++ node (s.post.values.map toMessageData),
-    "definitions to unfold:" ++ node
-      (s.toUnfold.toArray.qsort Name.lt |>.map toMessageData),
-    "erased entries:" ++ node
-      (s.erased.toArray.qsort (λ o₁ o₂ => o₁.key.lt o₂.key) |>.map (·.key))
-  ]
-
 end Lean.Meta.SimpTheorems
+
 
 namespace Lean.Meta
 

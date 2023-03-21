@@ -817,22 +817,31 @@ slow to prove a goal -- it is useful to see what it's doing. To that end, you
 can enable various tracing options. These use the usual syntax, e.g.
 
 ``` lean
-set_option trace.aesop.steps true
+set_option trace.aesop true
 ```
 
 The main options are:
 
-- `trace.aesop.steps`: print a step-by-step log of which goals Aesop tried to
+- `trace.aesop`: print a step-by-step log of which goals Aesop tried to
   solve, which rules it tried to apply (successfully or unsuccessfully), etc.
-  You can customise the output by setting various sub-options, e.g.
-  `trace.aesop.steps.normalization` will show which normalisation rules were
-  applied. When you autocomplete `set_option trace.aesop.steps.`, you should
-  get a full list of available sub-options.
 - `trace.aesop.ruleSet`: print the rule set used for an Aesop call.
-- `trace.aesop.profile`: print some information about where Aesop spent its
-  time.
 - `trace.aesop.proof`: if Aesop is successful, print the proof that was
-  generated (as a Lean term).
+  generated (as a Lean term). You should be able to copy-and-paste this proof
+  to replace Aesop.
+  
+### Profiling
+
+To get an idea of where Aesop spends its time, use
+
+``` lean
+set_option profiler true
+```
+
+Aesop then prints a summary of how much time its various tasks took, including
+the time spent executing each rule.
+
+If you additionally enable `trace.aesop`, the trace also tells you long it took
+to expand each goal.
 
 ### Checking Internal Invariants
 

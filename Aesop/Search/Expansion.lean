@@ -14,16 +14,38 @@ namespace Aesop
 variable [Aesop.Queue Q]
 
 inductive RuleResult
-  | proven
+  | proved (newRapps : Array RappRef)
+  | succeeded (newRapps : Array RappRef)
   | failed
-  | succeeded
+
+namespace RuleResult
+
+def toEmoji : RuleResult → String
+  | proved .. => ruleProvedEmoji
+  | succeeded .. => ruleSuccessEmoji
+  | failed => ruleFailureEmoji
+
+def isSuccessful
+  | proved .. | succeeded .. => true
+  | failed => false
+
+end RuleResult
+
+inductive SafeRuleResult
+  | regular (result : RuleResult)
   | postponed (result : PostponedSafeRule)
 
-def RuleResult.isSuccessful
-  | proven => true
-  | succeeded => true
-  | failed => false
-  | postponed .. => false
+namespace SafeRuleResult
+
+def toEmoji : SafeRuleResult → String
+  | regular r => r.toEmoji
+  | postponed .. => rulePostponedEmoji
+
+def isSuccessfulOrPostponed
+  | regular r => r.isSuccessful
+  | postponed .. => true
+
+end SafeRuleResult
 
 def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
     (indexMatchLocations : UnorderedArraySet IndexMatchLocation)
@@ -39,7 +61,8 @@ def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
   runRuleTac tac ruleName postNormState input
 
 def addRapps (parentRef : GoalRef) (rule : RegularRule)
-    (rapps : Array RuleApplicationWithMVarInfo) : SearchM Q RuleResult := do
+    (rapps : Array RuleApplicationWithMVarInfo) :
+    SearchM Q RuleResult := do
   let parent ← parentRef.get
   let successProbability := parent.successProbability * rule.successProbability
 
@@ -63,133 +86,191 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
     -- perform this computation after all rapps have been added to ensure
     -- that if one is proven, the others are all marked as irrelevant.
 
-  aesop_trace[steps] do
-    let traceMods ← TraceModifiers.get
-    let rappMsgs ← rrefs.mapM λ rref => do
-      let r ← rref.get
-      let rappMsg ← r.toMessageData
-      let subgoalMsgs ← r.foldSubgoalsM (init := #[]) λ msgs gref =>
-        return msgs.push (← (← gref.get).toMessageData traceMods)
-      return rappMsg ++ MessageData.node subgoalMsgs
-    aesop_trace![steps] "New rapps and goals:{MessageData.node rappMsgs}"
-
   let provenRref? ← rrefs.findM? λ rref => return (← rref.get).state.isProven
   if let (some _) := provenRref? then
-    aesop_trace[steps] "One of the rule applications has no subgoals. Goal is proven."
-    return RuleResult.proven
+    return .proved rrefs
   else
-    return RuleResult.succeeded
+    return .succeeded rrefs
+
+private def addRuleFailure (rule : RegularRule) (parentRef : GoalRef) :
+    SearchM Q Unit := do
+  parentRef.modify λ g => g.setFailedRapps $ g.failedRapps.push rule
+
+@[inline, always_inline]
+def withRuleTraceNode (ruleName : RuleName)
+    (toEmoji : α → String) (suffix : String) (k : SearchM Q α) : SearchM Q α :=
+  withAesopTraceNode .steps fmt k
+  where
+    fmt (result : Except Exception α) : SearchM Q MessageData := do
+      let emoji := exceptRuleResultToEmoji toEmoji result
+      return m!"{emoji} {ruleName}{suffix}"
 
 def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
     (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
-    SearchM Q RuleResult := do
+    SearchM Q (Option RuleTacOutput) := do
   let parent ← parentRef.get
   let ruleOutput? ←
     runRegularRuleTac parent rule.tac.run rule.name indexMatchLocations
       (← read).options
   match ruleOutput? with
-  | Sum.inl exc => onFailure exc.toMessageData
+  | Sum.inl exc =>
+    aesop_trace[steps] exc.toMessageData
+    return none
   | Sum.inr { applications := #[], .. } =>
-    onFailure "Rule returned no rule applications."
+    aesop_trace[steps] "Rule returned no rule applications"
+    return none
   | Sum.inr output =>
-    let rapps ← output.applications.mapM
-      (·.toRuleApplicationWithMVarInfo parent.mvars)
-    if let (.safe rule) := rule then
-      if rapps.size != 1 then
-        return ← onFailure "Safe rule did not produce exactly one rule application. Treating it as failed."
-      if rapps.any (! ·.assignedMVars.isEmpty) then
-        aesop_trace[steps] "Safe rule assigned metavariables. Postponing it."
-        return RuleResult.postponed ⟨rule, output⟩
-    aesop_trace[steps] "Rule succeeded, producing {rapps.size} rule application(s)."
-    addRapps parentRef rule rapps
-  where
-    onFailure (msg : MessageData) : SearchM Q RuleResult := do
-      aesop_trace[stepsRuleFailures] "Rule failed with message:{indentD msg}"
-      parentRef.modify λ g => g.setFailedRapps $ g.failedRapps.push rule
-      return RuleResult.failed
+    return some output
 
-def runRegularRule (parentRef : GoalRef) (rule : RegularRule)
+def runSafeRuleCore (parentRef : GoalRef) (rule : SafeRule)
+    (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
+    SearchM Q SafeRuleResult := do
+  withRuleTraceNode rule.name (·.toEmoji) "" do
+    let some output ←
+        runRegularRuleCore parentRef (.safe rule) indexMatchLocations
+      | do addRuleFailure (.safe rule) parentRef; return .regular .failed
+    let parentMVars := (← parentRef.get).mvars
+    let rapps ←
+      output.applications.mapM (·.toRuleApplicationWithMVarInfo parentMVars)
+    if rapps.size != 1 then
+      aesop_trace[steps] "Safe rule did not produce exactly one rule application"
+      addRuleFailure (.safe rule) parentRef
+      return .regular .failed
+    else if rapps.any (! ·.assignedMVars.isEmpty) then
+      aesop_trace[steps] "Safe rule assigned metavariables, so we postpone it"
+      return .postponed ⟨rule, output⟩
+    else
+      return .regular (← addRapps parentRef (.safe rule) rapps)
+
+def runSafeRule (parentRef : GoalRef) (rule : SafeRule)
+    (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
+    SearchM Q SafeRuleResult :=
+  profiling (runSafeRuleCore parentRef rule indexMatchLocations)
+    λ result elapsed => recordRuleProfile {
+        rule := .ruleName rule.name
+        successful := result.isSuccessfulOrPostponed
+        elapsed
+      }
+
+def runUnsafeRuleCore (parentRef : GoalRef) (rule : UnsafeRule)
+    (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
+    SearchM Q RuleResult := do
+  withRuleTraceNode rule.name (·.toEmoji) "" do
+    let some output ←
+        runRegularRuleCore parentRef (.unsafe rule) indexMatchLocations
+      | do addRuleFailure (.unsafe rule) parentRef; return .failed
+    let parentMVars := (← parentRef.get).mvars
+    let rapps ←
+      output.applications.mapM (·.toRuleApplicationWithMVarInfo parentMVars)
+    addRapps parentRef (.unsafe rule) rapps
+
+def runUnsafeRule (parentRef : GoalRef) (rule : UnsafeRule)
     (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
     SearchM Q RuleResult :=
-  profiling (runRegularRuleCore parentRef rule indexMatchLocations)
-    λ result elapsed => do
-      let successful :=
-        match result with
-        | .failed => false
-        | .succeeded => true
-        | .proven => true
-        | .postponed .. => true
-      let rule := .ruleName rule.name
-      recordAndTraceRuleProfile { rule, elapsed, successful }
+  profiling (runUnsafeRuleCore parentRef rule indexMatchLocations)
+    λ result elapsed => recordRuleProfile {
+        rule := .ruleName rule.name
+        successful := result.isSuccessful
+        elapsed
+      }
 
--- Never returns `RuleResult.postponed`.
-def runFirstSafeRule (gref : GoalRef) :
-    SearchM Q (RuleResult × Array PostponedSafeRule) := do
+inductive SafeRulesResult
+  | proved (newRapps : Array RappRef)
+  | succeeded (newRapps : Array RappRef)
+  | failed (postponed : Array PostponedSafeRule)
+  | skipped
+
+def SafeRulesResult.toEmoji : SafeRulesResult → String
+  | proved .. => ruleProvedEmoji
+  | succeeded .. => ruleSuccessEmoji
+  | failed .. => ruleFailureEmoji
+  | skipped => ruleSkippedEmoji
+
+def runFirstSafeRule (gref : GoalRef) : SearchM Q SafeRulesResult := do
   let g ← gref.get
   if g.unsafeRulesSelected then
-    return (RuleResult.failed, #[])
+    return .skipped
     -- If the unsafe rules have been selected, we have already tried all the
     -- safe rules.
   let rules ← selectSafeRules g
-  aesop_trace[steps] "Selected safe rules:{MessageData.node $ rules.map toMessageData}"
-  aesop_trace[steps] "Trying safe rules"
   let mut postponedRules := {}
   for r in rules do
-    aesop_trace[steps] "Trying {r.rule}"
-    let result' ←
-      runRegularRule gref (.safe r.rule) r.locations
-    match result' with
-    | .failed => continue
-    | .proven => return (result', #[])
-    | .succeeded => return (result', #[])
+    let result ← runSafeRule gref r.rule r.locations
+    match result with
+    | .regular .failed => continue
+    | .regular (.proved newRapps) => return .proved newRapps
+    | .regular (.succeeded newRapps) => return .succeeded newRapps
     | .postponed r =>
       postponedRules := postponedRules.push r
-  return (RuleResult.failed, postponedRules)
+  return .failed postponedRules
+
+def applyPostponedSafeRule (r : PostponedSafeRule) (parentRef : GoalRef) :
+    SearchM Q RuleResult := do
+  withRuleTraceNode r.rule.name (·.toEmoji) " (postponed)" do
+    let parentMVars := (← parentRef.get).mvars
+    let rapps ← r.output.applications.mapM
+      (·.toRuleApplicationWithMVarInfo parentMVars)
+    addRapps parentRef (.«unsafe» r.toUnsafeRule) rapps
 
 partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
-    (parentRef : GoalRef) : SearchM Q Unit := do
+    (parentRef : GoalRef) : SearchM Q RuleResult := do
   let queue ← selectUnsafeRules postponedSafeRules parentRef
-  aesop_trace[steps] "Trying unsafe rules"
-  let (remainingQueue, _) ← loop queue
+  let (remainingQueue, result) ← loop queue
   parentRef.modify λ g => g.setUnsafeQueue remainingQueue
-  aesop_trace[steps] "Remaining unsafe rules:{MessageData.node remainingQueue.entriesToMessageData}"
   if remainingQueue.isEmpty then
-    if (← parentRef.get).state.isProven then
-      return
-    if ← (← parentRef.get).isUnprovableNoCache then
-      aesop_trace[steps] "Goal is unprovable."
+    let parent ← parentRef.get
+    if ← pure (! parent.state.isProven) <&&> parent.isUnprovableNoCache then
       parentRef.markUnprovable
-    else
-      aesop_trace[steps] "All rules applied, goal is exhausted."
+  return result
   where
     loop (queue : UnsafeQueue) : SearchM Q (UnsafeQueue × RuleResult) := do
       let (some (r, queue)) := queue.popFront?
         | return (queue, RuleResult.failed)
       match r with
       | .unsafeRule r =>
-        aesop_trace[steps] "Trying {r.rule}"
-        let result ←
-          runRegularRule parentRef (.«unsafe» r.rule) r.locations
+        let result ← runUnsafeRule parentRef r.rule r.locations
         match result with
-        | .proven => return (queue, result)
-        | .succeeded => return (queue, result)
-        | .postponed .. => throwError
-          "aesop: internal error: applying an unsafe rule yielded a postponed safe rule."
+        | .proved .. => return (queue, result)
+        | .succeeded .. => return (queue, result)
         | .failed => loop queue
       | .postponedSafeRule r =>
-        aesop_trace[steps] "Applying postponed safe rule {r.rule}"
-        let parentMVars := (← parentRef.get).mvars
-        let rapps ← r.output.applications.mapM
-          (·.toRuleApplicationWithMVarInfo parentMVars)
-        let result ← addRapps parentRef (.«unsafe» r.toUnsafeRule) rapps
-        return (queue, result)
+        return (queue, ← applyPostponedSafeRule r parentRef)
 
-def expandGoal (gref : GoalRef) : SearchM Q Unit := do
-  if ← normalizeGoalIfNecessary gref then
-    -- Goal was already proven by normalisation.
-    return
-  let (safeResult, postponedSafeRules) ← runFirstSafeRule gref
-  unless safeResult.isSuccessful do
-    runFirstUnsafeRule postponedSafeRules gref
+def expandGoal (gref : GoalRef) : SearchM Q RuleResult := do
+  let provedByNorm ←
+    withAesopTraceNode .steps fmtNorm (normalizeGoalIfNecessary gref)
+  aesop_trace[steps] do
+    let (goal, metaState) ← (← gref.get).currentGoalAndMetaState
+    metaState.runMetaM' do
+      aesop_trace![steps] "Goal after normalisation:{indentD goal}"
+  if provedByNorm then
+    return .proved #[]
+  let safeResult ←
+    withAesopTraceNode .steps fmtSafe (runFirstSafeRule gref)
+  match safeResult with
+  | .succeeded newRapps => return .succeeded newRapps
+  | .proved newRapps => return .proved newRapps
+  | .failed postponedSafeRules => doUnsafe postponedSafeRules
+  | .skipped => doUnsafe #[]
+  where
+    doUnsafe (postponedSafeRules : Array PostponedSafeRule) :
+        SearchM Q RuleResult := do
+      withAesopTraceNode .steps fmtUnsafe do
+        runFirstUnsafeRule postponedSafeRules gref
+
+    fmtNorm (result : Except Exception Bool) : SearchM Q MessageData :=
+      let emoji :=
+        match result with
+        | .error _ => ruleErrorEmoji
+        | .ok true => ruleProvedEmoji
+        | .ok false => ruleSuccessEmoji
+      return m!"{emoji} Normalisation"
+
+    fmtSafe (result : Except Exception SafeRulesResult) :
+        SearchM Q MessageData :=
+      return m!"{exceptRuleResultToEmoji (·.toEmoji) result} Safe rules"
+
+    fmtUnsafe (result : Except Exception RuleResult) : SearchM Q MessageData :=
+      return m!"{exceptRuleResultToEmoji (·.toEmoji) result} Unsafe rules"
 
 end Aesop

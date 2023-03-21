@@ -9,10 +9,10 @@ import Aesop.Tree.Check
 import Aesop.Tree.Data
 import Aesop.Tree.ExtractProof
 import Aesop.Tree.ExtractScript
-import Aesop.Tree.Format
 import Aesop.Tree.Free
 import Aesop.Tree.RunMetaM
 import Aesop.Tree.State
+import Aesop.Tree.Tracing
 import Aesop.Tree.Traversal
 import Aesop.Tree.TreeM
 import Aesop.Tree.UnsafeQueue

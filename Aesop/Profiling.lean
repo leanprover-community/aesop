@@ -73,20 +73,27 @@ def ruleApplicationTotals (p : Profile) :
           m.insert rp.rule (successful, failed + rp.elapsed)
   return m
 
-open Lean.MessageData in
-protected def toMessageData (p : Profile) : MessageData :=
+def trace (p : Profile) (opt : TraceOption) : CoreM Unit := do
+  if ! (← opt.isEnabled) then
+    return
   let totalRuleApplications :=
     p.ruleApplications.foldl (init := 0) λ total rp =>
       total + rp.elapsed
-  "execution times:" ++ node #[
-    m!"total: {p.total.printAsMillis}" ++ node #[
-      m!"configuration parsing: {p.configParsing.printAsMillis}",
-      m!"rule set construction: {p.ruleSetConstruction.printAsMillis}",
-      m!"search: {p.search.printAsMillis}" ++ node #[
-        m!"rule selection: {p.ruleSelection.printAsMillis}",
-        m!"rule applications: {totalRuleApplications.printAsMillis}" ++
-          node (displayRuleApplications p.ruleApplicationTotals)
-  ]]]
+  aesop_trace![opt] "Configuration parsing: {p.configParsing.printAsMillis}"
+  aesop_trace![opt] "Rule set construction: {p.ruleSetConstruction.printAsMillis}"
+  withConstAesopTraceNode opt (collapsed := false)
+      (return m!"Search: {p.search.printAsMillis}") do
+    aesop_trace![opt] "Rule selection: {p.ruleSelection.printAsMillis}"
+    withConstAesopTraceNode opt (collapsed := false)
+        (return m!"Rule applications: {totalRuleApplications.printAsMillis}") do
+      let timings :=
+        p.ruleApplicationTotals.fold
+          (init := Array.mkEmpty p.ruleApplicationTotals.size)
+          λ timings n (successful, failed) =>
+            timings.push (n, successful, failed)
+      let timings := timings.qsortOrd (ord := ⟨compareTimings⟩)
+      for (n, s, f) in timings do
+        aesop_trace![opt] "[{(s + f).printAsMillis} / {s.printAsMillis} / {f.printAsMillis}] {n}"
   where
     compareTimings (x y : DisplayRuleName × Nanos × Nanos) : Ordering :=
       compareLex
@@ -94,18 +101,6 @@ protected def toMessageData (p : Profile) : MessageData :=
         (compareOn (λ (n, _, _) => n))
         x y
       |>.swap
-
-    displayRuleApplications (apps : HashMap DisplayRuleName (Nanos × Nanos)) :
-        Array MessageData := Id.run do
-      let timings := apps.fold (init := Array.mkEmpty apps.size)
-        λ timings n (successful, failed) => timings.push (n, successful, failed)
-      let timings := timings.qsortOrd (ord := ⟨compareTimings⟩)
-      let result := timings.map λ (n, s, f) =>
-        m!"[{(s + f).printAsMillis} / {s.printAsMillis} / {f.printAsMillis}] {n}"
-      return result
-
-instance : ToMessageData Profile :=
-  ⟨Profile.toMessageData⟩
 
 end Profile
 
@@ -144,7 +139,7 @@ def recordRuleSelectionProfile (elapsed : Nanos) : m Unit :=
   modify λ p => { p with ruleSelection := p.ruleSelection + elapsed }
 
 @[inline, always_inline]
-def recordRuleProfile (rp :  RuleProfile) : m Unit :=
+def recordRuleProfile (rp : RuleProfile) : m Unit :=
   modify λ p => { p with ruleApplications := p.ruleApplications.push rp }
 
 @[inline, always_inline]
@@ -156,22 +151,5 @@ def profiling [MonadLiftT BaseIO m] (x : m α)
     return result
   else
     x
-
-section
-
-variable [MonadTrace m] [MonadOptions m] [MonadRef m] [AddMessageContext m]
-
-@[inline, always_inline]
-def recordAndTraceRuleSelectionProfile (phase : PhaseName) (elapsed : Nanos) :
-    m Unit := do
-  aesop_trace[stepsProfile] "[{elapsed.printAsMillis}] {phase} rule selection"
-  recordRuleSelectionProfile elapsed
-
-@[inline, always_inline]
-def recordAndTraceRuleProfile (rp : RuleProfile) : m Unit := do
-  aesop_trace[stepsProfile] toMessageData rp
-  recordRuleProfile rp
-
-end
 
 end Aesop

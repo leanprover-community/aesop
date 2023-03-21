@@ -46,7 +46,7 @@ def applyConsts (decls : Array Name) : RuleTac := λ input => do
     finally
       restoreState initialState
   if apps.isEmpty then throwError
-    "failed to apply any of these declarations:{MessageData.node $ decls.map toMessageData}"
+    "failed to apply any of these declarations:{decls}"
   return ⟨apps⟩
 
 end RuleTac

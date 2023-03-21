@@ -31,8 +31,8 @@ instance : LE NormRuleInfo :=
 
 abbrev NormRule := Rule NormRuleInfo
 
-instance : ToFormat NormRule where
-  format r := f!"[{r.extra.penalty}] {r.name}"
+instance : ToString NormRule where
+  toString r := s!"[{r.extra.penalty}] {r.name}"
 
 def defaultNormPenalty : Int := 1
 
@@ -46,8 +46,8 @@ inductive Safety
 
 namespace Safety
 
-instance : ToFormat Safety where
-  format
+instance : ToString Safety where
+  toString
     | safe => "safe"
     | almostSafe => "almostSafe"
 
@@ -69,8 +69,8 @@ instance : LE SafeRuleInfo :=
 
 abbrev SafeRule := Rule SafeRuleInfo
 
-instance : ToFormat SafeRule where
-  format r := f!"[{r.extra.penalty}/{r.extra.safety}] {r.name}"
+instance : ToString SafeRule where
+  toString r := s!"[{r.extra.penalty}/{r.extra.safety}] {r.name}"
 
 def defaultSafePenalty : Int := 1
 
@@ -94,8 +94,8 @@ instance : LE UnsafeRuleInfo :=
 
 abbrev UnsafeRule := Rule UnsafeRuleInfo
 
-instance : ToFormat UnsafeRule where
-  format r := f!"[{r.extra.successProbability.toHumanString}] {r.name}"
+instance : ToString UnsafeRule where
+  toString r := s!"[{r.extra.successProbability.toHumanString}] {r.name}"
 
 def defaultSuccessProbability : Percent := .fifty
 

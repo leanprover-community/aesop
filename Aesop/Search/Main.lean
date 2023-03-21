@@ -27,25 +27,58 @@ partial def nextActiveGoal : SearchM Q GoalRef := do
   let some gref ← popGoal?
     | throwError "aesop/expandNextGoal: internal error: no active goals left"
   if ! (← (← gref.get).isActive) then
-    aesop_trace[steps] "Skipping inactive goal {(← gref.get).id}."
     nextActiveGoal
   else
     return gref
 
 def expandNextGoal : SearchM Q Unit := do
   let gref ← nextActiveGoal
-  aesop_trace[steps] "Expanding {← (← gref.get).toMessageData (← TraceModifiers.get)}"
-  let maxRappDepth := (← read).options.maxRuleApplicationDepth
-  if maxRappDepth != 0 && (← gref.get).depth >= maxRappDepth then
-    aesop_trace[steps] "Skipping goal since it is beyond the maximum rule application depth ({maxRappDepth})."
-    gref.markForcedUnprovable
-    setMaxRuleApplicationDepthReached
-    return
-  expandGoal gref
-  let currentIteration ← getIteration
-  gref.modify λ g => g.setLastExpandedInIteration currentIteration
-  if ← (← gref.get).isActive then
-    enqueueGoals #[gref]
+  let g ← gref.get
+  let (initialGoal, initialMetaState) ← g.currentGoalAndMetaState
+  let result ← withAesopTraceNode .steps
+    (fmt g.id g.priority initialGoal initialMetaState) do
+    initialMetaState.runMetaM' do
+      aesop_trace[steps] "Initial goal:{indentD initialGoal}"
+    let maxRappDepth := (← read).options.maxRuleApplicationDepth
+    if maxRappDepth != 0 && (← gref.get).depth >= maxRappDepth then
+      aesop_trace[steps] "Treating the goal as unprovable since it is beyond the maximum rule application depth ({maxRappDepth})."
+      gref.markForcedUnprovable
+      setMaxRuleApplicationDepthReached
+      return .failed
+    let result ← expandGoal gref
+    let currentIteration ← getIteration
+    gref.modify λ g => g.setLastExpandedInIteration currentIteration
+    if ← (← gref.get).isActive then
+      enqueueGoals #[gref]
+    return result
+  match result with
+  | .proved newRapps | .succeeded newRapps => traceNewRapps newRapps
+  | .failed => return
+  where
+    fmt (id : GoalId) (priority : Percent) (initialGoal : MVarId)
+        (initialMetaState : Meta.SavedState)
+        (result : Except Exception RuleResult) : SearchM Q MessageData := do
+      let tgt ← initialMetaState.runMetaM' do
+        initialGoal.withContext do
+          addMessageContext $ toMessageData (← initialGoal.getType)
+      return m!"{exceptRuleResultToEmoji (·.toEmoji) result} (G{id}) [{priority.toHumanString}] ⋯ ⊢ {tgt}"
+
+    traceNewRapps (newRapps : Array RappRef) : SearchM Q Unit := do
+      aesop_trace[steps] do
+        for rref in newRapps do
+          let r ← rref.get
+          r.withHeadlineTraceNode .steps
+            (transform := λ msg => return m!"{newNodeEmoji} " ++ msg) do
+            withAesopTraceNode .steps (λ _ => return "Metadata") do
+              r.traceMetadata .steps
+          r.metaState.runMetaM' do
+            r.forSubgoalsM λ gref => do
+              let g ← gref.get
+              g.withHeadlineTraceNode .steps
+                (transform := λ msg => return m!"{newNodeEmoji} " ++ msg) do
+                aesop_trace![steps] g.preNormGoal
+                withAesopTraceNode .steps (λ _ => return "Metadata") do
+                  g.traceMetadata .steps
 
 def checkGoalLimit : SearchM Q (Option MessageData) := do
   let maxGoals := (← read).options.maxGoals
@@ -81,19 +114,16 @@ private def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
   withOptions (·.setBool `pp.analyze true) x
 
 def finalizeProof : SearchM Q Unit := do
-  aesop_trace[steps] "Root node is proven. Linking proofs."
   (← getRootMVarId).withContext do
     extractProof
     let (some proof) ← getProof? | throwError
       "aesop: internal error: root goal is proven but its metavariable is not assigned"
-    if proof.hasExprMVar then throwError
-      m!"aesop: internal error: extracted proof has metavariables." ++ MessageData.node #[
-        m!"Proof: {proof}",
-        m!"Unassigned metavariables: {(← getMVarsNoDelayed proof).map (·.name)}"
-      ]
-    aesop_trace[proof] do
-      withPPAnalyze do
-        aesop_trace![proof] "Final proof:{indentExpr proof}"
+    if proof.hasExprMVar then
+      let inner :=
+        m!"Proof: {proof}\nUnassigned metavariables: {(← getMVarsNoDelayed proof).map (·.name)}"
+      throwError "aesop: internal error: extracted proof has metavariables.{indentD inner}"
+    withPPAnalyze do
+      aesop_trace[proof] "Final proof:{indentExpr proof}"
 
 open Lean.Elab.Tactic in
 def checkRenderedScript (script : Array Syntax.Tactic) : SearchM Q Unit := do
@@ -124,7 +154,8 @@ def traceScript : SearchM Q Unit := do
     let script ← script.toStructuredScript tacticState
     let script ← script.render tacticState
     if options.traceScript then
-      let scriptMsg := .unlines $ script.map toMessageData
+      let scriptMsg :=
+        MessageData.joinSep (script.map toMessageData |>.toList) "\n"
       withPPAnalyze do
         logInfo m!"Try this:{indentD scriptMsg}"
     if ← Check.script.isEnabled then
@@ -139,11 +170,8 @@ def finishIfProven : SearchM Q Bool := do
   traceScript
   return true
 
-def traceFinalTree : SearchM Q Unit := do
-  aesop_trace[finalTree] do
-    let treeMsg ←
-      (← (← getRootGoal).get).treeToMessageData (← TraceModifiers.get)
-    aesop_trace![finalTree] "Final search tree:{indentD treeMsg}"
+def traceTree : SearchM Q Unit := do
+  (← (← getRootGoal).get).traceTree .tree
 
 -- When we hit a non-fatal error (i.e. the search terminates without a proof
 -- because the root goal is unprovable or because we hit a search limit), we
@@ -158,7 +186,6 @@ def traceFinalTree : SearchM Q Unit := do
 -- not expand the safe rules after the fact, the tactic's output would be
 -- sensitive to minor changes in, e.g., rule priority.
 def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
-  aesop_trace[steps] "Search terminated unsuccessfully."
   let opts := (← read).options
   if opts.terminal then
     throwTacticEx `aesop (← getRootMVarId) err
@@ -167,35 +194,34 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
   expandSafePrefix
   let goals ← extractSafePrefix
   aesop_trace[proof] do
-    let proof? ← getProof?
-    (← getRootMVarId).withContext do
-      match proof? with
-      | some proof => aesop_trace![proof] "Final proof:{indentExpr proof}"
-      | none => aesop_trace![proof] "Final proof: <none>"
-  traceFinalTree
+    match ← getProof? with
+    | some proof =>
+      (← getRootMVarId).withContext do
+        aesop_trace![proof] "{proof}"
+    | none => aesop_trace![proof] "<no proof>"
+  traceTree
   return goals
 
 def handleFatalError (e : Exception) : SearchM Q α := do
-  traceFinalTree
+  traceTree
   throw e
 
 partial def searchLoop : SearchM Q (Array MVarId) :=
   withIncRecDepth do
-    aesop_trace[steps] "=== Search loop iteration {← getIteration}"
     if let (some err) ← checkRootUnprovable then
-      return (← handleNonfatalError err)
-    if ← finishIfProven then
+      handleNonfatalError err
+    else if ← finishIfProven then
+      traceTree
       return #[]
-    if let (some err) ← checkGoalLimit then
-      return (← handleNonfatalError err)
-    if let (some err) ← checkRappLimit then
-      return (← handleNonfatalError err)
-    expandNextGoal
-    aesop_trace[stepsTree] "Current search tree:{indentD $ ← (← (← getRootGoal).get).treeToMessageData (← TraceModifiers.get)}"
-    aesop_trace[stepsActiveGoalQueue] "Current active goals:{← formatQueue}"
-    checkInvariantsIfEnabled
-    incrementIteration
-    searchLoop
+    else if let (some err) ← checkGoalLimit then
+      handleNonfatalError err
+    else if let (some err) ← checkRappLimit then
+      handleNonfatalError err
+    else
+      expandNextGoal
+      checkInvariantsIfEnabled
+      incrementIteration
+      searchLoop
 
 def preprocessGoal (mvarId : MVarId) (mvars : HashSet MVarId)
     (generateScript : Bool) : MetaM (MVarId × UnstructuredScript) := do

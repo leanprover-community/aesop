@@ -14,7 +14,6 @@ class Queue (Q : Type) where
   init : BaseIO Q
   addGoals : Q → Array GoalRef → BaseIO Q
   popGoal : Q → BaseIO (Option GoalRef × Q)
-  format : Q → MetaM MessageData
 
 namespace Queue
 

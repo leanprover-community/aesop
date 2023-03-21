@@ -5,7 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Tracing
-import Aesop.Tree.Format
+import Aesop.Tree.Tracing
 import Aesop.Tree.TreeM
 
 open Lean
@@ -121,7 +121,7 @@ private partial def copyExprMVar (s : Meta.SavedState) (mvarId : MVarId) :
 -- ## Main Functions
 
 private def visitGoal (g : Goal) : MetaM (Option (MVarId × Array RappRef)) := do
-  aesop_trace[extraction] "visiting {← g.toMessageData (← TraceModifiers.get)}"
+  aesop_trace[extraction] "visiting G{g.id}"
   match g.normalizationState with
   | NormalizationState.notNormal => throwPRError
     "goal {g.id} was not normalised."
@@ -134,7 +134,7 @@ private def visitGoal (g : Goal) : MetaM (Option (MVarId × Array RappRef)) := d
 
 private def visitRapp (parentEnv : Environment) (parentGoal : MVarId) (r : Rapp) :
     MetaM (Array MVarClusterRef × Environment) := do
-  aesop_trace[extraction] "visiting {← r.toMessageData}"
+  aesop_trace[extraction] "visiting R{r.id}"
   let newEnv := r.metaState.core.env
   copyNewDeclarations parentEnv newEnv
   copyMatchEqnsExtState parentEnv newEnv

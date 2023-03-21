@@ -95,22 +95,27 @@ structure RuleSet where
 
 namespace RuleSet
 
-open MessageData in
-instance : ToMessageData RuleSet where
-  toMessageData rs :=
-    unlines #[
-      "Unsafe rules:" ++ toMessageData rs.unsafeRules,
-      "Safe rules:" ++ toMessageData rs.safeRules,
-      "Normalisation rules:" ++ toMessageData rs.normRules,
-      "Normalisation simp lemmas:" ++ rs.normSimpLemmas.toMessageData,
-      "Local normalisation simp lemmas:" ++ .node
-        (rs.localNormSimpLemmas.map (·.fvarUserName)),
-      "Unfolding rules:" ++ .node
-        (rs.unfoldRules.toArray.map toMessageData),
-      "Erased rules:" ++ indentD (unlines $
-        rs.erased.toArray.qsort (λ x y => compare x y |>.isLT)
-          |>.map toMessageData)
-    ]
+def trace (rs : RuleSet) (traceOpt : TraceOption) : CoreM Unit := do
+  if ! (← traceOpt.isEnabled) then
+    return
+  withConstAesopTraceNode traceOpt (return "Erased rules") do
+    aesop_trace![traceOpt] "(Note: even if these rules appear in the sections below, they will not be applied by Aesop.)"
+    for r in rs.erased.toArray.qsortOrd do
+      aesop_trace![traceOpt] r
+  withConstAesopTraceNode traceOpt (return "Unsafe rules") do
+    rs.unsafeRules.trace traceOpt
+  withConstAesopTraceNode traceOpt (return "Safe rules") do
+    rs.safeRules.trace traceOpt
+  withConstAesopTraceNode traceOpt (return "Normalisation rules") do
+    rs.normRules.trace traceOpt
+  withConstAesopTraceNode traceOpt (return "Normalisation simp theorems") do
+    traceSimpTheorems rs.normSimpLemmas traceOpt
+  withConstAesopTraceNode traceOpt (return "Local normalisation simp theorems") do
+    for r in rs.localNormSimpLemmas.map (·.fvarUserName.toString) |>.qsortOrd do
+      aesop_trace![traceOpt] r
+  withConstAesopTraceNode traceOpt (return "Constants to unfold") do
+    for r in rs.unfoldRules.toArray.map (·.fst.toString) |>.qsortOrd do
+      aesop_trace![traceOpt] r
 
 def empty : RuleSet where
   normRules := {}
@@ -350,12 +355,13 @@ protected def empty : RuleSets where
 instance : EmptyCollection RuleSets :=
   ⟨RuleSets.empty⟩
 
-instance : ToMessageData RuleSets where
-  toMessageData rss :=
-    let lt (x y : RuleSetName × RuleSet) := x.fst.cmp y.fst |>.isLT
-    .unlines $
-      rss.rs.toArray.qsort lt |>.map λ (rsName, rs) =>
-        m!"{rsName}:{indentD $ toMessageData rs}"
+def trace (rss : RuleSets) (opt : TraceOption) : CoreM Unit := do
+  for (rsName, rs) in rss.rs.toArray.qsort compareRuleSets do
+    withConstAesopTraceNode opt (return m!"Rule set {rsName}") do
+      rs.trace opt
+  where
+    compareRuleSets (x y : RuleSetName × RuleSet) : Bool :=
+      x.fst.cmp y.fst |>.isLT
 
 -- If a rule set with name `rsName` already exists, it is overwritten.
 def addEmptyRuleSet (rss : RuleSets) (rsName : RuleSetName) : RuleSets :=

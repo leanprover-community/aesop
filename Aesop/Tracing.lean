@@ -4,111 +4,157 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Tracing.Init
-import Lean.Parser.Do
+import Aesop.Util.Basic
+import Lean.Elab.Term
+import Lean.Meta.Tactic.Simp
 
-open Lean
+open Lean Lean.Meta
 
 namespace Aesop
 
-variable [Monad m] [MonadOptions m]
+structure TraceOption where
+  traceClass : Name
+  option : Lean.Option Bool
+  deriving Inhabited
+
+def registerTraceOption (traceName : Name) (descr : String) :
+    IO TraceOption := do
+  let option ← Option.register (`trace.aesop ++ traceName) {
+    defValue := false
+    group := "trace"
+    descr
+  }
+  return { traceClass := `aesop ++ traceName, option }
 
 namespace TraceOption
 
-def isEnabled' (opt : TraceOption) (opts : Options) : Bool :=
-  match opt.parentOption with
-  | none => opt.option.get opts
-  | some parent => parent.get opts && opt.option.get opts
+def isEnabled [Monad m] [MonadOptions m] (opt : TraceOption) : m Bool :=
+  return opt.option.get (← getOptions)
 
-def isEnabled (opt : TraceOption) : m Bool :=
-  return opt.isEnabled' (← getOptions)
+def withEnabled [Monad m] [MonadWithOptions m] (opt : TraceOption) (k : m α) :
+    m α := do
+  withOptions (λ opts => opt.option.set opts true) k
 
-macro "aesop_trace![" opt:ident "]"
-    s:(interpolatedStr(term) <|> term) : doElem => do
-  let opt := mkIdentFrom opt $ `Aesop.TraceOption ++ opt.getId
-  let msg ← do
-    let s := s.raw
-    if s.getKind == interpolatedStrKind then
-      `(m! $(⟨s⟩))
-    else
-      `(($(⟨s⟩) : MessageData))
-  `(doElem| do Lean.addTrace (Aesop.TraceOption.traceName $opt) $msg)
+initialize steps : TraceOption ←
+  registerTraceOption .anonymous
+    "(aesop) Print actions taken by Aesop during the proof search."
 
-macro "aesop_trace[" opt:ident "]"
-    s:(interpolatedStr(term) <|> Parser.Term.do <|> term) : doElem => do
-  let optFull := mkIdentFrom opt $ `Aesop.TraceOption ++ opt.getId
-  match s with
-  | `(do $action) =>
-    `(doElem| do
-      if ← Aesop.TraceOption.isEnabled $optFull then
-        $action)
-  | _ =>
-    let msg ← do
-      let s := s.raw
-      if s.getKind == interpolatedStrKind then
-        `(m! $(⟨s⟩))
-      else
-        `(($(⟨s⟩) : MessageData))
-    `(doElem| do
-      if ← Aesop.TraceOption.isEnabled $optFull then
-        aesop_trace![$opt] $msg)
+initialize ruleSet : TraceOption ←
+  registerTraceOption `ruleSet
+    "(aesop) Print the rule set before starting the search."
 
--- The following slightly weird setup with the `Init.*` TraceOptions is
--- necessary because when we define something via `initialize`, we can't
--- evaluate that thing in the module where it was initialised. We therefore
--- can't use `steps.option` in the `Init` module.
+initialize proof : TraceOption ←
+  registerTraceOption `proof
+    "(aesop) If the search is successful, print the produced proof term."
 
-@[inline]
-def stepsActiveGoalQueue : TraceOption :=
-  { Init.stepsActiveGoalQueue with parentOption := steps.option }
+initialize tree : TraceOption ←
+  registerTraceOption `tree
+    "(aesop) Once the search has concluded (successfully or unsuccessfully), print the final search tree."
 
-@[inline]
-def stepsNormalization : TraceOption :=
-  { Init.stepsNormalization with parentOption := steps.option }
+initialize extraction : TraceOption ←
+  registerTraceOption `extraction
+    "(aesop) Print a trace of the proof extraction procedure."
 
-@[inline]
-def stepsRuleFailures : TraceOption :=
-  { Init.stepsRuleFailures with parentOption := steps.option }
-
-@[inline]
-def stepsRuleSelection : TraceOption :=
-  { Init.stepsRuleSelection with parentOption := steps.option }
-
-@[inline]
-def stepsTree : TraceOption :=
-  { Init.stepsTree with parentOption := steps.option }
-
-@[inline]
-def stepsProfile : TraceOption :=
-  { Init.stepsProfile with parentOption := steps.option }
+initialize profile : TraceOption ←
+  registerTraceOption `profile
+    "(aesop) DO NOT set this option directly. Instead, enable the 'profiler' option."
 
 end TraceOption
 
+section
 
-namespace TraceModifier
+open Lean.Elab Lean.Elab.Term
 
-@[inline]
-def isEnabled' (opts : Options) (mod : TraceModifier) : Bool :=
-  mod.option.get opts
+private def isFullyQualifiedGlobalName (n : Name) : MacroM Bool :=
+  return (← Macro.resolveGlobalName n).any (·.fst == n)
 
-@[inline]
-def isEnabled (mod : TraceModifier) : m Bool :=
-  return mod.isEnabled' (← getOptions)
+def resolveTraceOption (stx : Ident) : MacroM Name :=
+  withRef stx do
+    let n := stx.getId
+    let fqn := ``TraceOption ++ n
+    if ← isFullyQualifiedGlobalName fqn then
+      return fqn
+    else
+      return n
 
-end TraceModifier
+macro "aesop_trace![" opt:ident "]" msg:(interpolatedStr(term) <|> term) :
+    doElem => do
+  let opt ← mkIdent <$> resolveTraceOption opt
+  let msg := msg.raw
+  let msg ← if msg.getKind == interpolatedStrKind then
+    `(m! $(⟨msg⟩):interpolatedStr)
+  else
+    `(toMessageData ($(⟨msg⟩)))
+  `(doElem| Lean.addTrace (Aesop.TraceOption.traceClass $opt) $msg)
 
+macro "aesop_trace[" opt:ident "]"
+    msg:(interpolatedStr(term) <|> Parser.Term.do <|> term) : doElem => do
+  let msg := msg.raw
+  let opt ← mkIdent <$> resolveTraceOption opt
+  match msg with
+  | `(do $action) =>
+    `(doElem| do
+        if ← Aesop.TraceOption.isEnabled $opt then
+          $action)
+  | _ =>
+    `(doElem| do
+        if ← Aesop.TraceOption.isEnabled $opt then
+          aesop_trace![$opt] $(⟨msg⟩))
 
-structure TraceModifiers where
-  goals : Bool
-  unsafeQueues : Bool
-  failedRapps : Bool
+end
 
-def TraceModifiers.get : m TraceModifiers := do
-  let opts ← getOptions
-  return {
-    goals := TraceModifier.goals.isEnabled' opts
-    unsafeQueues := TraceModifier.unsafeQueues.isEnabled' opts
-    failedRapps := TraceModifier.failedRapps.isEnabled' opts
-  }
+def ruleSuccessEmoji    := checkEmoji
+def ruleFailureEmoji    := crossEmoji
+def ruleProvedEmoji     := "🏁"
+def ruleErrorEmoji      := bombEmoji
+def rulePostponedEmoji  := "⏳️"
+def ruleSkippedEmoji    := "⏩️"
+def nodeUnknownEmoji    := "❓️"
+def nodeProvedEmoji     := ruleProvedEmoji
+def nodeUnprovableEmoji := ruleFailureEmoji
+def newNodeEmoji        := "🆕"
+
+def exceptRuleResultToEmoji (toEmoji : α → String) : Except ε α → String
+  | .error _ => ruleFailureEmoji
+  | .ok r => toEmoji r
+
+section
+
+variable [Monad m] [MonadTrace m] [MonadLiftT BaseIO m] [MonadLiftT IO m]
+    [MonadRef m] [AddMessageContext m] [MonadOptions m] [MonadExcept ε m]
+
+@[inline, always_inline]
+def withAesopTraceNode (opt : TraceOption)
+    (msg : Except ε α → m MessageData) (k : m α) (collapsed := true) : m α :=
+  withTraceNode opt.traceClass msg k collapsed
+
+@[inline, always_inline]
+def withConstAesopTraceNode (opt : TraceOption) (msg : m MessageData) (k : m α)
+    (collapsed := true) : m α :=
+  withAesopTraceNode opt (λ _ => msg) k collapsed
+
+end
+
+def traceSimpTheoremTreeContents (t : SimpTheoremTree) (opt : TraceOption) :
+    CoreM Unit := do
+  if ! (← opt.isEnabled) then
+    return
+  for e in t.values.map (toString ·.origin.key) |>.qsortOrd do
+    aesop_trace![opt] e
+
+def traceSimpTheorems (s : SimpTheorems) (opt : TraceOption) : CoreM Unit := do
+  if ! (← opt.isEnabled) then
+    return
+  withConstAesopTraceNode opt (return "Erased entries") do
+    aesop_trace![opt] "(Note: even if these entries appear in the sections below, they will not be used by simp.)"
+    for e in s.erased.toArray.map (toString ·.key) |>.qsortOrd do
+      aesop_trace![opt] e
+  withConstAesopTraceNode opt (return "Pre lemmas") do
+    traceSimpTheoremTreeContents s.pre opt
+  withConstAesopTraceNode opt (return "Post lemmas") do
+    traceSimpTheoremTreeContents s.post opt
+  withConstAesopTraceNode opt (return "Constants to unfold") do
+    for e in s.toUnfold.toArray.map toString |>.qsortOrd do
+      aesop_trace![opt] e
 
 end Aesop

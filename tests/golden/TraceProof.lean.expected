@@ -2,4 +2,4 @@ tests/golden/TraceProof.lean:11:2: warning: aesop: failed to prove the goal afte
 tests/golden/TraceProof.lean:10:15: error: unsolved goals
 α : Sort ?u.5
 ⊢ α
-[aesop.proof] Final proof: <none>
+[aesop.proof] <no proof>

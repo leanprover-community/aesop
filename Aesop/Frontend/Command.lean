@@ -25,9 +25,11 @@ elab "erase_aesop_rules" "[" es:Aesop.rule_expr,* "]" : command => do
     for (rsFilter, rFilter) in fs do
       eraseRules rsFilter rFilter (check := true)
 
+open Lean.Elab.Command in
 elab "#aesop_rules" : command => do
-  let rss ← Elab.Command.liftTermElabM do
-    getAllRuleSets (includeGlobalSimpTheorems := true)
-  logInfo $ toMessageData rss
+  liftTermElabM do
+    let rss ← getAllRuleSets (includeGlobalSimpTheorems := true)
+    TraceOption.ruleSet.withEnabled do
+      rss.trace .ruleSet
 
 end Aesop.Frontend.Parser

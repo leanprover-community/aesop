@@ -6,6 +6,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 
 import Aesop.Constants
 import Aesop.Script
+import Aesop.Tracing
 import Aesop.Tree.UnsafeQueue
 
 open Lean
@@ -181,6 +182,11 @@ def isIrrelevant : NodeState → Bool
   | unprovable => true
   | unknown => false
 
+def toEmoji : NodeState → String
+  | proven => nodeProvedEmoji
+  | unprovable => nodeUnprovableEmoji
+  | unknown => nodeUnknownEmoji
+
 end NodeState
 
 
@@ -233,6 +239,11 @@ def toNodeState : GoalState → NodeState
 
 def isIrrelevant (s : GoalState) : Bool :=
   s.toNodeState.isIrrelevant
+
+def toEmoji : GoalState → String
+  | unknown => nodeUnknownEmoji
+  | provenByRuleApplication | provenByNormalization => nodeProvedEmoji
+  | unprovable => nodeUnprovableEmoji
 
 end GoalState
 
@@ -840,6 +851,10 @@ def foldSubgoalsM [Monad m] [MonadLiftT (ST IO.RealWorld) m] (init : σ)
 def forSubgoalsM [Monad m] [MonadLiftT (ST IO.RealWorld) m]
     (f : GoalRef → m Unit) (r : Rapp) : m Unit :=
   r.children.forM λ cref => do (← cref.get).goals.forM f
+
+def subgoals [Monad m] [MonadLiftT (ST IO.RealWorld) m] (r : Rapp) :
+    m (Array GoalRef) :=
+  r.foldSubgoalsM (init := #[]) λ subgoals gref => return subgoals.push gref
 
 def depth (r : Rapp) : BaseIO Nat :=
   return (← r.parent.get).depth

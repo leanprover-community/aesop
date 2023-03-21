@@ -26,7 +26,8 @@ def evalAesop : Tactic := λ stx => do
         let ((goal, ruleSet), ruleSetConstructionTime) ← IO.time $
           config.getRuleSet goal
         let profile := { profile with ruleSetConstruction := ruleSetConstructionTime }
-        aesop_trace[ruleSet] "Rule set:{indentD $ toMessageData ruleSet}"
+        withConstAesopTraceNode .ruleSet (return "Rule set") do
+          ruleSet.trace .ruleSet
         let (goals, profile) ←
           search goal ruleSet config.options config.simpConfig
             config.simpConfigSyntax? profile
@@ -34,7 +35,9 @@ def evalAesop : Tactic := λ stx => do
         return profile
       pure { profile with search := searchTime }
     let profile := { profile with total := totalTime }
-    aesop_trace[profile] toMessageData profile
+    if (← getOptions).getBool `profiler then
+      TraceOption.profile.withEnabled do
+        profile.trace .profile
 
 macro_rules
   | `(tactic| aesop $cs:Aesop.tactic_clause*) =>

@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Index.Basic
+import Aesop.Tracing
 import Std.Lean.Meta.InstantiateMVars
 
 open Lean
@@ -22,13 +23,19 @@ namespace Index
 
 variable [BEq α] [Hashable α]
 
-open MessageData in
-instance [ToMessageData α] : ToMessageData (Index α) where
-  toMessageData ri := node #[
-    "indexed by target:" ++ node (ri.byTarget.values.map toMessageData),
-    "indexed by hypotheses:" ++ node (ri.byHyp.values.map toMessageData),
-    "unindexed:" ++ node (ri.unindexed.toArray.map toMessageData)
-  ]
+def trace [ToString α] (ri : Index α) (traceOpt : TraceOption) :
+    CoreM Unit := do
+  if ! (← traceOpt.isEnabled) then
+    return
+  withConstAesopTraceNode traceOpt (return "Indexed by target") do
+    traceArray ri.byTarget.values
+  withConstAesopTraceNode traceOpt (return "Indexed by hypotheses") do
+    traceArray ri.byHyp.values
+  withConstAesopTraceNode traceOpt (return "Unindexed") do
+    traceArray ri.unindexed.toArray
+  where
+    traceArray (as : Array α) : CoreM Unit :=
+      as.map toString |>.qsortOrd.forM λ r => do aesop_trace![traceOpt] r
 
 instance : EmptyCollection (Index α) where
   emptyCollection := {

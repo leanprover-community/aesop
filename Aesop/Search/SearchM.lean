@@ -61,6 +61,9 @@ namespace SearchM
 instance : Monad (SearchM Q) :=
   { inferInstanceAs (Monad (SearchM Q)) with }
 
+instance : MonadRef (SearchM Q) :=
+  { inferInstanceAs (MonadRef (SearchM Q)) with }
+
 instance : Inhabited (SearchM Q α) where
   default := failure
 
@@ -96,7 +99,7 @@ def run (ruleSet : RuleSet) (options : Aesop.Options')
     (originalGoal : MVarId) (preprocessingScript : UnstructuredScript)
     (profile : Profile) (x : SearchM Q α) : MetaM (α × State Q × Tree) := do
   let t ← mkInitialTree goal
-  let profilingEnabled ← TraceOption.profile.isEnabled
+  let profilingEnabled := (← getOptions).getBool `profiler
   let normSimpContext := {
     (← Simp.Context.mkDefault) with
     config := simpConfig.toConfig
@@ -147,9 +150,6 @@ def enqueueGoals (gs : Array GoalRef) : SearchM Q Unit := do
   let s ← get
   let queue ← Queue.addGoals s.queue gs
   set { s with queue }
-
-def formatQueue : SearchM Q MessageData := do
-  Queue.format (← get).queue
 
 def setMaxRuleApplicationDepthReached : SearchM Q Unit :=
   modify λ s => { s with maxRuleApplicationDepthReached := true }
