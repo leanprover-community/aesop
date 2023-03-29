@@ -63,6 +63,13 @@ partial def add (r : α) (imode : IndexingMode) (ri : Index α) :
     imodes.foldl (init := ri) λ ri imode =>
       ri.add r imode
 
+def unindex (ri : Index α) (p : α → Bool) : Index α :=
+  let (byTarget, removed) := filterDiscrTree ri.byTarget (not ∘ p)
+  let (byHyp,    removed) := filterDiscrTreeCore ri.byHyp removed (not ∘ p)
+  let unindexed := removed.foldl (init := ri.unindexed) λ unindexed (_, v) =>
+    unindexed.insert v
+  { byTarget, byHyp, unindexed }
+
 def foldM [Monad m] (ri : Index α) (f : σ → α → m σ) (init : σ) : m σ :=
   match ri with
   | { byHyp, byTarget, unindexed} => do

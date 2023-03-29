@@ -157,20 +157,6 @@ def merge (s t : SimpTheorems) : SimpTheorems := {
 end Lean.Meta.SimpTheorems
 
 
-namespace Lean.Meta
-
-def matchAppOf (f : Expr) (e : Expr) : MetaM (Option (Array Expr)) := do
-  let type ← inferType f
-  let (mvars, _, _) ← forallMetaTelescope type
-  let app := mkAppN f mvars
-  if ← isDefEq app e then
-    some <$> mvars.mapM instantiateMVars
-  else
-    return none
-
-end Lean.Meta
-
-
 @[inline]
 def setThe (σ) {m} [MonadStateOf σ m] (s : σ) : m PUnit :=
   MonadStateOf.set s
@@ -187,3 +173,60 @@ def runTermElabMAsCoreM (x : Elab.TermElabM α) : CoreM α :=
   runMetaMAsCoreM x.run'
 
 end Lean
+
+
+namespace Aesop
+
+open Lean Lean.Meta
+
+def isAppOfUpToDefeq (f : Expr) (e : Expr) : MetaM Bool :=
+  withoutModifyingState do
+    let type ← inferType f
+    let (mvars, _, _) ← forallMetaTelescope type
+    let app := mkAppN f mvars
+    if ← isDefEq app e then
+      return true
+    else
+      return false
+
+section DiscrTree
+
+open DiscrTree
+
+private partial def filterTrie (removed : Array (Array (Key s) × α))
+    (parentKeys : Array (Key s)) (p : α → Bool) :
+    Trie α s → Trie α s × Array (Array (Key s) × α)
+  | .node vs children =>
+    let (vs, removed') := vs.partition p
+    let removed := removed ++ removed'.map (λ v => (parentKeys, v))
+    let (children, removed) := go removed 0 children
+    (.node vs children, removed)
+  where
+    go (removed : Array (Array (Key s) × α)) (i : Nat)
+        (children : Array (Key s × Trie α s)) :
+        Array (Key s × Trie α s) × Array (Array (Key s) × α) :=
+      if h : i < children.size then
+        let (key, t) := children[i]'h
+        let (t, removed') := filterTrie removed (parentKeys.push key) p t
+        go (removed ++ removed') (i + 1) (children.set ⟨i, h⟩ (key, t))
+      else
+        (children, removed)
+
+def filterDiscrTreeCore (t : DiscrTree α s)
+    (removed : Array (Array (Key s) × α)) (p : α → Bool) :
+    DiscrTree α s × Array (Array (Key s) × α) :=
+  let (root, removed) :=
+    t.root.foldl (init := (.empty, removed)) λ (root, removed) key t =>
+      let (t, removed') := filterTrie removed #[key] p t
+      (root.insert key t, removed ++ removed')
+  (⟨root⟩, removed)
+
+/--
+Remove elements for which `p` returns `false` from the given `DiscrTree`. The
+modified `DiscrTree` is returned along with the removed elements.
+-/
+def filterDiscrTree (t : DiscrTree α s) (p : α → Bool) :
+    DiscrTree α s × Array (Array (Key s) × α) :=
+  filterDiscrTreeCore t #[] p
+
+end Aesop.DiscrTree

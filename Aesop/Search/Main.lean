@@ -253,7 +253,9 @@ def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
     preprocessGoal goal mvars options.generateScript
   let ruleSet ←
     match ruleSet? with
-    | none => Frontend.getDefaultRuleSet (includeGlobalSimpTheorems := true)
+    | none =>
+        Frontend.getDefaultRuleSet (includeGlobalSimpTheorems := true)
+          options.toOptions
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
   let (goals, state, _) ←
