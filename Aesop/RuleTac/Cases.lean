@@ -42,7 +42,7 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
               -- we didn't have to do this all the time. But we must be careful
               -- not to leak metavariables.
         return ← (← getLCtx).findDeclM? λ ldecl => do
-          if ldecl.isAuxDecl || excluded.contains ldecl.fvarId then
+          if ldecl.isImplementationDetail || excluded.contains ldecl.fvarId then
             return none
           else if ← «match» ldecl then
             return some ldecl.fvarId
