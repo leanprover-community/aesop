@@ -188,12 +188,6 @@ def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
 def addArray (rs : RuleSet) (ra : Array RuleSetMember) : RuleSet :=
   ra.foldl add rs
 
-def rulesMatching (rs : RuleSet) (f : RuleNameFilter) :
-    UnorderedArraySet RuleName :=
-  match rs.ruleNames.find? f.ident with
-  | none => ∅
-  | some ns => ns.filter f.match
-
 -- Returns the updated rule set and `true` if at least one rule was erased.
 def erase (rs : RuleSet) (f : RuleNameFilter) : RuleSet × Bool :=
   match rs.ruleNames.find? f.ident with
@@ -238,6 +232,13 @@ def erase (rs : RuleSet) (f : RuleNameFilter) : RuleSet × Bool :=
 def eraseAllRulesWithIdent (rs : RuleSet) (i : RuleIdent) : RuleSet × Bool :=
   rs.erase (.ofIdent i)
 
+def unindex (rs : RuleSet) (p : RuleName → Bool) : RuleSet := {
+  rs with
+  normRules := rs.normRules.unindex (λ r => p r.name)
+  unsafeRules := rs.unsafeRules.unindex (λ r => p r.name)
+  safeRules := rs.safeRules.unindex (λ r => p r.name)
+}
+
 @[inline]
 private def isErased (rs : RuleSet) (n : RuleName) : Bool :=
   rs.erased.contains n
@@ -247,6 +248,12 @@ def contains (rs : RuleSet) (n : RuleName) : Bool :=
   match rs.ruleNames.find? n.toRuleIdent with
   | none => false
   | some ns => ns.contains n
+
+def rulesMatching (rs : RuleSet) (f : RuleNameFilter) :
+    UnorderedArraySet RuleName :=
+  match rs.ruleNames.find? f.ident with
+  | none => ∅
+  | some ns => ns.filter f.match
 
 def applicableNormalizationRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult NormRule)) :=
@@ -286,20 +293,6 @@ def foldM [Monad m] (rs : RuleSet) (f : σ → RuleSetMember → m σ) (init : �
 @[inline]
 def fold (rs : RuleSet) (f : σ → RuleSetMember → σ) (init : σ) : σ :=
   Id.run $ rs.foldM f init
-
--- TODO remove?
-def foldGlobalRulesForDeclM [Monad m] (decl : Name) (rs : RuleSet)
-    (f : σ → RuleSetMember → m σ) (init : σ) : m σ :=
-  rs.foldM (init := init) λ s r =>
-    match r.name.scope with
-    | ScopeName.global => f s r
-    | ScopeName.local => pure init
-
--- TODO remove?
-@[inline]
-def foldGlobalRulesForDecl (decl : Name) (rs : RuleSet)
-    (f : σ → RuleSetMember → σ) (init : σ) : σ :=
-  Id.run $ rs.foldGlobalRulesForDeclM decl f init
 
 end RuleSet
 
@@ -449,7 +442,19 @@ def eraseRulesChecked [Monad m] [MonadError m] (rss : RuleSets)
     | some rsNames => throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any of the rule sets {rsNames.map toString}."
   return rss
 
-def getMergedRuleSet (rss : RuleSets) : RuleSet :=
-  rss.rs.fold (init := ∅) λ result _ rs => result.merge rs
+@[inline, always_inline]
+def unindexPredicate? (options : Options) : Option (RuleName → Bool) :=
+  if options.casesTransparency == .reducible then
+    none
+  else
+    some λ n => n.builder == .cases
+
+def getMergedRuleSet (rss : RuleSets) (options : Options) :
+    RuleSet :=
+  let update : RuleSet → RuleSet :=
+    match unindexPredicate? options with
+    | none => id
+    | some p => λ rs => rs.unindex p
+  rss.rs.fold (init := ∅) λ result _ rs => result.merge (update rs)
 
 end Aesop.RuleSets

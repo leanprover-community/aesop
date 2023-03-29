@@ -42,6 +42,13 @@ attribute [aesop (rule_sets [builtin]) safe 100 constructors] Iff
 @[aesop (rule_sets [builtin]) safe 0]
 theorem not_intro (h : P → False) : ¬ P := h
 
+-- Ordinarily, a `False` hypothesis already lets `simp` solve the goal during
+-- normalisation. But if we have `casesTransparency := .default` or higher,
+-- then this rule may match a hypothesis `h : T` with `def T := False`. If
+-- we have `casesTransparency := .reducible` (the default), the rule will not
+-- be selected by the index, so there is no performance loss in the common case.
+attribute [aesop (rule_sets [builtin]) safe 0 cases] False
+
 @[aesop (rule_sets [builtin]) norm destruct]
 theorem empty_false (h : Empty) : False := nomatch h
 

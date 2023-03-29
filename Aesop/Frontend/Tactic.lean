@@ -14,9 +14,7 @@ open Lean.Meta
 open Lean.Elab
 open Lean.Elab.Term
 
-namespace Aesop.Frontend
-
-namespace Parser
+namespace Aesop.Frontend.Parser
 
 declare_syntax_cat Aesop.tactic_clause
 
@@ -145,7 +143,7 @@ def getRuleSet (goal : MVarId) (c : TacticConfig) :
     MetaM (MVarId × Aesop.RuleSet) := do
   let rss ← getRuleSets c.enabledRuleSets (includeGlobalSimpTheorems := true)
   let (goal, rss) ← c.updateRuleSets goal rss
-  return (goal, rss.getMergedRuleSet)
+  return (goal, rss.getMergedRuleSet c.options)
 
 end TacticConfig
 

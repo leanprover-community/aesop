@@ -25,33 +25,34 @@ namespace RuleTac
 
 partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
-    match ← go #[] #[] input.goal input.options.generateScript with
+    match ← go input.options #[] #[] input.goal input.options.generateScript with
     | none => throwError "No matching hypothesis found."
     | some x => return x
   where
-    findFirstApplicableHyp (excluded : Array FVarId) (goal : MVarId) :
-        MetaM (Option FVarId) :=
-      goal.withContext do
+    findFirstApplicableHyp (options : Options') (excluded : Array FVarId)
+        (goal : MVarId) : MetaM (Option FVarId) :=
+      withTransparency options.casesTransparency do goal.withContext do
         let «match» ldecl : MetaM Bool :=
           match target with
-          | .decl d => withoutModifyingState do
-            return (← matchAppOf (← mkConstWithFreshMVarLevels d) ldecl.type).isSome
+          | .decl d => do
+            isAppOfUpToDefeq (← mkConstWithFreshMVarLevels d) ldecl.type
           | .patterns ps => ps.anyM λ p => withoutModifyingState do
               isDefEq (← p.toExpr) ldecl.type
               -- TODO `p.toExpr` is mildly expensive, so it would be nicer if
               -- we didn't have to do this all the time. But we must be careful
               -- not to leak metavariables.
         return ← (← getLCtx).findDeclM? λ ldecl => do
-          if ← (pure $ ! ldecl.isAuxDecl) <&&>
-             «match» ldecl <&&>
-             pure (! excluded.contains ldecl.fvarId) then
+          if ldecl.isAuxDecl || excluded.contains ldecl.fvarId then
+            return none
+          else if ← «match» ldecl then
             return some ldecl.fvarId
           else
             return none
 
-    go (newGoals : Array MVarId) (excluded : Array FVarId) (goal : MVarId)
-        (generateScript : Bool) : MetaM (Option (Array MVarId × Option RuleTacScriptBuilder)) := do
-      let (some hyp) ← findFirstApplicableHyp excluded goal
+    go (options : Options') (newGoals : Array MVarId) (excluded : Array FVarId)
+        (goal : MVarId) (generateScript : Bool) :
+        MetaM (Option (Array MVarId × Option RuleTacScriptBuilder)) := do
+      let (some hyp) ← findFirstApplicableHyp options excluded goal
         | return none
       let (goals, scriptBuilder?) ←
         try
@@ -73,7 +74,7 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
               | (.fvar fvarId' ..) => some fvarId'
               | _ => none
             excluded ++ fields
-        match ← go newGoals excluded g.mvarId generateScript with
+        match ← go options newGoals excluded g.mvarId generateScript with
         | some (newGoals', newScriptBuilder?) =>
           newGoals := newGoals'
           if let some newScriptBuilder := newScriptBuilder? then

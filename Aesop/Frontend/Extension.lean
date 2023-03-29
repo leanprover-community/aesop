@@ -59,8 +59,10 @@ def getRuleSets (rsNames : Array RuleSetName)
 def getDefaultRuleSets (includeGlobalSimpTheorems : Bool) : CoreM RuleSets :=
   getRuleSets defaultEnabledRuleSetNames includeGlobalSimpTheorems
 
-def getDefaultRuleSet (includeGlobalSimpTheorems : Bool) : CoreM RuleSet :=
+def getDefaultRuleSet (includeGlobalSimpTheorems : Bool) (options : Options) :
+    CoreM RuleSet :=
   return (← getDefaultRuleSets includeGlobalSimpTheorems).getMergedRuleSet
+    options
 
 def getAllRuleSets (includeGlobalSimpTheorems : Bool) : CoreM RuleSets := do
   (← aesopExtensionsMapRef.get).foldM (init := ∅) λ rss rsName _ =>
