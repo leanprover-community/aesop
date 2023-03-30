@@ -70,14 +70,15 @@ structure Options where
   -/
   introsTransparency? : Option TransparencyMode := none
   /--
-  The transparency used when matching a hypothesis `h : T` against a `cases`
-  rule for `U`. A `cases` rule is applied to `h` if `T` is defeq to
-  `U x₁ ... xₙ` at the given transparency.
+  The transparency used by the `destructProducts` builtin rule. The rule splits
+  a hypothesis `h : T` if `T` is defeq to a product-like type (e.g. `T ≡ A ∧ B`
+  or `T ≡ A × B`) at the given transparency.
 
-  Note: we can effectively index `cases` rules only if the transparency is
-  `.reducible`. With any other transparency, all `cases` rules become unindexed.
+  Note: we can index this rule only if the transparency is `.reducible`. With
+  any other transparency, the rule becomes unindexed and is applied to every
+  goal.
   -/
-  casesTransparency : TransparencyMode := .reducible
+  destructProductsTransparency : TransparencyMode := .reducible
   /--
   If `true`, Aesop succeeds only if it proves the goal. If `false`, Aesop always
   succeeds and reports the goals remaining after safe rules were applied.

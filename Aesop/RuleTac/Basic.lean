@@ -109,7 +109,7 @@ inductive RuleTacDescr
   | constructors (constructorNames : Array Name)
   | forwardConst (decl     : Name) (immediate : UnorderedArraySet Nat) (clear : Bool)
   | forwardFVar  (userName : Name) (immediate : UnorderedArraySet Nat) (clear : Bool)
-  | cases (target : CasesTarget) (isRecursiveType : Bool)
+  | cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveType : Bool)
   | tacticM (decl : Name)
   | ruleTac (decl : Name)
   | singleRuleTac (decl : Name)

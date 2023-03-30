@@ -444,12 +444,10 @@ def eraseRulesChecked [Monad m] [MonadError m] (rss : RuleSets)
 
 @[inline, always_inline]
 def unindexPredicate? (options : Options) : Option (RuleName → Bool) :=
-  if options.casesTransparency == .reducible then
+  if options.destructProductsTransparency == .reducible then
     none
   else
-    some λ n =>
-      n.builder == .cases ||
-      n.name == `Aesop.BuiltinRules.destructProducts
+    some λ n => n.name == `Aesop.BuiltinRules.destructProducts
 
 def getMergedRuleSet (rss : RuleSets) (options : Options) :
     RuleSet :=

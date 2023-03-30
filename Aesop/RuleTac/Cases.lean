@@ -23,15 +23,15 @@ end CasesPattern
 
 namespace RuleTac
 
-partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
+partial def cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveType : Bool) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
-    match ← go input.options #[] #[] input.goal input.options.generateScript with
+    match ← go #[] #[] input.goal input.options.generateScript with
     | none => throwError "No matching hypothesis found."
     | some x => return x
   where
-    findFirstApplicableHyp (options : Options') (excluded : Array FVarId)
-        (goal : MVarId) : MetaM (Option FVarId) :=
-      withTransparency options.casesTransparency do goal.withContext do
+    findFirstApplicableHyp (excluded : Array FVarId) (goal : MVarId) :
+        MetaM (Option FVarId) :=
+      withTransparency md do goal.withContext do
         let «match» ldecl : MetaM Bool :=
           match target with
           | .decl d => do
@@ -49,10 +49,10 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
           else
             return none
 
-    go (options : Options') (newGoals : Array MVarId) (excluded : Array FVarId)
+    go (newGoals : Array MVarId) (excluded : Array FVarId)
         (goal : MVarId) (generateScript : Bool) :
         MetaM (Option (Array MVarId × Option RuleTacScriptBuilder)) := do
-      let (some hyp) ← findFirstApplicableHyp options excluded goal
+      let (some hyp) ← findFirstApplicableHyp excluded goal
         | return none
       let (goals, scriptBuilder?) ←
         try
@@ -74,7 +74,7 @@ partial def cases (target : CasesTarget) (isRecursiveType : Bool) : RuleTac :=
               | (.fvar fvarId' ..) => some fvarId'
               | _ => none
             excluded ++ fields
-        match ← go options newGoals excluded g.mvarId generateScript with
+        match ← go newGoals excluded g.mvarId generateScript with
         | some (newGoals', newScriptBuilder?) =>
           newGoals := newGoals'
           if let some newScriptBuilder := newScriptBuilder? then

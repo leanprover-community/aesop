@@ -29,16 +29,20 @@ end CasesPattern
 
 structure CasesBuilderOptions extends RegularBuilderOptions where
   patterns : Array CasesPattern
+  transparency : TransparencyMode
 
 namespace CasesBuilderOptions
 
 protected def default : CasesBuilderOptions where
   toRegularBuilderOptions := .default
   patterns := #[]
+  transparency := .reducible
 
 def indexingMode (decl : Name) (opts : CasesBuilderOptions) :
     MetaM IndexingMode :=
   opts.getIndexingModeM do
+    if opts.transparency != .reducible then
+      return .unindexed
     if opts.patterns.isEmpty then
       IndexingMode.hypsMatchingConst decl
     else
@@ -50,13 +54,12 @@ def target (decl : Name) (opts : CasesBuilderOptions) : CasesTarget :=
   else
     .patterns opts.patterns
 
-
 end CasesBuilderOptions
 
 
 def RuleBuilder.cases (opts : CasesBuilderOptions) : RuleBuilder :=
   RuleBuilder.ofGlobalRuleBuilder BuilderName.cases λ phase decl => do
-    if let (.norm) := phase then throwError
+    if let .norm := phase then throwError
       "cases builder cannot currently be used for norm rules."
       -- TODO `Meta.cases` may assign and introduce metavariables.
       -- (Specifically, it can *replace* existing metavariables, which Aesop
@@ -67,7 +70,7 @@ def RuleBuilder.cases (opts : CasesBuilderOptions) : RuleBuilder :=
     let target := opts.target decl
     return RuleBuilderResult.regular {
       builder := name
-      tac := .cases target (isRecursiveType := inductInfo.isRec)
+      tac := .cases target opts.transparency (isRecursiveType := inductInfo.isRec)
       indexingMode
     }
   where

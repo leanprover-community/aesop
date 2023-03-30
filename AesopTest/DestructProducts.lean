@@ -48,10 +48,10 @@ def T α β := α ∧ β
 
 example (h : T α β) : Sig α (λ _ => β) := by
   fail_if_success aesop (options := { terminal := true })
-  aesop (options := { casesTransparency := .default })
+  aesop (options := { destructProductsTransparency := .default })
 
 def U := T
 
 example (h : U α β) : Sig α (λ _ => β) := by
   fail_if_success aesop (options := { terminal := true })
-  aesop (options := { casesTransparency := .default })
+  aesop (options := { destructProductsTransparency := .default })
