@@ -201,12 +201,15 @@ def CasesPattern.elab (stx : Syntax) : TermElabM CasesPattern := do
 
 namespace Parser
 
+syntax transparency := &"default" <|> &"reducible" <|> &"instances" <|> &"all"
+
 declare_syntax_cat Aesop.builder_option
 
 syntax "(" &"uses_branch_state" ":=" Aesop.bool_lit ")" : Aesop.builder_option
 syntax "(" &"immediate" ":=" "[" ident,+,? "]" ")" : Aesop.builder_option
 syntax "(" &"index" ":=" "[" Aesop.indexing_mode,+,? "]" ")" : Aesop.builder_option
 syntax "(" &"patterns" ":=" "[" term,+,? "]" ")" : Aesop.builder_option
+syntax "(" &"transparency" ":=" transparency ")" : Aesop.builder_option
 
 syntax builderOptions := Aesop.builder_option*
 
@@ -216,6 +219,7 @@ inductive BuilderOption
   | immediate (names : Array Name)
   | index (imode : IndexingMode)
   | patterns (pats : Array CasesPattern)
+  | transparency (md : TransparencyMode)
 
 namespace BuilderOption
 
@@ -228,17 +232,28 @@ def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
       index <$> IndexingMode.elab imodes
     | `(builder_option| (patterns := [$pats:term,*])) =>
       patterns <$> (pats : Array Syntax).mapM (CasesPattern.elab ·)
+    | `(builder_option| (transparency := $md)) =>
+      let md ←
+        match md with
+        | `(Parser.transparency| default) => pure .default
+        | `(Parser.transparency| reducible) => pure .reducible
+        | `(Parser.transparency| instances) => pure .instances
+        | `(Parser.transparency| all) => pure .all
+        | _ => throwUnsupportedSyntax
+      return transparency md
     | _ => throwUnsupportedSyntax
 
 protected def name : BuilderOption → String
   | immediate .. => "immediate"
   | index .. => "index"
   | patterns .. => "patterns"
+  | transparency .. => "transparency"
 
 protected def toCtorIdx : BuilderOption → Nat
   | immediate .. => 0
   | index .. => 1
   | patterns .. => 2
+  | transparency .. => 3
 
 end BuilderOption
 
@@ -258,9 +273,10 @@ def «elab» (bo : BuilderOptions α) (stx : Syntax) : ElabM α :=
       let mut seen : HashSet Nat := {}
       for stx in stxs do
         let opt ← BuilderOption.elab stx
-        if seen.contains opt.toCtorIdx then withRef stx $ throwError
+        let idx := opt.toCtorIdx
+        if seen.contains idx then withRef stx $ throwError
           "duplicate builder option '{opt.name}'"
-        seen := seen.insert opt.toCtorIdx
+        seen := seen.insert idx
         match bo.add opts opt with
         | some opts' => opts := opts'
         | none => withRef stx $ throwError
@@ -281,7 +297,7 @@ def regular (builderName : BuilderName) :
     | opts, .index imode => some { opts with indexingMode? := imode }
     | _, _ => none
 
-@[inline]
+@[inline, always_inline]
 private def forwardCore (clear : Bool) :
     BuilderOptions ForwardBuilderOptions where
   builderName := .regular $ if clear then .destruct else .forward
@@ -302,7 +318,8 @@ def cases : BuilderOptions CasesBuilderOptions where
   init := .default
   add
     | opts, .patterns patterns => some { opts with patterns }
-    | opts, .index imode => some { opts with indexingMode? := imode }
+    | opts, .index indexingMode? => some { opts with indexingMode? }
+    | opts, .transparency transparency => some { opts with transparency }
     | _, _ => none
 
 end BuilderOptions

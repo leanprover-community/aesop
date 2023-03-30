@@ -83,30 +83,21 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
 elab &"aesop_destruct_products" : tactic =>
   Elab.Tactic.liftMetaTactic1 λ goal => some <$> destructProductsCore goal
 
-open Lean.Parser.Tactic in
-def withTransparencySyntax [Monad m] [MonadQuotation m] (md : TransparencyMode)
-    (k : TSyntax ``tacticSeq) : m (TSyntax ``tacticSeq) :=
-  match md with
-  | .default   => return k
-  | .all       => `(tacticSeq| with_unfolding_all $k:tacticSeq)
-  | .reducible => `(tacticSeq| with_reducible $k)
-  | .instances => `(tacticSeq| with_reducible_and_instances $k)
-
 -- This tactic splits hypotheses of product-like types: `And`, `Prod`, `PProd`,
 -- `MProd`, `Exists`, `Subtype`, `Sigma` and `PSigma`. It's a restricted version
 -- of `cases`. We have this separate tactic because `cases` interacts badly with
 -- metavariables and therefore can't be used for norm rules.
 --
--- HACK: If `casesTransparency` != `.reducible`, then this rule is moved from
--- the by-hyp index to the unindexed rules. The rule is identified by name,
--- so if you change its name, you must also adjust the function responsible for
--- dynamically unindexing rules.
+-- NOTE: If `destructProductsTransparency` != `.reducible`, then this rule is
+-- moved from the by-hyp index to the unindexed rules. The rule is identified by
+-- name, so if you change its name, you must also adjust the function
+-- responsible for dynamically unindexing rules.
 @[aesop norm 0 (rule_sets [builtin])
   (tactic
     (index := [hyp And _ _, hyp Prod _ _, hyp PProd _ _, hyp MProd _ _,
                hyp Exists _, hyp Subtype _, hyp Sigma _, hyp PSigma _]))]
 partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
-  let md := input.options.casesTransparency
+  let md := input.options.destructProductsTransparency
   let goal ← unhygienic $ destructProductsCore input.goal
   let scriptBuilder? :=
     mkScriptBuilder? input.options.generateScript $ .ofTactic 1 do

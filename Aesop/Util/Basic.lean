@@ -189,6 +189,15 @@ def isAppOfUpToDefeq (f : Expr) (e : Expr) : MetaM Bool :=
     else
       return false
 
+open Lean.Parser.Tactic in
+def withTransparencySyntax [Monad m] [MonadQuotation m] (md : TransparencyMode)
+    (k : TSyntax ``tacticSeq) : m (TSyntax ``tacticSeq) :=
+  match md with
+  | .default   => return k
+  | .all       => `(tacticSeq| with_unfolding_all $k:tacticSeq)
+  | .reducible => `(tacticSeq| with_reducible $k)
+  | .instances => `(tacticSeq| with_reducible_and_instances $k)
+
 /--
 If the input expression `e` reduces to `f x₁ ... xₙ` via repeated `whnf`, this
 function returns `f` and `[x₁, ⋯, xₙ]`. Otherwise it returns `e` (unchanged, not
