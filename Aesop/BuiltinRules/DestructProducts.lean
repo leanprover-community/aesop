@@ -14,24 +14,28 @@ namespace Aesop.BuiltinRules
 private def destructProductHyp (goal : MVarId) (hyp : FVarId) :
     MetaM MVarId :=
   goal.withContext do
-    let hypType ← instantiateMVars (← hyp.getDecl).type
-    match hypType with
-    | (.app (.app (.const ``And _) α) β) =>
-      go hypType (mkApp2 (mkConst ``And.casesOn [← mkFreshLevelMVar]) α β)
-    | (.app (.app (.const ``Prod lvls) α) β) =>
-      go hypType (mkApp2 (mkConst ``Prod.casesOn  ((← mkFreshLevelMVar) :: lvls)) α β)
-    | (.app (.app (.const ``PProd lvls) α) β) =>
-      go hypType (mkApp2 (mkConst ``PProd.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
-    | (.app (.app (.const ``MProd lvls) α) β) =>
-      go hypType (mkApp2 (mkConst ``MProd.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
-    | (.app (.app (.const ``Exists lvls) α) β) => do
-      go hypType (mkApp2 (mkConst ``Exists.casesOn lvls) α β)
-    | (.app (.app (.const ``Subtype lvls) α) β) =>
-      go hypType (mkApp2 (mkConst ``Subtype.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
-    | (.app (.app (.const ``Sigma lvls) α) β) =>
-      go hypType (mkApp2 (mkConst ``Sigma.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
-    | (.app (.app (.const ``PSigma lvls) α) β) =>
-      go hypType (mkApp2 (mkConst ``PSigma.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
+    let hypType ← hyp.getType
+    let (f, args) ← getAppUpToDefeq hypType
+    match args with
+    | #[α, β] =>
+      match f with
+      | (.const ``And _) =>
+        go hypType (mkApp2 (.const ``And.casesOn [← mkFreshLevelMVar]) α β)
+      | (.const ``Prod lvls) =>
+        go hypType (mkApp2 (.const ``Prod.casesOn  ((← mkFreshLevelMVar) :: lvls)) α β)
+      | (.const ``PProd lvls) =>
+        go hypType (mkApp2 (.const ``PProd.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
+      | (.const ``MProd lvls) =>
+        go hypType (mkApp2 (.const ``MProd.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
+      | (.const ``Exists lvls) =>
+        go hypType (mkApp2 (.const ``Exists.casesOn lvls) α β)
+      | (.const ``Subtype lvls) =>
+        go hypType (mkApp2 (.const ``Subtype.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
+      | (.const ``Sigma lvls) =>
+        go hypType (mkApp2 (.const ``Sigma.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
+      | (.const ``PSigma lvls) =>
+        go hypType (mkApp2 (.const ``PSigma.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
+      | _ => return goal
     | _ => return goal
   where
     -- `rec` is the partially applied recursor. Missing arguments to `rec` are
@@ -79,19 +83,36 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
 elab &"aesop_destruct_products" : tactic =>
   Elab.Tactic.liftMetaTactic1 λ goal => some <$> destructProductsCore goal
 
+open Lean.Parser.Tactic in
+def withTransparencySyntax [Monad m] [MonadQuotation m] (md : TransparencyMode)
+    (k : TSyntax ``tacticSeq) : m (TSyntax ``tacticSeq) :=
+  match md with
+  | .default   => return k
+  | .all       => `(tacticSeq| with_unfolding_all $k:tacticSeq)
+  | .reducible => `(tacticSeq| with_reducible $k)
+  | .instances => `(tacticSeq| with_reducible_and_instances $k)
+
 -- This tactic splits hypotheses of product-like types: `And`, `Prod`, `PProd`,
 -- `MProd`, `Exists`, `Subtype`, `Sigma` and `PSigma`. It's a restricted version
 -- of `cases`. We have this separate tactic because `cases` interacts badly with
 -- metavariables and therefore can't be used for norm rules.
+--
+-- HACK: If `casesTransparency` != `.reducible`, then this rule is moved from
+-- the by-hyp index to the unindexed rules. The rule is identified by name,
+-- so if you change its name, you must also adjust the function responsible for
+-- dynamically unindexing rules.
 @[aesop norm 0 (rule_sets [builtin])
   (tactic
     (index := [hyp And _ _, hyp Prod _ _, hyp PProd _ _, hyp MProd _ _,
                hyp Exists _, hyp Subtype _, hyp Sigma _, hyp PSigma _]))]
 partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
+  let md := input.options.casesTransparency
   let goal ← unhygienic $ destructProductsCore input.goal
   let scriptBuilder? :=
-    mkScriptBuilder? input.options.generateScript $
-      .ofTactic 1 `(tactic| unhygienic aesop_destruct_products)
+    mkScriptBuilder? input.options.generateScript $ .ofTactic 1 do
+      let tac ← withTransparencySyntax md
+        (← `(Lean.Parser.Tactic.tacticSeq| aesop_destruct_products))
+      `(tactic| unhygienic $tac)
   return (#[goal], scriptBuilder?)
 
 end Aesop.BuiltinRules

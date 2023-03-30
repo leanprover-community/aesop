@@ -189,6 +189,19 @@ def isAppOfUpToDefeq (f : Expr) (e : Expr) : MetaM Bool :=
     else
       return false
 
+/--
+If the input expression `e` reduces to `f x₁ ... xₙ` via repeated `whnf`, this
+function returns `f` and `[x₁, ⋯, xₙ]`. Otherwise it returns `e` (unchanged, not
+in WHNF!) and `[]`.
+-/
+partial def getAppUpToDefeq (e : Expr) : MetaM (Expr × Array Expr) :=
+  go #[] e
+where
+  go (args : Array Expr) (e : Expr) : MetaM (Expr × Array Expr) := do
+    match ← whnf e with
+    | .app f e => go (args.push e) f
+    | _ => return (e, args.reverse)
+
 section DiscrTree
 
 open DiscrTree

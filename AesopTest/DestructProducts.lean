@@ -43,3 +43,15 @@ example {p : α → Type} (h : Σ a, p a) : Sig α p := by
 
 example {p : α → Type} (h : Σ' a, p a) : Sig α p := by
   aesop
+
+def T α β := α ∧ β
+
+example (h : T α β) : Sig α (λ _ => β) := by
+  fail_if_success aesop (options := { terminal := true })
+  aesop (options := { casesTransparency := .default })
+
+def U := T
+
+example (h : U α β) : Sig α (λ _ => β) := by
+  fail_if_success aesop (options := { terminal := true })
+  aesop (options := { casesTransparency := .default })
