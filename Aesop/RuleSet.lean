@@ -447,7 +447,9 @@ def unindexPredicate? (options : Options) : Option (RuleName → Bool) :=
   if options.casesTransparency == .reducible then
     none
   else
-    some λ n => n.builder == .cases
+    some λ n =>
+      n.builder == .cases ||
+      n.name == `Aesop.BuiltinRules.destructProducts
 
 def getMergedRuleSet (rss : RuleSets) (options : Options) :
     RuleSet :=
