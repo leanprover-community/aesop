@@ -8,11 +8,18 @@ import Aesop
 
 set_option aesop.check.all true
 
+@[aesop safe]
 inductive Even : Nat → Type
-| zero : Even 0
-| plusTwo : Even n → Even (n + 2)
-
-attribute [aesop safe] Even
+  | zero : Even 0
+  | plusTwo : Even n → Even (n + 2)
 
 example : Even 6 := by
   aesop
+
+attribute [-aesop] Even
+
+def T n := Even n
+
+example : T 6 := by
+  fail_if_success aesop (options := { terminal := true })
+  aesop (add safe (constructors (transparency! := default)) Even)

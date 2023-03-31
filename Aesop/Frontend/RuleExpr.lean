@@ -203,6 +203,18 @@ namespace Parser
 
 syntax transparency := &"default" <|> &"reducible" <|> &"instances" <|> &"all"
 
+end Parser
+
+open Parser in
+def elabTransparency : TSyntax ``transparency → TermElabM TransparencyMode
+  | `(transparency| default) => return .default
+  | `(transparency| reducible) => return .reducible
+  | `(transparency| instances) => return .instances
+  | `(transparency| all) => return .all
+  | _ => throwUnsupportedSyntax
+
+namespace Parser
+
 declare_syntax_cat Aesop.builder_option
 
 syntax "(" &"uses_branch_state" ":=" Aesop.bool_lit ")" : Aesop.builder_option
@@ -210,6 +222,7 @@ syntax "(" &"immediate" ":=" "[" ident,+,? "]" ")" : Aesop.builder_option
 syntax "(" &"index" ":=" "[" Aesop.indexing_mode,+,? "]" ")" : Aesop.builder_option
 syntax "(" &"patterns" ":=" "[" term,+,? "]" ")" : Aesop.builder_option
 syntax "(" &"transparency" ":=" transparency ")" : Aesop.builder_option
+syntax "(" &"transparency!" ":=" transparency ")" : Aesop.builder_option
 
 syntax builderOptions := Aesop.builder_option*
 
@@ -219,7 +232,7 @@ inductive BuilderOption
   | immediate (names : Array Name)
   | index (imode : IndexingMode)
   | patterns (pats : Array CasesPattern)
-  | transparency (md : TransparencyMode)
+  | transparency (md : TransparencyMode) (alsoForIndex : Bool)
 
 namespace BuilderOption
 
@@ -233,14 +246,11 @@ def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
     | `(builder_option| (patterns := [$pats:term,*])) =>
       patterns <$> (pats : Array Syntax).mapM (CasesPattern.elab ·)
     | `(builder_option| (transparency := $md)) =>
-      let md ←
-        match md with
-        | `(Parser.transparency| default) => pure .default
-        | `(Parser.transparency| reducible) => pure .reducible
-        | `(Parser.transparency| instances) => pure .instances
-        | `(Parser.transparency| all) => pure .all
-        | _ => throwUnsupportedSyntax
-      return transparency md
+      let md ← elabTransparency md
+      return transparency md (alsoForIndex := false)
+    | `(builder_option| (transparency! := $md)) =>
+      let md ← elabTransparency md
+      return transparency md (alsoForIndex := true)
     | _ => throwUnsupportedSyntax
 
 protected def name : BuilderOption → String
@@ -292,7 +302,7 @@ protected def none (builderName : DBuilderName) : BuilderOptions Unit where
 def regular (builderName : BuilderName) :
     BuilderOptions RegularBuilderOptions where
   builderName := .regular builderName
-  init := .default
+  init := default
   add
     | opts, .index imode => some { opts with indexingMode? := imode }
     | _, _ => none
@@ -315,11 +325,42 @@ def destruct : BuilderOptions ForwardBuilderOptions :=
 
 def cases : BuilderOptions CasesBuilderOptions where
   builderName := .regular .cases
-  init := .default
+  init := default
   add
     | opts, .patterns patterns => some { opts with patterns }
     | opts, .index indexingMode? => some { opts with indexingMode? }
-    | opts, .transparency transparency => some { opts with transparency }
+    | opts, .transparency transparency alsoForIndex =>
+      let opts := { opts with transparency }
+      if alsoForIndex then
+        some { opts with indexTransparency := transparency }
+      else
+        some opts
+    | _, _ => none
+
+def apply : BuilderOptions ApplyBuilderOptions where
+  builderName := .regular .cases
+  init := default
+  add
+    | opts, .index indexingMode? => some { opts with indexingMode? }
+    | opts, .transparency transparency alsoForIndex =>
+      let opts := { opts with transparency }
+      if alsoForIndex then
+        some { opts with indexTransparency := transparency }
+      else
+        some opts
+    | _, _ => none
+
+def constructors : BuilderOptions ConstructorsBuilderOptions where
+  builderName := .regular .cases
+  init := default
+  add
+    | opts, .index indexingMode? => some { opts with indexingMode? }
+    | opts, .transparency transparency alsoForIndex =>
+      let opts := { opts with transparency }
+      if alsoForIndex then
+        some { opts with indexTransparency := transparency }
+      else
+        some opts
     | _, _ => none
 
 end BuilderOptions
@@ -335,11 +376,11 @@ syntax "(" Aesop.builder_name builderOptions ")" : Aesop.builder
 end Parser
 
 inductive Builder
-  | apply (opts : RegularBuilderOptions)
+  | apply (opts : ApplyBuilderOptions)
   | simp
   | unfold
   | tactic (opts : RegularBuilderOptions)
-  | constructors (opts : RegularBuilderOptions)
+  | constructors (opts : ConstructorsBuilderOptions)
   | forward (opts : ForwardBuilderOptions)
   | cases (opts : CasesBuilderOptions)
   | «default»
@@ -349,19 +390,17 @@ namespace Builder
 
 def elabOptions (b : DBuilderName) (opts : Syntax) : ElabM Builder := do
   match b with
-  | .regular .apply => apply <$> getRegularOptions .apply
+  | .regular .apply => apply <$> BuilderOptions.apply.elab opts
   | .regular .simp => checkNoOptions; return simp
   | .regular .unfold => checkNoOptions; return unfold
-  | .regular .tactic => tactic <$> getRegularOptions .tactic
-  | .regular .constructors => constructors <$> getRegularOptions .constructors
+  | .regular .tactic => tactic <$> (BuilderOptions.regular .tactic |>.elab opts)
+  | .regular .constructors => constructors <$> BuilderOptions.constructors.elab opts
   | .regular .forward => forward <$> BuilderOptions.forward.elab opts
   | .regular .destruct => forward <$> BuilderOptions.destruct.elab opts
   | .regular .cases => «cases» <$> BuilderOptions.cases.elab opts
   | .default => checkNoOptions; return default
   where
     checkNoOptions := BuilderOptions.none b |>.«elab» opts
-    getRegularOptions builderName :=
-      BuilderOptions.regular builderName |>.«elab» opts
 
 def «elab» (stx : Syntax) : ElabM Builder :=
   withRef stx do

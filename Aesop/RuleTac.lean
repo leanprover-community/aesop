@@ -16,9 +16,9 @@ open Lean
 namespace Aesop.RuleTacDescr
 
 protected def run : RuleTacDescr → RuleTacInput → MetaM RuleTacOutput
-  | applyConst decl => RuleTac.applyConst decl
-  | applyFVar userName => RuleTac.applyFVar userName
-  | constructors cs => RuleTac.applyConsts cs
+  | applyConst decl md => RuleTac.applyConst decl md
+  | applyFVar userName md => RuleTac.applyFVar userName md
+  | constructors cs md => RuleTac.applyConsts cs md
   | forwardConst decl    immediate clear =>
     RuleTac.forwardConst decl immediate clear
   | forwardFVar userName immediate clear =>

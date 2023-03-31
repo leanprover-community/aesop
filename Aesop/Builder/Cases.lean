@@ -29,19 +29,27 @@ end CasesPattern
 
 structure CasesBuilderOptions extends RegularBuilderOptions where
   patterns : Array CasesPattern
+  /-- The transparency used by the rule tactic when searching for hypotheses to
+  run `cases` on. -/
   transparency : TransparencyMode
+  /-- The transparency used to index the rule. The rule is not indexed unless
+  this is `.reducible`. -/
+  indexTransparency : TransparencyMode
 
 namespace CasesBuilderOptions
 
-protected def default : CasesBuilderOptions where
-  toRegularBuilderOptions := .default
-  patterns := #[]
-  transparency := .reducible
+instance : Inhabited CasesBuilderOptions where
+  default := {
+    toRegularBuilderOptions := default
+    patterns := #[]
+    transparency := .reducible
+    indexTransparency := .reducible
+  }
 
 def indexingMode (decl : Name) (opts : CasesBuilderOptions) :
     MetaM IndexingMode :=
   opts.getIndexingModeM do
-    if opts.transparency != .reducible then
+    if opts.indexTransparency != .reducible then
       return .unindexed
     if opts.patterns.isEmpty then
       IndexingMode.hypsMatchingConst decl
