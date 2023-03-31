@@ -18,9 +18,12 @@ example (h : False) : α := by
 example (h : T) : α := by
   fail_if_success aesop (options := { terminal := true })
   fail_if_success
-    aesop (add safe (cases (transparency := reducible)) False)
+    aesop (add safe (cases (transparency! := reducible)) False)
       (options := { terminal := true })
-  aesop (add safe (cases (transparency := default)) False)
+  fail_if_success
+    aesop (add safe (cases (transparency := default)) False)
+      (options := { terminal := true })
+  aesop (add safe (cases (transparency! := default)) False)
 
 example (h : U) : α := by
-  aesop (add safe (cases (transparency := default)) False)
+  aesop (add safe (cases (transparency! := default)) False)

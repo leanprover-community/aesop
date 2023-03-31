@@ -9,17 +9,31 @@ import Aesop.Builder.Basic
 open Lean
 open Lean.Meta
 
-namespace Aesop.RuleBuilder
+namespace Aesop
 
-def apply (opts : RegularBuilderOptions) : RuleBuilder := λ input =>
+structure ApplyBuilderOptions extends RegularBuilderOptions where
+  /-- The transparency used by the rule tactic. -/
+  transparency : TransparencyMode
+  /-- The transparency used to index the rule. The rule is not indexed unless
+  this is `.reducible`. -/
+  indexTransparency : TransparencyMode
+
+instance : Inhabited ApplyBuilderOptions where
+  default := {
+    toRegularBuilderOptions := default
+    transparency := .default
+    indexTransparency := .reducible
+  }
+
+def RuleBuilder.apply (opts : ApplyBuilderOptions) : RuleBuilder := λ input =>
   match input.kind with
   | RuleBuilderKind.global decl => do
-    let tac := .applyConst decl
+    let tac := .applyConst decl opts.transparency
     let type := (← getConstInfo decl).type
     RuleBuilderOutput.global <$> mkResult tac type
   | RuleBuilderKind.local fvarUserName goal =>
     goal.withContext do
-      let tac := RuleTacDescr.applyFVar fvarUserName
+      let tac := RuleTacDescr.applyFVar fvarUserName opts.transparency
       let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
       let result ← mkResult tac type
       return RuleBuilderOutput.local goal result
@@ -28,8 +42,11 @@ def apply (opts : RegularBuilderOptions) : RuleBuilder := λ input =>
       return RuleBuilderResult.regular {
         builder := BuilderName.apply
         tac := tac
-        indexingMode := ← opts.getIndexingModeM $
-          IndexingMode.targetMatchingConclusion type
+        indexingMode := ← opts.getIndexingModeM do
+          if opts.indexTransparency != .reducible then
+            return .unindexed
+          else
+            IndexingMode.targetMatchingConclusion type
       }
 
-end Aesop.RuleBuilder
+end Aesop

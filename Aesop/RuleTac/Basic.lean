@@ -104,9 +104,9 @@ inductive CasesTarget
   deriving Inhabited
 
 inductive RuleTacDescr
-  | applyConst (decl     : Name)
-  | applyFVar  (userName : Name)
-  | constructors (constructorNames : Array Name)
+  | applyConst (decl     : Name) (md : TransparencyMode)
+  | applyFVar  (userName : Name) (md : TransparencyMode)
+  | constructors (constructorNames : Array Name) (md : TransparencyMode)
   | forwardConst (decl     : Name) (immediate : UnorderedArraySet Nat) (clear : Bool)
   | forwardFVar  (userName : Name) (immediate : UnorderedArraySet Nat) (clear : Bool)
   | cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveType : Bool)
