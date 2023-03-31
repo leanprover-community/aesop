@@ -79,6 +79,7 @@ def trace (p : Profile) (opt : TraceOption) : CoreM Unit := do
   let totalRuleApplications :=
     p.ruleApplications.foldl (init := 0) λ total rp =>
       total + rp.elapsed
+  aesop_trace![opt] "Total: {p.total.printAsMillis}"
   aesop_trace![opt] "Configuration parsing: {p.configParsing.printAsMillis}"
   aesop_trace![opt] "Rule set construction: {p.ruleSetConstruction.printAsMillis}"
   withConstAesopTraceNode opt (collapsed := false)

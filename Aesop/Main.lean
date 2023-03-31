@@ -21,18 +21,19 @@ def evalAesop : Tactic := λ stx => do
     let (profile, totalTime) ← IO.time do
       let (config, configParseTime) ← IO.time $ Frontend.TacticConfig.parse stx
       let profile := { Profile.empty with configParsing := configParseTime }
+      let goal ← getMainGoal
+      let ((goal, ruleSet), ruleSetConstructionTime) ← IO.time $
+        config.getRuleSet goal
+      let profile :=
+        { profile with ruleSetConstruction := ruleSetConstructionTime }
+      withConstAesopTraceNode .ruleSet (return "Rule set") do
+        ruleSet.trace .ruleSet
       let (profile, searchTime) ← IO.time do
-        let goal ← getMainGoal
-        let ((goal, ruleSet), ruleSetConstructionTime) ← IO.time $
-          config.getRuleSet goal
-        let profile := { profile with ruleSetConstruction := ruleSetConstructionTime }
-        withConstAesopTraceNode .ruleSet (return "Rule set") do
-          ruleSet.trace .ruleSet
         let (goals, profile) ←
           search goal ruleSet config.options config.simpConfig
             config.simpConfigSyntax? profile
         replaceMainGoal goals.toList
-        return profile
+        pure profile
       pure { profile with search := searchTime }
     let profile := { profile with total := totalTime }
     if (← getOptions).getBool `profiler then
