@@ -57,7 +57,7 @@ initialize extraction : TraceOption ←
 
 initialize profile : TraceOption ←
   registerTraceOption `profile
-    "(aesop) DO NOT set this option directly. Instead, enable the 'profiler' option."
+    "(aesop) If the search is successful, print a summary of where Aesop spent its time. Enable the `profiler` and `trace.aesop` options for finer-grained information."
 
 end TraceOption
 

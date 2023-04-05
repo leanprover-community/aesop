@@ -36,9 +36,7 @@ def evalAesop : Tactic := λ stx => do
         pure profile
       pure { profile with search := searchTime }
     let profile := { profile with total := totalTime }
-    if (← getOptions).getBool `profiler then
-      TraceOption.profile.withEnabled do
-        profile.trace .profile
+    profile.trace .profile
 
 macro_rules
   | `(tactic| aesop $cs:Aesop.tactic_clause*) =>
