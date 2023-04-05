@@ -3,7 +3,7 @@ import Lake
 open Lake DSL
 
 package aesop {
-  precompileModules := true
+  precompileModules := false -- breaks mathlib cache
 }
 
 @[default_target]
