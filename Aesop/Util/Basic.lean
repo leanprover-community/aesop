@@ -225,6 +225,9 @@ section DiscrTree
 
 open DiscrTree
 
+def isEmptyTrie : Trie α s → Bool
+  | .node vs children => vs.isEmpty && children.isEmpty
+
 private partial def filterTrie (removed : Array (Array (Key s) × α))
     (parentKeys : Array (Key s)) (p : α → Bool) :
     Trie α s → Trie α s × Array (Array (Key s) × α)
@@ -232,6 +235,7 @@ private partial def filterTrie (removed : Array (Array (Key s) × α))
     let (vs, removed') := vs.partition p
     let removed := removed ++ removed'.map (λ v => (parentKeys, v))
     let (children, removed) := go removed 0 children
+    let children := children.filter λ (_, c) => ! isEmptyTrie c
     (.node vs children, removed)
   where
     go (removed : Array (Array (Key s) × α)) (i : Nat)
@@ -250,7 +254,8 @@ def filterDiscrTreeCore (t : DiscrTree α s)
   let (root, removed) :=
     t.root.foldl (init := (.empty, removed)) λ (root, removed) key t =>
       let (t, removed') := filterTrie removed #[key] p t
-      (root.insert key t, removed ++ removed')
+      let root := if isEmptyTrie t then root else root.insert key t
+      (root, removed ++ removed')
   (⟨root⟩, removed)
 
 /--
