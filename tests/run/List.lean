@@ -257,7 +257,8 @@ theorem X.eq_or_ne_mem_of_mem {a b : α} {l : List α} : a ∈ b :: l → a = b 
   open Classical in
   aesop (add safe [decidable.list.eq_or_ne_mem_of_mem])
 
-theorem not_mem_append {a : α} {s t : List α} (h₁ : a ∉ s) (h₂ : a ∉ t) : a ∉ s ++ t := by
+-- attribute [-simp] not_mem_append
+theorem X.not_mem_append {a : α} {s t : List α} (h₁ : a ∉ s) (h₂ : a ∉ t) : a ∉ s ++ t := by
   induction s <;> aesop
 
 -- attribute [-simp] ne_nil_of_mem
@@ -268,19 +269,24 @@ set_option linter.unusedVariables false in
 theorem mem_split {a : α} {l : List α} (h : a ∈ l) : ∃ s t : List α, l = s ++ a :: t :=
   ADMIT -- Nontrivial existential.
 
-theorem mem_of_ne_of_mem {a y : α} {l : List α} (h₁ : a ≠ y) (h₂ : a ∈ y :: l) : a ∈ l := by
+-- attribute [-simp] mem_of_ne_of_mem
+theorem X.mem_of_ne_of_mem {a y : α} {l : List α} (h₁ : a ≠ y) (h₂ : a ∈ y :: l) : a ∈ l := by
   aesop
 
-theorem ne_of_not_mem_cons {a b : α} {l : List α} : a ∉ b::l → a ≠ b := by
+-- attribute [-simp] ne_of_not_mem_cons
+theorem X.ne_of_not_mem_cons {a b : α} {l : List α} : a ∉ b::l → a ≠ b := by
   aesop
 
-theorem not_mem_of_not_mem_cons {a b : α} {l : List α} : a ∉ b::l → a ∉ l := by
+-- attribute [-simp] not_mem_of_not_mem_cons
+theorem X.not_mem_of_not_mem_cons {a b : α} {l : List α} : a ∉ b::l → a ∉ l := by
   aesop
 
-theorem not_mem_cons_of_ne_of_not_mem {a y : α} {l : List α} : a ≠ y → a ∉ l → a ∉ y::l := by
+-- attribute [-simp] not_mem_cons_of_ne_of_not_mem
+theorem X.not_mem_cons_of_ne_of_not_mem {a y : α} {l : List α} : a ≠ y → a ∉ l → a ∉ y::l := by
   aesop
 
-theorem ne_and_not_mem_of_not_mem_cons {a y : α} {l : List α} : a ∉ y::l → a ≠ y ∧ a ∉ l := by
+-- attribute [-simp] ne_and_not_mem_of_not_mem_cons
+theorem X.ne_and_not_mem_of_not_mem_cons {a y : α} {l : List α} : a ∉ y::l → a ≠ y ∧ a ∉ l := by
   aesop
 
 -- attribute [-simp] mem_map
@@ -646,13 +652,15 @@ theorem X.map_eq_append_split {f : α → β} {l : List α} {s₁ s₂ : List β
 theorem X.eq_of_mem_replicate {a b : α} {n} (h : b ∈ replicate n a) : b = a := by
   aesop
 
-theorem eq_replicate_of_mem {a : α} {l : List α} : (∀ b, b ∈ l → b = a) → l = replicate l.length a := by
+-- attribute [-simp] eq_replicate_of_mem
+theorem X.eq_replicate_of_mem {a : α} {l : List α} : (∀ b, b ∈ l → b = a) → l = replicate l.length a := by
   induction l <;> aesop (simp_options := { useHyps := false })
 
 theorem eq_replicate' {a : α} {l : List α} : l = replicate l.length a ↔ ∀ b, b ∈ l → b = a := by
   induction l <;> aesop
 
-theorem eq_replicate {a : α} {n} {l : List α} : l = replicate n a ↔ length l = n ∧ ∀ b, b ∈ l → b = a := by
+-- attribute [-simp] eq_replicate
+theorem X.eq_replicate {a : α} {n} {l : List α} : l = replicate n a ↔ length l = n ∧ ∀ b, b ∈ l → b = a := by
   set_option aesop.check.script false in -- TODO
   aesop (add norm simp eq_replicate')
 
