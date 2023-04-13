@@ -9,6 +9,8 @@ package aesop {
 @[default_target]
 lean_lib Aesop
 
-lean_lib AesopTest
+lean_lib AesopTest {
+  globs := #[.submodules "AesopTest"]
+}
 
 require std from git "https://github.com/leanprover/std4" @ "main"

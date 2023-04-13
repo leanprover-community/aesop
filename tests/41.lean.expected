@@ -1,3 +1,3 @@
-tests/golden/41.lean:4:2: error: no such rule set: 'Nonexistent'
+tests/41.lean:4:2: error: no such rule set: 'Nonexistent'
   (Use 'declare_aesop_rule_set' to declare rule sets.
    Declared rule sets are not visible in the current file; they only become visible once you import the declaring file.)

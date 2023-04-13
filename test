@@ -2,8 +2,8 @@
 
 # Usage:
 #
-# `./test` to build tests/*.lean
-# `./test tests/run/A.lean tests/golden/B.lean ...` to build the specified files
+# `./test` to build the AesopTest project and tests/*.lean
+# `./test tests/<file>.lean ...` to build the specified files
 #
 # This script must be called from the directory it is located in.
 
@@ -12,22 +12,21 @@ RESET="\e[0m"
 
 LEAN_OPTS="-D linter.unusedVariables=false"
 
-lake build std || exit 1 # required for tests/run/Aesop.lean
-lake build Aesop AesopTest || exit 1
+# Build Aesop and AesopTest
+
+lake build Aesop || exit 1
+lake build AesopTest
+exitcode="$?"
+
+# Run golden tests in tests/
 
 if [ -z "$1" ]; then
-  files=(tests/run/*.lean)
-  files+=(tests/golden/*.lean)
+  files=(tests/*.lean)
 else
   files="$@"
 fi
 
-function run_run_test {
-  lake env lean $LEAN_OPTS "$file"
-  return "$?"
-}
-
-function run_golden_test {
+function run_test {
   file="$1"
   expected="${file}.expected"
   produced="${file}.produced"
@@ -42,25 +41,10 @@ function run_golden_test {
   fi
 }
 
-failed=0
-
 for file in ${files[@]}; do
   echo -e "$GREEN$file$RESET"
-  dir="$(dirname "$file")"
-  case $dir in
-    "tests/run")
-      run_run_test "$file"
-      [ "$?" -eq 0 ] || failed=1
-      ;;
-    "tests/golden")
-      run_golden_test "$file"
-      [ "$?" -eq 0 ] || failed=1
-      ;;
-    *)
-      echo "Unexpected test file. Valid files are 'tests/run/*.lean' and 'tests/golden/*.lean'"
-      exit 1
-      ;;
-  esac
+  run_test "$file"
+  [ "$?" -eq 0 ] || exitcode=1
 done
 
-exit $failed
+exit $exitcode

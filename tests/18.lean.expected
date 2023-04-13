@@ -1,4 +1,4 @@
-tests/golden/18.lean:20:6: error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+tests/18.lean:20:6: error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 α : Type u_1
 inst : DecidableEq α
 v x : α

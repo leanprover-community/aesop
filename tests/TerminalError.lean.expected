@@ -1,0 +1,2 @@
+tests/TerminalError.lean:12:2: error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+⊢ False

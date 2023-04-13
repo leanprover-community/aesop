@@ -1,0 +1,9 @@
+tests/13.lean:22:2: error: tactic 'aesop' failed, maximum number of rule applications (100) reached. Set the 'maxRuleApplications' option to increase the limit.
+P : Nat → Prop
+Δ : List Nat
+⊢ Any P Δ
+tests/13.lean:27:2: error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+α : Type u_1
+P : α → Prop
+Δ : List α
+⊢ Any P Δ

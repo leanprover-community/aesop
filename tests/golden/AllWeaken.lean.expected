@@ -1,3 +1,0 @@
-tests/golden/AllWeaken.lean:20:2: error: tactic 'aesop' failed, maximum number of rule applications (50) reached. Set the 'maxRuleApplications' option to increase the limit.
-α : Type ?u.340
-⊢ All (fun x => x ∈ []) []
