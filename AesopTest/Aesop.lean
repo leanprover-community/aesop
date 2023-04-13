@@ -6,10 +6,6 @@ Authors: Jannis Limperg
 
 import Aesop
 
--- make sure definitions don't clash
-import Lean
-import Std
-
 set_option aesop.check.all true
 
 open Lean
