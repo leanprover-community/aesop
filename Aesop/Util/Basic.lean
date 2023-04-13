@@ -228,42 +228,52 @@ open DiscrTree
 def isEmptyTrie : Trie α s → Bool
   | .node vs children => vs.isEmpty && children.isEmpty
 
-private partial def filterTrie (removed : Array (Array (Key s) × α))
-    (parentKeys : Array (Key s)) (p : α → Bool) :
-    Trie α s → Trie α s × Array (Array (Key s) × α)
-  | .node vs children =>
-    let (vs, removed') := vs.partition p
-    let removed := removed ++ removed'.map (λ v => (parentKeys, v))
-    let (children, removed) := go removed 0 children
+@[specialize]
+private partial def filterTrieM [Monad m] [Inhabited σ] (f : σ → α → m σ)
+    (p : α → m (ULift Bool)) (init : σ) : Trie α s → m (Trie α s × σ)
+  | .node vs children => do
+    let (vs, acc) ← vs.foldlM (init := (#[], init)) λ (vs, acc) v => do
+      if (← p v).down then
+        return (vs.push v, acc)
+      else
+        return (vs, ← f acc v)
+    let (children, acc) ← go acc 0 children
     let children := children.filter λ (_, c) => ! isEmptyTrie c
-    (.node vs children, removed)
+    return (.node vs children, acc)
   where
-    go (removed : Array (Array (Key s) × α)) (i : Nat)
-        (children : Array (Key s × Trie α s)) :
-        Array (Key s × Trie α s) × Array (Array (Key s) × α) :=
+    go (acc : σ) (i : Nat) (children : Array (Key s × Trie α s)) :
+        m (Array (Key s × Trie α s) × σ) := do
       if h : i < children.size then
         let (key, t) := children[i]'h
-        let (t, removed') := filterTrie removed (parentKeys.push key) p t
-        go (removed ++ removed') (i + 1) (children.set ⟨i, h⟩ (key, t))
+        let (t, acc) ← filterTrieM f p acc t
+        go acc (i + 1) (children.set ⟨i, h⟩ (key, t))
       else
-        (children, removed)
-
-def filterDiscrTreeCore (t : DiscrTree α s)
-    (removed : Array (Array (Key s) × α)) (p : α → Bool) :
-    DiscrTree α s × Array (Array (Key s) × α) :=
-  let (root, removed) :=
-    t.root.foldl (init := (.empty, removed)) λ (root, removed) key t =>
-      let (t, removed') := filterTrie removed #[key] p t
-      let root := if isEmptyTrie t then root else root.insert key t
-      (root, removed ++ removed')
-  (⟨root⟩, removed)
+        return (children, acc)
 
 /--
-Remove elements for which `p` returns `false` from the given `DiscrTree`. The
-modified `DiscrTree` is returned along with the removed elements.
+Remove elements for which `p` returns `false` from the given `DiscrTree`.
+The removed elements are monadically folded over using `f` and `init`, so `f`
+is called once for each removed element and the final state of type `σ` is
+returned.
 -/
-def filterDiscrTree (t : DiscrTree α s) (p : α → Bool) :
-    DiscrTree α s × Array (Array (Key s) × α) :=
-  filterDiscrTreeCore t #[] p
+@[specialize]
+def filterDiscrTreeM [Monad m] [Inhabited σ] (p : α → m (ULift Bool))
+    (f : σ → α → m σ) (init : σ) (t : DiscrTree α s) :
+    m (DiscrTree α s × σ) := do
+  let (root, acc) ←
+    t.root.foldlM (init := (.empty, init)) λ (root, acc) key t => do
+      let (t, acc) ← filterTrieM f p acc t
+      let root := if isEmptyTrie t then root else root.insert key t
+      return (root, acc)
+  return (⟨root⟩, acc)
+
+/--
+Remove elements for which `p` returns `false` from the given `DiscrTree`.
+The removed elements are folded over using `f` and `init`, so `f` is called
+once for each removed element and the final state of type `σ` is returned.
+-/
+def filterDiscrTree [Inhabited σ] (p : α → Bool) (f : σ → α → σ) (init : σ)
+    (t : DiscrTree α s) : DiscrTree α s × σ := Id.run $
+  filterDiscrTreeM (λ a => pure ⟨p a⟩) (λ s a => pure (f s a)) init t
 
 end Aesop.DiscrTree

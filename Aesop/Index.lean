@@ -64,11 +64,15 @@ partial def add (r : α) (imode : IndexingMode) (ri : Index α) :
       ri.add r imode
 
 def unindex (ri : Index α) (p : α → Bool) : Index α :=
-  let (byTarget, removed) := filterDiscrTree ri.byTarget (not ∘ p)
-  let (byHyp,    removed) := filterDiscrTreeCore ri.byHyp removed (not ∘ p)
-  let unindexed := removed.foldl (init := ri.unindexed) λ unindexed (_, v) =>
-    unindexed.insert v
+  let (byTarget, unindexed) := filterDiscrTree' ri.unindexed ri.byTarget
+  let (byHyp,    unindexed) := filterDiscrTree' unindexed ri.byHyp
   { byTarget, byHyp, unindexed }
+  where
+    @[inline, always_inline]
+    filterDiscrTree' {s} (unindexed : PHashSet α) (t : DiscrTree α s) :
+        DiscrTree α s × PHashSet α :=
+      filterDiscrTree (not ∘ p) (λ unindexed v => unindexed.insert v) unindexed
+        t
 
 def foldM [Monad m] (ri : Index α) (f : σ → α → m σ) (init : σ) : m σ :=
   match ri with
