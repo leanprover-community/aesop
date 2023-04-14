@@ -315,6 +315,12 @@ private def forwardCore (clear : Bool) :
   add
     | opts, .immediate ns => some { opts with immediateHyps := ns }
     | opts, .index imode => some { opts with indexingMode? := imode }
+    | opts, .transparency transparency alsoForIndex =>
+      let opts := { opts with transparency }
+      if alsoForIndex then
+        some { opts with indexTransparency := transparency }
+      else
+        some opts
     | _, _ => none
 
 def forward : BuilderOptions ForwardBuilderOptions :=

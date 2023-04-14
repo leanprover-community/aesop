@@ -16,10 +16,8 @@ namespace Aesop.RuleTac
 private partial def makeForwardHyps (e : Expr)
     (immediate : UnorderedArraySet Nat) (collectUsedHyps : Bool) :
     MetaM (Array Expr × Array FVarId) :=
-
   withNewMCtxDepth (allowLevelAssignments := true) do
     let (argMVars, binderInfos, _) ← forallMetaTelescopeReducing (← inferType e)
-
     let app := mkAppN e argMVars
     let mut instMVars := Array.mkEmpty argMVars.size
     let mut immediateMVars := Array.mkEmpty argMVars.size
@@ -29,7 +27,6 @@ private partial def makeForwardHyps (e : Expr)
         immediateMVars := immediateMVars.push mvarId
       else if binderInfos[i]!.isInstImplicit then
         instMVars := instMVars.push mvarId
-
     loop app instMVars immediateMVars 0 #[] #[] #[]
   where
     loop (app : Expr) (instMVars : Array MVarId) (immediateMVars : Array MVarId)
@@ -100,9 +97,9 @@ def getForwardHypTypes : MetaM (HashSet Expr) := do
   return result
 
 def applyForwardRule (goal : MVarId) (e : Expr)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) (generateScript : Bool) :
-    MetaM (MVarId × Option RuleTacScriptBuilder) :=
-  goal.withContext do
+    (immediate : UnorderedArraySet Nat) (clear : Bool) (generateScript : Bool)
+    (md : TransparencyMode) : MetaM (MVarId × Option RuleTacScriptBuilder) :=
+  withTransparency md $ goal.withContext do
     let (newHypProofs, usedHyps) ←
       makeForwardHyps e immediate (collectUsedHyps := clear)
     if newHypProofs.isEmpty then
@@ -121,6 +118,8 @@ def applyForwardRule (goal : MVarId) (e : Expr)
       err
     let (_, goal, assertScriptBuilder?) ←
       assertHypothesesWithScript goal newHyps generateScript
+    let assertScriptBuilder? :=
+      assertScriptBuilder?.map (·.withAllTransparency md)
     let implDetailHyps ← newHyps.mapM λ hyp =>
       return {
         hyp with
@@ -143,21 +142,21 @@ def applyForwardRule (goal : MVarId) (e : Expr)
 
 @[inline]
 def forwardExpr (e : Expr) (immediate : UnorderedArraySet Nat)
-    (clear : Bool) : RuleTac :=
+    (clear : Bool) (md : TransparencyMode) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => input.goal.withContext do
     let (goal, scriptBuilder?) ←
       applyForwardRule input.goal e immediate (clear := clear)
-        (generateScript := input.options.generateScript)
+        (generateScript := input.options.generateScript) md
     return (#[goal], scriptBuilder?)
 
 def forwardConst (decl : Name) (immediate : UnorderedArraySet Nat)
-    (clear : Bool) : RuleTac := λ input => do
-  forwardExpr (← mkConstWithFreshMVarLevels decl) immediate clear input
+    (clear : Bool) (md : TransparencyMode) : RuleTac := λ input => do
+  forwardExpr (← mkConstWithFreshMVarLevels decl) immediate clear md input
 
 def forwardFVar (userName : Name) (immediate : UnorderedArraySet Nat)
-    (clear : Bool) : RuleTac := λ input =>
+    (clear : Bool) (md : TransparencyMode) : RuleTac := λ input =>
   input.goal.withContext do
     let ldecl ← getLocalDeclFromUserName userName
-    forwardExpr (mkFVar ldecl.fvarId) immediate (clear := clear) input
+    forwardExpr (mkFVar ldecl.fvarId) immediate (clear := clear) md input
 
 end Aesop.RuleTac

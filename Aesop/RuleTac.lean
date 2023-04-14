@@ -19,10 +19,10 @@ protected def run : RuleTacDescr → RuleTacInput → MetaM RuleTacOutput
   | applyConst decl md => RuleTac.applyConst decl md
   | applyFVar userName md => RuleTac.applyFVar userName md
   | constructors cs md => RuleTac.applyConsts cs md
-  | forwardConst decl    immediate clear =>
-    RuleTac.forwardConst decl immediate clear
-  | forwardFVar userName immediate clear =>
-    RuleTac.forwardFVar userName immediate clear
+  | forwardConst decl    immediate clear md =>
+    RuleTac.forwardConst decl immediate clear md
+  | forwardFVar userName immediate clear md =>
+    RuleTac.forwardFVar userName immediate clear md
   | cases decl md isRecursiveType => RuleTac.cases decl md isRecursiveType
   | tacticM decl => RuleTac.tacticM decl
   | singleRuleTac decl => RuleTac.singleRuleTac decl

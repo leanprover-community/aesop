@@ -392,6 +392,29 @@ def unfoldManyStar (usedDecls : HashSet Name) : ScriptBuilder MetaM :=
   else
     .ofTactic 1 `(tactic| aesop_unfold [$(usedDecls.toArray.map mkIdent):ident,*])
 
+@[inline, always_inline]
+def withPrefix (f : TSyntax ``tacticSeq → m (Array (TSyntax `tactic)))
+    (b : ScriptBuilder m) : ScriptBuilder m where
+  unstructured := do
+    let ts ← b.unstructured
+    f (← `(tacticSeq| $ts:tactic*))
+  structured := {
+    subgoals := b.structured.subgoals
+    elim := λ ks => do
+      let ts ← b.structured.elim ks
+      f (← `(tacticSeq| $ts:tactic*))
+  }
+
+protected def withTransparency (md : TransparencyMode) (b : ScriptBuilder m) :
+    ScriptBuilder m :=
+  b.withPrefix λ ts =>
+    return #[← `(tactic| ($(← withTransparencySeqSyntax md ts)))]
+
+protected def withAllTransparency (md : TransparencyMode) (b : ScriptBuilder m) :
+    ScriptBuilder m :=
+  b.withPrefix λ ts =>
+    return #[← `(tactic| ($(← withAllTransparencySeqSyntax md ts)))]
+
 end ScriptBuilder
 
 abbrev RuleTacScriptBuilder := ScriptBuilder MetaM

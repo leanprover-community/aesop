@@ -5,14 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
-import Lean
-
-open Aesop
-open Lean
-open Lean.Meta
-open Lean.Elab.Tactic
 
 set_option aesop.check.all true
+
+open Aesop Lean Lean.Meta Lean.Elab.Tactic
 
 /-! # Unit tests for the MetaM tactic that implements forward rules -/
 
@@ -20,26 +16,26 @@ syntax (name := forward) &"forward" ident ("[" ident* "]")? : tactic
 syntax (name := elim)    &"elim"    ident ("[" ident* "]")? : tactic
 
 def forwardTac (goal : MVarId) (id : Syntax) (immediate : Option (Array Syntax))
-    (clear : Bool) : MetaM (List MVarId) := do
+    (clear : Bool) (md : TransparencyMode) : MetaM (List MVarId) := do
   let userName := id.getId
   let ldecl ← getLocalDeclFromUserName userName
   let immediate ← RuleBuilder.getImmediatePremises userName ldecl.type
-    (immediate.map (·.map (·.getId)))
+    md (immediate.map (·.map (·.getId)))
   let (goal, _) ←
     RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) immediate clear
-      (generateScript := false)
+      (generateScript := false) md
   return [goal]
 
 @[tactic forward]
 def evalForward : Tactic
   | `(tactic| forward $t:ident $[[ $immediate:ident* ]]?) =>
-    liftMetaTactic λ goal => forwardTac goal t immediate (clear := false)
+    liftMetaTactic (forwardTac · t immediate (clear := false) .default)
   | _ => unreachable!
 
 @[tactic elim]
 def evalElim : Tactic
   | `(tactic| elim $t:ident $[[ $immediate:ident* ]]?) =>
-    liftMetaTactic λ goal => forwardTac goal t immediate (clear := true)
+    liftMetaTactic (forwardTac · t immediate (clear := true) .default)
   | _ => unreachable!
 
 example (rule : (a : α) → (b : β) → γ) (h₁ : α) (h₂ : β) : γ := by
