@@ -29,8 +29,9 @@ def introsUnfolding (mvarId : MVarId) : MetaM (Array FVarId × MVarId) := do
 
 @[aesop norm -100 (rule_sets [builtin])]
 def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
+    let md? := input.options.introsTransparency?
     let (newFVars, goal) ← unhygienic $
-      if let some md := input.options.introsTransparency? then
+      if let some md := md? then
         withTransparency md $ introsUnfolding input.goal
       else
         input.goal.intros
@@ -40,7 +41,14 @@ def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
       if input.options.generateScript then
         goal.withContext do
           let newFVarUserNames ← newFVars.mapM (mkIdent <$> ·.getUserName)
-          pure $ some $ .ofTactic 1 `(tactic| intro $newFVarUserNames:ident*)
+          let tac ← `(tactic| intro $newFVarUserNames:ident*)
+          let tac :=
+            if let some md := md? then
+              withAllTransparencySyntax md tac
+            else
+              pure tac
+          pure $ some $ .ofTactic 1 tac
+
       else
         pure none
     return (#[goal], scriptBuilder?)
