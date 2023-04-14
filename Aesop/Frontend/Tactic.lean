@@ -68,9 +68,9 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
   withRef stx do
     match stx with
     | `(tactic| aesop_no_checkpoint $clauses:Aesop.tactic_clause*) =>
-      clauses.foldlM addClause $ init (traceScript := false)
+      clauses.foldlM (addClause false) (init false)
     | `(tactic| aesop_no_checkpoint? $clauses:Aesop.tactic_clause*) =>
-      clauses.foldlM addClause $ init (traceScript := true)
+      clauses.foldlM (addClause true) (init true)
     | _ => throwUnsupportedSyntax
   where
     init (traceScript : Bool) : TacticConfig := {
@@ -82,7 +82,8 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
       simpConfigSyntax? := none
     }
 
-    addClause (c : TacticConfig) (stx : Syntax) : TermElabM TacticConfig :=
+    addClause (traceScript : Bool) (c : TacticConfig) (stx : Syntax) :
+        TermElabM TacticConfig :=
       withRef stx do
         match stx with
         | `(tactic_clause| (add $es:Aesop.rule_expr,*)) => do
@@ -110,7 +111,10 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
             | _ => throwUnsupportedSyntax
           return { c with enabledRuleSets }
         | `(tactic_clause| (options := $t:term)) =>
-          return { c with options := ← elabOptions t }
+          let options ← elabOptions t
+          let options :=
+            { options with traceScript := options.traceScript || traceScript }
+          return { c with options }
         | `(tactic_clause| (simp_options := $t:term)) =>
           return {
             c with
