@@ -163,15 +163,16 @@ def traceScript : SearchM Q Unit := do
   catch e =>
     logError m!"aesop: error while generating tactic script:{indentD e.toMessageData}"
 
+def traceTree : SearchM Q Unit := do
+  (← (← getRootGoal).get).traceTree .tree
+
 def finishIfProven : SearchM Q Bool := do
   unless (← (← getRootMVarCluster).get).state.isProven do
     return false
   finalizeProof
   traceScript
+  traceTree
   return true
-
-def traceTree : SearchM Q Unit := do
-  (← (← getRootGoal).get).traceTree .tree
 
 -- When we hit a non-fatal error (i.e. the search terminates without a proof
 -- because the root goal is unprovable or because we hit a search limit), we
@@ -211,7 +212,6 @@ partial def searchLoop : SearchM Q (Array MVarId) :=
     if let (some err) ← checkRootUnprovable then
       handleNonfatalError err
     else if ← finishIfProven then
-      traceTree
       return #[]
     else if let (some err) ← checkGoalLimit then
       handleNonfatalError err
