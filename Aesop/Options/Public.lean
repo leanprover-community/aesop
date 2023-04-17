@@ -60,15 +60,12 @@ structure Options where
   -/
   maxNormIterations := 100
   /--
-  If this option is not `none`, the builtin `intros` rule unfolds the goal's
-  target with the given transparency to discover `∀` binders. For example, with
-  `def T := ∀ x y : Nat, x = y`, `introsTransparency? := some .default` and goal
-  `⊢ T`, the `intros` rule produces the goal `x, y : Nat ⊢ x = y`. With
-  `introsTransparency? := some .reducible`, it produces `⊢ T`. With
-  `introsTransparency? := none`, it only introduces arguments which are
-  syntactically bound by `∀` binders, so it also produces `⊢ T`.
+  The transparency used by the `applyHyps` builtin rule. The rule applies a
+  hypothesis `h : T` if `T ≡ ∀ (x₁ : X₁) ... (xₙ : Xₙ), Y` at the given
+  transparency and if additionally the goal's target is defeq to `Y` at the
+  given transparency.
   -/
-  introsTransparency? : Option TransparencyMode := none
+  applyHypsTransparency : TransparencyMode := .default
   /--
   The transparency used by the `destructProducts` builtin rule. The rule splits
   a hypothesis `h : T` if `T` is defeq to a product-like type (e.g. `T ≡ A ∧ B`
@@ -79,6 +76,16 @@ structure Options where
   goal.
   -/
   destructProductsTransparency : TransparencyMode := .reducible
+  /--
+  If this option is not `none`, the builtin `intros` rule unfolds the goal's
+  target with the given transparency to discover `∀` binders. For example, with
+  `def T := ∀ x y : Nat, x = y`, `introsTransparency? := some .default` and goal
+  `⊢ T`, the `intros` rule produces the goal `x, y : Nat ⊢ x = y`. With
+  `introsTransparency? := some .reducible`, it produces `⊢ T`. With
+  `introsTransparency? := none`, it only introduces arguments which are
+  syntactically bound by `∀` binders, so it also produces `⊢ T`.
+  -/
+  introsTransparency? : Option TransparencyMode := none
   /--
   If `true`, Aesop succeeds only if it proves the goal. If `false`, Aesop always
   succeeds and reports the goals remaining after safe rules were applied.
