@@ -14,10 +14,11 @@ namespace Aesop.BuiltinRules
 @[aesop safe -50 (rule_sets [builtin])]
 def assumption : RuleTac := λ input => do
   let goal := input.goal
+  let generateScript := input.options.generateScript
+  let md := input.options.assumptionTransparency
   goal.withContext do
     goal.checkNotAssigned `Aesop.BuiltinRules.assumption
     goal.instantiateMVars
-    let generateScript := input.options.generateScript
     let tgt ← goal.getType
     let initialState ← saveState
     let mut applications := #[]
@@ -26,7 +27,7 @@ def assumption : RuleTac := λ input => do
         continue
       restoreState initialState
       let (some (application, proofHasMVar)) ←
-        tryHyp goal tgt ldecl generateScript
+        tryHyp goal tgt ldecl md generateScript
         | continue
       if ! tgt.hasMVar && ! proofHasMVar then
         applications := #[application]
@@ -38,14 +39,16 @@ def assumption : RuleTac := λ input => do
     return ⟨applications⟩
   where
     tryHyp (goal : MVarId) (tgt : Expr) (ldecl : LocalDecl)
-        (generateScript : Bool) : MetaM (Option (RuleApplication × Bool)) := do
-      if ! (← isDefEq ldecl.type tgt) then
+        (md : TransparencyMode) (generateScript : Bool) :
+        MetaM (Option (RuleApplication × Bool)) := do
+      if ! (← withTransparency md $ isDefEq ldecl.type tgt) then
         return none
       goal.assign ldecl.toExpr
       let postState ← saveState
       let scriptBuilder? :=
         mkScriptBuilder? generateScript $
-          .ofTactic 0 `(tactic| exact $(mkIdent ldecl.userName))
+          .ofTactic 0 $ withAllTransparencySyntax md $
+            ← `(tactic| exact $(mkIdent ldecl.userName))
       let app := {
         goals := #[]
         postState, scriptBuilder?

@@ -67,6 +67,12 @@ structure Options where
   -/
   applyHypsTransparency : TransparencyMode := .default
   /--
+  The transparency used by the `assumption` builtin rule. The rule applies a
+  hypothesis `h : T` if `T` is defeq to the goal's target at the given
+  transparency.
+  -/
+  assumptionTransparency : TransparencyMode := .default
+  /--
   The transparency used by the `destructProducts` builtin rule. The rule splits
   a hypothesis `h : T` if `T` is defeq to a product-like type (e.g. `T ≡ A ∧ B`
   or `T ≡ A × B`) at the given transparency.
