@@ -530,6 +530,26 @@ an Aesop rule. Currently available builders are:
   - For `safe` and `unsafe` rules: `constructors`, `tactic`, `apply`.
   - For `norm` rules: `constructors`, `tactic`, `simp`, `apply`.
 
+#### Transparency Options
+
+The rule builders `apply`, `forward`, `destruct`, `constructors` and `cases`
+each have a `transparency` option. This option controls the transparency at
+which the rule is executed. For example, registering a rule with the builder
+`(apply (transparency := reducible))` makes the rule act like the tactic
+`with_reducible apply`.
+
+However, even if you change the transparency of a rule, it is still indexed at
+`reducible` transparency (since the data structure we use for indexing only
+supports `reducible` transparency). So suppose you register an `apply` rule with
+`default` transparency. Further suppose the rule concludes `A ∧ B` and your
+target is `T` with `def T := A ∧ B`. Then the rule could apply to the target
+since it can unfold `T` at `default` transparency to discover `A ∧ B`. However,
+the rule is never applied because the indexing procedure sees only `T` and does
+not consider the rule potentially applicable.
+
+To override this behaviour, you can write `(apply (transparency! := default))`
+(note the bang). This disables indexing, so the rule is tried on every goal.
+
 ### Rule Sets
 
 Rule sets are declared with the command
