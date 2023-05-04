@@ -428,9 +428,8 @@ theorem weaken (Γ Δ : List (Form Φ)) (prf : Proof Γ Δ) (δ : Form Φ)
     have ih' : Proof (φ :: Γ) (ψ :: δ :: Δ) := by aesop
     aesop
   | _ =>
-    -- TODO No "Try this:" output??
     set_option aesop.check.script false in
-    aesop? (options := { maxRuleApplications := 250 })
+    aesop (options := { maxRuleApplications := 250 })
 
 
 --- Soundness
