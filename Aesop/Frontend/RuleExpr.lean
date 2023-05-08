@@ -446,8 +446,15 @@ syntax ruleSetsFeature := "(" &"rule_sets" "[" ident,+,? "]" ")"
 
 end Parser
 
+def RuleSetName.elab (stx : Syntax) : RuleSetName :=
+  stx.getId.eraseMacroScopes
+  -- We erase macro scopes to support macros such as
+  --   macro &"aesop_test" : tactic => `(tactic| aesop (rule_sets [test]))
+  -- Here the macro hygienifies `test` by appending macro scopes, but we want
+  -- to interpret `test` as a global name.
+
 structure RuleSets where
-  ruleSets : Array Name
+  ruleSets : Array RuleSetName
   deriving Inhabited
 
 namespace RuleSets
@@ -456,7 +463,7 @@ def «elab» (stx : Syntax) : ElabM RuleSets :=
   withRef stx do
     match stx with
     | `(Parser.ruleSetsFeature| (rule_sets [$ns:ident,*])) =>
-      return ⟨(ns : Array Syntax).map (·.getId)⟩
+      return ⟨(ns : Array Syntax).map RuleSetName.elab⟩
     | _ => throwUnsupportedSyntax
 
 end RuleSets

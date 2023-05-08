@@ -99,12 +99,12 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
           for spec in (specs : Array Syntax) do
             match spec with
             | `(Parser.ruleSetSpec| - $rsName:ident) => do
-              let rsName := rsName.getId
+              let rsName := RuleSetName.elab rsName
               unless enabledRuleSets.contains rsName do throwError
                 "aesop: trying to deactivate rule set '{rsName}', but it is not active"
               enabledRuleSets := enabledRuleSets.erase rsName
             | `(Parser.ruleSetSpec| $rsName:ident) => do
-              let rsName := rsName.getId
+              let rsName := RuleSetName.elab rsName
               if enabledRuleSets.contains rsName then throwError
                 "aesop: rule set '{rsName}' is already active"
               enabledRuleSets := enabledRuleSets.push rsName
