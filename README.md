@@ -167,7 +167,7 @@ If you want to see how Aesop proves your goal (or why it doesn't prove your
 goal, or why it takes too long to prove your goal), you can enable tracing:
 
 ``` lean
-set_option trace.aesop.steps true
+set_option trace.aesop true
 ```
 
 This makes Aesop print out the steps it takes while searching for a proof. You
