@@ -236,9 +236,9 @@ def seqFocus (b : UnstructuredScriptBuilder m)
       else
         `(tactic| ($ts₂:tactic*))
     if let (some t) := ts[ts.size - 1]? then
-      return ts.pop.push (← `(tactic| $t:tactic <;> [ $tss,* ]))
+      return ts.pop.push (← `(tactic| $t:tactic <;> [ $tss;* ]))
     else
-      return #[← `(tactic| skip <;> [ $tss,* ])]
+      return #[← `(tactic| map_tacs [ $tss;* ])]
 
 @[inline]
 protected def id : UnstructuredScriptBuilder m :=
