@@ -80,7 +80,7 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
         else
           return goal
 
-elab &"aesop_destruct_products" : tactic =>
+elab "aesop_destruct_products" : tactic =>
   Elab.Tactic.liftMetaTactic1 λ goal => some <$> destructProductsCore goal
 
 -- This tactic splits hypotheses of product-like types: `And`, `Prod`, `PProd`,

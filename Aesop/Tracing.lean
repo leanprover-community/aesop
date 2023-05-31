@@ -77,7 +77,7 @@ def resolveTraceOption (stx : Ident) : MacroM Name :=
     else
       return n
 
-macro "aesop_trace![" opt:ident "]" msg:(interpolatedStr(term) <|> term) :
+macro "aesop_trace![" opt:ident "] " msg:(interpolatedStr(term) <|> term) :
     doElem => do
   let opt ← mkIdent <$> resolveTraceOption opt
   let msg := msg.raw
@@ -87,7 +87,7 @@ macro "aesop_trace![" opt:ident "]" msg:(interpolatedStr(term) <|> term) :
     `(toMessageData ($(⟨msg⟩)))
   `(doElem| Lean.addTrace (Aesop.TraceOption.traceClass $opt) $msg)
 
-macro "aesop_trace[" opt:ident "]"
+macro "aesop_trace[" opt:ident "] "
     msg:(interpolatedStr(term) <|> Parser.Term.do <|> term) : doElem => do
   let msg := msg.raw
   let opt ← mkIdent <$> resolveTraceOption opt

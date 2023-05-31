@@ -74,9 +74,9 @@ namespace Parser
 
 declare_syntax_cat Aesop.phase (behavior := symbol)
 
-syntax &"safe" : Aesop.phase
-syntax &"norm" : Aesop.phase
-syntax &"unsafe" : Aesop.phase
+syntax "safe" : Aesop.phase
+syntax "norm" : Aesop.phase
+syntax "unsafe" : Aesop.phase
 
 end Parser
 
@@ -93,8 +93,8 @@ namespace Parser
 
 declare_syntax_cat Aesop.bool_lit (behavior := symbol)
 
-syntax &"true" : Aesop.bool_lit
-syntax &"false" : Aesop.bool_lit
+syntax "true" : Aesop.bool_lit
+syntax "false" : Aesop.bool_lit
 
 end Parser
 
@@ -110,15 +110,15 @@ namespace Parser
 
 declare_syntax_cat Aesop.builder_name (behavior := symbol)
 
-syntax &"apply" : Aesop.builder_name
-syntax &"simp" : Aesop.builder_name
-syntax &"unfold" : Aesop.builder_name
-syntax &"tactic" : Aesop.builder_name
-syntax &"constructors" : Aesop.builder_name
-syntax &"forward" : Aesop.builder_name
-syntax &"destruct" : Aesop.builder_name
-syntax &"cases" : Aesop.builder_name
-syntax &"default" : Aesop.builder_name
+syntax "apply" : Aesop.builder_name
+syntax "simp" : Aesop.builder_name
+syntax "unfold" : Aesop.builder_name
+syntax "tactic" : Aesop.builder_name
+syntax "constructors" : Aesop.builder_name
+syntax "forward" : Aesop.builder_name
+syntax "destruct" : Aesop.builder_name
+syntax "cases" : Aesop.builder_name
+syntax "default" : Aesop.builder_name
 
 end Parser
 
@@ -159,9 +159,9 @@ namespace Parser
 
 declare_syntax_cat Aesop.indexing_mode (behavior := symbol)
 
-syntax &"target " term : Aesop.indexing_mode
-syntax &"hyp " term : Aesop.indexing_mode
-syntax &"unindexed " : Aesop.indexing_mode
+syntax "target " term : Aesop.indexing_mode
+syntax "hyp " term : Aesop.indexing_mode
+syntax "unindexed " : Aesop.indexing_mode
 
 end Parser
 
@@ -217,12 +217,12 @@ namespace Parser
 
 declare_syntax_cat Aesop.builder_option
 
-syntax "(" &"uses_branch_state" ":=" Aesop.bool_lit ")" : Aesop.builder_option
-syntax "(" &"immediate" ":=" "[" ident,+,? "]" ")" : Aesop.builder_option
-syntax "(" &"index" ":=" "[" Aesop.indexing_mode,+,? "]" ")" : Aesop.builder_option
-syntax "(" &"patterns" ":=" "[" term,+,? "]" ")" : Aesop.builder_option
-syntax "(" &"transparency" ":=" transparency ")" : Aesop.builder_option
-syntax "(" &"transparency!" ":=" transparency ")" : Aesop.builder_option
+syntax " (" &"uses_branch_state" " := " Aesop.bool_lit ")" : Aesop.builder_option
+syntax " (" &"immediate" " := " "[" ident,+,? "]" ")" : Aesop.builder_option
+syntax " (" &"index" " := " "[" Aesop.indexing_mode,+,? "]" ")" : Aesop.builder_option
+syntax " (" &"patterns" " := " "[" term,+,? "]" ")" : Aesop.builder_option
+syntax " (" &"transparency" " := " transparency ")" : Aesop.builder_option
+syntax " (" &"transparency!" " := " transparency ")" : Aesop.builder_option
 
 syntax builderOptions := Aesop.builder_option*
 
@@ -442,7 +442,7 @@ end Builder
 
 namespace Parser
 
-syntax ruleSetsFeature := "(" &"rule_sets" "[" ident,+,? "]" ")"
+syntax ruleSetsFeature := "(" &"rule_sets " "[" ident,+,? "]" ")"
 
 end Parser
 
@@ -540,8 +540,8 @@ namespace Parser
 declare_syntax_cat Aesop.rule_expr (behavior := symbol)
 
 syntax Aesop.feature : Aesop.rule_expr
-syntax Aesop.feature Aesop.rule_expr : Aesop.rule_expr
-syntax Aesop.feature "[" Aesop.rule_expr,+,? "]" : Aesop.rule_expr
+syntax Aesop.feature ppSpace Aesop.rule_expr : Aesop.rule_expr
+syntax Aesop.feature " [" Aesop.rule_expr,+,? "]" : Aesop.rule_expr
 
 end Parser
 

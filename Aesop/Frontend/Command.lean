@@ -11,12 +11,12 @@ open Lean
 namespace Aesop.Frontend.Parser
 
 open Elab.Command in
-elab "declare_aesop_rule_sets" "[" ids:ident,+,? "]" : command => do
+elab "declare_aesop_rule_sets " "[" ids:ident,+,? "]" : command => do
   let rsNames := (ids : Array Ident).map (·.getId)
   rsNames.forM checkRuleSetNotDeclared
   elabCommand $ ← `(initialize ($(quote rsNames).forM declareRuleSetUnchecked))
 
-elab "erase_aesop_rules" "[" es:Aesop.rule_expr,* "]" : command => do
+elab "erase_aesop_rules " "[" es:Aesop.rule_expr,* "]" : command => do
   let filters ← (es : Array _).mapM λ e => do
     let e ← Elab.Command.liftTermElabM $
       RuleExpr.elab e |>.run ElabOptions.forErasing

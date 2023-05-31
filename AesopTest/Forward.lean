@@ -12,8 +12,8 @@ open Aesop Lean Lean.Meta Lean.Elab.Tactic
 
 /-! # Unit tests for the MetaM tactic that implements forward rules -/
 
-syntax (name := forward) &"forward" ident ("[" ident* "]")? : tactic
-syntax (name := elim)    &"elim"    ident ("[" ident* "]")? : tactic
+syntax (name := forward) "forward " ident (" [" ident* "]")? : tactic
+syntax (name := elim)    "elim "    ident (" [" ident* "]")? : tactic
 
 def forwardTac (goal : MVarId) (id : Syntax) (immediate : Option (Array Syntax))
     (clear : Bool) (md : TransparencyMode) : MetaM (List MVarId) := do

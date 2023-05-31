@@ -18,7 +18,7 @@ open Lean.PrettyPrinter
 namespace Aesop
 
 -- FIXME remove
-elab (name := Parser.onGoal) &"on_goal " n:num " => " ts:tacticSeq : tactic => do
+elab (name := Parser.onGoal) "on_goal " n:num " => " ts:tacticSeq : tactic => do
   let gs := (← getGoals).toArray
   let n := n.getNat
   if n == 0 then

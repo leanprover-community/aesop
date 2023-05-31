@@ -71,10 +71,10 @@ def elabAesopSubst (hyps : Array Syntax.Ident) : TacticM Unit := do
     else
       return [goal]
 
-elab &"aesop_subst " "[" hyps:ident,+ "]" : tactic =>
+elab "aesop_subst " "[" hyps:ident,+ "]" : tactic =>
   elabAesopSubst hyps
 
-elab &"aesop_subst " hyp:ident : tactic =>
+elab "aesop_subst " hyp:ident : tactic =>
   elabAesopSubst #[hyp]
 
 @[aesop (rule_sets [builtin]) norm -50
