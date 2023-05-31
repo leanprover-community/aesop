@@ -17,7 +17,7 @@ namespace Aesop
 -- version of `cases` use different naming heuristics. If the two tactics were
 -- harmonised, we could use regular `cases` in the script (assuming there are no
 -- other differences).
-elab &"aesop_cases" x:ident : tactic =>
+elab "aesop_cases " x:ident : tactic =>
   liftMetaTactic λ goal => do
     let fvarId ← getFVarFromUserName x.getId
     let subgoals ← goal.cases fvarId.fvarId!
@@ -122,7 +122,7 @@ def _root_.Lean.MVarId.unfoldManyStar (goal : MVarId)
           | .reduced e' => return .done { r with expr := e' }
           | _ => return .done r
 
-elab &"aesop_unfold " "[" ids:ident,+ "]" : tactic => do
+elab "aesop_unfold " "[" ids:ident,+ "]" : tactic => do
   let mut toUnfold : HashMap Name (Option Name) := {}
   for id in (ids : Array Ident) do
     let decl ← resolveGlobalConstNoOverload id

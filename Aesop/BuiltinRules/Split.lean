@@ -31,7 +31,7 @@ def splitFirstHypothesis (goal : MVarId) : MetaM (Option (Array MVarId)) :=
 def splitHypothesesCore (goal : MVarId) : MetaM (Option (Array MVarId)) :=
   saturate1 goal splitFirstHypothesis
 
-elab &"aesop_split_hyps" : tactic =>
+elab "aesop_split_hyps" : tactic =>
   Elab.Tactic.liftMetaTactic λ goal => do
     match ← splitHypothesesCore goal with
     | none => throwError "no splittable hypothesis found"

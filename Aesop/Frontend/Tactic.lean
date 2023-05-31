@@ -20,14 +20,14 @@ declare_syntax_cat Aesop.tactic_clause
 
 syntax ruleSetSpec := "-"? ident
 
-syntax "(" &"add" Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
-syntax "(" &"erase" Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
-syntax "(" &"rule_sets" "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
-syntax "(" &"options" ":=" term ")" : Aesop.tactic_clause
-syntax "(" &"simp_options" ":=" term ")" : Aesop.tactic_clause
+syntax " (" &"add " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
+syntax " (" &"erase " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
+syntax " (" &"rule_sets " "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
+syntax " (" &"options" " := " term ")" : Aesop.tactic_clause
+syntax " (" &"simp_options" " := " term ")" : Aesop.tactic_clause
 
-syntax (name := aesopTactic) &"aesop" Aesop.tactic_clause* : tactic
-syntax (name := aesopTactic?) &"aesop?" Aesop.tactic_clause* : tactic
+syntax (name := aesopTactic)  "aesop"  Aesop.tactic_clause* : tactic
+syntax (name := aesopTactic?) "aesop?" Aesop.tactic_clause* : tactic
 
 end Parser
 

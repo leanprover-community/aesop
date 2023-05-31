@@ -8,7 +8,7 @@ import AesopTest.RuleSetNameHygiene0
 
 set_option aesop.check.all true
 
-macro &"aesop_test" : tactic => `(tactic| aesop (rule_sets [test]))
+macro "aesop_test" : tactic => `(tactic| aesop (rule_sets [test]))
 
 @[aesop safe (rule_sets [test])]
 structure TT

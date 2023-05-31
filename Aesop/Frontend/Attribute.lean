@@ -19,7 +19,7 @@ declare_syntax_cat Aesop.attr_rules
 syntax Aesop.rule_expr : Aesop.attr_rules
 syntax "[" Aesop.rule_expr,+,? "]" : Aesop.attr_rules
 
-syntax (name := aesop) &"aesop" Aesop.attr_rules : attr
+syntax (name := aesop) "aesop" Aesop.attr_rules : attr
 
 end Parser
 
