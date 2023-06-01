@@ -26,10 +26,8 @@ syntax "(" &"rule_sets" "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
 syntax "(" &"options" ":=" term ")" : Aesop.tactic_clause
 syntax "(" &"simp_options" ":=" term ")" : Aesop.tactic_clause
 
-syntax (name := aesopTacticNoCheckpoint) &"aesop_no_checkpoint" Aesop.tactic_clause* : tactic
-syntax (name := aesopTacticNoCheckpoint?) &"aesop_no_checkpoint?" Aesop.tactic_clause* : tactic
-syntax &"aesop" Aesop.tactic_clause* : tactic
-syntax &"aesop?" Aesop.tactic_clause* : tactic
+syntax (name := aesopTactic) &"aesop" Aesop.tactic_clause* : tactic
+syntax (name := aesopTactic?) &"aesop?" Aesop.tactic_clause* : tactic
 
 end Parser
 
@@ -67,9 +65,9 @@ namespace TacticConfig
 def parse (stx : Syntax) : TermElabM TacticConfig :=
   withRef stx do
     match stx with
-    | `(tactic| aesop_no_checkpoint $clauses:Aesop.tactic_clause*) =>
+    | `(tactic| aesop $clauses:Aesop.tactic_clause*) =>
       clauses.foldlM (addClause false) (init false)
-    | `(tactic| aesop_no_checkpoint? $clauses:Aesop.tactic_clause*) =>
+    | `(tactic| aesop? $clauses:Aesop.tactic_clause*) =>
       clauses.foldlM (addClause true) (init true)
     | _ => throwUnsupportedSyntax
   where
