@@ -26,7 +26,34 @@ syntax " (" &"rule_sets " "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
 syntax " (" &"options" " := " term ")" : Aesop.tactic_clause
 syntax " (" &"simp_options" " := " term ")" : Aesop.tactic_clause
 
+/--
+`aesop <clause>*` tries to solve the current goal by applying a set of rules
+registered with the `@[aesop]` attribute. See [its
+README](https://github.com/JLimperg/aesop#readme) for a tutorial and a
+reference.
+
+The variant `aesop?` prints the proof it found as a `Try this` suggestion.
+
+Clauses can be used to customise the behaviour of an Aesop call. Available
+clauses are:
+
+- `(add <phase> <priority> <builder> <rule>)` adds a rule. `<phase>` is
+  `unsafe`, `safe` or `norm`. `<priority>` is a percentage for unsafe rules and
+  an integer for safe and norm rules. `<rule>` is the name of a declaration or
+  local hypothesis. `<builder>` is the rule builder used to turn `<rule>` into
+  an Aesop rule. Example: `(add unsafe 50% apply Or.inl)`.
+- `(erase <rule>)` disables a globally registered Aesop rule. Example: `(erase
+  Aesop.BuiltinRules.assumption)`.
+- `(rule_sets [<ruleset>,*])` enables or disables named sets of rules for this
+  Aesop call. Example: `(rule_sets [-builtin, MyRuleSet])`.
+- `(options { <opt> := <value> })` adjusts Aesop's search options. See
+  `Aesop.Options`.
+- `(simp_options { <opt> := <value> })` adjusts options for Aesop's built-in
+  `simp` rule. See `Aesop.SimpConfig`.
+-/
 syntax (name := aesopTactic)  "aesop"  Aesop.tactic_clause* : tactic
+
+@[inherit_doc aesopTactic]
 syntax (name := aesopTactic?) "aesop?" Aesop.tactic_clause* : tactic
 
 end Parser
