@@ -24,3 +24,7 @@ def U := T
 example (h : U α β) : Sig α (λ _ => β) := by
   fail_if_success aesop (options := { terminal := true })
   aesop (options := { destructProductsTransparency := .default })
+
+example (h : U α β ∧ U γ δ) : Sig α (λ _ => γ) := by
+  fail_if_success aesop (options := { terminal := true })
+  aesop (options := { destructProductsTransparency := .default })

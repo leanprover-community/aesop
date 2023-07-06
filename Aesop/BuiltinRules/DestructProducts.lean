@@ -11,11 +11,11 @@ open Lean.Meta
 
 namespace Aesop.BuiltinRules
 
-private def destructProductHyp (goal : MVarId) (hyp : FVarId) :
-    MetaM MVarId :=
+private def destructProductHyp (goal : MVarId) (hyp : FVarId)
+    (md : TransparencyMode) : MetaM MVarId :=
   goal.withContext do
     let hypType ← hyp.getType
-    let (f, args) ← getAppUpToDefeq hypType
+    let (f, args) ← withTransparency md $ getAppUpToDefeq hypType
     match args with
     | #[α, β] =>
       match f with
@@ -54,7 +54,8 @@ private def destructProductHyp (goal : MVarId) (hyp : FVarId) :
       let (_, goal) ← goal.introN 2
       goal.clear hyp
 
-partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
+partial def destructProductsCore (goal : MVarId) (md : TransparencyMode) :
+    MetaM MVarId :=
   goal.withContext do
     let newGoal ← go 0 goal
     if newGoal == goal then
@@ -72,7 +73,7 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
             if ldecl.isImplementationDetail then
               go (i + 1) goal
             else
-              let newGoal ← destructProductHyp goal ldecl.fvarId
+              let newGoal ← destructProductHyp goal ldecl.fvarId md
               if newGoal == goal then
                 go (i + 1) newGoal
               else
@@ -81,7 +82,8 @@ partial def destructProductsCore (goal : MVarId) : MetaM MVarId :=
           return goal
 
 elab "aesop_destruct_products" : tactic =>
-  Elab.Tactic.liftMetaTactic1 λ goal => some <$> destructProductsCore goal
+  Elab.Tactic.liftMetaTactic1 λ goal =>
+    return some (← destructProductsCore goal (← getTransparency))
 
 -- This tactic splits hypotheses of product-like types: `And`, `Prod`, `PProd`,
 -- `MProd`, `Exists`, `Subtype`, `Sigma` and `PSigma`. It's a restricted version
@@ -98,7 +100,7 @@ elab "aesop_destruct_products" : tactic =>
                hyp Exists _, hyp Subtype _, hyp Sigma _, hyp PSigma _]))]
 partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let md := input.options.destructProductsTransparency
-  let goal ← unhygienic $ destructProductsCore input.goal
+  let goal ← unhygienic $ destructProductsCore input.goal md
   let scriptBuilder? :=
     mkScriptBuilder? input.options.generateScript $ .ofTactic 1 do
       let tac ← withTransparencySyntax md (← `(tactic| aesop_destruct_products))
