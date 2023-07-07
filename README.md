@@ -442,9 +442,14 @@ an Aesop rule. Currently available builders are:
   except for instance arguments and dependent arguments (i.e. those that can be
   inferred from the types of later arguments).
 
-  When a forward rule has been successfully applied, it will not be tried again
-  when processing its subgoals (and their subgoals, etc.). Without this limit,
-  many forward rules would be applied infinitely often.
+  When a forward rule is successful, Aesop remembers the type of the hypothesis
+  added by the rule, say `T`. If a forward rule (possibly the same one) is
+  subsequently applied to a subgoal and wants to add another hypothesis of type
+  `T`, this is forbidden and the rule fails. Without this restriction, forward
+  rules would in many cases be applied infinitely often. However, note that the
+  rule is still executed on its own subgoals (and their subgoals, etc.), which
+  can become a performance issue. You should therefore prefer `destruct` rules
+  where possible.
 - **`destruct`**: works like `forward`, but after the rule has been applied,
   hypotheses that were used as immediate arguments are cleared. This is useful
   when you want to eliminate a hypothesis. E.g. the rule
