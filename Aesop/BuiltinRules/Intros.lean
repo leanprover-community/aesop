@@ -12,8 +12,13 @@ open Lean.Meta
 namespace Aesop.BuiltinRules
 
 partial def getIntrosSizeUnfolding : Expr → MetaM Nat
-  | .forallE _ _ b _ => return (← getIntrosSizeUnfolding b) + 1
-  | .letE _ _ _ b _ => return (← getIntrosSizeUnfolding b) + 1
+  | .forallE n t b bi =>
+    withLocalDecl n bi t λ fvar =>
+      return (← getIntrosSizeUnfolding $ b.instantiate1 fvar) + 1
+    -- Repeated `instantiate1` is not very efficient, but probably good enough.
+  | .letE n t v b _ =>
+    withLetDecl n t v λ fvar =>
+      return (← getIntrosSizeUnfolding $ b.instantiate1 fvar) + 1
   | .mdata _ b => getIntrosSizeUnfolding b
   | e => do
     let e' ← whnf e

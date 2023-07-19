@@ -1,0 +1,8 @@
+tests/IntrosWhnfPanic.lean:15:17: error: expected term
+tests/IntrosWhnfPanic.lean:14:26: error: unsolved goals
+ι : Type u
+V : ι → Type v
+G : (i : ι) → SimpleGraph' (V i)
+x✝ y✝ : (i : ι) × V i
+a✝ : (nomatch x✝) y✝
+⊢ (nomatch y✝) x✝
