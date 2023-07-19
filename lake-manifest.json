@@ -4,6 +4,6 @@
  [{"git":
    {"url": "https://github.com/leanprover/std4",
     "subDir?": null,
-    "rev": "cd11695b18ffc0f91407e48b9084d85a46481f72",
+    "rev": "f3cecee63cd64440e1cecb3bf3578d0e73954ebd",
     "name": "std",
     "inputRev?": "main"}}]}
