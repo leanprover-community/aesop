@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Jannis Limperg
+Authors: Jannis Limperg, Kyle Miller
 -/
 
 import Aesop.Frontend
@@ -11,26 +11,25 @@ open Lean.Meta
 
 namespace Aesop.BuiltinRules
 
-partial def getIntrosSizeUnfolding : Expr → MetaM Nat
-  | .forallE n t b bi =>
-    withLocalDecl n bi t λ fvar =>
-      return (← getIntrosSizeUnfolding $ b.instantiate1 fvar) + 1
-    -- Repeated `instantiate1` is not very efficient, but probably good enough.
-  | .letE n t v b _ =>
-    withLetDecl n t v λ fvar =>
-      return (← getIntrosSizeUnfolding $ b.instantiate1 fvar) + 1
-  | .mdata _ b => getIntrosSizeUnfolding b
-  | e => do
-    let e' ← whnf e
-    if e' == e then
-      return 0
-    else
-      getIntrosSizeUnfolding e'
+private def getIntrosSize : Expr → Nat
+  | .forallE _ _ b _ => getIntrosSize b + 1
+  | .letE _ _ _ b _  => getIntrosSize b + 1
+  | .mdata _ b       => getIntrosSize b
+  | _                => 0
 
-def introsUnfolding (mvarId : MVarId) : MetaM (Array FVarId × MVarId) := do
-  let type ← instantiateMVars (← mvarId.getType)
-  let n ← getIntrosSizeUnfolding type
-  mvarId.introN n
+/-- Introduce as many binders as possible while unfolding definitions with the
+ambient transparency. -/
+partial def introsUnfolding (mvarId : MVarId) : MetaM (Array FVarId × MVarId) :=
+  run mvarId #[]
+where
+  run (mvarId : MVarId) (fvars : Array FVarId) : MetaM (Array FVarId × MVarId) := do
+    let type ← whnf (← mvarId.getType)
+    let size := getIntrosSize type
+    if 0 < size then
+      let (fvars', mvarId') ← mvarId.introN size
+      run mvarId' (fvars ++ fvars')
+    else
+      return (fvars, mvarId)
 
 @[aesop norm -100 (rule_sets [builtin])]
 def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
