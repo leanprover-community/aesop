@@ -150,7 +150,9 @@ def traceScript : SearchM Q Unit := do
   try
     let script ← (← getRootMVarCluster).extractScript
     let goal ← getRootMVarId
-    let tacticState ← TacticState.ofGoals #[goal]
+    let goalMVars ← goal.getMVarDependencies
+    let tacticState :=
+      { visibleGoals := #[⟨goal, goalMVars⟩], invisibleGoals := {} }
     let script ← script.toStructuredScript tacticState
     let script ← script.render tacticState
     if options.traceScript then

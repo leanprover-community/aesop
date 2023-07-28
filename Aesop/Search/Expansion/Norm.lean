@@ -17,9 +17,9 @@ namespace Aesop
 
 inductive NormRuleResult
   | succeeded (goal : MVarId)
-      (scriptStep? : Except DisplayRuleName UnstructuredScriptStep)
-  | proved (scriptStep? : Except DisplayRuleName UnstructuredScriptStep)
-  | failed (scriptStep? : Option UnstructuredScriptStep)
+      (scriptStep? : Except DisplayRuleName TacticInvocation)
+  | proved (scriptStep? : Except DisplayRuleName TacticInvocation)
+  | failed (scriptStep? : Option TacticInvocation)
     -- `simp` may generate a 'dummy' script step even when it fails.
 
 namespace NormRuleResult
@@ -52,22 +52,17 @@ def withNormTraceNode (ruleName : DisplayRuleName) (k : MetaM NormRuleResult) :
       let emoji := exceptRuleResultToEmoji (·.toEmoji) r
       return m!"{emoji} {ruleName}"
 
-def mkNormRuleScriptStep (ruleName : RuleName)
+def mkNormRuleTacticInvocation (ruleName : RuleName)
     (scriptBuilder? : Option RuleTacScriptBuilder)
-    (inGoal : MVarId) (outGoal? : Option GoalWithMVars) :
-    MetaM (Except DisplayRuleName UnstructuredScriptStep) := do
+    (preGoal : MVarId) (outGoal? : Option GoalWithMVars)
+    (preState postState : Meta.SavedState) :
+    MetaM (Except DisplayRuleName TacticInvocation) := do
   let (some scriptBuilder) := scriptBuilder?
     | return .error $ .ruleName ruleName
   try
     let tacticSeq ← scriptBuilder.unstructured.run
-    let outGoals :=
-      match outGoal? with
-      | none => #[]
-      | some g => #[g]
-    return .ok {
-      otherSolvedGoals := #[]
-      tacticSeq, inGoal, outGoals
-    }
+    let postGoals := outGoal?.toArray
+    return .ok { tacticSeq, preGoal, postGoals, preState, postState }
   catch e =>
     throwError "aesop: error while running script builder for rule {ruleName}:{indentD e.toMessageData}"
 
@@ -85,7 +80,8 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) :
     restoreState rapp.postState
     if rapp.goals.isEmpty then
       let step? ←
-        mkNormRuleScriptStep rule.name rapp.scriptBuilder? input.goal none
+        mkNormRuleTacticInvocation rule.name rapp.scriptBuilder? input.goal none
+          preMetaState rapp.postState
       return .proved step?
     let (#[g]) := rapp.goals
       | err m!"rule produced more than one subgoal."
@@ -95,8 +91,8 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) :
       if ! actualMVars == mvars then
          err "the goal produced by the rule depends on different metavariables than the original goal."
     let step? ←
-      mkNormRuleScriptStep rule.name rapp.scriptBuilder? input.goal
-        (some ⟨g, mvars⟩)
+      mkNormRuleTacticInvocation rule.name rapp.scriptBuilder? input.goal
+        (some ⟨g, mvars⟩) preMetaState rapp.postState
     return .succeeded g step?
   where
     err {α} (msg : MessageData) : MetaM α := throwError
@@ -132,26 +128,26 @@ def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
   return .failed none
 
 def mkNormSimpScriptStep (ctx : NormSimpContext)
-    (inGoal : MVarId) (outGoal? : Option GoalWithMVars)
-    (usedTheorems : Simp.UsedSimps) :
-    MetaM UnstructuredScriptStep := do
+    (preGoal : MVarId) (postGoal? : Option GoalWithMVars)
+    (preState postState : Meta.SavedState) (usedTheorems : Simp.UsedSimps) :
+    MetaM TacticInvocation := do
   let tactic ←
-    mkNormSimpOnlySyntax inGoal ctx.useHyps ctx.configStx? usedTheorems
+    mkNormSimpOnlySyntax preGoal ctx.useHyps ctx.configStx? usedTheorems
   return {
     tacticSeq := #[tactic]
-    otherSolvedGoals := #[]
-    outGoals := outGoal?.toArray
-    inGoal
+    postGoals := postGoal?.toArray
+    preGoal, preState, postState
   }
 
 def SimpResult.toNormRuleResult (ruleName : DisplayRuleName)
-    (ctx : NormSimpContext) (originalGoal : MVarId)
-    (originalGoalMVars : HashSet MVarId) (generateScript : Bool) :
+    (ctx : NormSimpContext) (originalGoal : GoalWithMVars)
+    (preState postState : Meta.SavedState) (generateScript : Bool) :
     SimpResult → MetaM NormRuleResult
   | .unchanged newGoal => do
     let scriptStep? :=
       if generateScript then
-        some $ .dummy originalGoal ⟨newGoal, originalGoalMVars⟩
+        some $ .noop originalGoal.goal ⟨newGoal, originalGoal.mvars⟩ preState
+                 postState
       else
         none
     return .failed scriptStep?
@@ -164,10 +160,11 @@ def SimpResult.toNormRuleResult (ruleName : DisplayRuleName)
   where
     @[inline, always_inline]
     mkScriptStep? (newGoal? : Option MVarId) (usedTheorems : Simp.UsedSimps) :
-        MetaM (Except DisplayRuleName UnstructuredScriptStep) := do
+        MetaM (Except DisplayRuleName TacticInvocation) := do
       if generateScript then
-        let newGoal? := newGoal?.map λ g => ⟨g, originalGoalMVars⟩
-        .ok <$> mkNormSimpScriptStep ctx originalGoal newGoal? usedTheorems
+        let newGoal? := newGoal?.map (⟨·, originalGoal.mvars⟩)
+        .ok <$> mkNormSimpScriptStep ctx originalGoal.goal newGoal? preState
+                  postState usedTheorems
       else
         return .error ruleName
 
@@ -192,6 +189,7 @@ def normSimpCore (ctx : NormSimpContext)
           simpTheorems := simpTheorems'
         let ctx := { ctx with simpTheorems }
         Aesop.simpGoalWithAllHypotheses goal ctx
+    let postState ← saveState
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
     -- unassigned. In this case, we treat the goal as unchanged.
@@ -211,7 +209,8 @@ def normSimpCore (ctx : NormSimpContext)
         aesop_trace[steps] "norm simp left the goal unchanged"
         pure result
 
-    result.toNormRuleResult .normSimp ctx goal goalMVars generateScript
+    result.toNormRuleResult .normSimp ctx ⟨goal, goalMVars⟩ preState postState
+      generateScript
 
 @[inline, always_inline]
 def checkSimp (name : String) (mayCloseGoal : Bool) (goal : MVarId)
@@ -261,8 +260,10 @@ def normSimp (ctx : NormSimpContext) (localSimpRules : Array LocalNormSimpRule)
 def normUnfoldCore (unfoldRules : PHashMap Name (Option Name))
     (goal : MVarId) (goalMVars : HashSet MVarId) (generateScript : Bool) :
     MetaM NormRuleResult := do
+  let preState ← saveState
   let (result, scriptBuilder?) ←
     unfoldManyStarWithScript goal (unfoldRules.find? ·) generateScript
+  let postState ← saveState
   match result with
   | .unchanged =>
     aesop_trace[steps] "nothing to unfold"
@@ -273,9 +274,9 @@ def normUnfoldCore (unfoldRules : PHashMap Name (Option Name))
       | some unfoldScriptBuilder =>
         pure $ .ok {
           tacticSeq := ← unfoldScriptBuilder.unstructured.run
-          inGoal := goal
-          outGoals := #[⟨newGoal, goalMVars⟩]
-          otherSolvedGoals := {}
+          preGoal := goal
+          postGoals := #[⟨newGoal, goalMVars⟩]
+          preState, postState
         }
       | none => pure $ .error .normUnfold
     return .succeeded newGoal scriptStep?

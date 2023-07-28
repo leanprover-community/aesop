@@ -47,6 +47,18 @@ def time' [Monad m] [MonadLiftT BaseIO m] (x : m Unit) : m Aesop.Nanos := do
 end IO
 
 
+namespace Aesop
+
+open Lean
+
+-- TODO reuse old hash set instead of building a new one.
+def filterHashSet [BEq α] [Hashable α] (hs : HashSet α) (p : α → Bool) :
+    HashSet α :=
+  hs.fold (init := ∅) λ hs a => if p a then hs.insert a else hs
+
+end Aesop
+
+
 namespace Lean.PersistentHashSet
 
 -- Elements are returned in unspecified order.
@@ -293,4 +305,6 @@ def filterDiscrTree [Inhabited σ] (p : α → Bool) (f : σ → α → σ) (ini
     (t : DiscrTree α s) : DiscrTree α s × σ := Id.run $
   filterDiscrTreeM (λ a => pure ⟨p a⟩) (λ s a => pure (f s a)) init t
 
-end Aesop.DiscrTree
+end DiscrTree
+
+end Aesop

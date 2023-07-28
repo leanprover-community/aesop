@@ -5,7 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Tracing
-import Aesop.Tree.Traversal
+import Aesop.Tree.TreeM
 
 open Lean
 open Lean.Meta
@@ -13,7 +13,7 @@ open Lean.Parser.Tactic (tacticSeq)
 
 namespace Aesop
 
-abbrev ExtractScriptM := StateRefT UnstructuredScript MetaM
+abbrev ExtractScriptM := StateRefT UnstructuredScript TreeM
 
 mutual
   partial def MVarClusterRef.extractScriptCore (cref : MVarClusterRef) :
@@ -41,7 +41,7 @@ mutual
         | .ok script => pure script
         | .error rule => throwError "normalization rule {rule} (at goal {gid}) does not support tactic script generation"
 
-  partial def RappRef.extractScriptCore (rref : RappRef) (inGoal : MVarId) : ExtractScriptM Unit := do
+  partial def RappRef.extractScriptCore (rref : RappRef) (preGoal : MVarId) : ExtractScriptM Unit := do
     let r ← rref.get
     let (some scriptBuilder) := r.scriptBuilder?
       | throwError "rule {r.appliedRule.name} (at rapp {r.id}) does not support tactic script generation"
@@ -50,19 +50,21 @@ mutual
         r.metaState.runMetaM' scriptBuilder.unstructured.run
       catch e =>
         throwError "script builder for rapp {r.id} reported error:{indentD $ e.toMessageData}"
-    let otherSolvedGoals := r.assignedMVars.toArray
-    let outGoals ← r.foldSubgoalsM (init := #[]) λ outGoals gref => do
+    let postGoals ← r.foldSubgoalsM (init := #[]) λ outGoals gref => do
       let g ← gref.get
       return outGoals.push
         { goal := g.preNormGoal, mvars := .ofArray g.mvars.toArray }
-    modify λ s => s.push { tacticSeq, inGoal, outGoals, otherSolvedGoals }
+    let preState ← r.parentPostNormMetaState (← getRootMetaState)
+    modify λ s => s.push {
+      postState := r.metaState
+      tacticSeq, preGoal, postGoals, preState
+    }
     r.children.forM (·.extractScriptCore)
 end
 
 @[inline]
 def MVarClusterRef.extractScript (cref : MVarClusterRef) :
-    MetaM UnstructuredScript := do
-  let result ← (·.snd) <$> cref.extractScriptCore.run #[]
-  return result
+    TreeM UnstructuredScript :=
+  (·.snd) <$> cref.extractScriptCore.run #[]
 
 end Aesop
