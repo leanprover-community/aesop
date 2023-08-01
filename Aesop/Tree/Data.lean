@@ -834,6 +834,9 @@ def isNormal (g : Goal) : Bool :=
 def originalGoalId (g : Goal) : GoalId :=
   g.origin.originalGoalId?.getD g.id
 
+def isRoot (g : Goal) : BaseIO Bool :=
+  return (← g.parentRapp?).isNone
+
 end Goal
 
 

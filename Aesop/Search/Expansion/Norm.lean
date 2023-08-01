@@ -377,6 +377,12 @@ partial def normalizeGoalMVar (rs : RuleSet) (normSimpContext : NormSimpContext)
 def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
     SearchM Q Bool := do
   let g ← gref.get
+  if ← g.isRoot then
+    -- For the root goal, we skip normalization.
+    let rootState ← getRootMetaState
+    gref.modify λ g =>
+      g.setNormalizationState (.normal g.preNormGoal rootState (.ok #[]))
+    return false
   match g.normalizationState with
   | .provenByNormalization .. => return true
   | .normal .. => return false

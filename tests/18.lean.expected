@@ -1,6 +1,6 @@
 tests/18.lean:20:6: error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 α : Type u_1
-inst : DecidableEq α
+inst✝ : DecidableEq α
 v x : α
 xs : List α
 ih : v ∈ xs → ∃ l r, xs = l ++ v :: r

@@ -1,6 +1,6 @@
 tests/13_2.lean:20:4: error: tactic 'aesop' failed, maximum number of rule applications (50) reached. Set the 'maxRuleApplications' option to increase the limit.
 Φ : Type
-Γ_1 Δ_1 : List Φ
+Γ✝ Δ✝ : List Φ
 δ : Φ
 Γ Δ : List Φ
 n : Φ

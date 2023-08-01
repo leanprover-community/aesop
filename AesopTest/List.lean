@@ -526,6 +526,7 @@ theorem X.map_subset {l₁ l₂ : List α} (f : α → β) (H : l₁ ⊆ l₂) :
 
 theorem map_subset_iff {l₁ l₂ : List α} (f : α → β) (h : Injective f) :
     map f l₁ ⊆ map f l₂ ↔ l₁ ⊆ l₂ := by
+  set_option aesop.check.script false in
   induction l₁ <;> induction l₂ <;> aesop
 
 /-! ### append -/

@@ -128,8 +128,8 @@ def finalizeProof : SearchM Q Unit := do
 
 open Lean.Elab.Tactic in
 def checkRenderedScript (script : Array Syntax.Tactic) : SearchM Q Unit := do
-  let initialState := (← read).originalMetaState
-  let rootGoal := (← read).originalGoal
+  let initialState ← getRootMetaState
+  let rootGoal ← getRootMVarId
   let go : TacticM Unit := do
     setGoals [rootGoal]
     evalTactic $ ← `(tacticSeq| $script:tactic*)
@@ -148,9 +148,8 @@ def traceScript : SearchM Q Unit := do
   if ! options.generateScript then
     return
   try
-    let script ←
-      (← getRootMVarCluster).extractScript (← read).preprocessingScript
-    let goal := (← read).originalGoal
+    let script ← (← getRootMVarCluster).extractScript
+    let goal ← getRootMVarId
     let tacticState ← TacticState.ofGoals #[goal]
     let script ← script.toStructuredScript tacticState
     let script ← script.render tacticState
@@ -224,34 +223,13 @@ partial def searchLoop : SearchM Q (Array MVarId) :=
       incrementIteration
       searchLoop
 
-def preprocessGoal (mvarId : MVarId) (mvars : HashSet MVarId)
-    (generateScript : Bool) : MetaM (MVarId × UnstructuredScript) := do
-  let (mvarId', _, scriptBuilder?) ←
-    renameInaccessibleFVarsWithScript mvarId generateScript
-  let script ←
-    if let some scriptBuilder := scriptBuilder? then
-      pure #[{
-        tacticSeq := ← scriptBuilder.unstructured.run
-        inGoal := mvarId
-        outGoals := #[⟨mvarId', mvars⟩]
-        otherSolvedGoals := {}
-      }]
-    else
-      pure #[]
-  return (mvarId', script)
-
 def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
      (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
      (simpConfigSyntax? : Option Term := none)
      (profile : Profile := {}) :
      MetaM (Array MVarId × Profile) := do
   goal.checkNotAssigned `aesop
-  let originalMetaState ← saveState
-  let mvars ← goal.getMVarDependencies
-  let originalGoal := goal
   let options ← options.toOptions'
-  let (goal, preprocessingScript) ←
-    preprocessGoal goal mvars options.generateScript
   let ruleSet ←
     match ruleSet? with
     | none =>
@@ -260,8 +238,7 @@ def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
   let (goals, state, _) ←
-    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal
-        originalMetaState originalGoal preprocessingScript profile do
+    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal profile do
       show SearchM Q _ from
       try searchLoop
       catch e => handleFatalError e

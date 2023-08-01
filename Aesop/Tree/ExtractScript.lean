@@ -60,9 +60,9 @@ mutual
 end
 
 @[inline]
-def MVarClusterRef.extractScript (cref : MVarClusterRef)
-    (prefixScript : UnstructuredScript) : MetaM UnstructuredScript := do
-  let result ← (·.snd) <$> cref.extractScriptCore.run prefixScript
+def MVarClusterRef.extractScript (cref : MVarClusterRef) :
+    MetaM UnstructuredScript := do
+  let result ← (·.snd) <$> cref.extractScriptCore.run #[]
   return result
 
 end Aesop

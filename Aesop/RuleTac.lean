@@ -8,6 +8,7 @@ import Aesop.RuleTac.Apply
 import Aesop.RuleTac.Basic
 import Aesop.RuleTac.Cases
 import Aesop.RuleTac.Forward
+import Aesop.RuleTac.Preprocess
 import Aesop.RuleTac.RuleApplicationWithMVarInfo
 import Aesop.RuleTac.Tactic
 
@@ -27,5 +28,6 @@ protected def run : RuleTacDescr → RuleTacInput → MetaM RuleTacOutput
   | tacticM decl => RuleTac.tacticM decl
   | singleRuleTac decl => RuleTac.singleRuleTac decl
   | ruleTac decl => RuleTac.ruleTac decl
+  | preprocess => RuleTac.preprocess
 
 end RuleTacDescr

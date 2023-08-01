@@ -116,6 +116,7 @@ inductive RuleTacDescr
   | tacticM (decl : Name)
   | ruleTac (decl : Name)
   | singleRuleTac (decl : Name)
+  | preprocess
   deriving Inhabited
 
 namespace RuleTacDescr
@@ -130,6 +131,7 @@ def isGlobal : RuleTacDescr → Bool
   | tacticM .. => true
   | ruleTac .. => true
   | singleRuleTac .. => true
+  | preprocess => true
 
 end RuleTacDescr
 
