@@ -784,15 +784,17 @@ def currentGoal (g : Goal) : MVarId :=
 def parentRapp? (g : Goal) : BaseIO (Option RappRef) :=
   return (← g.parent.get).parent?
 
-def parentMetaState (g : Goal) : MetaM Meta.SavedState := do
+def parentMetaState (g : Goal) (rootMetaState : Meta.SavedState) :
+    BaseIO Meta.SavedState := do
   match ← g.parentRapp? with
-  | none => saveState
+  | none => return rootMetaState
   | some parent => return (← parent.get).metaState
 
-def currentGoalAndMetaState (g : Goal) : MetaM (MVarId × Meta.SavedState) :=
+def currentGoalAndMetaState (g : Goal) (rootMetaState : Meta.SavedState) :
+    MetaM (MVarId × Meta.SavedState) :=
   match g.postNormGoalAndMetaState? with
   | some x => return x
-  | none => return (g.preNormGoal, ← g.parentMetaState)
+  | none => return (g.preNormGoal, ← g.parentMetaState rootMetaState)
 
 def isUnsafeExhausted (g : Goal) : Bool :=
   g.unsafeRulesSelected && g.unsafeQueue.isEmpty
@@ -840,8 +842,9 @@ namespace Rapp
 def introducesMVar (r : Rapp) : Bool :=
   ! r.introducedMVars.isEmpty
 
-def parentPostNormMetaState (r : Rapp) : MetaM Meta.SavedState := do
-  (← r.parent.get).parentMetaState
+def parentPostNormMetaState (r : Rapp) (rootMetaState : Meta.SavedState) :
+    BaseIO Meta.SavedState := do
+  (← r.parent.get).parentMetaState rootMetaState
 
 def foldSubgoalsM [Monad m] [MonadLiftT (ST IO.RealWorld) m] (init : σ)
     (f : σ → GoalRef → m σ) (r : Rapp) : m σ :=

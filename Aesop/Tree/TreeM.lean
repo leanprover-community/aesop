@@ -13,6 +13,7 @@ namespace Aesop
 
 structure Tree where
   root : MVarClusterRef
+  rootMetaState : Meta.SavedState
   numGoals : Nat
   numRapps : Nat
   nextGoalId : GoalId
@@ -47,6 +48,7 @@ def mkInitialTree (goal : MVarId) : MetaM Tree := do
   rootClusterRef.modify λ c => c.setGoals #[rootGoalRef]
   return {
     root := rootClusterRef
+    rootMetaState := ← saveState
     numGoals := 1
     numRapps := 0
     nextGoalId := GoalId.one
@@ -77,6 +79,9 @@ end TreeM
 
 def getRootMVarCluster : TreeM MVarClusterRef :=
   return (← get).root
+
+def getRootMetaState : TreeM Meta.SavedState :=
+  return (← get).rootMetaState
 
 def getRootGoal : TreeM GoalRef := do
   let cref ← getRootMVarCluster

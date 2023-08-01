@@ -34,7 +34,8 @@ partial def nextActiveGoal : SearchM Q GoalRef := do
 def expandNextGoal : SearchM Q Unit := do
   let gref ← nextActiveGoal
   let g ← gref.get
-  let (initialGoal, initialMetaState) ← g.currentGoalAndMetaState
+  let (initialGoal, initialMetaState) ←
+    g.currentGoalAndMetaState (← getRootMetaState)
   let result ← withAesopTraceNode .steps
     (fmt g.id g.priority initialGoal initialMetaState) do
     initialMetaState.runMetaM' do

@@ -122,7 +122,8 @@ def checkIrrelevance (root : MVarClusterRef) : CoreM Unit :=
         "{Check.tree.name}: {id} is marked as not irrelevant, but is irrelevant."
       | _, _ => return true
 
-def checkMVars (root : MVarClusterRef) : MetaM Unit :=
+def checkMVars (root : MVarClusterRef) (rootMetaState : Meta.SavedState) :
+    MetaM Unit :=
   preTraverseDown
     (λ gref => do
       let g ← gref.get
@@ -182,31 +183,33 @@ def checkMVars (root : MVarClusterRef) : MetaM Unit :=
       match g.normalizationState with
       | .notNormal => return
       | .provenByNormalization postMetaState .. =>
-        let parentMetaState ← g.parentMetaState
+        let parentMetaState ← g.parentMetaState rootMetaState
         let introduced ← getIntroducedExprMVars parentMetaState postMetaState
         go parentMetaState postMetaState introduced
       | .normal postGoal postMetaState .. =>
-        let parentMetaState ← g.parentMetaState
+        let parentMetaState ← g.parentMetaState rootMetaState
         let introduced :=
           (← getIntroducedExprMVars parentMetaState postMetaState).erase
             postGoal
         go parentMetaState postMetaState introduced
 
-def checkInvariants (root : MVarClusterRef) : MetaM Unit := do
+def checkInvariants (root : MVarClusterRef) (rootMetaState : Meta.SavedState) :
+    MetaM Unit := do
   root.checkAcyclic
   root.checkConsistentParentChildLinks
   root.checkIds
   root.checkState
   root.checkIrrelevance
-  root.checkMVars
+  root.checkMVars rootMetaState
 
-def checkInvariantsIfEnabled (root : MVarClusterRef) : MetaM Unit := do
+def checkInvariantsIfEnabled (root : MVarClusterRef)
+    (rootMetaState : Meta.SavedState) : MetaM Unit := do
   if ← Check.tree.isEnabled then
-    root.checkInvariants
+    root.checkInvariants rootMetaState
 
 end MVarClusterRef
 
 def checkInvariantsIfEnabled : TreeM Unit := do
-  (← get).root.checkInvariantsIfEnabled
+  (← getRootMVarCluster).checkInvariantsIfEnabled (← getRootMetaState)
 
 end Aesop
