@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Util.Basic
+import Aesop.Util.EqualUpToIds
 import Aesop.Util.Tactic
 import Aesop.Util.UnionFind
 import Aesop.Util.UnorderedArraySet

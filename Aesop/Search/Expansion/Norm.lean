@@ -189,7 +189,6 @@ def normSimpCore (ctx : NormSimpContext)
           simpTheorems := simpTheorems'
         let ctx := { ctx with simpTheorems }
         Aesop.simpGoalWithAllHypotheses goal ctx
-    let postState ← saveState
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
     -- unassigned. In this case, we treat the goal as unchanged.
@@ -208,6 +207,8 @@ def normSimpCore (ctx : NormSimpContext)
       | .unchanged .. =>
         aesop_trace[steps] "norm simp left the goal unchanged"
         pure result
+
+    let postState ← saveState
 
     result.toNormRuleResult .normSimp ctx ⟨goal, goalMVars⟩ preState postState
       generateScript

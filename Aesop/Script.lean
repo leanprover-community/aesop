@@ -4,7 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Util
+import Aesop.Util.Basic
+import Aesop.Util.Tactic
+import Aesop.Util.EqualUpToIds
 import Std.Lean.Meta.Clear
 import Std.Lean.Meta.Inaccessible
 import Std.Lean.HashSet
@@ -352,8 +354,8 @@ def unfoldManyStarWithScript (goal : MVarId)
   return (result, scriptBuilder?)
 
 
-private def throwUnknownGoalError (goal : MVarId) : m α :=
-  throwError "internal error: unknown goal '?{goal.name}'"
+private def throwUnknownGoalError (goal : MVarId) (pre : MessageData) : m α :=
+  throwError "internal error: {pre}: unknown goal '?{goal.name}'"
 
 
 structure TacticState where
@@ -372,7 +374,7 @@ def getVisibleGoalIndex (ts : TacticState) (goal : MVarId) : m Nat := do
   if let (some idx) := ts.getVisibleGoalIndex? goal then
     return idx
   else
-    throwUnknownGoalError goal
+    throwUnknownGoalError goal "getVisibleGoalIndex"
 
 def getMainGoal? (ts : TacticState) : Option MVarId :=
   ts.visibleGoals[0]?.map (·.goal)
@@ -413,7 +415,7 @@ def applyTactic (ts : TacticState) (inGoal : MVarId)
     m TacticState := do
   let (some visibleGoals) :=
         replaceWithArray ts.visibleGoals ⟨inGoal, {}⟩ outGoals
-    | throwUnknownGoalError inGoal
+    | throwUnknownGoalError inGoal "applyTactic"
   let ts := { ts with visibleGoals }
   return eraseSolvedGoals ts postMCtx
 
@@ -421,7 +423,7 @@ def applyTactic (ts : TacticState) (inGoal : MVarId)
 -- to `invisibleGoals`.
 def focus (ts : TacticState) (goal : MVarId) : m TacticState := do
   let (some goalWithMVars) := ts.visibleGoals.find? (·.goal == goal)
-    | throwUnknownGoalError goal
+    | throwUnknownGoalError goal "focus"
   let mut invisibleGoals := ts.invisibleGoals
   for g in ts.visibleGoals do
     if g.goal != goal then
@@ -479,6 +481,27 @@ def render (acc : Array Syntax.Tactic) (ti : TacticInvocation)
       let t ← `(tactic| on_goal $posLit:num => $(ti.tacticSeq):tactic*)
       return (acc.push t, tacticState)
 
+def validate (ti : TacticInvocation) : MetaM Unit := do
+  let preMCtx := ti.preState.meta.mctx
+  let expectedPostMCtx := ti.postState.meta.mctx
+  let expectedPostGoals := ti.postGoals |>.map (·.goal)
+  let tac ← `(Lean.Parser.Tactic.tacticSeq| $ti.tacticSeq*)
+  let (actualPostState, actualPostGoals) ←
+    try
+      runTacticMCapturingPostState (evalTactic tac) ti.preState [ti.preGoal]
+    catch e =>
+      throwError "tactic{indentD tac}\nfailed with error{indentD e.toMessageData}"
+  let actualPostGoals := actualPostGoals.toArray
+  unless ← tacticStatesEqualUpToIds preMCtx expectedPostMCtx
+      actualPostState.meta.mctx expectedPostGoals actualPostGoals do
+    throwError "tactic{indentD tac}\nsucceeded but did not generate expected state. Initial goal:{indentD $ ← fmtGoals ti.preState #[ti.preGoal]}\nExpected goals:{indentD $ ← fmtGoals ti.postState $ ti.postGoals.map (·.goal)}\nActual goals:{indentD $ ← fmtGoals actualPostState actualPostGoals}"
+where
+  fmtGoals (state : Meta.SavedState) (goals : Array MVarId) :
+      MetaM MessageData :=
+    state.runMetaM' do
+      addMessageContext $
+        MessageData.joinSep (← goals.mapM (λ g => return m!"{g}")).toList "\n"
+
 end TacticInvocation
 
 
@@ -493,6 +516,9 @@ def UnstructuredScript.render (tacticState : TacticState)
     script := script'
     tacticState := tacticState'
   return script
+
+def UnstructuredScript.validate (s : UnstructuredScript) : MetaM Unit :=
+  s.forM (·.validate)
 
 inductive StructuredScript
   | empty
@@ -546,13 +572,20 @@ where
             tacticState.visibleGoalsHaveMVars then
       -- TODO If the original order happens to solve the main goal, we can
       -- structure opportunistically.
-      let currentSteps ← tacticState.visibleGoals.mapM λ goal => do
-        let (some x) := steps[goal.goal]
-          | throwUnknownGoalError goal.goal
-        return x
-      let currentSteps := currentSteps.qsort (λ x y => x.fst < y.fst)
-      let (some (_, firstStep)) := currentSteps[0]?
-        | throwError "internal error: currentSteps is empty"
+      let mut firstStep? := none
+      for g in tacticState.visibleGoals do
+        if let (some (i, step)) := steps[g.goal] then
+          if let some (j, firstStep) := firstStep? then
+            firstStep? := some $ if i < j then (i, step) else (j, firstStep)
+          else
+            firstStep? := some (i, step)
+        else
+          -- It's possible that a visible goal is solved as a side effect of
+          -- some unrelated step. So we can't expect every visible goal to have
+          -- an associated step.
+          continue
+      let some (_, firstStep) := firstStep?
+        | throwError "internal error: found no step to solve any visible goal"
       let tacticState ← tacticState.applyTacticInvocation firstStep
       let (tailScript, tacticState) ← go steps tacticState
       return (.unstructuredStep firstStep tailScript, tacticState)

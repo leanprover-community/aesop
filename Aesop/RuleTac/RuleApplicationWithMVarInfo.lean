@@ -76,24 +76,10 @@ def RuleApplication.toRuleApplicationWithMVarInfo
     -- Get assigned mvars
     r.postState.runMetaM' do
     let assignedMVars ← parentMVars.filterM (·.isAssignedOrDelayedAssigned)
-
-    -- Get goals and mvars
-    let mut goalsAndMVars := #[]
-    let mut mvars := {}
-    for g in r.goals do
-      let gMVars ← .ofHashSet <$> g.getMVarDependencies
-      mvars := mvars.merge gMVars
-      goalsAndMVars := goalsAndMVars.push (g, gMVars)
-    let goals :=
-      if mvars.isEmpty then
-        goalsAndMVars
-      else
-        goalsAndMVars.filter λ (g, _) => ! mvars.contains g
-
-    -- Get introduced mvars
+    let (goals, mvars) ← partitionGoalsAndMVars r.goals
     let introducedMVars := mvars.filter (! parentMVars.contains ·)
-
-    return { r with
+    return {
+      r with
       originalSubgoals, goals, mvars, introducedMVars, assignedMVars
     }
 

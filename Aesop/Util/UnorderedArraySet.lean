@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Util.Basic
+import Std.Data.Array.Merge
 
 open Lean
 
@@ -56,7 +56,7 @@ protected def ofHashSet [Hashable α] (xs : HashSet α) : UnorderedArraySet α :
   ⟨xs.toArray⟩
 
 protected def ofPersistentHashSet [Hashable α] (xs : PersistentHashSet α) : UnorderedArraySet α :=
-  ⟨xs.toArray⟩
+  ⟨xs.fold (init := Array.mkEmpty xs.size) λ as a => as.push a⟩
 
 protected def toArray (s : UnorderedArraySet α) : Array α :=
   s.rep

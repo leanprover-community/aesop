@@ -6,6 +6,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 
 import Aesop.Nanos
 import Aesop.Util.UnionFind
+import Aesop.Util.UnorderedArraySet
 import Std.Lean.Expr
 import Std.Lean.Meta.DiscrTree
 import Std.Lean.PersistentHashSet
@@ -200,6 +201,27 @@ def isAppOfUpToDefeq (f : Expr) (e : Expr) : MetaM Bool :=
       return true
     else
       return false
+
+/--
+Partition an array of `MVarId`s into 'goals' and 'proper mvars'. An `MVarId`
+from the input array `ms` is classified as a proper mvar if any of the `ms`
+depend on it, and as a goal otherwise. Additionally, for each goal, we report
+the set of mvars that the goal depends on.
+-/
+def partitionGoalsAndMVars (goals : Array MVarId) :
+    MetaM (Array (MVarId × UnorderedArraySet MVarId) × UnorderedArraySet MVarId) := do
+  let mut goalsAndMVars := #[]
+  let mut mvars : UnorderedArraySet MVarId := {}
+  for g in goals do
+    let gMVars ← .ofHashSet <$> g.getMVarDependencies
+    mvars := mvars.merge gMVars
+    goalsAndMVars := goalsAndMVars.push (g, gMVars)
+  let goals :=
+    if mvars.isEmpty then
+      goalsAndMVars
+    else
+      goalsAndMVars.filter λ (g, _) => ! mvars.contains g
+  return (goals, mvars)
 
 section TransparencySyntax
 

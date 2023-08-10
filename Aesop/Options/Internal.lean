@@ -18,7 +18,10 @@ structure Options' extends Options where
 
 def Options.toOptions' [Monad m] [MonadOptions m] (opts : Options) :
     m Options' := do
-  let generateScript ← pure opts.traceScript <||> Check.script.isEnabled
+  let generateScript ←
+    pure opts.traceScript <||>
+    Check.script.isEnabled <||>
+    Check.scriptSteps.isEnabled
   return { opts with generateScript }
 
 end Aesop

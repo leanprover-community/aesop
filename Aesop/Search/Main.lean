@@ -12,7 +12,6 @@ import Aesop.Search.Expansion
 import Aesop.Search.ExpandSafePrefix
 import Aesop.Search.Queue
 import Aesop.Tree
-import Aesop.Util
 
 open Lean
 open Lean.Elab.Tactic (liftMetaTacticAux TacticM)
@@ -136,30 +135,39 @@ def checkRenderedScript (script : Array Syntax.Tactic) : SearchM Q Unit := do
     unless (← getUnsolvedGoals).isEmpty do
       throwError "script executed successfully but did not solve the main goal"
   try
-    discard $ show MetaM _ from withoutModifyingState do
+    show MetaM Unit from withoutModifyingState do
       initialState.restore
       go.run { elaborator := .anonymous, recover := false }
-        |>.run { goals := [rootGoal] } |>.run
+        |>.run' { goals := [rootGoal] }
+        |>.run'
   catch e => throwError
     "{Check.script.name}: error while executing generated script:{indentD e.toMessageData}"
+
+def checkScriptSteps (script : UnstructuredScript) : SearchM Q Unit := do
+  try
+    script.validate
+  catch e =>
+    throwError "{Check.scriptSteps.name}: {e.toMessageData}"
 
 def traceScript : SearchM Q Unit := do
   let options := (← read).options
   if ! options.generateScript then
     return
   try
-    let script ← (← getRootMVarCluster).extractScript
+    let uscript ← (← getRootMVarCluster).extractScript
     let goal ← getRootMVarId
     let goalMVars ← goal.getMVarDependencies
     let tacticState :=
       { visibleGoals := #[⟨goal, goalMVars⟩], invisibleGoals := {} }
-    let script ← script.toStructuredScript tacticState
+    let script ← uscript.toStructuredScript tacticState
     let script ← script.render tacticState
     if options.traceScript then
       let scriptMsg :=
         MessageData.joinSep (script.map toMessageData |>.toList) "\n"
       withPPAnalyze do
         logInfo m!"Try this:{indentD scriptMsg}"
+    if ← Check.scriptSteps.isEnabled then
+      checkScriptSteps uscript
     if ← Check.script.isEnabled then
       checkRenderedScript script
   catch e =>

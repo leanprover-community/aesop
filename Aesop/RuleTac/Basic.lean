@@ -7,7 +7,6 @@ Authors: Jannis Limperg
 import Aesop.Index.Basic
 import Aesop.Options
 import Aesop.Script
-import Aesop.Util
 import Std.Lean.Meta.SavedState
 
 open Lean

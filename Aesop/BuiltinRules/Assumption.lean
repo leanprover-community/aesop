@@ -20,6 +20,7 @@ def assumption : RuleTac := λ input => do
     goal.checkNotAssigned `Aesop.BuiltinRules.assumption
     goal.instantiateMVars
     let tgt ← goal.getType
+    let tgtHasMVar := tgt.hasMVar
     let initialState ← saveState
     let mut applications := #[]
     for ldecl in ← getLCtx do
@@ -29,7 +30,7 @@ def assumption : RuleTac := λ input => do
       let (some (application, proofHasMVar)) ←
         tryHyp goal tgt ldecl md generateScript
         | continue
-      if ! tgt.hasMVar && ! proofHasMVar then
+      if ! tgtHasMVar && ! proofHasMVar then
         applications := #[application]
         break
       else

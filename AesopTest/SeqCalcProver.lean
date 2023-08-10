@@ -160,12 +160,7 @@ theorem sym {xs ys : List α} (perm : xs ↭ ys)
 
 theorem shift (v : α) (xs ys : List α)
   : xs ++ v :: ys ↭ v :: xs ++ ys := by
-  induction xs
-  . aesop
-  . -- TODO need to make all hyps accessible in initial goal
-    -- BUG in on_goal: wrong position
-    set_option aesop.check.script false in
-    aesop
+  induction xs <;> aesop
 
 theorem map {xs ys : List α} (f : α → β) (perm : xs ↭ ys)
   : xs.map f ↭ ys.map f := by
@@ -427,9 +422,7 @@ theorem weaken (Γ Δ : List (Form Φ)) (prf : Proof Γ Δ) (δ : Form Φ)
   | imp_r Γ Δ φ ψ =>
     have ih' : Proof (φ :: Γ) (ψ :: δ :: Δ) := by aesop
     aesop
-  | _ =>
-    set_option aesop.check.script false in
-    aesop (options := { maxRuleApplications := 250 })
+  | _ => aesop (options := { maxRuleApplications := 250 })
 
 
 --- Soundness

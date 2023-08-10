@@ -7,7 +7,6 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Aesop.Index
 import Aesop.Rule.Basic
 import Aesop.Percent
-import Aesop.Util
 
 namespace Aesop
 
