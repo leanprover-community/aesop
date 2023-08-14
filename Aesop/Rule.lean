@@ -35,6 +35,8 @@ instance : ToString NormRule where
 
 def defaultNormPenalty : Int := 1
 
+def defaultSimpRulePriority : Int := eval_prio default
+
 
 /-! ### Safe and Almost Safe Rules -/
 

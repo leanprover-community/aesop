@@ -33,6 +33,7 @@ end Parser
 inductive Priority
   | int (i : Int)
   | percent (p : Percent)
+  | nat (n : Nat)
   deriving Inhabited
 
 namespace Priority
@@ -57,6 +58,7 @@ instance : ToString Priority where
   toString
     | int i => toString i
     | percent p => p.toHumanString
+    | nat n => toString n
 
 def toInt? : Priority → Option Int
   | int i => some i
@@ -599,6 +601,13 @@ def getSuccessProbability (c : RuleConfig Id) : m Percent := do
     "unsafe rules must specify a success probability (not an integer penalty)"
   return prob
 
+def getSimpPriority (c : RuleConfig Id) : m Nat := do
+  let prio? := c.priority.toInt?.bind λ prio =>
+    if prio < 0 then none else some prio.toNat
+  let (some prio) := prio? | throwError
+    "simp rules must specify a non-negative integer priority"
+  return prio
+
 def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
     MetaM (MVarId × RuleSetMember × Array RuleSetName) := do
   match c.phase with
@@ -624,21 +633,25 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
     }
     return (goal, rule, c.ruleSets.ruleSets)
   | phase@PhaseName.norm =>
-    let penalty ← c.getPenalty phase
     let (goal, res) ← runBuilder goal phase c.builder
-    let rule :=
+    let rule ←
       match res with
-      | .regular res => .normRule {
+      | .regular res => do
+        let penalty ← c.getPenalty phase
+        pure $ .normRule {
           res with
           name := c.ident.toRuleName phase res.builder
           extra := { penalty }
         }
-      | .globalSimp entries => .normSimpRule {
+      | .globalSimp entries => do
+        let prio ← c.getSimpPriority
+        let entries := entries.map (updateSimpEntryPriority prio)
+        pure $ .normSimpRule {
           entries
           name := c.ident.toRuleName phase .simp
         }
-      | .localSimp fvarUserName => .localNormSimpRule { fvarUserName }
-      | .unfold r => .unfoldRule r
+      | .localSimp fvarUserName => pure $ .localNormSimpRule { fvarUserName }
+      | .unfold r => pure $ .unfoldRule r
     return (goal, rule, c.ruleSets.ruleSets)
   where
     runBuilder (goal : MVarId) (phase : PhaseName) (b : Builder) :
@@ -726,20 +739,24 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
 
     getPhaseAndPriority (c : RuleConfig Option) :
         m (PhaseName × Priority) :=
-      match c.phase, c.priority with
-      | none, none =>
-        throwError "phase (safe/unsafe/norm) not specified."
-      | some .unsafe, none =>
-        return (.unsafe, Priority.percent defaultSuccessProbability)
-      | some .safe, none =>
-        return (.safe, Priority.int defaultSafePenalty)
-      | some .norm, none =>
-        return (.norm, Priority.int defaultNormPenalty)
-      | some phase, some prio =>
+      match c.builder, c.phase, c.priority with
+      | _, some phase, some prio =>
         return (phase, prio)
-      | none, some prio@(Priority.percent _) =>
-        return (PhaseName.unsafe, prio)
-      | none, some _ =>
+      | some .simp, none, none =>
+        return (.norm, .int defaultSimpRulePriority)
+      | some .simp, none, some prio =>
+        return (.norm, prio)
+      | some .simp, some phase, none =>
+        return (phase, .int defaultSimpRulePriority)
+      | _, some .unsafe, none =>
+        return (.unsafe, .percent defaultSuccessProbability)
+      | _, some .safe, none =>
+        return (.safe, .int defaultSafePenalty)
+      | _, some .norm, none =>
+        return (.norm, .int defaultNormPenalty)
+      | _, none, some prio@(.percent _) =>
+        return (.unsafe, prio)
+      | _, none, _ =>
         throwError "phase (safe/unsafe/norm) not specified."
 
     finish (c : RuleConfig Option) : m (RuleConfig Id) := do

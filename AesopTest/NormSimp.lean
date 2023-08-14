@@ -17,6 +17,10 @@ example {α : Prop} (h : α) : α := by
 example (h : (α ∧ β) ∨ γ) : α ∨ γ := by
   aesop (add h norm simp)
 
+-- Ditto, but we can omit the 'norm'.
+example (h : (α ∧ β) ∨ γ) : α ∨ γ := by
+  aesop (add h simp)
+
 -- This test checks that the norm simp config is passed around properly.
 example {α β : Prop} (ha : α) (h : α → β) : β := by
   fail_if_success aesop (rule_sets [-builtin,-default])
@@ -31,3 +35,23 @@ example {α : Prop} (ha : α) : α := by
     (simp_options := { useHyps := false })
     (options := { terminal := true })
   aesop (rule_sets [-builtin,-default])
+
+-- We can give priorities to `simp` rules, corresponding to the priorities of
+-- `simp` lemmas.
+
+opaque T : Prop
+
+@[aesop simp 1]
+axiom TF : T ↔ False
+
+@[aesop simp 2]
+axiom TT : T ↔ True
+
+example : T := by aesop
+
+attribute [-aesop] TF
+attribute [aesop simp 3] TF
+
+example : T := by
+  fail_if_success aesop (options := { terminal := true })
+  rw [TT]; trivial

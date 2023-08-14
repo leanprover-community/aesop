@@ -192,6 +192,11 @@ namespace Aesop
 
 open Lean Lean.Meta
 
+def updateSimpEntryPriority (priority : Nat) (e : SimpEntry) : SimpEntry :=
+  match e with
+  | .thm t => .thm { t with priority }
+  | .toUnfoldThms .. | .toUnfold .. => e
+
 def isAppOfUpToDefeq (f : Expr) (e : Expr) : MetaM Bool :=
   withoutModifyingState do
     let type ← inferType f
