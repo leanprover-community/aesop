@@ -162,10 +162,8 @@ def traceScript : SearchM Q Unit := do
     let script ← uscript.toStructuredScript tacticState
     let script ← script.render tacticState
     if options.traceScript then
-      let scriptMsg :=
-        MessageData.joinSep (script.map toMessageData |>.toList) "\n"
-      withPPAnalyze do
-        logInfo m!"Try this:{indentD scriptMsg}"
+      let script ← `(tacticSeq| $script*)
+      Std.Tactic.TryThis.addSuggestion (← getRef) script
     if ← Check.scriptSteps.isEnabled then
       checkScriptSteps uscript
     if ← Check.script.isEnabled then
