@@ -11,15 +11,24 @@ open Lean.Meta
 
 namespace Aesop
 
-namespace CasesPattern
-
 -- NOTE: introduces fresh metavariables for the 'holes' in `p`.
-def toExpr (p : CasesPattern) : MetaM Expr := do
+def CasesPattern.toExpr (p : CasesPattern) : MetaM Expr := do
   let (_, _, p) ← openAbstractMVarsResult p
   return p
 
-end CasesPattern
+inductive CasesTarget' where
+  | decl (decl : Name)
+  | patterns (ps : Array (Expr × Meta.SavedState))
 
+def CasesTarget.toCasesTarget' : CasesTarget → MetaM CasesTarget'
+  | decl d => return .decl d
+  | patterns ps => withoutModifyingState do
+    let initialState ← saveState
+    .patterns <$> ps.mapM λ p => do
+      initialState.restore
+      let e ← p.toExpr
+      let s ← saveState
+      return (e, s)
 
 namespace RuleTac
 
@@ -32,15 +41,13 @@ partial def cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveTyp
     findFirstApplicableHyp (excluded : Array FVarId) (goal : MVarId) :
         MetaM (Option FVarId) :=
       withTransparency md do goal.withContext do
+        let target ← target.toCasesTarget'
         let «match» ldecl : MetaM Bool :=
           match target with
           | .decl d => do
             isAppOfUpToDefeq (← mkConstWithFreshMVarLevels d) ldecl.type
-          | .patterns ps => ps.anyM λ p => withoutModifyingState do
-              isDefEq (← p.toExpr) ldecl.type
-              -- TODO `p.toExpr` is mildly expensive, so it would be nicer if
-              -- we didn't have to do this all the time. But we must be careful
-              -- not to leak metavariables.
+          | .patterns ps => withoutModifyingState do
+            ps.anyM λ (e, state) => do state.restore; isDefEq e ldecl.type
         return ← (← getLCtx).findDeclM? λ ldecl => do
           if ldecl.isImplementationDetail || excluded.contains ldecl.fvarId then
             return none
