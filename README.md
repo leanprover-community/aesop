@@ -608,6 +608,7 @@ where
     omitted, defaults to 1.
   - For `unsafe` rules, a percentage between 0% and 100%. Cannot be omitted.
     You may omit the `unsafe` phase specification when giving a percentage.
+  - For `unfold` rules, a penalty can be given, but it is currently ignored.
 
 - `<builder>` is one of the builders given above. If you want to pass options to
   a builder, write it like this (with mandatory parentheses):
