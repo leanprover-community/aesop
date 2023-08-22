@@ -18,17 +18,17 @@ namespace Aesop
 def evalAesop : Tactic := λ stx => do
   profileitM Exception "aesop" (← getOptions) do
   withMainContext do
-    let (profile, totalTime) ← IO.time do
-      let (config, configParseTime) ← IO.time $ Frontend.TacticConfig.parse stx
+    let (profile, totalTime) ← time do
+      let (config, configParseTime) ← time $ Frontend.TacticConfig.parse stx
       let profile := { Profile.empty with configParsing := configParseTime }
       let goal ← getMainGoal
-      let ((goal, ruleSet), ruleSetConstructionTime) ← IO.time $
+      let ((goal, ruleSet), ruleSetConstructionTime) ← time $
         config.getRuleSet goal
       let profile :=
         { profile with ruleSetConstruction := ruleSetConstructionTime }
       withConstAesopTraceNode .ruleSet (return "Rule set") do
         ruleSet.trace .ruleSet
-      let (profile, searchTime) ← IO.time do
+      let (profile, searchTime) ← time do
         let (goals, profile) ←
           search goal ruleSet config.options config.simpConfig
             config.simpConfigSyntax? profile

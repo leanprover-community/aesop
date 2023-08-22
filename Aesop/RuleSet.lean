@@ -135,7 +135,7 @@ def merge (rs₁ rs₂ : RuleSet) : RuleSet where
   normRules := rs₁.normRules.merge rs₂.normRules
   unsafeRules := rs₁.unsafeRules.merge rs₂.unsafeRules
   safeRules := rs₁.safeRules.merge rs₂.safeRules
-  normSimpLemmas := rs₁.normSimpLemmas.merge rs₂.normSimpLemmas
+  normSimpLemmas := SimpTheorems.merge rs₁.normSimpLemmas rs₂.normSimpLemmas
   normSimpLemmaDescrs :=
     rs₁.normSimpLemmaDescrs.mergeWith rs₂.normSimpLemmaDescrs λ _ nsd₁ _ => nsd₁
     -- We can merge left-biased here because `nsd₁` and `nsd₂` should be equal
@@ -177,7 +177,7 @@ def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
       rs with
       normSimpLemmas :=
         r.entries.foldl (init := rs.normSimpLemmas) λ simpLemmas e =>
-          simpLemmas.addSimpEntry e
+          SimpTheorems.addSimpEntry simpLemmas e
       normSimpLemmaDescrs := rs.normSimpLemmaDescrs.insert r.name r.entries
     }
   | .localNormSimpRule r =>
@@ -214,7 +214,7 @@ def erase (rs : RuleSet) (f : RuleNameFilter) : RuleSet × Bool :=
             if let (some simpEntries) := normSimpLemmaDescrs.find? r then
               normSimpLemmaDescrs := normSimpLemmaDescrs.erase r
               for e in simpEntries do
-                normSimpLemmas := normSimpLemmas.eraseSimpEntry e
+                normSimpLemmas := SimpTheorems.eraseSimpEntry normSimpLemmas e
           else
             localNormSimpLemmas := localNormSimpLemmas.filter λ l => l.name != r
         else if r.builder == .unfold then

@@ -32,7 +32,7 @@ def trace [ToString α] (ri : Index α) (traceOpt : TraceOption) :
   withConstAesopTraceNode traceOpt (return "Indexed by hypotheses") do
     traceArray ri.byHyp.values
   withConstAesopTraceNode traceOpt (return "Unindexed") do
-    traceArray ri.unindexed.toArray
+    traceArray $ PersistentHashSet.toArray ri.unindexed
   where
     traceArray (as : Array α) : CoreM Unit :=
       as.map toString |>.qsortOrd.forM λ r => do aesop_trace![traceOpt] r

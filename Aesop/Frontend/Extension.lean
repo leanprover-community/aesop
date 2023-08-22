@@ -45,7 +45,8 @@ def getRuleSet (rsName : RuleSetName) (includeGlobalSimpTheorems : Bool) :
     CoreM RuleSet := do
   let rs := (← getRuleSetExtension rsName).getState (← getEnv)
   if includeGlobalSimpTheorems && rsName == defaultRuleSetName then
-    let normSimpLemmas := (← Meta.getSimpTheorems).merge rs.normSimpLemmas
+    let normSimpLemmas :=
+      SimpTheorems.merge (← Meta.getSimpTheorems) rs.normSimpLemmas
     return { rs with normSimpLemmas }
   else
     return rs

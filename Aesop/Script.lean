@@ -348,7 +348,7 @@ def renameInaccessibleFVarsWithScript (goal : MVarId) (generateScript : Bool) :
 def unfoldManyStarWithScript (goal : MVarId)
     (unfold? : Name → Option (Option Name)) (generateScript : Bool) :
     MetaM (UnfoldResult × Option (ScriptBuilder MetaM)) := do
-  let result ← goal.unfoldManyStar unfold?
+  let result ← unfoldManyStar goal unfold?
   let scriptBuilder? := mkScriptBuilder? generateScript $
     .unfoldManyStar result.usedDecls
   return (result, scriptBuilder?)
@@ -406,7 +406,7 @@ def eraseSolvedGoals (ts : TacticState) (mctx : MetavarContext) :
   visibleGoals :=
     ts.visibleGoals.filter (! mctx.isExprMVarAssignedOrDelayedAssigned ·.goal)
   invisibleGoals :=
-    filterHashSet ts.invisibleGoals
+    HashSet.filter ts.invisibleGoals
       (! mctx.isExprMVarAssignedOrDelayedAssigned ·)
 }
 

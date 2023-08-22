@@ -11,8 +11,10 @@ import Std.Lean.Expr
 import Std.Lean.Meta.DiscrTree
 import Std.Lean.PersistentHashSet
 
+open Lean
+open Lean.Meta
 
-namespace Subarray
+namespace Aesop.Subarray
 
 def popFront? (as : Subarray α) : Option (α × Subarray α) :=
   if h : as.start < as.stop
@@ -28,59 +30,52 @@ def popFront? (as : Subarray α) : Option (α × Subarray α) :=
 
 end Subarray
 
-
-namespace IO
-
 @[inline]
 def time [Monad m] [MonadLiftT BaseIO m] (x : m α) : m (α × Aesop.Nanos) := do
-  let start ← monoNanosNow
+  let start ← IO.monoNanosNow
   let a ← x
-  let stop ← monoNanosNow
+  let stop ← IO.monoNanosNow
   return (a, ⟨stop - start⟩)
 
 @[inline]
 def time' [Monad m] [MonadLiftT BaseIO m] (x : m Unit) : m Aesop.Nanos := do
-  let start ← monoNanosNow
+  let start ← IO.monoNanosNow
   x
-  let stop ← monoNanosNow
+  let stop ← IO.monoNanosNow
   return ⟨stop - start⟩
 
-end IO
-
-
-namespace Aesop
-
-open Lean
+namespace HashSet
 
 -- TODO reuse old hash set instead of building a new one.
-def filterHashSet [BEq α] [Hashable α] (hs : HashSet α) (p : α → Bool) :
-    HashSet α :=
+def filter [BEq α] [Hashable α] (hs : HashSet α) (p : α → Bool) : HashSet α :=
   hs.fold (init := ∅) λ hs a => if p a then hs.insert a else hs
 
-end Aesop
+end HashSet
 
-
-namespace Lean.PersistentHashSet
+namespace PersistentHashSet
 
 -- Elements are returned in unspecified order.
 @[inline]
-def toList [BEq α] [Hashable α] (s : PersistentHashSet α) : List α :=
+def toList [BEq α] [Hashable α] (s : PersistentHashSet α) :
+    List α :=
   s.fold (init := []) λ as a => a :: as
 
 -- Elements are returned in unspecified order. (In fact, they are currently
 -- returned in reverse order of `toList`.)
 @[inline]
-def toArray [BEq α] [Hashable α] (s : PersistentHashSet α) : Array α :=
+def toArray [BEq α] [Hashable α] (s : PersistentHashSet α) :
+    Array α :=
   s.fold (init := Array.mkEmpty s.size) λ as a => as.push a
 
-end Lean.PersistentHashSet
+end PersistentHashSet
 
+section DiscrTree
 
-namespace Lean.Meta.DiscrTree
+open DiscrTree
 
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
 -- `n` stars).
-def getConclusionKeys (type : Expr) :
+def getConclusionDiscrTreeKeys (type : Expr) :
     MetaM (Array (Key s)) :=
   withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
@@ -90,7 +85,7 @@ def getConclusionKeys (type : Expr) :
 
 -- For a constant `d` with type `∀ (x₁, ..., xₙ), T`, returns keys that
 -- match `d * ... *` (with `n` stars).
-def getConstKeys (decl : Name) : MetaM (Array (Key s)) := do
+def getConstDiscrTreeKeys (decl : Name) : MetaM (Array (Key s)) := do
   let (some info) ← getConst? decl
     | throwUnknownConstant decl
   let arity := info.type.forallArity
@@ -100,10 +95,60 @@ def getConstKeys (decl : Name) : MetaM (Array (Key s)) := do
     keys := keys.push $ .star
   return keys
 
-end Lean.Meta.DiscrTree
+def isEmptyTrie : Trie α s → Bool
+  | .node vs children => vs.isEmpty && children.isEmpty
 
+@[specialize]
+private partial def filterTrieM [Monad m] [Inhabited σ] (f : σ → α → m σ)
+    (p : α → m (ULift Bool)) (init : σ) : Trie α s → m (Trie α s × σ)
+  | .node vs children => do
+    let (vs, acc) ← vs.foldlM (init := (#[], init)) λ (vs, acc) v => do
+      if (← p v).down then
+        return (vs.push v, acc)
+      else
+        return (vs, ← f acc v)
+    let (children, acc) ← go acc 0 children
+    let children := children.filter λ (_, c) => ! isEmptyTrie c
+    return (.node vs children, acc)
+  where
+    go (acc : σ) (i : Nat) (children : Array (Key s × Trie α s)) :
+        m (Array (Key s × Trie α s) × σ) := do
+      if h : i < children.size then
+        let (key, t) := children[i]'h
+        let (t, acc) ← filterTrieM f p acc t
+        go acc (i + 1) (children.set ⟨i, h⟩ (key, t))
+      else
+        return (children, acc)
 
-namespace Lean.Meta.SimpTheorems
+/--
+Remove elements for which `p` returns `false` from the given `DiscrTree`.
+The removed elements are monadically folded over using `f` and `init`, so `f`
+is called once for each removed element and the final state of type `σ` is
+returned.
+-/
+@[specialize]
+def filterDiscrTreeM [Monad m] [Inhabited σ] (p : α → m (ULift Bool))
+    (f : σ → α → m σ) (init : σ) (t : DiscrTree α s) :
+    m (DiscrTree α s × σ) := do
+  let (root, acc) ←
+    t.root.foldlM (init := (.empty, init)) λ (root, acc) key t => do
+      let (t, acc) ← filterTrieM f p acc t
+      let root := if isEmptyTrie t then root else root.insert key t
+      return (root, acc)
+  return (⟨root⟩, acc)
+
+/--
+Remove elements for which `p` returns `false` from the given `DiscrTree`.
+The removed elements are folded over using `f` and `init`, so `f` is called
+once for each removed element and the final state of type `σ` is returned.
+-/
+def filterDiscrTree [Inhabited σ] (p : α → Bool) (f : σ → α → σ) (init : σ)
+    (t : DiscrTree α s) : DiscrTree α s × σ := Id.run $
+  filterDiscrTreeM (λ a => pure ⟨p a⟩) (λ s a => pure (f s a)) init t
+
+end DiscrTree
+
+namespace SimpTheorems
 
 def addSimpEntry (s : SimpTheorems) : SimpEntry → SimpTheorems
   | SimpEntry.thm l =>
@@ -141,7 +186,7 @@ def foldSimpEntries (f : σ → SimpEntry → σ) (init : σ) (thms : SimpTheore
   Id.run $ foldSimpEntriesM f init thms
 
 def simpEntries (thms : SimpTheorems) : Array SimpEntry :=
-  thms.foldSimpEntries (init := #[]) λ s thm => s.push thm
+  foldSimpEntries (thms := thms) (init := #[]) λ s thm => s.push thm
 
 def merge (s t : SimpTheorems) : SimpTheorems := {
     pre := s.pre.mergePreservingDuplicates t.pre
@@ -167,15 +212,12 @@ def merge (s t : SimpTheorems) : SimpTheorems := {
         else
           x.insert origin
 
-end Lean.Meta.SimpTheorems
+end SimpTheorems
 
 
 @[inline]
 def setThe (σ) {m} [MonadStateOf σ m] (s : σ) : m PUnit :=
   MonadStateOf.set s
-
-
-namespace Lean
 
 @[inline]
 def runMetaMAsCoreM (x : MetaM α) : CoreM α :=
@@ -184,13 +226,6 @@ def runMetaMAsCoreM (x : MetaM α) : CoreM α :=
 @[inline]
 def runTermElabMAsCoreM (x : Elab.TermElabM α) : CoreM α :=
   runMetaMAsCoreM x.run'
-
-end Lean
-
-
-namespace Aesop
-
-open Lean Lean.Meta
 
 def updateSimpEntryPriority (priority : Nat) (e : SimpEntry) : SimpEntry :=
   match e with
@@ -276,62 +311,5 @@ where
     match ← whnf e with
     | .app f e => go (args.push e) f
     | _ => return (e, args.reverse)
-
-section DiscrTree
-
-open DiscrTree
-
-def isEmptyTrie : Trie α s → Bool
-  | .node vs children => vs.isEmpty && children.isEmpty
-
-@[specialize]
-private partial def filterTrieM [Monad m] [Inhabited σ] (f : σ → α → m σ)
-    (p : α → m (ULift Bool)) (init : σ) : Trie α s → m (Trie α s × σ)
-  | .node vs children => do
-    let (vs, acc) ← vs.foldlM (init := (#[], init)) λ (vs, acc) v => do
-      if (← p v).down then
-        return (vs.push v, acc)
-      else
-        return (vs, ← f acc v)
-    let (children, acc) ← go acc 0 children
-    let children := children.filter λ (_, c) => ! isEmptyTrie c
-    return (.node vs children, acc)
-  where
-    go (acc : σ) (i : Nat) (children : Array (Key s × Trie α s)) :
-        m (Array (Key s × Trie α s) × σ) := do
-      if h : i < children.size then
-        let (key, t) := children[i]'h
-        let (t, acc) ← filterTrieM f p acc t
-        go acc (i + 1) (children.set ⟨i, h⟩ (key, t))
-      else
-        return (children, acc)
-
-/--
-Remove elements for which `p` returns `false` from the given `DiscrTree`.
-The removed elements are monadically folded over using `f` and `init`, so `f`
-is called once for each removed element and the final state of type `σ` is
-returned.
--/
-@[specialize]
-def filterDiscrTreeM [Monad m] [Inhabited σ] (p : α → m (ULift Bool))
-    (f : σ → α → m σ) (init : σ) (t : DiscrTree α s) :
-    m (DiscrTree α s × σ) := do
-  let (root, acc) ←
-    t.root.foldlM (init := (.empty, init)) λ (root, acc) key t => do
-      let (t, acc) ← filterTrieM f p acc t
-      let root := if isEmptyTrie t then root else root.insert key t
-      return (root, acc)
-  return (⟨root⟩, acc)
-
-/--
-Remove elements for which `p` returns `false` from the given `DiscrTree`.
-The removed elements are folded over using `f` and `init`, so `f` is called
-once for each removed element and the final state of type `σ` is returned.
--/
-def filterDiscrTree [Inhabited σ] (p : α → Bool) (f : σ → α → σ) (init : σ)
-    (t : DiscrTree α s) : DiscrTree α s × σ := Id.run $
-  filterDiscrTreeM (λ a => pure ⟨p a⟩) (λ s a => pure (f s a)) init t
-
-end DiscrTree
 
 end Aesop

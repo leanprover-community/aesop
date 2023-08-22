@@ -14,7 +14,7 @@ namespace Aesop.RuleBuilder
 private def getSimpEntriesFromPropConst (decl : Name) :
     MetaM (Array SimpEntry) := do
   let thms ← ({} : SimpTheorems).addConst decl
-  return thms.simpEntries
+  return SimpTheorems.simpEntries thms
 
 private def getSimpEntriesForConst (decl : Name) : MetaM (Array SimpEntry) := do
   let info ← getConstInfo decl
@@ -23,7 +23,7 @@ private def getSimpEntriesForConst (decl : Name) : MetaM (Array SimpEntry) := do
     thms ← thms.addConst decl
   else if info.hasValue then
     thms ← thms.addDeclToUnfold decl
-  return thms.simpEntries
+  return SimpTheorems.simpEntries thms
 
 def simp : RuleBuilder := λ input => do
   match input.kind with

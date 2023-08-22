@@ -147,14 +147,14 @@ def traceSimpTheorems (s : SimpTheorems) (opt : TraceOption) : CoreM Unit := do
     return
   withConstAesopTraceNode opt (return "Erased entries") do
     aesop_trace![opt] "(Note: even if these entries appear in the sections below, they will not be used by simp.)"
-    for e in s.erased.toArray.map (toString ·.key) |>.qsortOrd do
+    for e in PersistentHashSet.toArray s.erased |>.map (toString ·.key) |>.qsortOrd do
       aesop_trace![opt] e
   withConstAesopTraceNode opt (return "Pre lemmas") do
     traceSimpTheoremTreeContents s.pre opt
   withConstAesopTraceNode opt (return "Post lemmas") do
     traceSimpTheoremTreeContents s.post opt
   withConstAesopTraceNode opt (return "Constants to unfold") do
-    for e in s.toUnfold.toArray.map toString |>.qsortOrd do
+    for e in PersistentHashSet.toArray s.toUnfold |>.map toString |>.qsortOrd do
       aesop_trace![opt] e
 
 end Aesop

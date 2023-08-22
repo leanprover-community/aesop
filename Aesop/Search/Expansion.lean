@@ -224,7 +224,7 @@ partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
   return result
   where
     loop (queue : UnsafeQueue) : SearchM Q (UnsafeQueue × RuleResult) := do
-      let (some (r, queue)) := queue.popFront?
+      let (some (r, queue)) := Subarray.popFront? queue
         | return (queue, RuleResult.failed)
       match r with
       | .unsafeRule r =>

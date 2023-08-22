@@ -147,7 +147,7 @@ def recordRuleProfile (rp : RuleProfile) : m Unit :=
 def profiling [MonadLiftT BaseIO m] (x : m α)
     (recordProfile : α → Nanos → m Unit) : m α := do
   if ← isProfilingEnabled then
-    let (result, elapsed) ← IO.time x
+    let (result, elapsed) ← time x
     recordProfile result elapsed
     return result
   else

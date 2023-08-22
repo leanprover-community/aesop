@@ -53,7 +53,7 @@ def mkUnfoldSimpContext : MetaM Simp.Context := do
 
 -- Inspired by Lean.Meta.unfold, Lean.Meta.unfoldTarget,
 -- Lean.Meta.unfoldLocalDecl.
-def _root_.Lean.MVarId.unfoldManyStar (goal : MVarId)
+def unfoldManyStar (goal : MVarId)
     (unfold? : Name → Option (Option Name)) : MetaM UnfoldResult :=
   goal.withContext do
     let initialGoal := goal
@@ -129,7 +129,7 @@ elab "aesop_unfold " "[" ids:ident,+ "]" : tactic => do
     toUnfold := toUnfold.insert decl (← getUnfoldEqnFor? decl)
 
   liftMetaTactic λ goal => do
-    match ← goal.unfoldManyStar (toUnfold.find? ·) with
+    match ← unfoldManyStar goal (toUnfold.find? ·) with
     | .unchanged =>
       throwTacticEx `aesop_unfold goal "could not unfold any of the given constants"
     | .changed goal _ => return [goal]
