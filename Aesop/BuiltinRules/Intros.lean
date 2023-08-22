@@ -22,14 +22,15 @@ ambient transparency. -/
 partial def introsUnfolding (mvarId : MVarId) : MetaM (Array FVarId × MVarId) :=
   run mvarId #[]
 where
-  run (mvarId : MVarId) (fvars : Array FVarId) : MetaM (Array FVarId × MVarId) := do
-    let type ← whnf (← mvarId.getType)
-    let size := getIntrosSize type
-    if 0 < size then
-      let (fvars', mvarId') ← mvarId.introN size
-      run mvarId' (fvars ++ fvars')
-    else
-      return (fvars, mvarId)
+  run (mvarId : MVarId) (fvars : Array FVarId) : MetaM (Array FVarId × MVarId) :=
+    mvarId.withContext do
+      let type ← whnf (← mvarId.getType)
+      let size := getIntrosSize type
+      if 0 < size then
+        let (fvars', mvarId') ← mvarId.introN size
+        run mvarId' (fvars ++ fvars')
+      else
+        return (fvars, mvarId)
 
 @[aesop norm -100 (rule_sets [builtin])]
 def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
