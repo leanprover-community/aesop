@@ -597,11 +597,15 @@ this is
 where
 
 - `<phase>` is `safe`, `norm` or `unsafe`. Cannot be omitted except under the
-  conditions in the next bullet.
+  conditions in the next bullets.
 
 - `<priority>` is:
-  - For `safe` and `norm` rules, an integer penalty. Can be omitted, in which
-    case the penalty defaults to 1.
+  - For `simp` rules, a natural number. This is used as the priority of the
+    `simp` generated `simp` lemmas, so registering a `simp` rule with priority
+    `n` is roughly equivalent to the attribute `@[simp n]`. If omitted, defaults
+    to Lean's default `simp` priority.
+  - For `safe` and `norm` rules (except `simp` rules), an integer penalty. If
+    omitted, defaults to 1.
   - For `unsafe` rules, a percentage between 0% and 100%. Cannot be omitted.
     You may omit the `unsafe` phase specification when giving a percentage.
 
@@ -613,6 +617,8 @@ where
   ```
 
   If no builder is specified, the default builder for the given phase is used.
+  Since the `simp` builder generates only normalisation rules, the `norm` phase
+  may be omitted.
 
 - `<rule_sets>` is a clause of the form
 

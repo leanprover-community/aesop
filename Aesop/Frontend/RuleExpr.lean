@@ -33,7 +33,6 @@ end Parser
 inductive Priority
   | int (i : Int)
   | percent (p : Percent)
-  | nat (n : Nat)
   deriving Inhabited
 
 namespace Priority
@@ -58,7 +57,6 @@ instance : ToString Priority where
   toString
     | int i => toString i
     | percent p => p.toHumanString
-    | nat n => toString n
 
 def toInt? : Priority → Option Int
   | int i => some i
