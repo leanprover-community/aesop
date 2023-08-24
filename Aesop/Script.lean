@@ -46,6 +46,15 @@ def noop (preGoal : MVarId) (postGoal : GoalWithMVars)
   preGoal, preState, postState
 }
 
+def renderOnGoal (acc : Array Syntax.Tactic) (goalPos : Nat)
+    (ti : TacticInvocation) : m (Array Syntax.Tactic) := do
+  if goalPos == 0 then
+    return acc ++ ti.tacticSeq
+  else
+    let posLit := mkOneBasedNumLit goalPos
+    let t ← `(tactic| on_goal $posLit:num => $(ti.tacticSeq):tactic*)
+    return acc.push t
+
 def render (acc : Array Syntax.Tactic) (ti : TacticInvocation)
     (tacticState : TacticState) : m (Array Syntax.Tactic × TacticState) := do
   if ti.tacticSeq.size == 0 then
@@ -54,12 +63,8 @@ def render (acc : Array Syntax.Tactic) (ti : TacticInvocation)
   else
     let pos ← tacticState.getVisibleGoalIndex ti.preGoal
     let tacticState ← tacticState.applyTacticInvocation ti
-    if pos == 0 then
-      return (acc ++ ti.tacticSeq, tacticState)
-    else
-      let posLit := mkOneBasedNumLit pos
-      let t ← `(tactic| on_goal $posLit:num => $(ti.tacticSeq):tactic*)
-      return (acc.push t, tacticState)
+    let acc ← renderOnGoal acc pos ti
+    return (acc, tacticState)
 
 def validate (ti : TacticInvocation) : MetaM Unit := do
   let preMCtx := ti.preState.meta.mctx
@@ -103,43 +108,34 @@ def UnstructuredScript.validate (s : UnstructuredScript) : MetaM Unit :=
 
 inductive StructuredScript
   | empty
-  | unstructuredStep (ti : TacticInvocation) (tail : StructuredScript)
-  | solve (goal : MVarId) (here tail : StructuredScript)
+  | onGoal (goalPos : Nat) (ti : TacticInvocation) (tail : StructuredScript)
+  | focusAndSolve (goalPos : Nat) (here tail : StructuredScript)
   deriving Inhabited
 
-def StructuredScript.render (tacticState : TacticState)
-    (script : StructuredScript) : m (Array Syntax.Tactic) := do
-  (·.fst) <$> go #[] tacticState script
+def StructuredScript.render (script : StructuredScript) :
+    m (Array Syntax.Tactic) := do
+  go #[] script
   where
-    go (script : Array Syntax.Tactic) (tacticState : TacticState) :
-        StructuredScript → m (Array Syntax.Tactic × TacticState)
-      | empty =>
-        return (script, tacticState)
-      | unstructuredStep ti tail => do
-        let (script, tacticState) ← ti.render script tacticState
-        go script tacticState tail
-      | solve goal here tail => do
-        let pos ← tacticState.getVisibleGoalIndex goal
-        let (nestedScript, tacticState) ←
-          tacticState.onGoalM goal λ ts => do
-            let (nestedScript, nestedTacticState) ← go #[] ts here
-            if ! nestedTacticState.hasNoVisibleGoals then
-              throwError "expected script to solve the goal"
-            pure (nestedScript, nestedTacticState)
+    go (acc : Array Syntax.Tactic) :
+        StructuredScript → m (Array Syntax.Tactic)
+      | empty => return acc
+      | onGoal goalPos ti tail => do
+        let script ← ti.renderOnGoal acc goalPos
+        go script tail
+      | focusAndSolve goalPos here tail => do
+        let nestedScript ← go #[] here
         let t ←
-          if pos == 0 then
+          if goalPos == 0 then
             `(tactic| · $[$nestedScript:tactic]*)
           else
-            let posLit := mkOneBasedNumLit pos
+            let posLit := mkOneBasedNumLit goalPos
             `(tactic| on_goal $posLit:num => { $nestedScript:tactic* })
-        go (script.push t) tacticState tail
+        go (acc.push t) tail
 
--- TODO resolve positions as part of this step?
--- TODO We currently assume that we completely solve the tactic state. If we
--- don't, we have to allow getStep to fail and leave the goal alone.
-partial def UnstructuredScript.toStructuredScript (tacticState : TacticState)
-    (script : UnstructuredScript) : m StructuredScript := do
-  let mut steps := {}
+partial def UnstructuredScript.toStructuredScriptStatic
+    (tacticState : TacticState) (script : UnstructuredScript) :
+    m StructuredScript := do
+  let mut steps : HashMap MVarId (Nat × TacticInvocation) := {}
   for h : i in [:script.size] do
     let step := script[i]'h.2
     steps := steps.insert step.preGoal (i, step)
@@ -151,26 +147,29 @@ where
       return (.empty, tacticState)
     else if tacticState.hasSingleVisibleGoal ||
             tacticState.visibleGoalsHaveMVars then
+      -- "Unstructured mode"
       -- TODO If the original order happens to solve the main goal, we can
       -- structure opportunistically.
       let mut firstStep? := none
-      for g in tacticState.visibleGoals do
+      for h : pos in [:tacticState.visibleGoals.size] do
+        let g := tacticState.visibleGoals[pos]'h.2
         if let (some (i, step)) := steps[g.goal] then
-          if let some (j, firstStep) := firstStep? then
-            firstStep? := some $ if i < j then (i, step) else (j, firstStep)
+          if let some (pos', j, firstStep) := firstStep? then
+            firstStep? := some $ if i < j then (pos, i, step) else (pos', j, firstStep)
           else
-            firstStep? := some (i, step)
+            firstStep? := some (pos, i, step)
         else
           -- It's possible that a visible goal is solved as a side effect of
           -- some unrelated step. So we can't expect every visible goal to have
           -- an associated step.
           continue
-      let some (_, firstStep) := firstStep?
+      let some (goalPos, _, firstStep) := firstStep?
         | throwError "internal error: found no step to solve any visible goal"
       let tacticState ← tacticState.applyTacticInvocation firstStep
       let (tailScript, tacticState) ← go steps tacticState
-      return (.unstructuredStep firstStep tailScript, tacticState)
+      return (.onGoal goalPos firstStep tailScript, tacticState)
     else
+      -- "Structured mode"
       let mut tacticState := tacticState
       let mut nestedScripts := Array.mkEmpty tacticState.visibleGoals.size
       -- The following loop is not equivalent to a for loop because some of
@@ -178,12 +177,14 @@ where
       -- goal.
       while h : tacticState.visibleGoals.size > 0 do
         let goal := tacticState.visibleGoals[0]
+        let goalPos ← tacticState.getVisibleGoalIndex goal.goal
         let (nestedScript, nestedTacticState) ←
           tacticState.onGoalM goal.goal λ tacticState => go steps tacticState
-        nestedScripts := nestedScripts.push (goal.goal, nestedScript)
+        nestedScripts := nestedScripts.push (goalPos, nestedScript)
         tacticState := nestedTacticState
       let script := nestedScripts.foldr (init := .empty)
-        λ (goal, nestedScript) tail => .solve goal nestedScript tail
+        λ (goalPos, nestedScript) tail =>
+          .focusAndSolve goalPos nestedScript tail
       return (script, tacticState)
 
 end Aesop

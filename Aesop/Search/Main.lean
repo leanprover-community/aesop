@@ -159,8 +159,8 @@ def traceScript : SearchM Q Unit := do
     let goalMVars ← goal.getMVarDependencies
     let tacticState :=
       { visibleGoals := #[⟨goal, goalMVars⟩], invisibleGoals := {} }
-    let script ← uscript.toStructuredScript tacticState
-    let script ← script.render tacticState
+    let script ← uscript.toStructuredScriptStatic tacticState
+    let script ← script.render
     if options.traceScript then
       let script ← `(tacticSeq| $script*)
       addTryThisTacticSeqSuggestion (← getRef) script
