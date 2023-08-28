@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Util.Basic
 import Aesop.Util.EqualUpToIds
 
 -- Some simple test cases for the EqualUpToIds module. The module is mostly
@@ -33,6 +34,8 @@ open Lean.Elab.Tactic in
 elab &"assert_equal_tactics "
     " { " ts₁:tacticSeq " } " " { " ts₂:tacticSeq " } " : tactic => do
   assertEqualTactics (evalTactic ts₁) (evalTactic ts₂)
+
+set_option linter.unreachableTactic false
 
 example : True := by
   assert_equal_tactics { trivial } { trivial }
