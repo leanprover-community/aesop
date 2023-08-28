@@ -14,7 +14,7 @@ import Batteries.Lean.PersistentHashSet
 import Lean.Meta.Tactic.TryThis
 
 open Lean
-open Lean.Meta
+open Lean.Meta Lean.Elab.Tactic
 
 namespace Aesop.Array
 
@@ -192,6 +192,16 @@ def runMetaMAsCoreM (x : MetaM α) : CoreM α :=
 def runTermElabMAsCoreM (x : Elab.TermElabM α) : CoreM α :=
   runMetaMAsCoreM x.run'
 
+def runTacticMAsMetaM (x : TacticM α) (goals : List MVarId) :
+    MetaM (α × List MVarId) := do
+  let (a, s) ← x |>.run { elaborator := .anonymous } |>.run { goals } |>.run'
+  return (a, s.goals)
+
+def runTacticSyntaxAsMetaM (stx : Syntax) (goals : List MVarId) :
+    MetaM (List MVarId) :=
+  return (← runTacticMAsMetaM (evalTactic stx) goals).snd
+
+
 def updateSimpEntryPriority (priority : Nat) (e : SimpEntry) : SimpEntry :=
   match e with
   | .thm t => .thm { t with priority }
@@ -252,6 +262,41 @@ def partitionGoalsAndMVars (goals : Array MVarId) :
     else
       goalsAndMVars.filter λ (g, _) => ! mvars.contains g
   return (goals, mvars)
+
+section RunTactic
+
+open Lean.Elab.Tactic
+
+def runTacticMCapturingPostState (t : TacticM Unit) (preState : Meta.SavedState)
+    (preGoals : List MVarId) : MetaM (Meta.SavedState × List MVarId) :=
+  withoutModifyingState do
+    let go : TacticM (Meta.SavedState × List MVarId) := do
+      preState.restore
+      t
+      pruneSolvedGoals
+      let postState ← show MetaM _ from saveState
+      let postGoals ← getGoals
+      pure (postState, postGoals)
+    go |>.run { elaborator := .anonymous, recover := false }
+       |>.run' { goals := preGoals }
+       |>.run'
+
+def runTacticCapturingPostState (t : Syntax.Tactic) (preState : Meta.SavedState)
+    (preGoals : List MVarId) : MetaM (Meta.SavedState × List MVarId) := do
+  runTacticMCapturingPostState (evalTactic t) preState preGoals
+
+def runTacticSeqCapturingPostState (t : TSyntax ``Lean.Parser.Tactic.tacticSeq)
+    (preState : Meta.SavedState) (preGoals : List MVarId) :
+    MetaM (Meta.SavedState × List MVarId) := do
+  runTacticMCapturingPostState (evalTactic t) preState preGoals
+
+def runTacticsCapturingPostState (ts : Array Syntax.Tactic)
+    (preState : Meta.SavedState) (preGoals : List MVarId) :
+    MetaM (Meta.SavedState × List MVarId) := do
+  let t ← `(Lean.Parser.Tactic.tacticSeq| $ts*)
+  runTacticSeqCapturingPostState t preState preGoals
+
+end RunTactic
 
 section TransparencySyntax
 

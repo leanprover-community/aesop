@@ -8,7 +8,7 @@ import Batteries.Lean.Meta.SavedState
 
 open Lean Lean.Meta
 
-namespace Aesop.EqualUpToIds
+namespace Aesop
 
 -- TODO caching -- but maybe the ptrEq optimisation is enough
 
@@ -20,16 +20,47 @@ structure Context where
   commonMCtx : MetavarContext
   mctx₁ : MetavarContext
   mctx₂ : MetavarContext
+  /-- Allow metavariables to be unassigned on one side of the comparison and
+  assigned on the other. So when we compare two expressions and we encounter
+  a metavariable `?x` in one of them and a subexpression `e` in the other (at
+  the same position), we consider `?x` equal to `e`. -/
+  allowAssignmentDiff : Bool
 
 structure State where
   equalMVarIds : HashMap MVarId MVarId := {}
   equalLMVarIds : HashMap LMVarId LMVarId := {}
+  /-- A map from metavariables which are unassigned in the left goal
+  to their corresponding expression in the right goal. Only used when
+  `allowAssignmentDiff = true`. -/
+  leftUnassignedMVarValues : HashMap MVarId Expr := {}
+  /-- A map from metavariables which are unassigned in the right goal
+  to their corresponding expression in the left goal. Only used when
+  `allowAssignmentDiff = true`. -/
+  rightUnassignedMVarValues : HashMap MVarId Expr := {}
 
 end EqualUpToIdsM
 
 
 abbrev EqualUpToIdsM :=
   ReaderT EqualUpToIdsM.Context $ StateRefT EqualUpToIdsM.State MetaM
+
+-- Make the compiler generate specialized `pure`/`bind` so we do not have to optimize through the
+-- whole monad stack at every use site. May eventually be covered by `deriving`.
+@[inline, always_inline]
+instance : Monad EqualUpToIdsM :=
+  { inferInstanceAs (Monad EqualUpToIdsM) with }
+
+protected def EqualUpToIdsM.run' (x : EqualUpToIdsM α)
+    (commonMCtx mctx₁ mctx₂ : MetavarContext) (allowAssignmentDiff : Bool) :
+    MetaM (α × EqualUpToIdsM.State) :=
+  x { commonMCtx, mctx₁, mctx₂, allowAssignmentDiff } |>.run {}
+
+protected def EqualUpToIdsM.run (x : EqualUpToIdsM α)
+    (commonMCtx mctx₁ mctx₂ : MetavarContext) (allowAssignmentDiff : Bool) :
+    MetaM α :=
+  (·.fst) <$> x.run' commonMCtx mctx₁ mctx₂ allowAssignmentDiff
+
+namespace EqualUpToIds
 
 def readCommonMCtx : EqualUpToIdsM MetavarContext :=
   return (← read).commonMCtx
@@ -40,16 +71,8 @@ def readMCtx₁ : EqualUpToIdsM MetavarContext :=
 def readMCtx₂ : EqualUpToIdsM MetavarContext :=
   return (← read).mctx₂
 
--- Make the compiler generate specialized `pure`/`bind` so we do not have to optimize through the
--- whole monad stack at every use site. May eventually be covered by `deriving`.
-@[inline, always_inline]
-instance : Monad EqualUpToIdsM :=
-  { inferInstanceAs (Monad EqualUpToIdsM) with }
-
-protected def EqualUpToIdsM.run (x : EqualUpToIdsM α)
-    (commonMCtx mctx₁ mctx₂ : MetavarContext) :
-    MetaM α :=
-  (·.fst) <$> (x { commonMCtx, mctx₁, mctx₂ }).run {}
+def readAllowAssignmentDiff : EqualUpToIdsM Bool :=
+  return (← read).allowAssignmentDiff
 
 structure GoalContext where
   mdecl₁ : MetavarDecl
@@ -80,7 +103,7 @@ mutual
     | .param n₁, .param n₂ =>
       return n₁ == n₂
     | .mvar m₁, .mvar m₂ => do
-      let commonMCtx := (← read).commonMCtx
+      let commonMCtx ← readCommonMCtx
       if commonMCtx.lDepth.contains m₁ || commonMCtx.lDepth.contains m₂ then
         return m₁ == m₂
       if let some m₂' := (← get).equalLMVarIds.find? m₁ then
@@ -184,8 +207,32 @@ mutual
       | .mvarId m₁, .mvarId m₂ => unassignedMVarsEqualUpToIdsCore m₁ m₂
       | .delayedAssignment dAss₁, .delayedAssignment dAss₂ =>
         unassignedMVarsEqualUpToIdsCore dAss₁.mvarIdPending dAss₂.mvarIdPending
-        -- I'm not sure whether this suffices -- do we also need to check that
-        -- the `fvars` in `dAss₁` correspond to the `fvars` in `dAss₂`?
+        -- TODO I'm not sure whether this suffices -- do we also need to check
+        -- that the `fvars` in `dAss₁` correspond to the `fvars` in `dAss₂`?
+      | .mvarId m₁, .expr e₂ => do
+        if ! (← readAllowAssignmentDiff) then
+          return false
+        let map := (← get).leftUnassignedMVarValues
+        if let some e₁ := map.find? m₁ then
+          exprsEqualUpToIdsCore e₁ e₂
+        else
+          modify λ s => {
+            s with
+            leftUnassignedMVarValues := s.leftUnassignedMVarValues.insert m₁ e₂
+          }
+          return true
+      | .expr e₁, .mvarId m₂ => do
+        if ! (← readAllowAssignmentDiff) then
+          return false
+        let map := (← get).rightUnassignedMVarValues
+        if let some e₂ := map.find? m₂ then
+          exprsEqualUpToIdsCore e₁ e₂
+        else
+          modify λ s => {
+            s with
+            rightUnassignedMVarValues := s.rightUnassignedMVarValues.insert m₂ e₁
+          }
+          return true
       | _, _ => return false
 
   unsafe def localDeclsEqualUpToIdsCore :
@@ -282,28 +329,26 @@ def tacticStatesEqualUpToIdsCore (goals₁ goals₂ : Array MVarId) :
 end EqualUpToIds
 
 def unassignedMVarsEqualUptoIds (commonMCtx mctx₁ mctx₂ : MetavarContext)
-    (mvarId₁ mvarId₂ : MVarId) : MetaM Bool := do
+    (mvarId₁ mvarId₂ : MVarId) (allowAssignmentDiff := false) : MetaM Bool :=
   EqualUpToIds.unassignedMVarsEqualUpToIdsCore mvarId₁ mvarId₂
-    |>.run commonMCtx mctx₁ mctx₂
+    |>.run commonMCtx mctx₁ mctx₂ allowAssignmentDiff
+
+def unassignedMVarsEqualUptoIds' (commonMCtx mctx₁ mctx₂ : MetavarContext)
+    (mvarId₁ mvarId₂ : MVarId) (allowAssignmentDiff := false) :
+    MetaM (Bool × EqualUpToIdsM.State) :=
+  EqualUpToIds.unassignedMVarsEqualUpToIdsCore mvarId₁ mvarId₂
+    |>.run' commonMCtx mctx₁ mctx₂ allowAssignmentDiff
 
 def tacticStatesEqualUpToIds (commonMCtx mctx₁ mctx₂ : MetavarContext)
-    (goals₁ goals₂ : Array MVarId) : MetaM Bool := do
+    (goals₁ goals₂ : Array MVarId) (allowAssignmentDiff := false) :
+    MetaM Bool :=
   EqualUpToIds.tacticStatesEqualUpToIdsCore goals₁ goals₂
-    |>.run commonMCtx mctx₁ mctx₂
+    |>.run commonMCtx mctx₁ mctx₂ allowAssignmentDiff
 
-open Lean.Elab.Tactic in
-def runTacticMCapturingPostState (t : TacticM Unit) (preState : Meta.SavedState)
-    (preGoals : List MVarId) : MetaM (Meta.SavedState × List MVarId) :=
-  withoutModifyingState do
-    let go : TacticM (Meta.SavedState × List MVarId) := do
-      preState.restore
-      t
-      pruneSolvedGoals
-      let postState ← show MetaM _ from saveState
-      let postGoals ← getGoals
-      pure (postState, postGoals)
-    go |>.run { elaborator := .anonymous, recover := false }
-       |>.run' { goals := preGoals }
-       |>.run'
+def tacticStatesEqualUpToIds' (commonMCtx mctx₁ mctx₂ : MetavarContext)
+    (goals₁ goals₂ : Array MVarId) (allowAssignmentDiff := false) :
+    MetaM (Bool × EqualUpToIdsM.State) :=
+  EqualUpToIds.tacticStatesEqualUpToIdsCore goals₁ goals₂
+    |>.run' commonMCtx mctx₁ mctx₂ allowAssignmentDiff
 
 end Aesop
