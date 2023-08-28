@@ -17,7 +17,7 @@ initialize registerTraceClass `Aesop.Util.EqualUpToIds
 namespace EqualUpToIdsM
 
 structure Context where
-  commonMCtx : MetavarContext
+  commonMCtx? : Option MetavarContext
   mctx₁ : MetavarContext
   mctx₂ : MetavarContext
   /-- Allow metavariables to be unassigned on one side of the comparison and
@@ -51,19 +51,19 @@ instance : Monad EqualUpToIdsM :=
   { inferInstanceAs (Monad EqualUpToIdsM) with }
 
 protected def EqualUpToIdsM.run' (x : EqualUpToIdsM α)
-    (commonMCtx mctx₁ mctx₂ : MetavarContext) (allowAssignmentDiff : Bool) :
-    MetaM (α × EqualUpToIdsM.State) :=
-  x { commonMCtx, mctx₁, mctx₂, allowAssignmentDiff } |>.run {}
+    (commonMCtx? : Option MetavarContext) (mctx₁ mctx₂ : MetavarContext)
+    (allowAssignmentDiff : Bool) : MetaM (α × EqualUpToIdsM.State) :=
+  x { commonMCtx?, mctx₁, mctx₂, allowAssignmentDiff } |>.run {}
 
 protected def EqualUpToIdsM.run (x : EqualUpToIdsM α)
-    (commonMCtx mctx₁ mctx₂ : MetavarContext) (allowAssignmentDiff : Bool) :
-    MetaM α :=
-  (·.fst) <$> x.run' commonMCtx mctx₁ mctx₂ allowAssignmentDiff
+    (commonMCtx? : Option MetavarContext) (mctx₁ mctx₂ : MetavarContext)
+    (allowAssignmentDiff : Bool) : MetaM α :=
+  (·.fst) <$> x.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff
 
 namespace EqualUpToIds
 
-def readCommonMCtx : EqualUpToIdsM MetavarContext :=
-  return (← read).commonMCtx
+def readCommonMCtx? : EqualUpToIdsM (Option MetavarContext) :=
+  return (← read).commonMCtx?
 
 def readMCtx₁ : EqualUpToIdsM MetavarContext :=
   return (← read).mctx₁
@@ -73,6 +73,26 @@ def readMCtx₂ : EqualUpToIdsM MetavarContext :=
 
 def readAllowAssignmentDiff : EqualUpToIdsM Bool :=
   return (← read).allowAssignmentDiff
+
+def equalCommonLMVars? (lmvarId₁ lmvarId₂ : LMVarId) :
+    EqualUpToIdsM (Option Bool) := do
+  match ← readCommonMCtx? with
+  | none => return none
+  | some mctx =>
+    if mctx.lDepth.contains lmvarId₁ || mctx.lDepth.contains lmvarId₂ then
+      return some $ lmvarId₁ == lmvarId₂
+    else
+      return none
+
+def equalCommonMVars? (mvarId₁ mvarId₂ : MVarId) :
+    EqualUpToIdsM (Option Bool) := do
+  match ← readCommonMCtx? with
+  | none => return none
+  | some mctx =>
+    if mctx.isExprMVarDeclared mvarId₁ || mctx.isExprMVarDeclared mvarId₂ then
+      return some $ mvarId₁ == mvarId₂
+    else
+      return none
 
 structure GoalContext where
   mdecl₁ : MetavarDecl
@@ -103,10 +123,9 @@ mutual
     | .param n₁, .param n₂ =>
       return n₁ == n₂
     | .mvar m₁, .mvar m₂ => do
-      let commonMCtx ← readCommonMCtx
-      if commonMCtx.lDepth.contains m₁ || commonMCtx.lDepth.contains m₂ then
-        return m₁ == m₂
-      if let some m₂' := (← get).equalLMVarIds.find? m₁ then
+      if let some result ← equalCommonLMVars? m₁ m₂ then
+        return result
+      else if let some m₂' := (← get).equalLMVarIds.find? m₁ then
         return m₂' == m₂
       else
         modify λ s => { s with equalLMVarIds := s.equalLMVarIds.insert m₁ m₂ }
@@ -278,14 +297,9 @@ mutual
   unsafe def unassignedMVarsEqualUpToIdsCore (mvarId₁ mvarId₂ : MVarId) :
       EqualUpToIdsM Bool :=
     withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing mvars {mvarId₁.name}, {mvarId₂.name}") do
-      let commonMCtx ← readCommonMCtx
-      if commonMCtx.decls.contains mvarId₁ || commonMCtx.decls.contains mvarId₂ then
-        if mvarId₁ == mvarId₂ then
-          trace[Aesop.Util.EqualUpToIds] "common mvars are identical"
-          return true
-        else
-          trace[Aesop.Util.EqualUpToIds] "common mvars are different"
-          return false
+      if let some result ← equalCommonMVars? mvarId₁ mvarId₂ then
+        trace[Aesop.Util.EqualUpToIds] "common mvars are {if result then "identical" else "different"}"
+        return result
       else if let some m₂ := (← get).equalMVarIds.find? mvarId₁ then
         if mvarId₂ == m₂ then
           trace[Aesop.Util.EqualUpToIds] "mvars already known to be equal"
@@ -328,27 +342,28 @@ def tacticStatesEqualUpToIdsCore (goals₁ goals₂ : Array MVarId) :
 
 end EqualUpToIds
 
-def unassignedMVarsEqualUptoIds (commonMCtx mctx₁ mctx₂ : MetavarContext)
-    (mvarId₁ mvarId₂ : MVarId) (allowAssignmentDiff := false) : MetaM Bool :=
+def unassignedMVarsEqualUptoIds (commonMCtx? : Option MetavarContext)
+    (mctx₁ mctx₂ : MetavarContext) (mvarId₁ mvarId₂ : MVarId)
+    (allowAssignmentDiff := false) : MetaM Bool :=
   EqualUpToIds.unassignedMVarsEqualUpToIdsCore mvarId₁ mvarId₂
-    |>.run commonMCtx mctx₁ mctx₂ allowAssignmentDiff
+    |>.run commonMCtx? mctx₁ mctx₂ allowAssignmentDiff
 
-def unassignedMVarsEqualUptoIds' (commonMCtx mctx₁ mctx₂ : MetavarContext)
-    (mvarId₁ mvarId₂ : MVarId) (allowAssignmentDiff := false) :
-    MetaM (Bool × EqualUpToIdsM.State) :=
+def unassignedMVarsEqualUptoIds' (commonMCtx? : Option MetavarContext)
+    (mctx₁ mctx₂ : MetavarContext) (mvarId₁ mvarId₂ : MVarId)
+    (allowAssignmentDiff := false) : MetaM (Bool × EqualUpToIdsM.State) :=
   EqualUpToIds.unassignedMVarsEqualUpToIdsCore mvarId₁ mvarId₂
-    |>.run' commonMCtx mctx₁ mctx₂ allowAssignmentDiff
+    |>.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff
 
-def tacticStatesEqualUpToIds (commonMCtx mctx₁ mctx₂ : MetavarContext)
-    (goals₁ goals₂ : Array MVarId) (allowAssignmentDiff := false) :
-    MetaM Bool :=
+def tacticStatesEqualUpToIds (commonMCtx? : Option MetavarContext)
+    (mctx₁ mctx₂ : MetavarContext) (goals₁ goals₂ : Array MVarId)
+    (allowAssignmentDiff := false) : MetaM Bool :=
   EqualUpToIds.tacticStatesEqualUpToIdsCore goals₁ goals₂
-    |>.run commonMCtx mctx₁ mctx₂ allowAssignmentDiff
+    |>.run commonMCtx? mctx₁ mctx₂ allowAssignmentDiff
 
-def tacticStatesEqualUpToIds' (commonMCtx mctx₁ mctx₂ : MetavarContext)
-    (goals₁ goals₂ : Array MVarId) (allowAssignmentDiff := false) :
-    MetaM (Bool × EqualUpToIdsM.State) :=
+def tacticStatesEqualUpToIds' (commonMCtx? : Option MetavarContext)
+    (mctx₁ mctx₂ : MetavarContext) (goals₁ goals₂ : Array MVarId)
+    (allowAssignmentDiff := false) : MetaM (Bool × EqualUpToIdsM.State) :=
   EqualUpToIds.tacticStatesEqualUpToIdsCore goals₁ goals₂
-    |>.run' commonMCtx mctx₁ mctx₂ allowAssignmentDiff
+    |>.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff
 
 end Aesop
