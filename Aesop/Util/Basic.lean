@@ -86,9 +86,7 @@ def getConclusionDiscrTreeKeys (type : Expr) :
 -- For a constant `d` with type `∀ (x₁, ..., xₙ), T`, returns keys that
 -- match `d * ... *` (with `n` stars).
 def getConstDiscrTreeKeys (decl : Name) : MetaM (Array (Key s)) := do
-  let (some info) ← getConst? decl
-    | throwUnknownConstant decl
-  let arity := info.type.forallArity
+  let arity := (← getConstInfo decl).type.forallArity
   let mut keys := Array.mkEmpty (arity + 1)
   keys := keys.push $ .const decl arity
   for _ in [0:arity] do
