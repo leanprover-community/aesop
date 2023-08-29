@@ -51,8 +51,8 @@ namespace RuleBuilder
 
 def checkConstIsInductive (builderName : BuilderName) (decl : Name) :
     MetaM InductiveVal := do
-  let (some info) ← getConst? decl
-    | throwError "aesop: {builderName} builder: unknown constant '{decl}'"
+  let info ← getConstInfo decl
+    <|> throwError "aesop: {builderName} builder: unknown constant '{decl}'"
   let (ConstantInfo.inductInfo info) ← pure info
     | throwError "aesop: {builderName} builder: expected '{decl}' to be an inductive type"
   return info
