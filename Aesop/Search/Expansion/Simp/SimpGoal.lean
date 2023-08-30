@@ -12,6 +12,8 @@ open Lean.Meta.Simp (UsedSimps)
 namespace Aesop
 
 -- Largely copy pasta, originally from Lean/Meta/Simp/Main.lean.
+-- TODO: Once https://github.com/leanprover/lean4/issues/2486 is fixed, we can
+-- simply wrap core's simpGoal.
 
 def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     (discharge? : Option Simp.Discharge := none)
