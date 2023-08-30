@@ -15,11 +15,8 @@ namespace Aesop
 
 def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     (discharge? : Option Simp.Discharge := none)
-    (simplifyTarget : Bool := true)
-    (fvarIdsToSimp : Array FVarId := #[])
-    (usedSimps : UsedSimps := {})
-    (disabledTheorems : HashMap FVarId Origin := {}) :
-    MetaM SimpResult :=
+    (simplifyTarget : Bool := true) (fvarIdsToSimp : Array FVarId := #[])
+    (usedSimps : UsedSimps := {}) : MetaM SimpResult :=
   mvarId.withContext do
     mvarId.checkNotAssigned `simp
     let mvarIdOld := mvarId
@@ -31,11 +28,6 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
       let localDecl ← fvarId.getDecl
       let type ← instantiateMVars localDecl.type
       let ctx := { ctx with simpTheorems := ctx.simpTheorems.eraseTheorem (.fvar localDecl.fvarId) }
-      let ctx :=
-        match disabledTheorems.find? fvarId with
-        | none => ctx
-        | some thmId =>
-          { ctx with simpTheorems := ctx.simpTheorems.eraseTheorem thmId }
       let (r, usedSimps') ← simp type ctx discharge? usedSimps
       usedSimps := usedSimps'
       match r.proof? with
@@ -70,9 +62,7 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
 
 def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
     (discharge? : Option Simp.Discharge := none)
-    (simplifyTarget : Bool := true)
-    (usedSimps : UsedSimps := {})
-    (disabledTheorems : HashMap FVarId Origin := {}) :
+    (simplifyTarget : Bool := true) (usedSimps : UsedSimps := {}) :
     MetaM SimpResult :=
   mvarId.withContext do
     let lctx ← getLCtx
@@ -82,6 +72,5 @@ def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
         continue
       fvarIdsToSimp := fvarIdsToSimp.push ldecl.fvarId
     Aesop.simpGoal mvarId ctx discharge? simplifyTarget fvarIdsToSimp usedSimps
-      disabledTheorems
 
 end Aesop
