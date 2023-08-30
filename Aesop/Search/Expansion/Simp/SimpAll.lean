@@ -32,12 +32,6 @@ private structure State where
   entries : Array Entry := #[]
   ctx : Simp.Context
   usedSimps : UsedSimps := {}
-  disabledTheorems : HashMap FVarId Origin
-    -- If `fvarId` is mapped to `origin` in this map, the simp theorem `origin`
-    -- is disabled while simplifying the hypothesis `fvarId`.
-    --
-    -- This should really be `HashMap FVarId (Array Origin)`, but for the
-    -- purposes of Aesop we only need a single disabled entry per FVarId.
 
 private abbrev M := StateRefT State MetaM
 
@@ -69,9 +63,6 @@ private partial def loop : M Bool := do
     let ctx := (← get).ctx
     -- We disable the current entry to prevent it to be simplified to `True`
     let mut simpThmsWithoutEntry := (← getSimpTheorems).eraseTheorem entry.id
-    -- Ditto for explicitly disabled entries.
-    if let (some disabledEntry) := (← get).disabledTheorems.find? entry.fvarId then
-      simpThmsWithoutEntry := simpThmsWithoutEntry.eraseTheorem disabledEntry
     let ctx := { ctx with simpTheorems := simpThmsWithoutEntry }
     let (r, usedSimps) ← simpStep (← get).mvarId entry.proof entry.type ctx (usedSimps := (← get).usedSimps)
     modify fun s => { s with usedSimps }
@@ -146,10 +137,9 @@ private def main : M SimpResult := do
     return .simplified mvarId (← get).usedSimps
 
 def simpAll (mvarId : MVarId) (ctx : Simp.Context)
-    (disabledTheorems : HashMap FVarId Origin) (usedSimps : UsedSimps := {}) :
-    MetaM SimpResult :=
+    (usedSimps : UsedSimps := {}) : MetaM SimpResult :=
   mvarId.withContext do
     mvarId.checkNotAssigned `simp_all
-    (·.fst) <$> main.run { mvarId, ctx, usedSimps, disabledTheorems }
+    (·.fst) <$> main.run { mvarId, ctx, usedSimps }
 
 end Aesop

@@ -176,7 +176,7 @@ def normSimpCore (ctx : NormSimpContext)
     let preState ← saveState
     let result ←
       if ctx.useHyps then
-        Aesop.simpAll goal ctx.toContext (disabledTheorems := {})
+        Aesop.simpAll goal ctx.toContext
       else
         let lctx ← getLCtx
         let mut simpTheorems := ctx.simpTheorems
