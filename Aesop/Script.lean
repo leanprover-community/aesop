@@ -4,6 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.RuleTac.Forward.Basic
+import Aesop.Util.Basic
+import Aesop.Util.Tactic
 import Aesop.Util.EqualUpToIds
 import Aesop.Script.ScriptBuilder
 import Aesop.Script.TacticState
@@ -186,5 +189,183 @@ where
         λ (goalPos, nestedScript) tail =>
           .focusAndSolve goalPos nestedScript tail
       return (script, tacticState)
+
+def matchGoals (postState₁ postState₂ : Meta.SavedState)
+    (goals₁ goals₂ : Array MVarId) : MetaM (Option (HashMap MVarId MVarId)) := do
+  let goals₁ ← getProperGoals postState₁ goals₁
+  let goals₂ ← getProperGoals postState₂ goals₂
+  let (equal, s) ←
+    tacticStatesEqualUpToIds' none postState₁.meta.mctx
+      postState₂.meta.mctx goals₁ goals₂ (allowAssignmentDiff := true)
+        (ignoreFVar := λ ldecl => isForwardImplDetailHypName ldecl.userName)
+      -- HACK ignoreFVar excludes the _fwd hypotheses added by forward rules.
+      -- These are supposed to be `implDetail` hypotheses, which are ignored,
+      -- but tactics using the revert/intro pattern, such as `subst`, can remove
+      -- the `implDetail` attribute from these hypotheses.
+  if ! equal then
+    return none
+  else
+    return s.equalMVarIds
+where
+  getProperGoals (state : Meta.SavedState) (goals : Array MVarId) :
+      MetaM (Array MVarId) :=
+    state.runMetaM' do
+      let (properGoals, _) ← partitionGoalsAndMVars goals
+      return properGoals.map (·.fst)
+
+namespace DynStructureM
+
+structure Context where
+  /-- The tactic invocation steps corresponding to the original unstructured
+  script, but with `MVarId` keys adjusted to fit the current `MetaM` state. This
+  state evolves during dynamic structuring and we continually update the `steps`
+  so that this map's keys refer to metavariables which exist in the current
+  `MetaM` state. -/
+  steps : PHashMap MVarId (Nat × TacticInvocation)
+  deriving Inhabited
+
+/--
+Given a bijective map `map` from new `MVarId`s to old `MVarId`s, update the
+`steps` of the context `c` such that each entry whose key is an old `MVarId` `m`
+is replaced with an entry whose key is the corresponding new `MVarId`
+`map⁻¹ m`. If any of the old `MVarId`s in `map` do not have a corresponding
+entry in `c.steps`, return `none`.
+-/
+def Context.updateMVarIds (c : Context) (map : HashMap MVarId MVarId) :
+    Context :=
+  let steps := map.fold (init := c.steps) λ steps newMVarId oldMVarId =>
+    if let (some step) := steps.find? oldMVarId then
+      steps.erase oldMVarId |>.insert newMVarId step
+    else
+      steps
+  { c with steps }
+
+end DynStructureM
+
+abbrev DynStructureM := ReaderT DynStructureM.Context MetaM
+
+def DynStructureM.run (x : DynStructureM α) (script : UnstructuredScript) :
+    MetaM α := do
+  let mut steps : PHashMap MVarId (Nat × TacticInvocation) := {}
+  for h : i in [:script.size] do
+    let step := script[i]'h.2
+    steps := steps.insert step.preGoal (i, step)
+  ReaderT.run x { steps }
+
+def withUpdatedMVarIds [MonadWithReader DynStructureM.Context m]
+    [MonadLift DynStructureM m]
+    (oldPostState newPostState : Meta.SavedState)
+    (oldPostGoals newPostGoals : Array MVarId) (onFailure : m α)
+    (onSuccess : m α) : m α := do
+  match ← matchGoals newPostState oldPostState newPostGoals oldPostGoals with
+  | some m => withReader (·.updateMVarIds m) onSuccess
+  | none => onFailure
+
+-- TODO upstream
+local instance : Nonempty Core.State :=
+  ⟨{ env := Classical.ofNonempty }⟩
+
+-- TODO upstream
+local instance : Nonempty Meta.SavedState :=
+  ⟨{ core := Classical.ofNonempty, meta := {}}⟩
+
+-- TODO upstream
+local instance [Nonempty α] [Nonempty β] : Nonempty (α × β) :=
+  ⟨Classical.ofNonempty, Classical.ofNonempty⟩
+
+partial def UnstructuredScript.toStructuredScriptDynamic
+    (preState : Meta.SavedState) (preGoal : MVarId)
+    (script : UnstructuredScript) : MetaM StructuredScript := do
+  let (some (script, _)) ← go preState #[preGoal] |>.run.run script
+    | throwError "unknown error"
+  return script
+where
+  go (preState : Meta.SavedState) (preGoals : Array MVarId) :
+      OptionT DynStructureM (StructuredScript × Meta.SavedState × Array MVarId) := do
+    goStructured preState preGoals <|> goUnstructured preState preGoals
+
+  -- TODO Array MVarId -> List MVarId?
+  -- TODO preState can be implicit in the MetaM state
+  goStructured (preState : Meta.SavedState) (preGoals : Array MVarId) :
+      OptionT DynStructureM (StructuredScript × Meta.SavedState × Array MVarId) := do
+    trace[debug] "entering goStructured with goals:{indentD $ ← preState.runMetaM' do addMessageContext $ MessageData.joinSep (preGoals.map λ g => m!"?{g.name}:{indentD $ toMessageData g}").toList "\n"}"
+    if h : preGoals.size > 0 then
+      let preGoal := preGoals[0]
+      -- Structured mode: if there's only one goal, run the corresponding step.
+      -- Otherwise focus and solve the main goal.
+      if preGoals.size = 1 then
+        let (some (_, ti)) := (← read).steps[preGoal]
+          | throwError "found no step for goal {preGoal.name}:{indentD $ ← preState.runMetaM' do addMessageContext $ toMessageData preGoal}"
+        trace[debug] "running tactics:{indentD $ toMessageData ti.tacticSeq}"
+        trace[debug] "expected post goals:{indentD $ ← ti.postState.runMetaM' do addMessageContext $ MessageData.joinSep (ti.postGoals.map λ g => m!"?{g.goal.name}:{indentD $ toMessageData g.goal}").toList "\n"}"
+        let (postState, postGoals) ←
+          try
+            runTacticsCapturingPostState ti.tacticSeq preState preGoals.toList
+          catch e =>
+            trace[debug] "tactics failed with error:{indentD e.toMessageData}"
+            failure
+        let postGoals := postGoals.toArray
+        trace[debug] "post goals:{indentD $ ← postState.runMetaM' do addMessageContext $ MessageData.joinSep (postGoals.map λ g => m!"?{g.name}:{indentD $ toMessageData g}").toList "\n"}"
+        withUpdatedMVarIds ti.postState postState
+            (ti.postGoals.map (·.goal)) postGoals
+            (onFailure := do trace[debug] "goals don't match"; failure) do
+          let (tailScript, postState, postGoals) ←
+            goStructured postState postGoals
+          let script := .onGoal 0 ti tailScript
+          return (script, postState, postGoals)
+      else
+        let (nestedScript, postState, postGoals) ←
+          goStructured preState #[preGoal]
+        let remainingPreGoals ← postState.runMetaM' $
+          preGoals[1:].toArray.filterM λ g =>
+            return ! (← g.isAssignedOrDelayedAssigned)
+        let (tailScript, postState, postGoals) ←
+          goStructured postState (postGoals ++ remainingPreGoals)
+        let script := .focusAndSolve 0 nestedScript tailScript
+        return (script, postState, postGoals)
+    else
+      return (.empty, preState, preGoals)
+
+  -- TODO deduplicate firstStep? search
+  goUnstructured (preState : Meta.SavedState) (preGoals : Array MVarId) :
+      OptionT DynStructureM (StructuredScript × Meta.SavedState × Array MVarId) := do
+    -- Unstructured mode: execute the first step according to the original
+    -- order.
+    trace[debug] "entering goUnstructured with goals:{indentD $ ← preState.runMetaM' do addMessageContext $ MessageData.joinSep (preGoals.map λ g => m!"?{g.name}:{indentD $ toMessageData g}").toList "\n"}"
+    let mut firstStep? := none
+    for h : pos in [:preGoals.size] do
+      let g := preGoals[pos]'h.2
+      if let (some (i, step)) := (← read).steps[g] then
+        if let some (pos', g', j, firstStep) := firstStep? then
+          firstStep? := some $
+            if i < j then (pos, g, i, step) else (pos', g', j, firstStep)
+        else
+          firstStep? := some (pos, g, i, step)
+      else
+        -- It's possible that a goal is solved as a side effect of some
+        -- unrelated step. So we can't expect every goal to have an associated
+        -- step.
+        continue
+    let some (goalPos, goal, _, ti) := firstStep?
+      | throwError "found no step for any of the visible goals{indentD $ ← preState.runMetaM' do addMessageContext $ toMessageData preGoals}"
+    trace[debug] "running tactics on goal {goalPos}:{indentD $ toMessageData ti.tacticSeq}"
+    trace[debug] "expected post goals:{indentD $ ← ti.postState.runMetaM' do addMessageContext $ MessageData.joinSep (ti.postGoals.map λ g => m!"?{g.goal.name}:{indentD $ toMessageData g.goal}").toList "\n"}"
+    let (postState, postGoals) ←
+      try
+        runTacticsCapturingPostState ti.tacticSeq preState [goal]
+      catch e =>
+        trace[debug] "tactic failed with error:{indentD e.toMessageData}"
+        failure
+    let postGoals := postGoals.toArray
+    trace[debug] "post goals:{indentD $ ← postState.runMetaM' do addMessageContext $ MessageData.joinSep (postGoals.map λ g => m!"?{g.name}:{indentD $ toMessageData g}").toList "\n"}"
+    withUpdatedMVarIds ti.postState postState
+        (ti.postGoals.map (·.goal)) postGoals
+        (onFailure := do trace[debug] "goals don't match"; failure) do
+      let postGoals := preGoals[:goalPos] ++ postGoals ++ preGoals[goalPos+1:]
+      let (tailScript, postState, postGoals) ← go postState postGoals
+      let script := .onGoal goalPos ti tailScript
+      return (script, postState, postGoals)
+
+-- TODO withIncRecDepth
 
 end Aesop

@@ -35,8 +35,6 @@ elab &"assert_equal_tactics "
     " { " ts₁:tacticSeq " } " " { " ts₂:tacticSeq " } " : tactic => do
   assertEqualTactics (evalTactic ts₁) (evalTactic ts₂)
 
-set_option linter.unreachableTactic false
-
 example : True := by
   assert_equal_tactics { trivial } { trivial }
   trivial
