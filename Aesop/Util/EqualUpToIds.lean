@@ -24,7 +24,9 @@ structure Context where
   assigned on the other. So when we compare two expressions and we encounter
   a metavariable `?x` in one of them and a subexpression `e` in the other (at
   the same position), we consider `?x` equal to `e`. -/
+  -- TODO we should also allow ?P x₁ ... xₙ = e
   allowAssignmentDiff : Bool
+  ignoreFVar : LocalDecl → Bool
 
 structure State where
   equalMVarIds : HashMap MVarId MVarId := {}
@@ -52,13 +54,14 @@ instance : Monad EqualUpToIdsM :=
 
 protected def EqualUpToIdsM.run' (x : EqualUpToIdsM α)
     (commonMCtx? : Option MetavarContext) (mctx₁ mctx₂ : MetavarContext)
-    (allowAssignmentDiff : Bool) : MetaM (α × EqualUpToIdsM.State) :=
-  x { commonMCtx?, mctx₁, mctx₂, allowAssignmentDiff } |>.run {}
+    (allowAssignmentDiff : Bool) (ignoreFVar : LocalDecl → Bool) :
+    MetaM (α × EqualUpToIdsM.State) :=
+  x { commonMCtx?, mctx₁, mctx₂, allowAssignmentDiff, ignoreFVar } |>.run {}
 
 protected def EqualUpToIdsM.run (x : EqualUpToIdsM α)
     (commonMCtx? : Option MetavarContext) (mctx₁ mctx₂ : MetavarContext)
-    (allowAssignmentDiff : Bool) : MetaM α :=
-  (·.fst) <$> x.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff
+    (allowAssignmentDiff : Bool) (ignoreFVar : LocalDecl → Bool) : MetaM α :=
+  (·.fst) <$> x.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff ignoreFVar
 
 namespace EqualUpToIds
 
@@ -142,9 +145,10 @@ private def namesEqualUpToMacroScopes (n₁ n₂ : Name) : Bool :=
   n₁.hasMacroScopes == n₂.hasMacroScopes &&
   n₁.eraseMacroScopes == n₂.eraseMacroScopes
 
-private def lctxDecls (lctx : LocalContext) : Array LocalDecl :=
-  lctx.foldl (init := Array.mkEmpty lctx.numIndices) λ decls d =>
-    if d.isImplementationDetail then decls else decls.push d
+private def lctxDecls (lctx : LocalContext) : EqualUpToIdsM (Array LocalDecl) := do
+  let ignoreFVar := (← read).ignoreFVar
+  return lctx.foldl (init := Array.mkEmpty lctx.numIndices) λ decls d =>
+    if d.isImplementationDetail || ignoreFVar d then decls else decls.push d
 
 namespace Unsafe
 
@@ -271,8 +275,8 @@ mutual
 
   unsafe def localContextsEqualUpToIdsCore (mdecl₁ mdecl₂ : MetavarDecl) :
       EqualUpToIdsM (Option GoalContext) := do
-    let decls₁ := lctxDecls mdecl₁.lctx
-    let decls₂ := lctxDecls mdecl₂.lctx
+    let decls₁ ← lctxDecls mdecl₁.lctx
+    let decls₂ ← lctxDecls mdecl₂.lctx
     if h : decls₁.size = decls₂.size then
       go decls₁ decls₂ h 0 { mdecl₁, mdecl₂ }
     else
@@ -344,26 +348,32 @@ end EqualUpToIds
 
 def unassignedMVarsEqualUptoIds (commonMCtx? : Option MetavarContext)
     (mctx₁ mctx₂ : MetavarContext) (mvarId₁ mvarId₂ : MVarId)
-    (allowAssignmentDiff := false) : MetaM Bool :=
+    (allowAssignmentDiff := false)
+    (ignoreFVar : LocalDecl → Bool := λ _ => false) : MetaM Bool :=
   EqualUpToIds.unassignedMVarsEqualUpToIdsCore mvarId₁ mvarId₂
-    |>.run commonMCtx? mctx₁ mctx₂ allowAssignmentDiff
+    |>.run commonMCtx? mctx₁ mctx₂ allowAssignmentDiff ignoreFVar
 
 def unassignedMVarsEqualUptoIds' (commonMCtx? : Option MetavarContext)
     (mctx₁ mctx₂ : MetavarContext) (mvarId₁ mvarId₂ : MVarId)
-    (allowAssignmentDiff := false) : MetaM (Bool × EqualUpToIdsM.State) :=
+    (allowAssignmentDiff := false)
+    (ignoreFVar : LocalDecl → Bool := λ _ => false) :
+    MetaM (Bool × EqualUpToIdsM.State) :=
   EqualUpToIds.unassignedMVarsEqualUpToIdsCore mvarId₁ mvarId₂
-    |>.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff
+    |>.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff ignoreFVar
 
 def tacticStatesEqualUpToIds (commonMCtx? : Option MetavarContext)
     (mctx₁ mctx₂ : MetavarContext) (goals₁ goals₂ : Array MVarId)
-    (allowAssignmentDiff := false) : MetaM Bool :=
+    (allowAssignmentDiff := false)
+    (ignoreFVar : LocalDecl → Bool := λ _ => false) : MetaM Bool :=
   EqualUpToIds.tacticStatesEqualUpToIdsCore goals₁ goals₂
-    |>.run commonMCtx? mctx₁ mctx₂ allowAssignmentDiff
+    |>.run commonMCtx? mctx₁ mctx₂ allowAssignmentDiff ignoreFVar
 
 def tacticStatesEqualUpToIds' (commonMCtx? : Option MetavarContext)
     (mctx₁ mctx₂ : MetavarContext) (goals₁ goals₂ : Array MVarId)
-    (allowAssignmentDiff := false) : MetaM (Bool × EqualUpToIdsM.State) :=
+    (allowAssignmentDiff := false)
+    (ignoreFVar : LocalDecl → Bool := λ _ => false) :
+    MetaM (Bool × EqualUpToIdsM.State) :=
   EqualUpToIds.tacticStatesEqualUpToIdsCore goals₁ goals₂
-    |>.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff
+    |>.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff ignoreFVar
 
 end Aesop

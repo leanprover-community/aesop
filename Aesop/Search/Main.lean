@@ -155,17 +155,30 @@ def traceScript : SearchM Q Unit := do
     let uscript ← (← getRootMVarCluster).extractScript
     if ← Check.script.steps.isEnabled then
       checkScriptSteps uscript
-    let goal ← getRootMVarId
-    let goalMVars ← goal.getMVarDependencies
-    let tacticState :=
-      { visibleGoals := #[⟨goal, goalMVars⟩], invisibleGoals := {} }
-    let script ← uscript.toStructuredScriptStatic tacticState
-    let script ← script.render
-    if options.traceScript then
-      let script ← `(tacticSeq| $script*)
-      addTryThisTacticSeqSuggestion (← getRef) script
-    if ← Check.script.isEnabled then
-      checkRenderedScript script
+    let rootGoal ← getRootMVarId
+    let rootState ← getRootMetaState
+    let script? ←
+      try
+        some <$> uscript.toStructuredScriptDynamic rootState rootGoal
+      catch e =>
+        let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
+        let tacticState :=
+          { visibleGoals := #[⟨rootGoal, rootGoalMVars⟩], invisibleGoals := ∅ }
+        let uscript ← `(tacticSeq| $(← uscript.render tacticState):tactic*)
+        if options.traceScript then
+          addTryThisTacticSeqSuggestion (← getRef) uscript
+        if ← Check.script.isEnabled then
+          throwError m!"structuring the script failed with error{indentD e.toMessageData}"
+        else
+          logWarning m!"aesop: reporting unstructured script. Structuring the script failed with error{indentD e.toMessageData}"
+          pure none
+    if let some script := script? then
+      let script ← script.render
+      if options.traceScript then
+        let script ← `(tacticSeq| $script*)
+        addTryThisTacticSeqSuggestion (← getRef) script
+      if ← Check.script.isEnabled then
+        checkRenderedScript script
   catch e =>
     logError m!"aesop: error while generating tactic script:{indentD e.toMessageData}"
 
