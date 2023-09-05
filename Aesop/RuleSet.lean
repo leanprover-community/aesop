@@ -225,7 +225,7 @@ def erase (rs : RuleSet) (f : RuleNameFilter) : RuleSet × Bool :=
       let res := {
         rs with
         ruleNames, erased, normSimpLemmas, normSimpLemmaDescrs,
-        localNormSimpLemmas
+        localNormSimpLemmas, unfoldRules
       }
       return (res, true)
 
