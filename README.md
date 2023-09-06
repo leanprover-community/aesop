@@ -694,7 +694,10 @@ attribute [-aesop] foo
 ```
 
 This will remove all rules associated with the declaration `foo` from all rule
-sets.
+sets. However, this erasing is not persistent, so the rule will reappear at the
+end of the file. This is a fundamental limitation of Lean's attribute system:
+once a declaration is tagged with an attribute, it cannot be permanently
+untagged.
 
 If you want to remove only certain rules, you can use the `erase_aesop_rules`
 command:
@@ -745,7 +748,7 @@ involved Aesop call might look like this:
 ``` text
 aesop
   (add safe foo, 10% cases Or, safe cases Empty)
-  (erase A [cases, constructors], baz)
+  (erase A, baz)
   (rule_sets [A, B])
   (options := { maxRuleApplicationDepth := 10 })
 ```
@@ -787,7 +790,12 @@ of the `erase` clause is
 (erase <rule_expr,+>)
 ```
 
-and it works exactly like the `erase_aesop_rules` command.
+and it works exactly like the `erase_aesop_rules` command. To erase all rules
+associated with `x` and `y`, write
+
+``` lean
+(erase x, y)
+```
 
 #### Selecting Rule Sets
 
