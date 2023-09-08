@@ -29,7 +29,8 @@ like this:
   This means it should remain reasonably fast even with a large rule set.
 - When called as `aesop?`, Aesop prints a tactic script that proves the goal,
   similar to `simp?`. This way you can avoid the performance penalty of running
-  Aesop all the time.
+  Aesop all the time. However, the script generation is currently not fully
+  reliable, so you may have to adjust the generated script.
 
 Aesop should be suitable for two main use cases:
 
