@@ -106,6 +106,7 @@ inductive RuleTacDescr
   | applyConst (decl     : Name) (md : TransparencyMode)
   | applyFVar  (userName : Name) (md : TransparencyMode)
   | constructors (constructorNames : Array Name) (md : TransparencyMode)
+  | neuralProvers (neuralProverName : String)
   | forwardConst (decl     : Name) (immediate : UnorderedArraySet Nat)
       (clear : Bool) (md : TransparencyMode)
   | forwardFVar  (userName : Name) (immediate : UnorderedArraySet Nat)
@@ -124,6 +125,7 @@ def isGlobal : RuleTacDescr → Bool
   | applyConst .. => true
   | applyFVar .. => false
   | constructors .. => true
+  | neuralProvers .. => true
   | forwardConst .. => true
   | forwardFVar .. => false
   | cases .. => true
