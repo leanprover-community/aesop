@@ -36,25 +36,14 @@ def RuleBuilder.neural (opts : NeuralBuilderOptions) : RuleBuilder := λ input =
     -- let tac := .neuralProvers opts.neuralProver opts.numReturnSequences
     --     opts.maxLength opts.temperature opts.numBeams
     let tac := .neuralProvers opts.neuralProver
-    -- let type := (← getConstInfo decl).type
     RuleBuilderOutput.global <$> mkResult tac
   | RuleBuilderKind.local _ _ =>
     throwError "neural rule builder does not support local hypotheses"
-    -- goal.withContext do
-    --   let tac := RuleTacDescr.applyFVar fvarUserName opts.transparency
-    --   let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
-    --   let result ← mkResult tac
-    --   return RuleBuilderOutput.local goal result
   where
     mkResult (tac : RuleTacDescr) : MetaM RuleBuilderResult :=
       return RuleBuilderResult.regular {
         builder := BuilderName.neural
         tac := tac
-        -- indexingMode := ← opts.getIndexingModeM do
-        --   if opts.indexTransparency != .reducible then
-        --     return .unindexed
-        --   else
-        --     IndexingMode.targetMatchingConclusion type
         indexingMode := ← opts.getIndexingModeM $ pure IndexingMode.unindexed
       }
 
