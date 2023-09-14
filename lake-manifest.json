@@ -4,15 +4,15 @@
  [{"git":
    {"url": "https://github.com/lean-dojo/LeanInfer.git",
     "subDir?": null,
-    "rev": "a93e2f0baf25ddea2477535dcf4c78eed6a6fdd1",
+    "rev": "ef15c38f05db7e4de200f8b46db63276e02072d1",
     "opts": {},
     "name": "LeanInfer",
-    "inputRev?": "v0.0.2",
+    "inputRev?": "v0.0.4",
     "inherited": false}},
   {"git":
    {"url": "https://github.com/leanprover/std4",
     "subDir?": null,
-    "rev": "ba5e5e3af519b4fc5221ad0fa4b2c87276f1d323",
+    "rev": "efcb1a6fe69b57b16d370ffe36551c3d21b5a53e",
     "opts": {},
     "name": "std",
     "inputRev?": "main",

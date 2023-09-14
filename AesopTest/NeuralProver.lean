@@ -16,10 +16,10 @@ structure neuralConfig where
 def conf : neuralConfig := { model_name := "onnx-leandojo-lean4-tacgen-byt5-small" }
 
 theorem foo (a: Nat) : a + 1 = Nat.succ a := by
-  aesop  
+  aesop
   -- aesop alone should be able to prove this simple theorem.
 
-  -- suggest_tactics  
+  -- suggest_tactics
   -- aesop should also be able to call LeanInfer to suggest tactics as LeanInfer is already added into the loop.
   
   -- rfl

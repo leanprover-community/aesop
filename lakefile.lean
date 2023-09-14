@@ -14,4 +14,4 @@ lean_lib AesopTest {
 }
 
 require std from git "https://github.com/leanprover/std4" @ "main"
-require LeanInfer from git "https://github.com/lean-dojo/LeanInfer.git" @ "v0.0.2"
+require LeanInfer from git "https://github.com/lean-dojo/LeanInfer.git" @ "v0.0.4"
