@@ -19,9 +19,14 @@ theorem foo (a: Nat) : a + 1 = Nat.succ a := by
   aesop
   -- aesop alone should be able to prove this simple theorem.
 
+  -- aesop? 
+  -- aesop? should be able to suggest tactics to the user,
+  -- displayed in the InfoView as LeanInfer does.
+
   -- suggest_tactics
-  -- aesop should also be able to call LeanInfer to suggest tactics as LeanInfer is already added into the loop.
+  -- aesop should also be able to call LeanInfer to suggest tactics 
+  -- as LeanInfer is already added into the loop.
   
   -- rfl
   -- sorry
-  -- both closes the proof each in a safe/unsafe way.
+  -- both closes the proof either in a safe/unsafe way.

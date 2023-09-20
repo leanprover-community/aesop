@@ -8,9 +8,9 @@ namespace Aesop.RuleTac
 
 -- Tries to apply each tactic suggested by a neural network. For each one that
 -- applies, a rule application is returned. If none applies, the tactic fails.
-def applyNeural (model: String) : RuleTac := λ input => do
+def applyNeural (model: String) (md : TransparencyMode) : RuleTac := λ input => do
   let initialState ← saveState
-  -- let generateScript := input.options.generateScript
+  let generateScript := input.options.generateScript
   if model == "onnx-leandojo-lean4-tacgen-byt5-small" then
     let iptGoal ← LeanInfer.ppTacticState [input.goal]
     let optSuggestions ← LeanInfer.generate iptGoal
@@ -21,12 +21,17 @@ def applyNeural (model: String) : RuleTac := λ input => do
       | .ok stx =>
         initialState.restore
         let tac := evalTactic stx
+        let tstx : TSyntax `tactic := {raw := stx}
         let goals ← run input.goal tac |>.run'
+        let scriptBuilder? :=
+          mkScriptBuilder? generateScript $
+            .ofTactic goals.toArray.size do
+              withAllTransparencySyntax md tstx
         let postState ← saveState
         let thisApp : RuleApplication := {
           postState := postState
           goals := goals.toArray
-          scriptBuilder? := none
+          scriptBuilder? := scriptBuilder?
         }
         return thisApp
     restoreState initialState

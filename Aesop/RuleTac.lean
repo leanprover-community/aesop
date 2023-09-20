@@ -21,7 +21,7 @@ protected def run : RuleTacDescr → RuleTacInput → MetaM RuleTacOutput
   | applyConst decl md => RuleTac.applyConst decl md
   | applyFVar userName md => RuleTac.applyFVar userName md
   | constructors cs md => RuleTac.applyConsts cs md
-  | neuralProvers nps => RuleTac.applyNeural nps
+  | neuralProvers nps md => RuleTac.applyNeural nps md
   | forwardConst decl    immediate clear md =>
     RuleTac.forwardConst decl immediate clear md
   | forwardFVar userName immediate clear md =>

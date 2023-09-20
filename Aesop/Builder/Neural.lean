@@ -24,7 +24,7 @@ instance : Inhabited NeuralBuilderOptions where
     transparency := .default
     indexTransparency := .reducible
     neuralProver := "onnx-leandojo-lean4-tacgen-byt5-small"
-    numReturnSequences := 32
+    numReturnSequences := 64
     maxLength := 256
     temperature := 1.0
     numBeams := 1
@@ -35,7 +35,7 @@ def RuleBuilder.neural (opts : NeuralBuilderOptions) : RuleBuilder := λ input =
   | RuleBuilderKind.global _ => do
     -- let tac := .neuralProvers opts.neuralProver opts.numReturnSequences
     --     opts.maxLength opts.temperature opts.numBeams
-    let tac := .neuralProvers opts.neuralProver
+    let tac := .neuralProvers opts.neuralProver opts.transparency
     RuleBuilderOutput.global <$> mkResult tac
   | RuleBuilderKind.local _ _ =>
     throwError "neural rule builder does not support local hypotheses"
