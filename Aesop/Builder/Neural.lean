@@ -33,8 +33,6 @@ instance : Inhabited NeuralBuilderOptions where
 def RuleBuilder.neural (opts : NeuralBuilderOptions) : RuleBuilder := λ input =>
   match input.kind with
   | RuleBuilderKind.global _ => do
-    -- let tac := .neuralProvers opts.neuralProver opts.numReturnSequences
-    --     opts.maxLength opts.temperature opts.numBeams
     let tac := .neuralProvers opts.neuralProver opts.transparency
     RuleBuilderOutput.global <$> mkResult tac
   | RuleBuilderKind.local _ _ =>

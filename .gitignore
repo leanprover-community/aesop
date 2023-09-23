@@ -1,5 +1,3 @@
 /build/
 /tests/*.produced
 /lake-packages
-
-onnx-leandojo-lean4-tacgen-byt5-small/
