@@ -1,11 +1,12 @@
-{"version": 5,
+{"version": 6,
  "packagesDir": "lake-packages",
  "packages":
  [{"git":
-   {"url": "https://github.com/leanprover/std4",
+   {"url": "https://github.com/nomeata/std4",
     "subDir?": null,
-    "rev": "49353fa54abdac7221fe27f7b57a6ed9ff559d5c",
+    "rev": "1ac8a88bf46ad81893d62677811941052880f074",
     "opts": {},
     "name": "std",
-    "inputRev?": "main",
-    "inherited": false}}]}
+    "inputRev?": "lean-pr-testing-2577",
+    "inherited": false}}],
+ "name": "aesop"}

@@ -93,21 +93,38 @@ def getConstDiscrTreeKeys (decl : Name) : MetaM (Array (Key s)) := do
     keys := keys.push $ .star
   return keys
 
-def isEmptyTrie : Trie α s → Bool
-  | .node vs children => vs.isEmpty && children.isEmpty
+partial def isEmptyTrie : Trie α s → Bool
+  | .empty => True
+  | .values vs t => vs.isEmpty && isEmptyTrie t
+  | .path _ks t => isEmptyTrie t
+  | .branch cs => cs.all fun (_, t) => isEmptyTrie t
 
 @[specialize]
 private partial def filterTrieM [Monad m] [Inhabited σ] (f : σ → α → m σ)
     (p : α → m (ULift Bool)) (init : σ) : Trie α s → m (Trie α s × σ)
-  | .node vs children => do
+  | .empty =>
+    return (.empty, init)
+  | .values vs t => do
     let (vs, acc) ← vs.foldlM (init := (#[], init)) λ (vs, acc) v => do
       if (← p v).down then
         return (vs.push v, acc)
       else
         return (vs, ← f acc v)
-    let (children, acc) ← go acc 0 children
+    let (t, acc) ← filterTrieM f p acc t
+    if vs.isEmpty then
+      return (t, acc)
+    else
+      return (.values vs t, acc)
+  | .path ks t => do
+    let (t, acc) ← filterTrieM f p init t
+    return (.path ks t, acc)
+  | .branch children => do
+    let (children, acc) ← go init 0 children
     let children := children.filter λ (_, c) => ! isEmptyTrie c
-    return (.node vs children, acc)
+    if children.isEmpty then
+      return (.empty, acc)
+    else
+      return (.branch children, acc)
   where
     go (acc : σ) (i : Nat) (children : Array (Key s × Trie α s)) :
         m (Array (Key s × Trie α s) × σ) := do
