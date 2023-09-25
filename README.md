@@ -14,7 +14,7 @@ This tool is in its alpha stage and we are actively working to further enhance i
 
 A direct `lake build` in this directory should suffice. 
 
-To quickly test its success, write a simple theorem and try to prove it `by aesop`. If the goal is closed (i.e., `No goals` displayed in the InfoView), `aesop` is likely to have been properly built. Then replace `by aesop` with `by suggest_tactics`. If a list of tactics is shown under `Tactic suggestions` in the InfoView while the goal is not closed, the LeanInfer part is successfully built as well. For the first time, should it ask you to download the model by running `suggest_tactics!`, following it will automatically download the model to `~/.cache/lean_infer/` by default, with the path overridable by setting the `LEAN_INFER_CACHE_DIR` environment variable. A simple guide of this testing process is available [here](./AesopTest/NeuralProver.lean) as well.
+To quickly test its success, write a simple theorem and try to prove it `by aesop`. If the goal is closed (i.e., `No goals` displayed in the InfoView), `aesop` is likely to have been properly built. Then replace `by aesop` with `by suggest_tactics`. If a list of tactics is shown under `Tactic suggestions` in the InfoView while the goal is not closed, the LeanInfer part is successfully built as well. For the first time, should it ask you to download the model by running `suggest_tactics!`, following it will automatically download the model to `~/.cache/lean_infer/` by default, with the path overridable by setting the `LEAN_INFER_CACHE_DIR` environment variable. A simple guide of this testing process is available [here](./AesopTest/NeuralCheck.lean) as well.
 
 ## Usage
 
