@@ -2,7 +2,7 @@ import Lake
 
 open Lake DSL
 
-package aesop {
+package llmaesop {
   precompileModules := false -- breaks mathlib cache
   moreLinkArgs := #["-L./lake-packages/LeanInfer/build/lib", "-lonnxruntime", "-lstdc++"]
 }
