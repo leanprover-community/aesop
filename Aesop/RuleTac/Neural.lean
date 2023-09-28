@@ -16,8 +16,8 @@ def applyNeural (model: String) (md : TransparencyMode) : RuleTac := λ input =>
     let optSuggestions ← LeanInfer.generate iptGoal
     let suggestions := optSuggestions.map (·.1)
     let apps ← suggestions.filterMapM λ tacticStr => do
-      if tacticStr == "sorry" then return none
-      if tacticStr == "admit" then return none
+      if tacticStr.containsSubstr "sorry" then return none
+      if tacticStr.containsSubstr "admit" then return none
       match Parser.runParserCategory (← getEnv) `tactic tacticStr (fileName := "<stdin>") with
       | .error _ => return none
       | .ok stx =>
