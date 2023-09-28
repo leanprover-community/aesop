@@ -21,9 +21,14 @@ def applyNeural (model: String) (md : TransparencyMode) : RuleTac := λ input =>
       | .ok stx =>
         try 
           initialState.restore
-          let tac := evalTactic stx
+          let tac := commitIfNoEx $ evalTactic stx
           -- let tstx : TSyntax `tactic := {raw := stx}
           let goals ← run input.goal tac |>.run'
+          let pf? ← getExprMVarAssignment? input.goal
+          if pf?.isSome then
+            if (← instantiateMVars pf?.get!) |>.hasSorry then 
+              initialState.restore
+              return none
           -- let scriptBuilder? :=
           --   mkScriptBuilder? generateScript $
           --     .ofTactic goals.toArray.size do
@@ -45,3 +50,7 @@ def applyNeural (model: String) (md : TransparencyMode) : RuleTac := λ input =>
     throwError "unknown neural network model: {model}"
 
 end RuleTac
+
+          
+
+          

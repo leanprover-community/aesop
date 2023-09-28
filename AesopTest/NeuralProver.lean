@@ -4,6 +4,7 @@ import Aesop
 -- set_option trace.aesop.tree true
 -- set_option trace.aesop true  
 -- all three flags are for debugging purpose, not necessarily needed.
+set_option maxHeartbeats 0 -- disable timeout
 
 section simpleTest
 
