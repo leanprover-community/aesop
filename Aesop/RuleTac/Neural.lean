@@ -23,8 +23,7 @@ def applyNeural (model: String) (md : TransparencyMode) : RuleTac := λ input =>
       | .ok stx =>
         try 
           initialState.restore
-          -- let tac := evalTactic stx
-          let tac := commitIfNoEx $ evalTactic stx          
+          let tac := commitIfNoEx $ evalTactic stx
           -- let tstx : TSyntax `tactic := {raw := stx}
           let goals ← run input.goal tac |>.run'
           let some pf ← getExprMVarAssignment? input.goal | unreachable!
