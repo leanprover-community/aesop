@@ -270,30 +270,6 @@ def applicableSafeRules (rs : RuleSet) (goal : MVarId) :
   rs.safeRules.applicableRules (ord := ⟨Rule.compareByPriorityThenName⟩) goal
     (!rs.isErased ·.name)
 
-def foldM [Monad m] (rs : RuleSet) (f : σ → RuleSetMember → m σ) (init : σ) :
-    m σ := do
-  let mut s := init
-  s ← rs.normRules.foldM            (init := s) λ s r => go s (.normRule r)
-  s ← rs.safeRules.foldM            (init := s) λ s r => go s (.safeRule r)
-  s ← rs.unsafeRules.foldM          (init := s) λ s r => go s (.unsafeRule r)
-  s ← rs.normSimpLemmaDescrs.foldlM (init := s) λ s n es =>
-        f s (.normSimpRule { name := n, entries := es })
-        -- Erased rules are removed from `normSimpLemmaDescrs`, so we do not
-        -- need to filter here. Same for the next steps.
-  s ← rs.localNormSimpLemmas.foldlM (init := s) λ s r =>
-    f s (.localNormSimpRule r)
-  s ← rs.unfoldRules.foldlM (init := s) λ s decl unfoldThm? =>
-    f s (.unfoldRule { decl, unfoldThm? })
-  return s
-  where
-    @[inline]
-    go (s : σ) (r : RuleSetMember) : m σ :=
-      if rs.isErased r.name then pure s else f s r
-
-@[inline]
-def fold (rs : RuleSet) (f : σ → RuleSetMember → σ) (init : σ) : σ :=
-  Id.run $ rs.foldM f init
-
 end RuleSet
 
 
