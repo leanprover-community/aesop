@@ -1,3 +1,4 @@
+# [Temporarily disable LeanInfer cloud build]
 # Aesop-LeanInfer
 
 Aesop-LeanInfer is an enhanced version of [Aesop](https://github.com/JLimperg/aesop) (Automated Extensible Search for Obvious Proofs), a proof search tactic for Lean 4 similar to Isabelle's `auto`. In addition to the original Aesop, this version adds a new `RuleBuilder` and its corresponding `RuleTac`, which together enable fast plugin of machine learning models to assist with the proof search process, by seamlessly incorporating [LeanInfer](https://github.com/lean-dojo/LeanInfer)'s tactic suggestion feature into Aesop's workflow. 
