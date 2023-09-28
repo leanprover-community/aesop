@@ -43,13 +43,14 @@ def getRuleSetExtension (rsName : RuleSetName) : m RuleSetExtension := do
 
 def getRuleSet (rsName : RuleSetName) (includeGlobalSimpTheorems : Bool) :
     CoreM RuleSet := do
-  let rs := (← getRuleSetExtension rsName).getState (← getEnv)
+  let mut rs := (← getRuleSetExtension rsName).getState (← getEnv)
   if includeGlobalSimpTheorems && rsName == defaultRuleSetName then
-    let normSimpLemmas :=
-      SimpTheorems.merge (← Meta.getSimpTheorems) rs.normSimpLemmas
-    return { rs with normSimpLemmas }
-  else
-    return rs
+    rs := { rs with
+      simpAttrNormSimpLemmas :=
+        rs.simpAttrNormSimpLemmas.push (`_, (← Meta.getSimpTheorems))
+        |>.qsort (λ (x, _) (y, _) => x.quickLt y)
+    }
+  return rs
 
 def getRuleSets (rsNames : Array RuleSetName)
     (includeGlobalSimpTheorems : Bool) : CoreM RuleSets :=
