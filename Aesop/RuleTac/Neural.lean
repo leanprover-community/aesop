@@ -16,8 +16,6 @@ def applyNeural (model: String) (md : TransparencyMode) : RuleTac := λ input =>
     let optSuggestions ← LeanInfer.generate iptGoal
     let suggestions := optSuggestions.map (·.1)
     let apps ← suggestions.filterMapM λ tacticStr => do
-      if tacticStr.containsSubstr "sorry" then return none
-      if tacticStr.containsSubstr "admit" then return none
       match Parser.runParserCategory (← getEnv) `tactic tacticStr (fileName := "<stdin>") with
       | .error _ => return none
       | .ok stx =>
@@ -26,10 +24,11 @@ def applyNeural (model: String) (md : TransparencyMode) : RuleTac := λ input =>
           let tac := commitIfNoEx $ evalTactic stx
           -- let tstx : TSyntax `tactic := {raw := stx}
           let goals ← run input.goal tac |>.run'
-          let some pf ← getExprMVarAssignment? input.goal | unreachable!
-          if (← instantiateMVars pf) |>.hasSorry then 
-            initialState.restore
-            return none
+          let pf? ← getExprMVarAssignment? input.goal
+          if pf?.isSome then
+            if (← instantiateMVars pf?.get!) |>.hasSorry then 
+              initialState.restore
+              return none
           -- let scriptBuilder? :=
           --   mkScriptBuilder? generateScript $
           --     .ofTactic goals.toArray.size do
