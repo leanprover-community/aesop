@@ -27,8 +27,7 @@ def applyNeural (model: String) (md : TransparencyMode) : RuleTac := λ input =>
           -- let tstx : TSyntax `tactic := {raw := stx}
           let goals ← run input.goal tac |>.run'
           let some pf ← getExprMVarAssignment? input.goal | unreachable!
-          let pf ← instantiateMVars pf
-          if pf.hasSorry then 
+          if (← instantiateMVars pf) |>.hasSorry then 
             return none
           -- let scriptBuilder? :=
           --   mkScriptBuilder? generateScript $
