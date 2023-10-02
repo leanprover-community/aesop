@@ -106,6 +106,10 @@ structure Options where
   as a `Try this:` suggestion.
   -/
   traceScript := false
+  /--
+  Enable the builtin `unfold` normalisation rule.
+  -/
+  enableUnfold := true
   deriving Inhabited, BEq, Repr
 
 /--

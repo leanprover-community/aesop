@@ -249,10 +249,7 @@ def checkedNormSimpCore (ctx : NormSimpContext)
 
 def normSimp (ctx : NormSimpContext) (localSimpRules : Array LocalNormSimpRule)
     (goal : MVarId) (goalMVars : HashSet MVarId) (generateScript : Bool) :
-    ProfileT MetaM NormRuleResult := do
-  if ! ctx.enabled then
-    aesop_trace[steps] "norm simp is disabled (simp_options := \{ ..., enabled := false })"
-    return .failed none
+    ProfileT MetaM NormRuleResult :=
   profiling
     (checkedNormSimpCore ctx localSimpRules goal goalMVars generateScript)
     λ _ elapsed => recordRuleProfile
@@ -355,12 +352,19 @@ def NormStep.runPostSimpRules (options : Options')
 
 def NormStep.unfold (rs : RuleSet) (options : Options')
     (mvars : HashSet MVarId) : NormStep
-  | goal, _, _ =>
-    normUnfold rs.unfoldRules goal mvars options.generateScript
+  | goal, _, _ => do
+    if options.enableUnfold then
+      normUnfold rs.unfoldRules goal mvars options.generateScript
+    else
+      aesop_trace[steps] "norm unfold is disabled (options := \{ ..., enableUnfold := false })"
+      return .failed none
 
 def NormStep.simp (rs : RuleSet) (ctx : NormSimpContext) (options : Options')
     (mvars : HashSet MVarId) : NormStep
-  | goal, _, _ =>
+  | goal, _, _ => do
+    if ! ctx.enabled then
+      aesop_trace[steps] "norm simp is disabled (simp_options := \{ ..., enabled := false })"
+      return .failed none
     normSimp ctx rs.localNormSimpLemmas goal mvars options.generateScript
 
 partial def normalizeGoalMVar (rs : RuleSet) (normSimpContext : NormSimpContext)
