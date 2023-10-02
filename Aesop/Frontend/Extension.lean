@@ -100,7 +100,9 @@ def eraseRules (rsf : RuleSetNameFilter) (rf : RuleNameFilter) (check : Bool) :
   where
     go (anyErased : Bool) (ext : RuleSetExtension) : m Bool := do
       let env ← getEnv
-      let (rs, rsErased) := ext.getState env |>.erase rf
+      let rs := ext.getState env
+      setEnv $ ext.modifyState env λ _ => ∅ -- This ensures that `rs` is used linearly.
+      let (rs, rsErased) := rs.erase rf
       setEnv $ ext.modifyState env λ _ => rs
       return anyErased || rsErased
 
