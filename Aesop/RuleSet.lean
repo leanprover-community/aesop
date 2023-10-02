@@ -122,7 +122,7 @@ def trace (rs : RuleSet) (traceOpt : TraceOption) : CoreM Unit := do
     traceSimpTheorems rs.normSimpLemmas traceOpt
   withConstAesopTraceNode traceOpt (return "Normalisation simp theorems inherited from simp attributes") do
     rs.simpAttrNormSimpLemmas.forM λ (name, simpTheorems) =>
-      withConstAesopTraceNode traceOpt (return m!"{name}:") do
+      withConstAesopTraceNode traceOpt (return m!"Simp set {printSimpSetName name}:") do
         traceSimpTheorems simpTheorems traceOpt
   withConstAesopTraceNode traceOpt (return "Local normalisation simp theorems") do
     for r in rs.localNormSimpLemmas.map (·.fvarUserName.toString) |>.qsortOrd do
@@ -130,6 +130,10 @@ def trace (rs : RuleSet) (traceOpt : TraceOption) : CoreM Unit := do
   withConstAesopTraceNode traceOpt (return "Constants to unfold") do
     for r in rs.unfoldRules.toArray.map (·.fst.toString) |>.qsortOrd do
       aesop_trace![traceOpt] r
+where
+  printSimpSetName : Name → String
+    | `_ => "<default>"
+    | n => toString n
 
 def empty : RuleSet where
   normRules := {}

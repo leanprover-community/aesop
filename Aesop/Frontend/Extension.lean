@@ -47,7 +47,7 @@ def getRuleSet (rsName : RuleSetName) (includeGlobalSimpTheorems : Bool) :
   if includeGlobalSimpTheorems && rsName == defaultRuleSetName then
     rs := { rs with
       simpAttrNormSimpLemmas :=
-        rs.simpAttrNormSimpLemmas.push (`_, (← Meta.getSimpTheorems))
+        rs.simpAttrNormSimpLemmas.push (`_, ← Meta.getSimpTheorems)
         |>.qsort (λ (x, _) (y, _) => x.quickLt y)
     }
   return rs
