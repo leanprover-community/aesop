@@ -50,7 +50,7 @@ private def destructProductHyp (goal : MVarId) (hyp : FVarId)
       goal.withContext $ check prf
       let [goal] ← goal.apply prf
         | throwError "destructProducts: apply did not return exactly one goal"
-      discard $ goal.introN (genHyps.size - 1)
+      let (_, goal) ← goal.introN (genHyps.size - 1)
       let (_, goal) ← goal.introN 2
       goal.clear hyp
 
