@@ -16,7 +16,24 @@ own extension.
 -/
 abbrev RuleSetExtension := SimpleScopedEnvExtension RuleSetMember RuleSet
 
-initialize aesopExtensionsMapRef : IO.Ref (HashMap Name RuleSetExtension) ←
+/--
+Structure containing information about all declared Aesop rule sets.
+-/
+structure DeclaredRuleSets where
+  ruleSets : HashMap Name RuleSetExtension
+  defaultRuleSets : NameSet
+  deriving Inhabited
+
+instance : EmptyCollection DeclaredRuleSets :=
+  ⟨∅, ∅⟩
+
+initialize declaredRuleSetsRef : IO.Ref DeclaredRuleSets ←
   IO.mkRef ∅
+
+def getDeclaredRuleSets : IO (HashMap RuleSetName RuleSetExtension) :=
+  return (← declaredRuleSetsRef.get).ruleSets
+
+def getDefaultRuleSetNames : IO NameSet :=
+  return (← declaredRuleSetsRef.get).defaultRuleSets
 
 end Aesop

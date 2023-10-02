@@ -16,12 +16,20 @@ def extensionDescr (rsName : RuleSetName) :
   addEntry rs r := rs.add r
   initial := ∅
 
-def declareRuleSetUnchecked (rsName : RuleSetName) : IO Unit := do
+def declareRuleSetUnchecked (rsName : RuleSetName) (isDefault : Bool) :
+    IO Unit := do
   let ext ← registerSimpleScopedEnvExtension $ extensionDescr rsName
-  aesopExtensionsMapRef.modify (·.insert rsName ext)
+  declaredRuleSetsRef.modify λ rs =>
+    let ruleSets := rs.ruleSets.insert rsName ext
+    let defaultRuleSets :=
+      if isDefault then
+        rs.defaultRuleSets.insert rsName
+      else
+        rs.defaultRuleSets
+    { ruleSets, defaultRuleSets }
 
 def isRuleSetDeclared (rsName : RuleSetName) : IO Bool :=
-  return (← aesopExtensionsMapRef.get).contains rsName
+  return (← getDeclaredRuleSets).contains rsName
 
 variable [Monad m] [MonadError m] [MonadLiftT IO m]
   [MonadLiftT (ST IO.RealWorld) m] [MonadEnv m] [MonadResolveName m]
@@ -30,14 +38,15 @@ def checkRuleSetNotDeclared (rsName : RuleSetName) : m Unit := do
   if ← isRuleSetDeclared rsName then
     throwError "rule set '{rsName}' already exists"
 
-def declareRuleSet (rsName : RuleSetName) : m Unit := do
+def declareRuleSet (rsName : RuleSetName) (isDefault : Bool) : m Unit := do
   checkRuleSetNotDeclared rsName
-  declareRuleSetUnchecked rsName
+  declareRuleSetUnchecked rsName isDefault
 
-initialize builtinRuleSetNames.forM declareRuleSetUnchecked
+initialize
+  builtinRuleSetNames.forM (declareRuleSetUnchecked (isDefault := true))
 
 def getRuleSetExtension (rsName : RuleSetName) : m RuleSetExtension := do
-  let (some ext) := (← aesopExtensionsMapRef.get).find? rsName
+  let (some ext) := (← getDeclaredRuleSets).find? rsName
     | throwError "no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.\n   Declared rule sets are not visible in the current file; they only become visible once you import the declaring file.)"
   return ext
 
@@ -52,14 +61,14 @@ def getRuleSet (rsName : RuleSetName) (includeGlobalSimpTheorems : Bool) :
     }
   return rs
 
-def getRuleSets (rsNames : Array RuleSetName)
+def getRuleSets (rsNames : NameSet)
     (includeGlobalSimpTheorems : Bool) : CoreM RuleSets :=
-  rsNames.foldlM (init := ∅) λ rss rsName => do
+  rsNames.foldM (init := ∅) λ rss rsName => do
     let rs ← getRuleSet rsName includeGlobalSimpTheorems
     return rss.addRuleSet rsName rs
 
-def getDefaultRuleSets (includeGlobalSimpTheorems : Bool) : CoreM RuleSets :=
-  getRuleSets defaultEnabledRuleSetNames includeGlobalSimpTheorems
+def getDefaultRuleSets (includeGlobalSimpTheorems : Bool) : CoreM RuleSets := do
+  getRuleSets (← getDefaultRuleSetNames) includeGlobalSimpTheorems
 
 def getDefaultRuleSet (includeGlobalSimpTheorems : Bool) (options : Options) :
     CoreM RuleSet :=
@@ -67,7 +76,7 @@ def getDefaultRuleSet (includeGlobalSimpTheorems : Bool) (options : Options) :
     options
 
 def getAllRuleSets (includeGlobalSimpTheorems : Bool) : CoreM RuleSets := do
-  (← aesopExtensionsMapRef.get).foldM (init := ∅) λ rss rsName _ =>
+  (← getDeclaredRuleSets).foldM (init := ∅) λ rss rsName _ =>
     return rss.addRuleSet rsName (← getRuleSet rsName includeGlobalSimpTheorems)
 
 def addRuleUnchecked (rsName : RuleSetName) (r : RuleSetMember)
@@ -88,7 +97,7 @@ def eraseRules (rsf : RuleSetNameFilter) (rf : RuleNameFilter) (check : Bool) :
   match rsf.matchedRuleSetNames with
   | none =>
     let anyErased ←
-      (← aesopExtensionsMapRef.get).foldM (init := false) λ b _ ext => go b ext
+      (← getDeclaredRuleSets).foldM (init := false) λ b _ ext => go b ext
     if check && ! anyErased then
       throwError "'{rf.ident.name}' is not registered (with the given features) in any rule set."
   | some rsNames =>

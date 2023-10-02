@@ -5,16 +5,25 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Frontend.Attribute
+import Aesop.Frontend.Basic
 
-open Lean
+open Lean Lean.Elab Lean.Elab.Command
 
 namespace Aesop.Frontend.Parser
 
-open Elab.Command in
-elab "declare_aesop_rule_sets " "[" ids:ident,+,? "]" : command => do
-  let rsNames := (ids : Array Ident).map (·.getId)
-  rsNames.forM checkRuleSetNotDeclared
-  elabCommand $ ← `(initialize ($(quote rsNames).forM declareRuleSetUnchecked))
+syntax (name := declareAesopRuleSets)
+  "declare_aesop_rule_sets " "[" ident,+,? "]"
+  ("(" &"default" " := " Aesop.bool_lit ")")? : command
+
+@[command_elab declareAesopRuleSets]
+def elabDeclareAesopRuleSets : CommandElab
+  | `(command| declare_aesop_rule_sets [ $ids:ident,* ]
+               $[(default := $dflt?:Aesop.bool_lit)]?) => do
+    let rsNames := (ids : Array Ident).map (·.getId)
+    let dflt := (← dflt?.mapM (elabBoolLit ·)).getD false
+    rsNames.forM checkRuleSetNotDeclared
+    elabCommand $ ← `(initialize ($(quote rsNames).forM $ declareRuleSetUnchecked (isDefault := $(quote dflt))))
+  | _ => throwUnsupportedSyntax
 
 elab "erase_aesop_rules " "[" es:Aesop.rule_expr,* "]" : command => do
   let filters ← (es : Array _).mapM λ e => do
@@ -25,7 +34,6 @@ elab "erase_aesop_rules " "[" es:Aesop.rule_expr,* "]" : command => do
     for (rsFilter, rFilter) in fs do
       eraseRules rsFilter rFilter (check := true)
 
-open Lean.Elab.Command in
 elab "#aesop_rules" : command => do
   liftTermElabM do
     let rss ← getAllRuleSets (includeGlobalSimpTheorems := true)

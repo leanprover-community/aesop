@@ -341,8 +341,6 @@ def localRuleSetName : RuleSetName := `local
 def builtinRuleSetNames : Array RuleSetName :=
   #[defaultRuleSetName, builtinRuleSetName, localRuleSetName]
 
-def defaultEnabledRuleSetNames := builtinRuleSetNames
-
 def RuleSetName.isReserved (n : RuleSetName) : Bool :=
   builtinRuleSetNames.contains n
 
