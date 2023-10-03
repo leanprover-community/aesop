@@ -1,3 +1,4 @@
 /build/
 /tests/*.produced
 /lake-packages
+/lakefile.olean

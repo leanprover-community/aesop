@@ -1,4 +1,4 @@
-tests/IntrosWhnfPanic.lean:15:17: error: expected term
+tests/IntrosWhnfPanic.lean:15:16: error: unexpected token '\'; expected term
 tests/IntrosWhnfPanic.lean:14:26: error: unsolved goals
 ι : Type u
 V : ι → Type v
