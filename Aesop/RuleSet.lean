@@ -324,8 +324,8 @@ def applicableSafeRules (rs : RuleSet) (goal : MVarId) :
 
 def globalNormSimpTheorems (rs : RuleSet) : SimpTheoremsArray :=
   Array.mkEmpty (rs.simpAttrNormSimpLemmas.size + 1)
-    |>.push rs.normSimpLemmas
     |>.append (rs.simpAttrNormSimpLemmas.map (·.snd))
+    |>.push rs.normSimpLemmas
 
 end RuleSet
 
