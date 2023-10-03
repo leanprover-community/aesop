@@ -561,11 +561,12 @@ To override this behaviour, you can write `(apply (transparency! := default))`
 Rule sets are declared with the command
 
 ``` lean
-declare_aesop_rule_sets [r₁, ..., rₙ]
+declare_aesop_rule_sets [r₁, ..., rₙ] (default := <bool>)
 ```
 
 where the `rᵢ` are arbitrary names. To avoid clashes, pick names in the
-namespace of your package.
+namespace of your package. Setting `default := true` makes the rule set active
+by default. The `default` clause can be omitted and defaults to `false`.
 
 Within a rule set, rules are identified by their name, builder and phase
 (safe/unsafe/norm). This means you can add the same declaration as multiple
@@ -576,10 +577,11 @@ Rules can appear in multiple rule sets, but in this case you should make sure
 that they have the same priority and use the same builder options. Otherwise,
 Aesop will consider these rules the same and arbitrarily pick one.
 
-By default, the `aesop` tactic uses the `builtin` and `default` rule sets. The
-`builtin` set contains built-in rules for handling various constructions (see
-below). The `default` set contains rules which were added by Aesop users without
-specifying a rule set.
+Out of the box, Aesop uses the default rule sets `builtin`, `default` and
+`local`. The `builtin` set contains built-in rules for handling various
+constructions (see below). The `default` set contains rules which were added by
+Aesop users without specifying a rule set. The `local` set contains rules from
+`(add ...)` clauses.
 
 ### The `@[aesop]` Attribute
 
