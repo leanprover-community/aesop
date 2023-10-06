@@ -2,6 +2,14 @@
  "packagesDir": "lake-packages",
  "packages":
  [{"git":
+   {"url": "https://github.com/lean-dojo/LeanInfer.git",
+    "subDir?": null,
+    "rev": "ca2b011b6fc564740b6d1170ea1bb5d307eb81d5",
+    "opts": {},
+    "name": "LeanInfer",
+    "inputRev?": "peiyang-dev",
+    "inherited": false}},
+  {"git":
    {"url": "https://github.com/leanprover/std4",
     "subDir?": null,
     "rev": "f2df4ab8c0726fce3bafb73a5727336b0c3120ea",
