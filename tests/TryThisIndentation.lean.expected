@@ -1,0 +1,6 @@
+Try this:
+  intro a_1 a_2
+  simp_all only [ne_eq, List.mem_cons, or_self, not_false_eq_true]
+Try this:
+  rename_i a_1 a_2
+  simp_all only [ne_eq, List.mem_cons, or_self, not_false_eq_true]

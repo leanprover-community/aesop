@@ -165,7 +165,7 @@ def traceScript : SearchM Q Unit := do
     let script ← script.render tacticState
     if options.traceScript then
       let script ← `(tacticSeq| $script*)
-      Std.Tactic.TryThis.addSuggestion (← getRef) script
+      addTryThisTacticSeqSuggestion (← getRef) script
     if ← Check.script.isEnabled then
       checkRenderedScript script
   catch e =>
