@@ -17,7 +17,7 @@ theorem Mem.split [DecidableEq α] (xs : List α) (v : α) (h : v ∈ xs)
     have dec : Decidable (x = v) := inferInstance
     cases dec
     case isFalse no =>
-      aesop (options := { terminal := true })
+      aesop (options := { terminal := true }) (erase Aesop.BuiltinRules.ext)
     case isTrue yes =>
       apply Exists.intro []
       apply Exists.intro xs

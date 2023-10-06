@@ -109,6 +109,10 @@ end Option
 
 namespace List
 
+-- The `ext` rule for lists says that `l₁ = l₂ ↔ (∀ a, a ∈ l₁ ↔ a ∈ l₂)`. This
+-- is not particularly helpful for this file.
+attribute [-aesop] Aesop.BuiltinRules.ext
+
 attribute [simp] map List.bind
 
 instance : Pure List where
