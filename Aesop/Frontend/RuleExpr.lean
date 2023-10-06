@@ -355,17 +355,12 @@ def constructors : BuilderOptions ConstructorsBuilderOptions where
         some opts
     | _, _ => none
 
-def neural : BuilderOptions NeuralBuilderOptions where
+def neural : BuilderOptions RegularBuilderOptions where
   builderName := .regular .neural
   init := default
   add
     | opts, .index indexingMode? => some { opts with indexingMode? }
-    | opts, .transparency transparency alsoForIndex =>
-      let opts := { opts with transparency }
-      if alsoForIndex then
-        some { opts with indexTransparency := transparency }
-      else
-        some opts
+    | opts, .transparency _ _ => some opts
     | _, _ => none
 
 end BuilderOptions
@@ -388,7 +383,7 @@ inductive Builder
   | constructors (opts : ConstructorsBuilderOptions)
   | forward (opts : ForwardBuilderOptions)
   | cases (opts : CasesBuilderOptions)
-  | neural (opts: NeuralBuilderOptions)
+  | neural (opts: RegularBuilderOptions)
   | «default»
   deriving Inhabited
 

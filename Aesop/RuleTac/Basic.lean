@@ -106,7 +106,7 @@ inductive RuleTacDescr
   | applyConst (decl     : Name) (md : TransparencyMode)
   | applyFVar  (userName : Name) (md : TransparencyMode)
   | constructors (constructorNames : Array Name) (md : TransparencyMode)
-  | neuralProvers (neuralProverName : String) (md : TransparencyMode)
+  | neuralProvers
   | forwardConst (decl     : Name) (immediate : UnorderedArraySet Nat)
       (clear : Bool) (md : TransparencyMode)
   | forwardFVar  (userName : Name) (immediate : UnorderedArraySet Nat)

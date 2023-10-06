@@ -8,11 +8,7 @@ set_option maxHeartbeats 0 -- disable timeout
 
 section simpleTest
 
-structure neuralConfig where
-  neuralProver : String
-
 @[aesop unsafe 50% neural]
-def conf : neuralConfig := { neuralProver := "onnx-leandojo-lean4-tacgen-byt5-small" }
 
 /- [1/2] Simple theorem.
    The raw white-box aesop should be able to prove this theorem.
