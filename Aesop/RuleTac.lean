@@ -11,7 +11,6 @@ import Aesop.RuleTac.Forward
 import Aesop.RuleTac.Preprocess
 import Aesop.RuleTac.RuleApplicationWithMVarInfo
 import Aesop.RuleTac.Tactic
-import Aesop.RuleTac.Neural
 
 open Lean
 
@@ -21,7 +20,6 @@ protected def run : RuleTacDescr → RuleTacInput → MetaM RuleTacOutput
   | applyConst decl md => RuleTac.applyConst decl md
   | applyFVar userName md => RuleTac.applyFVar userName md
   | constructors cs md => RuleTac.applyConsts cs md
-  | neuralProvers => RuleTac.applyNeural
   | forwardConst decl    immediate clear md =>
     RuleTac.forwardConst decl immediate clear md
   | forwardFVar userName immediate clear md =>
@@ -30,6 +28,7 @@ protected def run : RuleTacDescr → RuleTacInput → MetaM RuleTacOutput
   | tacticM decl => RuleTac.tacticM decl
   | singleRuleTac decl => RuleTac.singleRuleTac decl
   | ruleTac decl => RuleTac.ruleTac decl
+  | tacGen decl => RuleTac.tacGen decl
   | preprocess => RuleTac.preprocess
 
 end RuleTacDescr

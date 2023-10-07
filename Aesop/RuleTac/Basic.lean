@@ -107,7 +107,6 @@ inductive RuleTacDescr
   | applyConst (decl     : Name) (md : TransparencyMode)
   | applyFVar  (userName : Name) (md : TransparencyMode)
   | constructors (constructorNames : Array Name) (md : TransparencyMode)
-  | neuralProvers
   | forwardConst (decl     : Name) (immediate : UnorderedArraySet Nat)
       (clear : Bool) (md : TransparencyMode)
   | forwardFVar  (userName : Name) (immediate : UnorderedArraySet Nat)
@@ -116,6 +115,7 @@ inductive RuleTacDescr
       (isRecursiveType : Bool)
   | tacticM (decl : Name)
   | ruleTac (decl : Name)
+  | tacGen (decl : Name)
   | singleRuleTac (decl : Name)
   | preprocess
   deriving Inhabited
@@ -126,12 +126,12 @@ def isGlobal : RuleTacDescr → Bool
   | applyConst .. => true
   | applyFVar .. => false
   | constructors .. => true
-  | neuralProvers .. => true
   | forwardConst .. => true
   | forwardFVar .. => false
   | cases .. => true
   | tacticM .. => true
   | ruleTac .. => true
+  | tacGen .. => true
   | singleRuleTac .. => true
   | preprocess => true
 

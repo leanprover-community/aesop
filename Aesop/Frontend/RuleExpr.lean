@@ -103,7 +103,6 @@ syntax "forward" : Aesop.builder_name
 syntax "destruct" : Aesop.builder_name
 syntax "cases" : Aesop.builder_name
 syntax "default" : Aesop.builder_name
-syntax "neural" : Aesop.builder_name
 
 end Parser
 
@@ -125,7 +124,6 @@ def «elab» (stx : Syntax) : ElabM DBuilderName :=
     | `(builder_name| forward) => return regular .forward
     | `(builder_name| destruct) => return regular .destruct
     | `(builder_name| cases) => return regular .cases
-    | `(builder_name| neural) => return regular .neural
     | `(builder_name| default) => return «default»
     | _ => throwUnsupportedSyntax
 
@@ -355,14 +353,6 @@ def constructors : BuilderOptions ConstructorsBuilderOptions where
         some opts
     | _, _ => none
 
-def neural : BuilderOptions RegularBuilderOptions where
-  builderName := .regular .neural
-  init := default
-  add
-    | opts, .index indexingMode? => some { opts with indexingMode? }
-    | opts, .transparency _ _ => some opts
-    | _, _ => none
-
 end BuilderOptions
 
 
@@ -383,7 +373,6 @@ inductive Builder
   | constructors (opts : ConstructorsBuilderOptions)
   | forward (opts : ForwardBuilderOptions)
   | cases (opts : CasesBuilderOptions)
-  | neural (opts: RegularBuilderOptions)
   | «default»
   deriving Inhabited
 
@@ -399,7 +388,6 @@ def elabOptions (b : DBuilderName) (opts : Syntax) : ElabM Builder := do
   | .regular .forward => forward <$> BuilderOptions.forward.elab opts
   | .regular .destruct => forward <$> BuilderOptions.destruct.elab opts
   | .regular .cases => «cases» <$> BuilderOptions.cases.elab opts
-  | .regular .neural => neural <$> BuilderOptions.neural.elab opts
   | .default => checkNoOptions; return default
   where
     checkNoOptions := BuilderOptions.none b |>.«elab» opts
@@ -421,7 +409,6 @@ def toRuleBuilder : Builder → RuleBuilder
   | constructors opts => RuleBuilder.constructors opts
   | forward opts => RuleBuilder.forward opts
   | cases opts => RuleBuilder.cases opts
-  | neural opts => RuleBuilder.neural opts
   | «default» => RuleBuilder.default
 
 open DBuilderName in
@@ -433,7 +420,6 @@ def toDBuilderName : Builder → DBuilderName
   | constructors .. => regular .constructors
   | forward .. => regular .forward
   | cases .. => regular .cases
-  | neural .. => regular .neural
   | .«default» => .default
 
 end Builder

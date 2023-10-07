@@ -8,7 +8,8 @@ import Aesop.RuleTac.Basic
 
 open Lean
 open Lean.Meta
-open Lean.Elab.Tactic (TacticM run)
+open Lean.Elab.Term (TermElabM withSynthesize)
+open Lean.Elab.Tactic (TacticM evalTactic run)
 
 namespace Aesop.RuleTac
 
@@ -41,5 +42,48 @@ unsafe def singleRuleTacImpl (decl : Name) : RuleTac :=
 -- Precondition: `decl` has type `SimpleRuleTac`.
 @[implemented_by singleRuleTacImpl]
 opaque singleRuleTac (decl : Name) : RuleTac
+
+-- Precondition: `decl` has type `MVarId → MetaM (Array (String × Float))`.
+unsafe def tacGenImpl (decl : Name) : RuleTac := λ input => do
+  let tac ← evalConst (MVarId → MetaM (Array (String × Float))) decl
+  let initialState ← saveState
+  let suggestions ← tac input.goal
+  let apps ← suggestions.filterMapM fun (tacticStr, score) => do
+    assert! 0 ≤ score ∧ score ≤ 1   
+    match Parser.runParserCategory (← getEnv) `tactic tacticStr (fileName := "<stdin>") with
+    | .error _ => return none
+    | .ok stx =>
+      try 
+        initialState.restore
+        let tac := commitIfNoEx $ evalTactic stx
+        -- let tstx : TSyntax `tactic := {raw := stx}
+        let goals ← run input.goal tac |>.run'
+        let pf? ← getExprMVarAssignment? input.goal
+        if pf?.isSome then
+          if (← instantiateMVars pf?.get!) |>.hasSorry then 
+            initialState.restore
+            return none
+        -- let scriptBuilder? :=
+        --   mkScriptBuilder? generateScript $
+        --     .ofTactic goals.toArray.size do
+        --       withAllTransparencySyntax md tstx
+        let postState ← saveState
+        let thisApp : RuleApplication := {
+          postState := postState
+          goals := goals.toArray
+          probabilityModifier := score
+          -- scriptBuilder? := scriptBuilder?
+          scriptBuilder? := none
+        }
+        return thisApp
+      catch _ => pure none
+  restoreState initialState
+  if apps.isEmpty then throwError
+    "failed to apply any tactics generated"
+  return ⟨apps⟩
+
+-- Precondition: `decl` has type `MVarId → MetaM (Array (String × Float))`.
+@[implemented_by tacGenImpl]
+opaque tacGen (decl : Name) : RuleTac
 
 end Aesop.RuleTac
