@@ -11,9 +11,9 @@ namespace Aesop.RuleTac
 def applyNeural: RuleTac := λ input => do
   let initialState ← saveState
   let iptGoal ← LeanInfer.ppTacticState [input.goal]
-  let optSuggestions ← LeanInfer.generate iptGoal
-  let suggestions := optSuggestions.map (·.1)
-  let apps ← suggestions.filterMapM λ tacticStr => do
+  let suggestions ← LeanInfer.generate iptGoal
+  let apps ← suggestions.filterMapM fun (tacticStr, score) => do
+    assert! 0 ≤ score ∧ score ≤ 1   
     match Parser.runParserCategory (← getEnv) `tactic tacticStr (fileName := "<stdin>") with
     | .error _ => return none
     | .ok stx =>
@@ -35,6 +35,7 @@ def applyNeural: RuleTac := λ input => do
         let thisApp : RuleApplication := {
           postState := postState
           goals := goals.toArray
+          probabilityModifier := score
           -- scriptBuilder? := scriptBuilder?
           scriptBuilder? := none
         }

@@ -2,7 +2,7 @@ import Lake
 
 open Lake DSL
 
-package llmaesop {
+package aesop {
   precompileModules := false -- breaks mathlib cache
   moreLinkArgs := #["-L./lake-packages/LeanInfer/build/lib", "-lonnxruntime", "-lstdc++"]
 }
@@ -15,4 +15,4 @@ lean_lib AesopTest {
 }
 
 require std from git "https://github.com/leanprover/std4" @ "main"
-require LeanInfer from git "https://github.com/lean-dojo/LeanInfer.git" @ "v0.0.7"
+require LeanInfer from git "https://github.com/lean-dojo/LeanInfer.git" @ "dev"

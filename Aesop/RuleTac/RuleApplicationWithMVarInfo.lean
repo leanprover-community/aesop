@@ -38,6 +38,7 @@ structure RuleApplicationWithMVarInfo where
   mvars : UnorderedArraySet MVarId
   introducedMVars : UnorderedArraySet MVarId
   assignedMVars : UnorderedArraySet MVarId
+  probabilityModifier : Float
   scriptBuilder? : Option (ScriptBuilder MetaM)
 
 namespace RuleApplicationWithMVarInfo

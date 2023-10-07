@@ -17,11 +17,11 @@ def unhygienicExt (goal : MVarId) : MetaM (Array MVarId) :=
     return subgoals.map (·.fst)
 
 def unhygienicExtWithScript (goal : MVarId) (generateScript : Bool) :
-    MetaM (Array MVarId × Option RuleTacScriptBuilder) := do
+    MetaM (Array MVarId × Float × Option RuleTacScriptBuilder) := do
   let subgoals ← unhygienicExt goal
   let scriptBuilder? :=
     mkScriptBuilder? generateScript (.unhygienicExt subgoals.size)
-  return (subgoals, scriptBuilder?)
+  return (subgoals, 1.0, scriptBuilder?)
 
 @[aesop 80% (rule_sets [builtin])]
 def ext : RuleTac := RuleTac.ofSingleRuleTac λ input =>

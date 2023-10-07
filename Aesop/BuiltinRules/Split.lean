@@ -19,7 +19,7 @@ def splitTarget : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let scriptBuilder? :=
     mkScriptBuilder? input.options.generateScript $
       .ofTactic goals.size `(tactic| split)
-  return (goals, scriptBuilder?)
+  return (goals, 1.0, scriptBuilder?)
 
 def splitFirstHypothesis (goal : MVarId) : MetaM (Option (Array MVarId)) :=
   goal.withContext do
@@ -44,6 +44,6 @@ def splitHypotheses : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let scriptBuilder? :=
     mkScriptBuilder? input.options.generateScript $
       .ofTactic goals.size `(tactic| aesop_split_hyps)
-  return (goals, scriptBuilder?)
+  return (goals, 1.0, scriptBuilder?)
 
 end Aesop.BuiltinRules

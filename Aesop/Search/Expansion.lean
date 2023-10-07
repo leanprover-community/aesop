@@ -64,12 +64,14 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
     (rapps : Array RuleApplicationWithMVarInfo) :
     SearchM Q RuleResult := do
   let parent ← parentRef.get
-  let successProbability := parent.successProbability * rule.successProbability
 
   let mut rrefs := Array.mkEmpty rapps.size
   let mut subgoals := Array.mkEmpty $ rapps.size * 3
   for h : i in [:rapps.size] do
     let rapp := rapps[i]'(by simp_all [Membership.mem])
+    let some probabilityModifier := Percent.ofFloat rapp.probabilityModifier | throwError 
+      "aesop: internal error: rule {rule.name} returned an invalid probability modifier {rapp.probabilityModifier}"
+    let successProbability := parent.successProbability * rule.successProbability * probabilityModifier
     let rref ← addRapp {
       rapp with
       parent := parentRef

@@ -8,7 +8,7 @@ set_option maxHeartbeats 0 -- disable timeout
 
 section simpleTest
 
-@[aesop unsafe 50% neural]
+@[aesop unsafe 80% neural]
 
 /- [1/2] Simple theorem.
    The raw white-box aesop should be able to prove this theorem.

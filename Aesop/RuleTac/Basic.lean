@@ -48,6 +48,7 @@ goal. Must accurately report the following information:
 structure RuleApplication where
   goals : Array MVarId
   postState : Meta.SavedState
+  probabilityModifier : Float
   scriptBuilder? : Option RuleTacScriptBuilder
 
 namespace RuleApplication
@@ -80,13 +81,13 @@ instance : Inhabited RuleTac := by
 A `RuleTac` which generates only a single `RuleApplication`.
 -/
 def SingleRuleTac :=
-  RuleTacInput → MetaM (Array MVarId × Option RuleTacScriptBuilder)
+  RuleTacInput → MetaM (Array MVarId × Float × Option RuleTacScriptBuilder)
 
 @[inline]
 def SingleRuleTac.toRuleTac (t : SingleRuleTac) : RuleTac := λ input => do
-  let (goals, scriptBuilder?) ← t input
+  let (goals, probabilityModifier, scriptBuilder?) ← t input
   let postState ← saveState
-  return ⟨#[{ postState, goals, scriptBuilder? }]⟩
+  return ⟨#[{ postState, goals, probabilityModifier, scriptBuilder? }]⟩
 
 @[inline]
 def RuleTac.ofSingleRuleTac := SingleRuleTac.toRuleTac

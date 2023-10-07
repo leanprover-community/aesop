@@ -105,6 +105,6 @@ partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
     mkScriptBuilder? input.options.generateScript $ .ofTactic 1 do
       let tac ← withTransparencySyntax md (← `(tactic| aesop_destruct_products))
       `(tactic| unhygienic $tac:tactic)
-  return (#[goal], scriptBuilder?)
+  return (#[goal], 1.0, scriptBuilder?)
 
 end Aesop.BuiltinRules
