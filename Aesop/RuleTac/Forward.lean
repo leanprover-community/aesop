@@ -147,7 +147,7 @@ def forwardExpr (e : Expr) (immediate : UnorderedArraySet Nat)
     let (goal, scriptBuilder?) ←
       applyForwardRule input.goal e immediate (clear := clear)
         (generateScript := input.options.generateScript) md
-    return (#[goal], 1.0, scriptBuilder?)
+    return (#[goal], scriptBuilder?)
 
 def forwardConst (decl : Name) (immediate : UnorderedArraySet Nat)
     (clear : Bool) (md : TransparencyMode) : RuleTac := λ input => do

@@ -17,6 +17,6 @@ tried.
 def preprocess : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let (postMVarId, _, scriptBuilder?) ←
     renameInaccessibleFVarsWithScript input.goal input.options.generateScript
-  return (#[postMVarId], 1.0, scriptBuilder?)
+  return (#[postMVarId], scriptBuilder?)
 
 end Aesop.RuleTac

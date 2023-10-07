@@ -59,7 +59,6 @@ inductive BuilderName
   | constructors
   | destruct
   | forward
-  | neural
   | simp
   | tactic
   | unfold
@@ -79,7 +78,6 @@ instance : ToString BuilderName where
     | constructors => "constructors"
     | destruct => "destruct"
     | forward => "forward"
-    | neural => "neural"
     | simp => "simp"
     | tactic => "tactic"
     | unfold => "unfold"

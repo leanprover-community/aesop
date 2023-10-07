@@ -52,7 +52,6 @@ def assumption : RuleTac := λ input => do
             ← `(tactic| exact $(mkIdent ldecl.userName))
       let app := {
         goals := #[]
-        probabilityModifier := 1.0
         postState, scriptBuilder?
       }
       let proofHasMVar := ldecl.type.hasMVar
