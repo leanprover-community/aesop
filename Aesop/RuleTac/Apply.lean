@@ -13,13 +13,13 @@ namespace Aesop.RuleTac
 
 private def applyExpr (goal : MVarId) (e : Expr) (n : Name)
     (md : TransparencyMode) (generateScript : Bool) :
-    MetaM (Array MVarId × Float × Option RuleTacScriptBuilder) := do
+    MetaM (Array MVarId × Option RuleTacScriptBuilder) := do
   let goals := (← withTransparency md $ goal.apply e).toArray
   let scriptBuilder? :=
     mkScriptBuilder? generateScript $
       .ofTactic goals.size do
         withAllTransparencySyntax md (← `(tactic| apply $(mkIdent n)))
-  return (goals, 1.0, scriptBuilder?)
+  return (goals, scriptBuilder?)
 
 def applyConst (decl : Name) (md : TransparencyMode) : RuleTac :=
   RuleTac.ofSingleRuleTac λ input => do
@@ -41,10 +41,10 @@ def applyConsts (decls : Array Name) (md : TransparencyMode) :
   let apps ← decls.filterMapM λ decl => do
     try
       let e ← mkConstWithFreshMVarLevels decl
-      let (goals, probabilityModifier, scriptBuilder?) ←
+      let (goals, scriptBuilder?) ←
         applyExpr input.goal e decl md generateScript
       let postState ← saveState
-      return some { postState, goals, probabilityModifier, scriptBuilder? }
+      return some { postState, goals, scriptBuilder? }
     catch _ =>
       return none
     finally

@@ -19,8 +19,7 @@ def applyHyp (hyp : FVarId) (goal : MVarId) (md : TransparencyMode)
     let scriptBuilder? := mkScriptBuilder? generateScript $
       .ofTactic goals.size $ withTransparencySyntax md $
         ← `(tactic| apply $(mkIdent $ ← hyp.getUserName))
-    let probabilityModifier := 1.0
-    return { postState, goals, probabilityModifier, scriptBuilder? }
+    return { postState, goals, scriptBuilder? }
 
 @[aesop unsafe 75% tactic (rule_sets [builtin])]
 def applyHyps : RuleTac := λ input =>

@@ -58,7 +58,7 @@ partial def cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveTyp
 
     go (newGoals : Array MVarId) (excluded : Array FVarId)
         (goal : MVarId) (generateScript : Bool) :
-        MetaM (Option (Array MVarId × Float × Option RuleTacScriptBuilder)) := do
+        MetaM (Option (Array MVarId × Option RuleTacScriptBuilder)) := do
       let (some hyp) ← findFirstApplicableHyp excluded goal
         | return none
       let (goals, scriptBuilder?) ←
@@ -82,7 +82,7 @@ partial def cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveTyp
               | _ => none
             excluded ++ fields
         match ← go newGoals excluded g.mvarId generateScript with
-        | some (newGoals', _, newScriptBuilder?) =>
+        | some (newGoals', newScriptBuilder?) =>
           newGoals := newGoals'
           if let some newScriptBuilder := newScriptBuilder? then
             newScriptBuilders := newScriptBuilders.push newScriptBuilder
@@ -90,6 +90,6 @@ partial def cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveTyp
           newGoals := newGoals.push g.mvarId
           if generateScript then
             newScriptBuilders := newScriptBuilders.push .id
-      return some (newGoals, 1.0, scriptBuilder?.bind (·.seq newScriptBuilders))
+      return some (newGoals, scriptBuilder?.bind (·.seq newScriptBuilders))
 
 end Aesop.RuleTac
