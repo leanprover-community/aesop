@@ -8,7 +8,6 @@ import Aesop.RuleTac.Basic
 
 open Lean
 open Lean.Meta
-open Lean.Elab.Term (TermElabM withSynthesize)
 open Lean.Elab.Tactic (TacticM evalTactic run)
 
 namespace Aesop.RuleTac
