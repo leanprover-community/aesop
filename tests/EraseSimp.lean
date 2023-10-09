@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 example (n : Nat) : n + m = m + n := by
   aesop (add simp Nat.add_comm)
 

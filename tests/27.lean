@@ -11,6 +11,8 @@ Authors: Asta H. From, Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 @[aesop safe [constructors, (cases (patterns := [All _ [], All _ (_ :: _)]))]]
 inductive All (P : α → Prop) : List α → Prop
   | nil : All P []

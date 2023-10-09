@@ -7,6 +7,8 @@ Authors: Jannis Limperg
 import AesopTest.Persistence1
 import AesopTest.Persistence2
 
+set_option aesop.check.all true
+
 namespace Aesop
 
 @[aesop 50% (rule_sets [test_persistence2])]

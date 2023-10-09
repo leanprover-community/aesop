@@ -9,6 +9,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 structure WalkingPair
 
 def WidePullbackShape A B := Sum A B

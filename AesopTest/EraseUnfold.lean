@@ -8,6 +8,8 @@ Authors: Jireh Loreaux, Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 @[irreducible]
 def foo : Nat := 37
 

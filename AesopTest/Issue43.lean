@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 structure A
 
 open Lean.Elab.Tactic in
@@ -14,4 +16,6 @@ def tac : TacticM Unit := do
   evalTactic $ ← `(tactic| exact A.mk)
 
 example : A := by
+  set_option aesop.check.script false in
+  set_option aesop.check.script.steps false in
   aesop

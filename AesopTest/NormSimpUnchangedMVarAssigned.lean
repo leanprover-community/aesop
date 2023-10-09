@@ -8,6 +8,8 @@ Authors: Thomas Murrills, Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 class Foo (α : Type u) where
   f : α → α
   p : True

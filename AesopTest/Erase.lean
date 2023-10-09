@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 @[aesop [10% cases, safe constructors]]
 inductive Even : Nat → Prop
   | zero : Even 0
