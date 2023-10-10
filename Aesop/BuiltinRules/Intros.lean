@@ -56,6 +56,6 @@ def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
 
       else
         pure none
-    return (#[goal], scriptBuilder?)
+    return (#[goal], scriptBuilder?, none)
 
 end Aesop.BuiltinRules

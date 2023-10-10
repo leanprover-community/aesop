@@ -38,6 +38,7 @@ structure RuleApplicationWithMVarInfo where
   mvars : UnorderedArraySet MVarId
   introducedMVars : UnorderedArraySet MVarId
   assignedMVars : UnorderedArraySet MVarId
+  successProbability? : Option Percent
   scriptBuilder? : Option (ScriptBuilder MetaM)
 
 namespace RuleApplicationWithMVarInfo

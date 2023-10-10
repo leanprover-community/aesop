@@ -24,7 +24,9 @@ def unhygienicExtWithScript (goal : MVarId) (generateScript : Bool) :
   return (subgoals, scriptBuilder?)
 
 @[aesop 80% (rule_sets [builtin])]
-def ext : RuleTac := RuleTac.ofSingleRuleTac λ input =>
-  unhygienicExtWithScript input.goal input.options.generateScript
+def ext : RuleTac := RuleTac.ofSingleRuleTac λ input => do
+  let (goals, scriptBuilder?) ←
+    unhygienicExtWithScript input.goal input.options.generateScript
+  return (goals, scriptBuilder?, none)
 
 end Aesop.BuiltinRules

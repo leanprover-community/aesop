@@ -21,8 +21,10 @@ def RuleBuilder.tactic (opts : RegularBuilderOptions) : RuleBuilder :=
       mkResult $ .singleRuleTac decl
     else if ← isDefEq (mkConst ``RuleTac) type then
       mkResult $ .ruleTac decl
+    else if ← isDefEq (mkConst ``TacGen) type then
+      mkResult $ .tacGen decl
     else
-      throwError "aesop: {decl} was expected to be a tactic, i.e. to have one of these types:\n  TacticM Unit\n  SimpleRuleTac\n  RuleTac\nHowever, it has type{indentExpr type}"
+      throwError "aesop: {decl} was expected to be a tactic, i.e. to have one of these types:\n  TacticM Unit\n  SimpleRuleTac\n  RuleTac\n  TacGen\nHowever, it has type{indentExpr type}"
   where
     builderName : BuilderName :=
       .tactic

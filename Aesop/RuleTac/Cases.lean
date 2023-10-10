@@ -36,7 +36,7 @@ partial def cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveTyp
   SingleRuleTac.toRuleTac λ input => do
     match ← go #[] #[] input.goal input.options.generateScript with
     | none => throwError "No matching hypothesis found."
-    | some x => return x
+    | some (goals, scriptBuilder?) => return (goals, scriptBuilder?, none)
   where
     findFirstApplicableHyp (excluded : Array FVarId) (goal : MVarId) :
         MetaM (Option FVarId) :=

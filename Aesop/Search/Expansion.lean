@@ -64,12 +64,14 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
     (rapps : Array RuleApplicationWithMVarInfo) :
     SearchM Q RuleResult := do
   let parent ← parentRef.get
-  let successProbability := parent.successProbability * rule.successProbability
 
   let mut rrefs := Array.mkEmpty rapps.size
   let mut subgoals := Array.mkEmpty $ rapps.size * 3
   for h : i in [:rapps.size] do
     let rapp := rapps[i]'(by simp_all [Membership.mem])
+    let successProbability :=
+      parent.successProbability *
+      (rapp.successProbability?.getD rule.successProbability)
     let rref ← addRapp {
       rapp with
       parent := parentRef

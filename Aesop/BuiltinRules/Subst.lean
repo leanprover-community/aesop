@@ -97,6 +97,6 @@ def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
           else
             `(tactic| aesop_subst [ $substitutedUserNames:ident,* ])
         .ofTactic 1 tactic
-    return (#[goal], scriptBuilder?)
+    return (#[goal], scriptBuilder?, none)
 
 end Aesop.BuiltinRules
