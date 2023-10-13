@@ -1,11 +1,12 @@
-{"version": 5,
+{"version": 6,
  "packagesDir": "lake-packages",
  "packages":
  [{"git":
-   {"url": "https://github.com/leanprover/std4",
+   {"url": "https://github.com/semorrison/std4",
     "subDir?": null,
-    "rev": "f2df4ab8c0726fce3bafb73a5727336b0c3120ea",
+    "rev": "371f5994da8c2af00d590095e73e20e0d75cfe2a",
     "opts": {},
     "name": "std",
-    "inputRev?": "main",
-    "inherited": false}}]}
+    "inputRev?": "bump_2621",
+    "inherited": false}}],
+ "name": "aesop"}
