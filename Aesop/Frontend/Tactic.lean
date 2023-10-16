@@ -82,7 +82,7 @@ opaque elabSimpConfig : Syntax → TermElabM Aesop.SimpConfig
 structure TacticConfig where
   additionalRules : Array RuleExpr
   erasedRules : Array RuleExpr
-  enabledRuleSets : Array RuleSetName
+  enabledRuleSets : NameSet
   options : Aesop.Options
   simpConfig : Aesop.SimpConfig
   simpConfigSyntax? : Option Term
@@ -93,15 +93,15 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
   withRef stx do
     match stx with
     | `(tactic| aesop $clauses:Aesop.tactic_clause*) =>
-      clauses.foldlM (addClause false) (init false)
+      clauses.foldlM (addClause false) (← init false)
     | `(tactic| aesop? $clauses:Aesop.tactic_clause*) =>
-      clauses.foldlM (addClause true) (init true)
+      clauses.foldlM (addClause true) (← init true)
     | _ => throwUnsupportedSyntax
   where
-    init (traceScript : Bool) : TacticConfig := {
+    init (traceScript : Bool) : CoreM TacticConfig := return {
       additionalRules := #[]
       erasedRules := #[]
-      enabledRuleSets := defaultEnabledRuleSetNames
+      enabledRuleSets := ← getDefaultRuleSetNames
       options := { traceScript }
       simpConfig := {}
       simpConfigSyntax? := none
@@ -132,7 +132,7 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
               let rsName := RuleSetName.elab rsName
               if enabledRuleSets.contains rsName then throwError
                 "aesop: rule set '{rsName}' is already active"
-              enabledRuleSets := enabledRuleSets.push rsName
+              enabledRuleSets := enabledRuleSets.insert rsName
             | _ => throwUnsupportedSyntax
           return { c with enabledRuleSets }
         | `(tactic_clause| (options := $t:term)) =>

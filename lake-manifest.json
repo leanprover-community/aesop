@@ -4,7 +4,7 @@
  [{"git":
    {"url": "https://github.com/nomeata/std4",
     "subDir?": null,
-    "rev": "1ac8a88bf46ad81893d62677811941052880f074",
+    "rev": "fd9204a645759b6a72d899644ef5f31437a3daaa",
     "opts": {},
     "name": "std",
     "inputRev?": "lean-pr-testing-2577",

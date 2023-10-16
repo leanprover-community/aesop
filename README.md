@@ -29,7 +29,8 @@ like this:
   This means it should remain reasonably fast even with a large rule set.
 - When called as `aesop?`, Aesop prints a tactic script that proves the goal,
   similar to `simp?`. This way you can avoid the performance penalty of running
-  Aesop all the time.
+  Aesop all the time. However, the script generation is currently not fully
+  reliable, so you may have to adjust the generated script.
 
 Aesop should be suitable for two main use cases:
 
@@ -560,11 +561,12 @@ To override this behaviour, you can write `(apply (transparency! := default))`
 Rule sets are declared with the command
 
 ``` lean
-declare_aesop_rule_sets [r₁, ..., rₙ]
+declare_aesop_rule_sets [r₁, ..., rₙ] (default := <bool>)
 ```
 
 where the `rᵢ` are arbitrary names. To avoid clashes, pick names in the
-namespace of your package.
+namespace of your package. Setting `default := true` makes the rule set active
+by default. The `default` clause can be omitted and defaults to `false`.
 
 Within a rule set, rules are identified by their name, builder and phase
 (safe/unsafe/norm). This means you can add the same declaration as multiple
@@ -575,10 +577,11 @@ Rules can appear in multiple rule sets, but in this case you should make sure
 that they have the same priority and use the same builder options. Otherwise,
 Aesop will consider these rules the same and arbitrarily pick one.
 
-By default, the `aesop` tactic uses the `builtin` and `default` rule sets. The
-`builtin` set contains built-in rules for handling various constructions (see
-below). The `default` set contains rules which were added by Aesop users without
-specifying a rule set.
+Out of the box, Aesop uses the default rule sets `builtin`, `default` and
+`local`. The `builtin` set contains built-in rules for handling various
+constructions (see below). The `default` set contains rules which were added by
+Aesop users without specifying a rule set. The `local` set contains rules from
+`(add ...)` clauses.
 
 ### The `@[aesop]` Attribute
 
@@ -694,7 +697,10 @@ attribute [-aesop] foo
 ```
 
 This will remove all rules associated with the declaration `foo` from all rule
-sets.
+sets. However, this erasing is not persistent, so the rule will reappear at the
+end of the file. This is a fundamental limitation of Lean's attribute system:
+once a declaration is tagged with an attribute, it cannot be permanently
+untagged.
 
 If you want to remove only certain rules, you can use the `erase_aesop_rules`
 command:
@@ -745,7 +751,7 @@ involved Aesop call might look like this:
 ``` text
 aesop
   (add safe foo, 10% cases Or, safe cases Empty)
-  (erase A [cases, constructors], baz)
+  (erase A, baz)
   (rule_sets [A, B])
   (options := { maxRuleApplicationDepth := 10 })
 ```
@@ -787,7 +793,12 @@ of the `erase` clause is
 (erase <rule_expr,+>)
 ```
 
-and it works exactly like the `erase_aesop_rules` command.
+and it works exactly like the `erase_aesop_rules` command. To erase all rules
+associated with `x` and `y`, write
+
+``` lean
+(erase x, y)
+```
 
 #### Selecting Rule Sets
 

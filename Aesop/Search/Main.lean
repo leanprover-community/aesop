@@ -155,6 +155,8 @@ def traceScript : SearchM Q Unit := do
     return
   try
     let uscript ← (← getRootMVarCluster).extractScript
+    if ← Check.scriptSteps.isEnabled then
+      checkScriptSteps uscript
     let goal ← getRootMVarId
     let goalMVars ← goal.getMVarDependencies
     let tacticState :=
@@ -164,8 +166,6 @@ def traceScript : SearchM Q Unit := do
     if options.traceScript then
       let script ← `(tacticSeq| $script*)
       Std.Tactic.TryThis.addSuggestion (← getRef) script
-    if ← Check.scriptSteps.isEnabled then
-      checkScriptSteps uscript
     if ← Check.script.isEnabled then
       checkRenderedScript script
   catch e =>

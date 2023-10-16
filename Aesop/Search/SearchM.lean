@@ -96,7 +96,7 @@ def run (ruleSet : RuleSet) (options : Aesop.Options')
   let normSimpContext := {
     (← Simp.Context.mkDefault) with
     config := simpConfig.toConfig
-    simpTheorems := #[ruleSet.normSimpLemmas]
+    simpTheorems := ruleSet.globalNormSimpTheorems
     configStx? := simpConfigStx?
     enabled := simpConfig.enabled
     useHyps := simpConfig.useHyps

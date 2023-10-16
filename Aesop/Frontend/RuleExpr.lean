@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Frontend.Basic
 import Aesop.Frontend.ElabM
 import Aesop.Percent
 import Aesop.Rule.Name
@@ -86,23 +87,6 @@ def PhaseName.«elab» (stx : Syntax) : ElabM PhaseName :=
     | `(phase| safe) => return .safe
     | `(phase| norm) => return .norm
     | `(phase| unsafe) => return .«unsafe»
-    | _ => throwUnsupportedSyntax
-
-
-namespace Parser
-
-declare_syntax_cat Aesop.bool_lit (behavior := symbol)
-
-syntax "true" : Aesop.bool_lit
-syntax "false" : Aesop.bool_lit
-
-end Parser
-
-def elabBoolLit (stx : Syntax) : ElabM Bool :=
-  withRef stx do
-    match stx with
-    | `(bool_lit| true) => return true
-    | `(bool_lit| false) => return false
     | _ => throwUnsupportedSyntax
 
 
