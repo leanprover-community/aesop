@@ -6,4 +6,6 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 declare_aesop_rule_sets [test_persistence1]

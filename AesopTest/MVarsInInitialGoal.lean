@@ -6,5 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 example {n m k : Nat} (h : n < m) (h₂ : m < k) : n < k := by
   apply Nat.lt_trans <;> aesop

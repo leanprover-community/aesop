@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 declare_aesop_rule_sets [regular₁, regular₂]
 
 declare_aesop_rule_sets [dflt₁, dflt₂] (default := true)

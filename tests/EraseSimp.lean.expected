@@ -1,1 +1,1 @@
-tests/EraseSimp.lean:26:2: error: aesop: 'Nat.add_comm' is not registered (with the given features) in any rule set.
+tests/EraseSimp.lean:28:2: error: aesop: 'Nat.add_comm' is not registered (with the given features) in any rule set.

@@ -8,8 +8,10 @@ import Aesop.Nanos
 import Aesop.Util.UnionFind
 import Aesop.Util.UnorderedArraySet
 import Std.Lean.Expr
+import Std.Lean.Format
 import Std.Lean.Meta.DiscrTree
 import Std.Lean.PersistentHashSet
+import Std.Tactic.TryThis
 
 open Lean
 open Lean.Meta
@@ -326,5 +328,44 @@ where
     match ← whnf e with
     | .app f e => go (args.push e) f
     | _ => return (e, args.reverse)
+
+-- Largely copy-pasta from Std.Tactic.TryThis.addSuggestion
+-- I don't really know what's going on here; this is all cargo-culted. It seems
+-- to work when `aesop?` appears on its own line, as in
+--
+-- ```lean
+-- by
+--   aesop?
+-- ```
+--
+-- It doesn't work when `aesop?` is preceded by other text on the same line, as
+-- in
+--
+-- ```lean
+-- have x := by aesop?
+-- ```
+--
+-- Also, the `Try this:` suggestion in the infoview is not properly formatted.
+def addTryThisTacticSeqSuggestion (ref : Syntax)
+    (suggestion : TSyntax ``Lean.Parser.Tactic.tacticSeq)
+    (origSpan? : Option Syntax := none)
+    (extraMsg : String := "") : MetaM Unit := do
+  let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq suggestion
+  let text := fmt.prettyExtra (indent := 0) (column := 0)
+  logInfoAt ref m!"Try this:\n  {text}"
+  if let some range := (origSpan?.getD ref).getRange? then
+    let map ← getFileMap
+    let start := findLineStart map.source range.start
+    let indent := (range.start - start).1
+    let text := fmt.prettyExtra (indent := indent - 2) (column := indent)
+    let stxRange := ref.getRange?.getD range
+    let stxRange :=
+      { start := map.lineStart (map.toPosition stxRange.start).line
+        stop := map.lineStart ((map.toPosition stxRange.stop).line + 1) }
+    let range := map.utf8RangeToLspRange range
+    let json := Json.mkObj
+      [("suggestion", text), ("range", toJson range), ("info", extraMsg)]
+    Widget.saveWidgetInfo ``Std.Tactic.TryThis.tryThisWidget json
+      (.ofRange stxRange)
 
 end Aesop

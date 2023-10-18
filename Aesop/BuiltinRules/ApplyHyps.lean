@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Frontend
+import Aesop.Frontend.Attribute
 
 namespace Aesop.BuiltinRules
 
@@ -19,7 +19,10 @@ def applyHyp (hyp : FVarId) (goal : MVarId) (md : TransparencyMode)
     let scriptBuilder? := mkScriptBuilder? generateScript $
       .ofTactic goals.size $ withTransparencySyntax md $
         ← `(tactic| apply $(mkIdent $ ← hyp.getUserName))
-    return { postState, goals, scriptBuilder? }
+    return {
+      successProbability? := none
+      postState, goals, scriptBuilder?
+    }
 
 @[aesop unsafe 75% tactic (rule_sets [builtin])]
 def applyHyps : RuleTac := λ input =>

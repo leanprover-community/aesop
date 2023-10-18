@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 def Foo := True
 
 example : Foo := by
@@ -18,4 +20,6 @@ def myTactic : TacticM Unit := do
   evalTactic $ ← `(tactic| rw [Foo])
 
 example : Foo := by
+  set_option aesop.check.script false in
+  set_option aesop.check.script.steps false in
   aesop

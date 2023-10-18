@@ -5,7 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Options
-import Aesop.Search.Expansion.Simp.Basic
+import Aesop.Search.Expansion.Simp
 import Aesop.Search.Queue.Class
 import Aesop.Profiling
 import Aesop.RuleSet

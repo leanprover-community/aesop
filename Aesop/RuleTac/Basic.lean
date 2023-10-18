@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Index.Basic
 import Aesop.Options
+import Aesop.Percent
 import Aesop.Script
 import Std.Lean.Meta.SavedState
 
@@ -43,12 +44,14 @@ goal. Must accurately report the following information:
   `input.options.generateScript = false` (where `input` is the `RuleTacInput`),
   this field is ignored, so you can use `none`. If the tactic does not support
   script generation, also use `none`.
+- `successProbability`: The success probability of this rule application. If
+  `none`, we use the success probability of the applied rule.
 -/
-
 structure RuleApplication where
   goals : Array MVarId
   postState : Meta.SavedState
   scriptBuilder? : Option RuleTacScriptBuilder
+  successProbability? : Option Percent
 
 namespace RuleApplication
 
@@ -80,17 +83,28 @@ instance : Inhabited RuleTac := by
 A `RuleTac` which generates only a single `RuleApplication`.
 -/
 def SingleRuleTac :=
-  RuleTacInput → MetaM (Array MVarId × Option RuleTacScriptBuilder)
+  RuleTacInput → MetaM (Array MVarId × Option RuleTacScriptBuilder × Option Percent)
 
 @[inline]
 def SingleRuleTac.toRuleTac (t : SingleRuleTac) : RuleTac := λ input => do
-  let (goals, scriptBuilder?) ← t input
+  let (goals, scriptBuilder?, successProbability?) ← t input
   let postState ← saveState
-  return ⟨#[{ postState, goals, scriptBuilder? }]⟩
+  return ⟨#[{ postState, goals, scriptBuilder?, successProbability? }]⟩
 
 @[inline]
 def RuleTac.ofSingleRuleTac := SingleRuleTac.toRuleTac
 
+/--
+A tactic generator is a special sort of rule tactic, intended for use with
+generative machine learning methods. It generates zero or more tactics
+(represented as strings) that could be applied to the goal, plus a success
+probability for each tactic. When Aesop executes a tactic generator, it executes
+each of the tactics and, if the tactic succeeds, adds a rule application for it.
+The tactic's success probability (which must be between 0 and 1, inclusive)
+becomes the success probability of the rule application. A `TacGen` rule
+succeeds if at least one of its suggested tactics succeeds.
+-/
+abbrev TacGen := MVarId → MetaM (Array (String × Float))
 
 /-! # Rule Tactic Descriptions -/
 
@@ -114,6 +128,7 @@ inductive RuleTacDescr
       (isRecursiveType : Bool)
   | tacticM (decl : Name)
   | ruleTac (decl : Name)
+  | tacGen (decl : Name)
   | singleRuleTac (decl : Name)
   | preprocess
   deriving Inhabited
@@ -129,6 +144,7 @@ def isGlobal : RuleTacDescr → Bool
   | cases .. => true
   | tacticM .. => true
   | ruleTac .. => true
+  | tacGen .. => true
   | singleRuleTac .. => true
   | preprocess => true
 

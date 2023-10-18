@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import AesopTest.DefaultRuleSetsInit
 
+set_option aesop.check.all true
+
 @[aesop norm unfold (rule_sets [regular₁])]
 def T := True
 

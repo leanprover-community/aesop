@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 example : True := by
   aesop (options := { noSuchOption := true })
 

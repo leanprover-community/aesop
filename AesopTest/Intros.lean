@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 def Injective₁ (f : α → β) := ∀ x y, f x = f y → x = y
 
 abbrev Injective₂ (f : α → β) := ∀ x y, f x = f y → x = y

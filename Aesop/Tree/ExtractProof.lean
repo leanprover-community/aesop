@@ -3,7 +3,7 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-
+import Lean.Replay
 import Aesop.Tracing
 import Aesop.Tree.Tracing
 import Aesop.Tree.TreeM
@@ -52,14 +52,14 @@ local macro "throwPRError " s:interpolatedStr(term) : term =>
 -- ## Copying Declarations
 
 private def getNewConsts (oldEnv newEnv : Environment) :
-    Array ConstantInfo := Id.run do
+    HashMap Name ConstantInfo := Id.run do
   let oldMap₂ := oldEnv.constants.map₂
   let newMap₂ := newEnv.constants.map₂
   if oldMap₂.size == newMap₂.size then
-    #[]
+    HashMap.empty
   else
-    newMap₂.foldl (init := #[]) λ cs n c =>
-      if oldMap₂.contains n then cs else cs.push c
+    newMap₂.foldl (init := HashMap.empty) λ cs n c =>
+      if oldMap₂.contains n then cs else cs.insert n c
 
 -- For each declaration `d` that appears in `newState` but not in
 -- `oldState`, add `d` to the environment. We assume that the environment in
@@ -71,7 +71,7 @@ private def getNewConsts (oldEnv newEnv : Environment) :
 --    identical. (These contain imported decls.)
 private def copyNewDeclarations (oldEnv newEnv : Environment) : CoreM Unit := do
   let newConsts := getNewConsts oldEnv newEnv
-  setEnv $ newConsts.foldl (init := ← getEnv) λ env c => env.add c
+  setEnv (← (← getEnv).replay newConsts)
 
 open Match in
 private def copyMatchEqnsExtState (oldEnv newEnv : Environment) : CoreM Unit := do

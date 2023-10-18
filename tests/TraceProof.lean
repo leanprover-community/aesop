@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 set_option trace.aesop.proof true in
 example : α := by
   aesop

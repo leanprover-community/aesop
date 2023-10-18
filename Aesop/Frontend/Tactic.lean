@@ -7,7 +7,6 @@ Authors: Jannis Limperg
 import Aesop.Frontend.Attribute
 import Aesop.Frontend.RuleExpr
 import Aesop.Options
-import Aesop.Search.Expansion.Simp.Basic
 
 open Lean
 open Lean.Meta

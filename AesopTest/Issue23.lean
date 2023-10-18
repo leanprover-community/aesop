@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 def Involutive (f : α → α) : Prop :=
   ∀ x, f (f x) = x
 

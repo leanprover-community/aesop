@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Frontend
+import Aesop.Frontend.Attribute
 
 open Lean
 open Lean.Meta
@@ -97,5 +97,6 @@ def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
           else
             `(tactic| aesop_subst [ $substitutedUserNames:ident,* ])
         .ofTactic 1 tactic
-    return (#[goal], scriptBuilder?)
+    return (#[goal], scriptBuilder?, none)
+
 end Aesop.BuiltinRules

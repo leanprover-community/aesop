@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Sebastian Ullrich, Jannis Limperg
 -/
 
-import Aesop.Frontend
+import Aesop.Frontend.Attribute
 
 open Lean
 open Lean.Meta
@@ -19,7 +19,7 @@ def splitTarget : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let scriptBuilder? :=
     mkScriptBuilder? input.options.generateScript $
       .ofTactic goals.size `(tactic| split)
-  return (goals, scriptBuilder?)
+  return (goals, scriptBuilder?, none)
 
 def splitFirstHypothesis (goal : MVarId) : MetaM (Option (Array MVarId)) :=
   goal.withContext do
@@ -44,6 +44,6 @@ def splitHypotheses : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let scriptBuilder? :=
     mkScriptBuilder? input.options.generateScript $
       .ofTactic goals.size `(tactic| aesop_split_hyps)
-  return (goals, scriptBuilder?)
+  return (goals, scriptBuilder?, none)
 
 end Aesop.BuiltinRules

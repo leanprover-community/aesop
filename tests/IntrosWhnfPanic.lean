@@ -1,5 +1,7 @@
 import Aesop
 
+set_option aesop.check.all true
+
 open Lean.Meta Lean.Elab Lean.Elab.Tactic in
 elab "aesop_intros" : tactic =>
   liftMetaTactic λ mvarId => do

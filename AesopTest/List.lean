@@ -89,7 +89,6 @@ instance : Membership α (Option α) :=
 
 @[simp]
 theorem mem_spec {o : Option α} : a ∈ o ↔ o = some a := by
-  set_option aesop.check.script false in -- TODO
   aesop (add norm simp Membership.mem)
 
 @[simp]
@@ -108,6 +107,10 @@ def iget [Inhabited α] : Option α → α
 end Option
 
 namespace List
+
+-- The `ext` rule for lists says that `l₁ = l₂ ↔ (∀ a, a ∈ l₁ ↔ a ∈ l₂)`. This
+-- is not particularly helpful for this file.
+attribute [-aesop] Aesop.BuiltinRules.ext
 
 attribute [simp] map List.bind
 
@@ -496,7 +499,6 @@ theorem X.subset_append_of_subset_right (l l₁ l₂ : List α) : l ⊆ l₂ →
 attribute [-simp] cons_subset
 @[simp] theorem X.cons_subset {a : α} {l m : List α} :
   a::l ⊆ m ↔ a ∈ m ∧ l ⊆ m := by
-  set_option aesop.check.script false in -- TODO
   aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 theorem cons_subset_of_subset_of_mem {a : α} {l m : List α}
@@ -505,12 +507,10 @@ theorem cons_subset_of_subset_of_mem {a : α} {l m : List α}
 
 theorem append_subset_of_subset_of_subset {l₁ l₂ l : List α} (l₁subl : l₁ ⊆ l) (l₂subl : l₂ ⊆ l) :
   l₁ ++ l₂ ⊆ l := by
-  set_option aesop.check.script false in -- TODO
   aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 @[simp] theorem append_subset_iff {l₁ l₂ l : List α} :
     l₁ ++ l₂ ⊆ l ↔ l₁ ⊆ l ∧ l₂ ⊆ l := by
-  set_option aesop.check.script false in -- TODO
   aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 @[aesop safe destruct]
@@ -523,7 +523,6 @@ theorem X.eq_nil_iff_forall_not_mem {l : List α} : l = [] ↔ ∀ a, a ∉ l :=
 
 -- attribute [-simp] map_subset
 theorem X.map_subset {l₁ l₂ : List α} (f : α → β) (H : l₁ ⊆ l₂) : map f l₁ ⊆ map f l₂ := by
-  set_option aesop.check.script false in -- TODO
   aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 theorem map_subset_iff {l₁ l₂ : List α} (f : α → β) (h : Injective f) :

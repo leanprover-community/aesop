@@ -9,6 +9,7 @@ Authors: Jannis Limperg
 import Aesop.BuiltinRules.Assumption
 import Aesop.BuiltinRules.ApplyHyps
 import Aesop.BuiltinRules.DestructProducts
+import Aesop.BuiltinRules.Ext
 import Aesop.BuiltinRules.Intros
 import Aesop.BuiltinRules.Split
 import Aesop.BuiltinRules.Subst

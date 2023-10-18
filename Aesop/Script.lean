@@ -266,6 +266,9 @@ def unfoldManyStar (usedDecls : HashSet Name) : ScriptBuilder MetaM :=
   else
     .ofTactic 1 `(tactic| aesop_unfold [$(usedDecls.toArray.map mkIdent):ident,*])
 
+def unhygienicExt (subgoals : Nat) : ScriptBuilder MetaM :=
+  .ofTactic subgoals `(tactic| unhygienic ext)
+
 @[inline, always_inline]
 def withPrefix (f : TSyntax ``tacticSeq → m (Array (TSyntax `tactic)))
     (b : ScriptBuilder m) : ScriptBuilder m where

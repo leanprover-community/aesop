@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Frontend
+import Aesop.Frontend.Attribute
 
 open Lean
 open Lean.Meta
@@ -105,6 +105,6 @@ partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
     mkScriptBuilder? input.options.generateScript $ .ofTactic 1 do
       let tac ← withTransparencySyntax md (← `(tactic| aesop_destruct_products))
       `(tactic| unhygienic $tac:tactic)
-  return (#[goal], scriptBuilder?)
+  return (#[goal], scriptBuilder?, none)
 
 end Aesop.BuiltinRules

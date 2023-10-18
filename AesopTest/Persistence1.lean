@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 
 import AesopTest.Persistence0
 
+set_option aesop.check.all true
+
 namespace Aesop
 
 @[aesop 50% constructors (rule_sets [test_persistence1])]

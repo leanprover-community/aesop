@@ -6,6 +6,8 @@ Authors: David Renshaw, Jannis Limperg
 
 import Aesop
 
+set_option aesop.check.all true
+
 -- This is an example which is currently challenging for Lean 4 `tauto`.
 example {α : Type} [LE α] (a b c : α) (x₀ x₁ x₂ : Prop)
  (this1 : x₀ → x₁ → a ≤ c)

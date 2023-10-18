@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Frontend
+import Aesop.Frontend.Attribute
 
 open Lean
 open Lean.Meta
@@ -52,6 +52,7 @@ def assumption : RuleTac := λ input => do
             ← `(tactic| exact $(mkIdent ldecl.userName))
       let app := {
         goals := #[]
+        successProbability? := none
         postState, scriptBuilder?
       }
       let proofHasMVar := ldecl.type.hasMVar
