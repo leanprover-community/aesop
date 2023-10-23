@@ -11,9 +11,9 @@ open Lean.Meta
 
 namespace Aesop
 
--- This value controls whether we use 'powerful' reductions, e.g. iota, when
--- indexing Aesop rules. See the `DiscrTree` docs for details.
-def discrTreeConfig : WhnfCoreConfig := { iota := false }
+-- This value controls which reductions are used when normalising expressions
+-- stored in the discrimination trees. We use the same config as `simp`.
+def discrTreeConfig : WhnfCoreConfig := { iota := false, proj := .no }
 
 inductive IndexingMode : Type
   | unindexed
