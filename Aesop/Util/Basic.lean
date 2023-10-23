@@ -77,17 +77,17 @@ open DiscrTree
 
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
 -- `n` stars).
-def getConclusionDiscrTreeKeys (type : Expr) :
-    MetaM (Array (Key s)) :=
+def getConclusionDiscrTreeKeys (type : Expr) (config : WhnfCoreConfig) :
+    MetaM (Array Key) :=
   withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
-    mkPath conclusion
+    mkPath conclusion config
     -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
     -- turn into `Key.star`) but not fvars.
 
 -- For a constant `d` with type `∀ (x₁, ..., xₙ), T`, returns keys that
 -- match `d * ... *` (with `n` stars).
-def getConstDiscrTreeKeys (decl : Name) : MetaM (Array (Key s)) := do
+def getConstDiscrTreeKeys (decl : Name) : MetaM (Array Key) := do
   let arity := (← getConstInfo decl).type.forallArity
   let mut keys := Array.mkEmpty (arity + 1)
   keys := keys.push $ .const decl arity
@@ -95,12 +95,12 @@ def getConstDiscrTreeKeys (decl : Name) : MetaM (Array (Key s)) := do
     keys := keys.push $ .star
   return keys
 
-def isEmptyTrie : Trie α s → Bool
+def isEmptyTrie : Trie α → Bool
   | .node vs children => vs.isEmpty && children.isEmpty
 
 @[specialize]
 private partial def filterTrieM [Monad m] [Inhabited σ] (f : σ → α → m σ)
-    (p : α → m (ULift Bool)) (init : σ) : Trie α s → m (Trie α s × σ)
+    (p : α → m (ULift Bool)) (init : σ) : Trie α → m (Trie α × σ)
   | .node vs children => do
     let (vs, acc) ← vs.foldlM (init := (#[], init)) λ (vs, acc) v => do
       if (← p v).down then
@@ -111,8 +111,8 @@ private partial def filterTrieM [Monad m] [Inhabited σ] (f : σ → α → m σ
     let children := children.filter λ (_, c) => ! isEmptyTrie c
     return (.node vs children, acc)
   where
-    go (acc : σ) (i : Nat) (children : Array (Key s × Trie α s)) :
-        m (Array (Key s × Trie α s) × σ) := do
+    go (acc : σ) (i : Nat) (children : Array (Key × Trie α)) :
+        m (Array (Key × Trie α) × σ) := do
       if h : i < children.size then
         let (key, t) := children[i]'h
         let (t, acc) ← filterTrieM f p acc t
@@ -128,8 +128,8 @@ returned.
 -/
 @[specialize]
 def filterDiscrTreeM [Monad m] [Inhabited σ] (p : α → m (ULift Bool))
-    (f : σ → α → m σ) (init : σ) (t : DiscrTree α s) :
-    m (DiscrTree α s × σ) := do
+    (f : σ → α → m σ) (init : σ) (t : DiscrTree α) :
+    m (DiscrTree α × σ) := do
   let (root, acc) ←
     t.root.foldlM (init := (.empty, init)) λ (root, acc) key t => do
       let (t, acc) ← filterTrieM f p acc t
@@ -143,7 +143,7 @@ The removed elements are folded over using `f` and `init`, so `f` is called
 once for each removed element and the final state of type `σ` is returned.
 -/
 def filterDiscrTree [Inhabited σ] (p : α → Bool) (f : σ → α → σ) (init : σ)
-    (t : DiscrTree α s) : DiscrTree α s × σ := Id.run $
+    (t : DiscrTree α) : DiscrTree α × σ := Id.run $
   filterDiscrTreeM (λ a => pure ⟨p a⟩) (λ s a => pure (f s a)) init t
 
 end DiscrTree
