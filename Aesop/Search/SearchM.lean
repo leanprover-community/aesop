@@ -82,6 +82,14 @@ instance : MonadStateOf Profile (SearchM Q) where
     let (result, profile) := f s.profile
     (result, { s with profile })
 
+instance [Monad m] [MonadLiftT (ST IO.RealWorld) m] [MonadLift m (SearchM Q)] :
+    MonadLift (ProfileT m) (SearchM Q) where
+  monadLift x := do
+    let profile ← modifyGetThe Profile λ profile => (profile, {})
+    let (result, profile) ← x.run (← read).profilingEnabled profile
+    setThe Profile profile
+    return result
+
 def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
     (x : SearchM Q α) : MetaM (α × SearchM.State Q × Tree) := do
   let ((a, σ), t) ← ReaderT.run x ctx |>.run σ |>.run t

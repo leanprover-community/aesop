@@ -122,6 +122,16 @@ protected def run [Monad m] [MonadLiftT (ST IO.RealWorld) m] (x : ProfileT m α)
     (isProfilingEnabled : Bool) (profile : Profile) : m (α × Profile) :=
   ReaderT.run x { isProfilingEnabled } |>.run profile
 
+-- Can this be expressed in terms of the various monad classes?
+def liftBase [Monad m] [Monad n] [MonadLiftT (ST IO.RealWorld) n]
+    [MonadLiftT (ST IO.RealWorld) m] [MonadLiftT m n]
+    (x : ProfileT m α) : ProfileT n α := do
+  let s ← getThe Profile
+  setThe Profile {} -- This ensures that the profile is used linearly.
+  let (result, profile) ← ReaderT.run x (← readThe ProfileT.Context) |>.run s
+  setThe Profile profile
+  return result
+
 end ProfileT
 
 
