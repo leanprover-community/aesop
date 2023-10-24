@@ -173,7 +173,7 @@ set_option trace.aesop true
 
 This makes Aesop print out the steps it takes while searching for a proof. You
 can also look at the search tree Aesop constructed by enabling the
-`trace.aesop.finalTree` option. For more tracing options, type `set_option
+`trace.aesop.tree` option. For more tracing options, type `set_option
 trace.aesop` and see what auto-completion suggests.
 
 If, in the example above, you call `aesop?` instead, then Aesop prints a proof
