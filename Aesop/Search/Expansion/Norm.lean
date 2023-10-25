@@ -90,7 +90,7 @@ def mkNormRuleTacticInvocation (ruleName : RuleName)
 def runNormRuleTac (rule : NormRule) (input : RuleTacInput) :
     MetaM NormRuleResult := do
   let preMetaState ← saveState
-  let result? ← runRuleTac rule.tac.run rule.name preMetaState input
+  let result? ← runRuleTac input.options rule.tac.run rule.name preMetaState input
   match result? with
   | Sum.inl e =>
     aesop_trace[steps] e.toMessageData
@@ -257,7 +257,9 @@ def checkedNormSimpCore (goal : MVarId) (goalMVars : HashSet MVarId) :
     NormM NormRuleResult :=
   checkSimp "norm simp" (mayCloseGoal := true) goal do
     try
-      withNormTraceNode .normSimp (normSimpCore goal goalMVars)
+      withNormTraceNode .normSimp do
+        withMaxHeartbeats (← read).options.maxSimpHeartbeats do
+          normSimpCore goal goalMVars
     catch e =>
       throwError "aesop: error in norm simp: {e.toMessageData}"
 
@@ -296,7 +298,9 @@ def checkedNormUnfoldCore (goal : MVarId) (goalMVars : HashSet MVarId) :
     NormM NormRuleResult := do
   checkSimp "unfold simp" (mayCloseGoal := false) goal do
     try
-      withNormTraceNode .normUnfold (normUnfoldCore goal goalMVars)
+      withNormTraceNode .normUnfold do
+        withMaxHeartbeats (← read).options.maxUnfoldHeartbeats do
+          normUnfoldCore goal goalMVars
     catch e =>
       throwError "aesop: error in norm unfold: {e.toMessageData}"
 

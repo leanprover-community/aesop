@@ -351,4 +351,19 @@ def addTryThisTacticSeqSuggestion (ref : Syntax)
     Widget.saveWidgetInfo ``Std.Tactic.TryThis.tryThisWidget json
       (.ofRange stxRange)
 
+/--
+Runs a computation for at most the given number of heartbeats times 1000,
+ignoring the global heartbeat limit. Note that heartbeats spent on the
+computation still count towards the global heartbeat count.
+-/
+def withMaxHeartbeats [Monad m] [MonadLiftT BaseIO m]
+    [MonadWithReaderOf Core.Context m] (n : Nat) (x : m α) : m α := do
+  let numHeartbeats ← IO.getNumHeartbeats
+  let f s := {
+    s with
+    initHeartbeats := numHeartbeats
+    maxHeartbeats := n * 1000
+  }
+  withReader f x
+
 end Aesop

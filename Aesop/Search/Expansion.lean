@@ -58,7 +58,7 @@ def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
     mvars := goal.mvars
     indexMatchLocations, options
   }
-  runRuleTac tac ruleName postNormState input
+  runRuleTac options tac ruleName postNormState input
 
 def addRapps (parentRef : GoalRef) (rule : RegularRule)
     (rapps : Array RuleApplicationWithMVarInfo) :
