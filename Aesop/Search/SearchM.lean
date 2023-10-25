@@ -27,7 +27,6 @@ structure Context where
   ruleSet : RuleSet
   normSimpContext : NormSimpContext
   options : Aesop.Options'
-  profilingEnabled : Bool
   deriving Nonempty
 
 def Context.normSimpConfig (ctx : Context) : SimpConfig where
@@ -37,14 +36,16 @@ def Context.normSimpConfig (ctx : Context) : SimpConfig where
 structure State (Q) [Aesop.Queue Q] where
   iteration : Iteration
   queue : Q
-  profile : Profile
   maxRuleApplicationDepthReached : Bool
   deriving Inhabited
 
 end SearchM
 
-abbrev SearchM Q [Aesop.Queue Q] :=
+abbrev SearchBaseM Q [Aesop.Queue Q] :=
   ReaderT SearchM.Context $ StateRefT (SearchM.State Q) $ StateRefT Tree MetaM
+
+abbrev SearchM Q [Aesop.Queue Q] :=
+  ProfileT $ SearchBaseM Q
 
 variable [Aesop.Queue Q]
 
@@ -61,46 +62,29 @@ instance : MonadRef (SearchM Q) :=
 instance : Inhabited (SearchM Q α) where
   default := failure
 
-instance : MonadLift TreeM (SearchM Q) where
-  monadLift x := do
-    let ctx := { currentIteration := (← get).iteration }
-    liftM $ ReaderT.run x ctx
-
 instance : MonadState (State Q) (SearchM Q) :=
   { inferInstanceAs (MonadStateOf (State Q) (SearchM Q)) with }
 
 instance : MonadReader Context (SearchM Q) :=
   { inferInstanceAs (MonadReaderOf Context (SearchM Q)) with }
 
-instance : MonadReaderOf ProfileT.Context (SearchM Q) where
-  read := return ⟨(← read).profilingEnabled⟩
-
-instance : MonadStateOf Profile (SearchM Q) where
-  get := return (← getThe (State Q)).profile
-  set profile := modify λ s => { s with profile }
-  modifyGet f := modifyGet λ s =>
-    let (result, profile) := f s.profile
-    (result, { s with profile })
-
-instance [Monad m] [MonadLiftT (ST IO.RealWorld) m] [MonadLift m (SearchM Q)] :
-    MonadLift (ProfileT m) (SearchM Q) where
+instance : MonadLift TreeM (SearchM Q) where
   monadLift x := do
-    let profile ← modifyGetThe Profile λ profile => (profile, {})
-    let (result, profile) ← x.run (← read).profilingEnabled profile
-    setThe Profile profile
-    return result
+    let ctx := { currentIteration := (← get).iteration }
+    liftM $ ReaderT.run x ctx
 
-def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
-    (x : SearchM Q α) : MetaM (α × SearchM.State Q × Tree) := do
-  let ((a, σ), t) ← ReaderT.run x ctx |>.run σ |>.run t
-  return (a, σ, t)
+protected def run' (profile : Profile) (ctx : SearchM.Context)
+    (σ : SearchM.State Q) (t : Tree) (x : SearchM Q α) :
+    MetaM (α × SearchM.State Q × Tree × Profile) := do
+  let (((a, profile), σ), t) ←
+    x.run profile |>.run ctx |>.run σ |>.run t
+  return (a, σ, t, profile)
 
-def run (ruleSet : RuleSet) (options : Aesop.Options')
+protected def run (ruleSet : RuleSet) (options : Aesop.Options')
     (simpConfig : Aesop.SimpConfig) (simpConfigStx? : Option Term)
     (goal : MVarId) (profile : Profile) (x : SearchM Q α) :
-    MetaM (α × State Q × Tree) := do
+    MetaM (α × State Q × Tree × Profile) := do
   let t ← mkInitialTree goal
-  let profilingEnabled := (← getOptions).getBool `profiler
   let normSimpContext := {
     (← Simp.Context.mkDefault) with
     config := simpConfig.toConfig
@@ -109,17 +93,15 @@ def run (ruleSet : RuleSet) (options : Aesop.Options')
     enabled := simpConfig.enabled
     useHyps := simpConfig.useHyps
   }
-  let ctx := { ruleSet, options, profilingEnabled, normSimpContext }
+  let ctx := { ruleSet, options, normSimpContext }
   let #[rootGoal] := (← t.root.get).goals
     | throwError "aesop: internal error: root mvar cluster does not contain exactly one goal."
   let state := {
     queue := ← Queue.init' #[rootGoal]
     iteration := Iteration.one
-    profile
     maxRuleApplicationDepthReached := false
   }
-  let ((a, state), tree) ← ReaderT.run x ctx |>.run state |>.run t
-  return (a, state, tree)
+  x.run' profile ctx state t
 
 end SearchM
 

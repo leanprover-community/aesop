@@ -245,12 +245,12 @@ def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
           options.toOptions
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
-  let (goals, state, _) ←
+  let (goals, _, _, profile) ←
     SearchM.run ruleSet options simpConfig simpConfigSyntax? goal profile do
       show SearchM Q _ from
       try searchLoop
       catch e => handleFatalError e
       finally freeTree
-  return (goals, state.profile)
+  return (goals, profile)
 
 end Aesop

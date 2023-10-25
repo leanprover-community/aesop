@@ -30,8 +30,11 @@ instance : MonadBacktrack Meta.SavedState NormM where
   saveState := Meta.saveState
   restoreState s := s.restore
 
-instance [Queue Q] : MonadLift NormM (SearchM Q) where
+instance [Queue Q] : MonadLift NormM (SearchBaseM Q) where
   monadLift x := do x.run { (← read) with }
+
+instance [Queue Q] : MonadLift (ProfileT NormM) (SearchM Q) where
+  monadLift := ProfileT.liftBase
 
 inductive NormRuleResult
   | succeeded (goal : MVarId)
@@ -324,7 +327,7 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
   let mut postSimpRules := ∅
   while iteration < maxIterations do
     if step.val == 0 then
-      let rules ← ProfileT.liftBase $ selectNormRules ctx.ruleSet goal
+      let rules ← ProfileT.liftBase (selectNormRules ctx.ruleSet goal)
       let (preSimpRules', postSimpRules') :=
         rules.partition λ r => r.rule.extra.penalty < (0 : Int)
       preSimpRules := preSimpRules'
@@ -396,12 +399,9 @@ def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
   | .provenByNormalization .. => return true
   | .normal .. => return false
   | .notNormal => pure ()
-  let (normResult, postState) ←
-    control (α := NormSeqResult × SavedState) λ runInBase =>
-      show MetaM _ by
-        dsimp [stM, MonadControl.stM] at *
-        exact do (← gref.get).runMetaMInParentState do
-          runInBase $ normalizeGoalMVar g.preNormGoal g.mvars
+  let (normResult, postState) ← controlAt MetaM λ runInBase => do
+    (← gref.get).runMetaMInParentState do
+      runInBase $ normalizeGoalMVar g.preNormGoal g.mvars
   match normResult with
   | .unproved postGoal script? =>
     gref.modify (·.setNormalizationState (.normal postGoal postState script?))

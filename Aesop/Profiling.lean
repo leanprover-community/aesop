@@ -106,44 +106,30 @@ def trace (p : Profile) (opt : TraceOption) : CoreM Unit := do
 end Profile
 
 
-namespace ProfileT
-
-structure Context where
-  isProfilingEnabled : Bool
-
-end ProfileT
-
-abbrev ProfileT m :=
-  ReaderT ProfileT.Context $ StateRefT' IO.RealWorld Profile m
+abbrev ProfileT m := StateRefT' IO.RealWorld Profile m
 
 namespace ProfileT
 
 protected def run [Monad m] [MonadLiftT (ST IO.RealWorld) m] (x : ProfileT m α)
-    (isProfilingEnabled : Bool) (profile : Profile) : m (α × Profile) :=
-  ReaderT.run x { isProfilingEnabled } |>.run profile
+    (profile : Profile) : m (α × Profile) :=
+  StateRefT'.run x profile
 
 -- Can this be expressed in terms of the various monad classes?
-def liftBase [Monad m] [Monad n] [MonadLiftT (ST IO.RealWorld) n]
-    [MonadLiftT (ST IO.RealWorld) m] [MonadLiftT m n]
-    (x : ProfileT m α) : ProfileT n α := do
-  let s ← getThe Profile
-  setThe Profile {} -- This ensures that the profile is used linearly.
-  let (result, profile) ← ReaderT.run x (← readThe ProfileT.Context) |>.run s
-  setThe Profile profile
-  return result
+def liftBase [MonadLiftT m n] (x : ProfileT m α) : ProfileT n α :=
+  λ r => x r
 
 end ProfileT
 
 
 class abbrev MonadProfile (m : Type → Type _) :=
-  MonadReaderOf ProfileT.Context m
+  MonadOptions m
   MonadStateOf Profile m
 
 variable [Monad m] [MonadProfile m]
 
 @[inline, always_inline]
 def isProfilingEnabled [MonadProfile m] : m Bool :=
-  return (← read).isProfilingEnabled
+  return (← getOptions).getBool `profiler
 
 @[inline, always_inline]
 def recordRuleSelectionProfile (elapsed : Nanos) : m Unit :=
