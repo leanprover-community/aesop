@@ -1,0 +1,4 @@
+tests/RecursiveUnfoldRule.lean:18:2: error: Recursive definition 'f₂' cannot be used as an unfold rule (it would be unfolded infinitely often). Try adding a simp rule for it.
+tests/RecursiveUnfoldRule.lean:23:2: error: Recursive definition 'f₃' cannot be used as an unfold rule (it would be unfolded infinitely often). Try adding a simp rule for it.
+tests/RecursiveUnfoldRule.lean:30:2: error: Recursive definition 'f₄' cannot be used as an unfold rule (it would be unfolded infinitely often). Try adding a simp rule for it.
+tests/RecursiveUnfoldRule.lean:53:2: error: Declaration 'test' cannot be unfolded.
