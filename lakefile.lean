@@ -13,4 +13,4 @@ lean_lib AesopTest {
   globs := #[.submodules "AesopTest"]
 }
 
-require std from git "https://github.com/leanprover/std4" @ "lean-pr-testing-2734"
+require std from git "https://github.com/leanprover/std4" @ "nightly-testing"
