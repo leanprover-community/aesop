@@ -39,23 +39,44 @@ forward rules.
 
 ## Proposed Integration into Aesop Search
 
-Currently, Aesop proceeds in three phases when faced with a goal `Γ ⊢ T`:
+Currently, Aesop proceeds in three phases when faced with a goal:
 
 1. Normalise the goal. This means in particular that we run `simp_all`.
 2. Apply safe rules as much as possible. (The new goals created during this are
    also normalised.)
 3. Apply unsafe rules.
 
-I propose that we introduce an additional *forward phase* between the
-normalisation phase (1) and the safe phase (2). In this phase, we run
-exclusively forward rules. The functional differences between forward rules and
-regular rules are:
+We propose that we split each phase into two subphases: a *forward subphase*
+in which we apply only forward rules, and a *regular subphase* in which we apply
+all other rules.
 
-- Forward rules must create exactly one subgoal. (We may want to allow zero
-  subgoals as a special case.)
-- Forward rules must not change the goal's target.
+Note: if we falsify the goal (as discussed below), we have to preserve the
+saturated context with falsified goal between the norm forward phase and the
+safe forward phase. But maybe we don't need forward norm rules at all.
 
-As a result, forward rules are automatically safe (for any sane rule set).
+Alternatives:
+
+1. Introduce a separate *forward phase* between the normalisation phase (1) and
+   the safe phase (2).
+2. Don't have separate phases at all.
+
+## Falsifying the Goal
+
+In a typical saturation-based prover, we negate the target at the start and try
+to derive a contradiction. This is also how `linarith` currently works. We can
+integrate this idea as follows:
+
+- Negate the target at the start and introduce it.
+- Keep track of which rule applications used the negated target (transitively).
+- At the end of the forward phase, when we haven't found a contradiction, throw
+  away the output hypotheses resulting from rule applications that used the
+  negated target (and throw away the negated target).
+
+Completeness issue: during the search, we might throw away rule applications
+that are redundant. E.g. when a prior rule application `R₁` produced an output
+hypothesis `o₁ : O` and a later rule application `R₂` produces `o₂ : O`, we
+throw away `o₂`. However, we should not do this if `o₂` doesn't use the negated
+target but `o₁` does.
 
 ## Destruct Rules
 
@@ -138,10 +159,10 @@ context hypotheses `k₁ : U₁, ..., kₙ : Uₙ`. This doesn't mean that `Tᵢ
 merely that `Uᵢ` is an *instance* of `Tᵢ`, i.e. `Uᵢ = Tᵢ[σ]` for some
 substitution `σ`. (I'm not sure whether `σ` is a substitution of `fvar`s,
 `mvar`s or both.) Thus, we need an order that is compatible with substitution,
-in the sense that `Tᵢ[σ] < Tⱼ[τ]` (i.e., `Uᵢ < Uⱼ`) implies `Tᵢ < Tⱼ` for any
-substitutions `σ` and `τ`. For instance, we must ensure
+in the sense that `Tᵢ < Tⱼ` implies `Tᵢ[σ] < Tⱼ[σ]` (i.e., `Uᵢ < Uⱼ`) for any
+substitution `σ`. For instance, we must ensure
 ```
-(0 = ?m) < (?n + ?m = 4)   ⇒   (?n = ?m) < (?n + ?m = ?k)
+(?n = ?m) < (?n + ?m = ?k)    ⇒    (0 = ?m) < (?n + ?m = 4)
 ```
 
 TODO cont
