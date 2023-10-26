@@ -76,7 +76,7 @@ private def getIndexingMode (type : Expr) (immediate : UnorderedArraySet Nat)
       match args.get? i with
       | some arg =>
         let argT := (← arg.mvarId!.getDecl).type
-        let keys ← DiscrTree.mkPath argT
+        let keys ← DiscrTree.mkPath argT discrTreeConfig
         return .hyps keys
       | none => throwError
         "aesop: internal error: immediate arg for forward rule is out of range"
