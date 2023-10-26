@@ -1,0 +1,294 @@
+# New Forward Reasoning Design
+
+## Forward Rules
+
+A *forward rule* is a tactic that, in a local context containing *input
+hypotheses* `h₁ : H₁, ..., hₙ : Hₙ`, produces *output hypotheses* `o₁ : O₁, ...,
+oₘ : Oₘ` and adds them to the context. Both input hypotheses and output
+hypotheses are *telescopes*, so the types of later hypotheses may depend on
+earlier hypotheses. We can also view the input hypotheses as a subcontext,
+since contexts are exactly telescopes.
+
+Example: the lemma
+
+```lean
+theorem eq_of_le_ge : ∀ {n : Nat}, n ≤ 0 → n ≥ 0 → n = 0
+```
+
+induces a forward rule with input hypotheses `n : Nat, p : n ≤ 0, q : n ≥ 0` and
+output hypothesis `n = 0`.
+
+We write `r : Φ → Ψ` for a rule with input hypotheses `Φ` and output hypotheses
+`Ψ`. Note that `Ψ` generally depends on `Φ`.
+
+To apply a rule `r : Φ → Ψ` to a goal `Γ ⊢ T`, we find all subcontexts `Δ ⊆ Γ`
+such that `Δ` unifies with `Φ`. We then extend `Γ` with the output hypotheses
+`Ψ[Φ := Δ]`.
+
+An output hypothesis `h : T` is *redundant* if `T` is a `Prop` and there is
+already a hypothesis `h' : T` in the context. A goal `Γ ⊢ T` is *saturated* for
+a set of forward rules if all output hypotheses of the rules, when applied to
+`Γ`, are redundant.
+
+Note that this notion of redundancy/saturation does not work for rules with
+non-`Prop` output hypotheses. For example, a rule application which splits the
+hypothesis `p : ℕ × ℕ` into `m : ℕ` and `n : ℕ` is not redundant just because we
+already have a natural number `k : ℕ` in the context, since `m`, `n` and `k` are
+all different. I suggest we ignore this complication and focus on `Prop`-valued
+forward rules.
+
+## Proposed Integration into Aesop Search
+
+Currently, Aesop proceeds in three phases when faced with a goal `Γ ⊢ T`:
+
+1. Normalise the goal. This means in particular that we run `simp_all`.
+2. Apply safe rules as much as possible. (The new goals created during this are
+   also normalised.)
+3. Apply unsafe rules.
+
+I propose that we introduce an additional *forward phase* between the
+normalisation phase (1) and the safe phase (2). In this phase, we run
+exclusively forward rules. The functional differences between forward rules and
+regular rules are:
+
+- Forward rules must create exactly one subgoal. (We may want to allow zero
+  subgoals as a special case.)
+- Forward rules must not change the goal's target.
+
+As a result, forward rules are automatically safe (for any sane rule set).
+
+## Destruct Rules
+
+A *destruct rule* is a forward rule that, if it succeeds, clears the input
+hypotheses. This is intended for rules which preserve all (relevant) information
+from the input hypotheses in the output hypotheses. The lemma `eq_of_le_ge`
+above would be suitable as a destruct rule.
+
+The advantage of destruct rules is that we don't have to worry about a rule
+applying multiple times to subgoals: the input hypotheses are gone after the
+rule has been applied.
+
+A complication: when other hypotheses in the context depend on the input
+hypotheses, the input hypotheses cannot be cleared. So then the destruct rule
+becomes a regular forward rule. Perhaps it would be sensible to clear only the
+`Prop`-valued input hypotheses, on which nothing will reasonably depend (because
+of proof irrelevance). This is probably the more useful behaviour anyway: if we
+apply `eq_of_le_ge`, we want to clear `n ≤ 0` and `n ≥ 0`, but not `n`.
+
+## Indexing Problem
+
+The indexing problem is about efficiently finding all forward rules that may
+apply to a goal. We need to do this at least for the root goal.
+
+### Problem
+
+To apply forward rules to a goal `Γ ⊢ T`, we must efficiently find all rules
+`r : Φ → Ψ` such that `Φ` is a subcontext of `Γ`. After the found rules have
+been applied, the context is extended with output hypotheses `Γ₁`, so we must
+now find all rules `r : Φ₁ → Ψ₁` such that `Φ₁` is a subcontext of `Γ, Γ₁`, and
+so on until all rules fail.
+
+### Solution: Iterated Discrimination Trees
+
+We use a discrimination tree which maps input hypothesis types to
+
+- an array of rules (these are rules which require only one hypothesis of the
+  given type); and
+- another discrimination tree (for rules which require multiple hypotheses).
+  
+For a rule `r : ∀ (h₁ : T₁) ... (hₙ : Tₙ), Ψ`, the *indexed hypotheses* are
+those input hypotheses `hᵢ₁, ..., hᵢₘ` that don't have forward dependencies,
+i.e. where there is no `hⱼ : Tⱼ` such that `hᵢₖ` appears in `Tⱼ`. We restrict
+indexing to these hypotheses. This makes sense because the values of non-indexed
+hypotheses (i.e. those with forward dependencies) are determined by unification
+as soon as we know the values of the indexed hypotheses. In effect, we treat
+non-indexed hypotheses as implicit arguments.
+  
+#### Naive Scheme
+  
+To index a rule `r` with indexed hypotheses `h₁ : T₁, ..., hₙ : Tₙ`, we map each
+`Tᵢ` to a discrimination tree which indexes the `hⱼ` for `j ≠ i`, recursively.
+Once `n = 1`, the recursion terminates and we map `T₁` to `r`. Thus, any
+ordering of the input hypotheses corresponds to a series of discrimination trees
+in the iterated discrimination tree, the last of which contains the rule.
+  
+To retrieve rules applicable in the context `h₁ : T₁, ..., hₘ : Tₘ`, we iterate
+through the `Tᵢ`. For each `Tᵢ`, we perform a lookup in the current collection
+of iterated discrimination trees (initially, the root discrimination tree). This
+lookup yields (a) an array of rules which are already applicable; (b) additional
+discrimination trees, containing rules that may become applicable if more
+hypotheses match. The latter are added to the collection of discrimination
+trees.
+
+This scheme scales very poorly with long chains of hypotheses: for `n`
+hypotheses, we get `n!` leaves in the discrimination trees. We may pragmatically
+limit the number of indexed hypotheses to, say, 3, preferring to index later
+hypotheses since they tend to be more specific.
+
+#### Ordered Scheme
+
+The core issue with the naive scheme is that we have to index every permutation
+of the indexed hypotheses. We can avoid this by fixing a term order. We then
+index only one permutation of the indexed hypotheses, determined by the order,
+and when we look up matching hypotheses for a context, we go through the context
+in the same order.
+
+However, suppose that the input hypotheses `h₁ : T₁, ..., hₙ : Tₙ` match the
+context hypotheses `k₁ : U₁, ..., kₙ : Uₙ`. This doesn't mean that `Tᵢ = Uᵢ` but
+merely that `Uᵢ` is an *instance* of `Tᵢ`, i.e. `Uᵢ = Tᵢ[σ]` for some
+substitution `σ`. (I'm not sure whether `σ` is a substitution of `fvar`s,
+`mvar`s or both.) Thus, we need an order that is compatible with substitution,
+in the sense that `Tᵢ[σ] < Tⱼ[τ]` (i.e., `Uᵢ < Uⱼ`) implies `Tᵢ < Tⱼ` for any
+substitutions `σ` and `τ`. For instance, we must ensure
+```
+(0 = ?m) < (?n + ?m = 4)   ⇒   (?n = ?m) < (?n + ?m = ?k)
+```
+
+TODO cont
+
+## Incrementality Problem
+
+Many rules produce subgoals with the same or very similar contexts as the parent
+goal. For instance, ∧-introduction reduces the goal `P := Γ ⊢ A ∧ B` to subgoals
+`S₁ := Γ ⊢ A` and `S₂ := Γ ⊢ B`. The forward rules applicable to `S₁` and `S₂`
+are exactly the same as those applicable to `P`. We therefore want to avoid
+(some of) the repeated work of applying forward rules to `S₁` and `S₂`.
+
+The problem becomes much more interesting if we weaken the assumption that the
+parent goal and the subgoals have exactly the same context. Let the parent
+goal be `P := Γ ⊢ T` and the subgoal `S := Δ ⊢ U`.
+
+- If `Γ ⊆ Δ`, then we can transfer all forward rules applied to `P` to `S`.
+- If `¬ Γ ⊆ Δ`, then there may still be a subcontext `Γ' ⊆ Γ` with `Γ ⊆ Δ`.
+  Forward rules which only need this subcontext may still apply to `S`.
+- Dually, if `Δ ⊆ Γ`, then forward rules which didn't apply to `P` won't apply
+  to `S` either.
+
+## Caching Problem
+
+The caching problem is the global version of the incrementality problem. Goals
+with similar contexts aren't necessarily parent goals and their subgoals. We can
+also find goals `G₁ := Γ ⊢ T` and `G₂ := Γ ⊢ U` in completely different parts of
+the search tree. So it would be even nicer if the forward rules applied to `G₁`
+were transferred to `G₂`, without (much) additional work.
+
+In particular, Aesop deals with metavariables by copying parts of the search
+tree. For instance, suppose we have a goal `G := Γ[?x] ⊢ T[?x]`, where both the
+context and the target contain a metavariable `?x`. If a rule finds an
+assignment `?x := t`, we get a copy `H := Γ[?x := t] ⊢ T[?x := t]` of `G`, where
+`H` is not necessarily a child of `G`. But presumably forward rules which were
+applied to `G` could still be applied to `H`.
+
+The variations of the incrementality problem also apply to the caching problem.
+
+## Pattern-Based Forward Rules
+
+For the applications below, our notion of forward rules is too restrictive.
+Forward rules in the sense discussed so far are triggered by the presence of
+certain hypotheses. But we also want forward rules that are triggered by the
+presence of terms of a certain shape in a hypothesis (or in the target). For
+example, a rule may establish `0 ≤ ↑n`, where `↑n` is the coercion to `Int` of a
+natural number `n` and `↑n` appears somewhere in the goal. Similarly, it may be
+useful to establish `min x y ≤ x` and `min x y ≤ y` for any occurrence of the
+pattern `min ?x ?y` in the goal.
+
+### Definition
+
+A *pattern-based forward rule* consists of
+
+- A *pattern* `p`. This is an expression with free variables (metavariables)
+  `x₁ : T₁, ..., xₙ : Tₙ`.
+- A forward rule `r : ∀ xᵢ : Tᵢ, Φ → Ψ`, where both the input and output
+  hypotheses may depend on the variables `xᵢ`. (This notation is a bit fishy --
+  the rule is really a tactic which receives a substitution for the `xᵢ` and can
+  do whatever it wants with this.)
+
+When applying a forward rule to a goal `Γ ⊢ T`, we first check whether any
+subterm `t` of `Γ` or `T` unifies with `p` (structurally or with reducible
+transparency?). If so, we obtain instantiations `u₁ : T₁, ..., uₙ : Tₙ` for the
+pattern variables. We then apply the forward rule `r u₁ ... uₙ` as usual.
+
+## Application: Positivity
+
+Mathlib's `positivity` tactic [1] establishes facts of the form `0 < t`
+(positivity), `0 ≤ t` (nonnegativity) and `0 ≠ t` (nonzeroness). It does this by
+going through the term `t`, which must be composed of function symbols and
+variables such that each function symbol has a registered *positivity
+extension*. Such an extension tells `positivity` how to combine
+positivity/nonnegativity/nonzeroness information about the function arguments
+into a positivity/nonnegativity/nonzeroness result about the function
+application.
+
+[1] https://github.com/leanprover-community/mathlib4/blob/26eb2b0ade1d7e252d07b13ea9253f9c8652facd/Mathlib/Tactic/Positivity/Core.lean
+
+For example, the positivity extension for `min` matches a term `min a b`,
+analyses `a` and `b` and combines the results:
+
+- If `a < 0` and `b < 0`, then `min a b < 0`.
+- If `a > 0` and `b > 0`, then `min a b > 0`.
+- If `a ≤ 0` and `b < 0`, then `min a b ≤ 0`.
+- Etc.
+
+See [2] for more extensions.
+
+[2] https://github.com/leanprover-community/mathlib4/blob/26eb2b0ade1d7e252d07b13ea9253f9c8652facd/Mathlib/Tactic/Positivity/Basic.lean
+
+This is essentially just forward reasoning with pattern-based rules, where the
+rules are applied 'inside-out'. So I believe once we have efficient support for
+such forward rules, we could emulate `positivity` in Aesop without much
+efficiency loss. Advantages:
+
+- With incremental forward rules, we get incremental positivity checking, which
+  should be much more efficient than running `positivity` over and over again.
+- The results of `positivity` are available to other forward rules, and the
+  results of other forward rules to `positivity`.
+  - The first part is nice because with the current Aesop architecture, rules
+    have to ask for a positivity result if they need it, which may happen
+    repeatedly. Adding these results to the context can be seen as perfect
+    caching.
+  - The second part is nice because `positivity` extensions cannot currently
+    make use of any information that is not of the form `0 < t`, `0 ≤ t` or `0 ≠
+    t`. But surely there are modules which could be interested in other facts
+    (TODO find examples).
+    
+### TODO: Why Not Backwards Rules?
+
+## Application: Arithmetic Forward Reasoning
+
+The Polya paper [1] describes a heuristic solver for problems involving real
+inequalities. Rob Lewis's MSc thesis [2] has more details.
+
+[1] https://arxiv.org/pdf/1404.4410.pdf
+[2] https://robertylewis.com/files/ms_thesis.pdf
+
+The basic idea is to perform heuristic forward reasoning with a 'blackboard'
+architecture. The blackboard is a central data structure that contains
+arithmetic information, specifically comparisons between subterms of the
+original goal. This information is in some canonical form. The solver then runs
+'modules', which are functions that derive additional comparisons from the
+comparisons currently found on the blackboard. For example, a module about the
+`min` function could identify all terms of the form `min(x₁, ..., xₙ)` that
+appear in any comparisons on the blackboard and assert `min(x₁, ..., xₙ) ≤ xᵢ`
+for `i = x, ..., n`.
+
+Particularly interesting are the Fourier-Motzkin modules, which use
+Fourier-Motzkin elimination to derive facts about sums and products.
+Essentially, given a system of linear inequalities, we can derive comparisons
+between any two variables `xᵢ` and `xⱼ` by eliminating all other variables from
+the system.
+
+I believe that forward rules could be used to implement something akin to Polya
+as an Aesop rule set. The local context would play the part of Polya's
+blackboard, and forward rules would play the part of Polya's modules.
+
+However, there are various challenges:
+
+- Polya's blackboard is not just a list of hypotheses; it's a data structure
+  that performs, for example, consistency checks between the current hypotheses.
+  The blackboard API would have to be emulated by additional rules, which would
+  probably be expensive.
+- Polya only deals with real inequalities, but we also need integer and natural
+  inequalities. So we're looking to copy Polya's architecture, but not
+  necessarily the specific modules.
+- Polya includes a normalisation pass that canonises terms. We could implement
+  this as a normalisation rule.
