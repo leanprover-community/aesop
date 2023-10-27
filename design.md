@@ -165,7 +165,25 @@ substitution `σ`. For instance, we must ensure
 (?n = ?m) < (?n + ?m = ?k)    ⇒    (0 = ?m) < (?n + ?m = 4)
 ```
 
-TODO cont
+The previous condition means that the order can't be a strict total order.
+Proof: assume that the order is total. This means the terms `T₁ := P ?x` and `T₂
+:= ?y` have to be ordered somehow; wlog assume `T₁ < T₂`. Take `σ := {?x ↦ a, ?y
+↦ a}`. Then `T₁[σ] = T₂[σ]`, but by assumption we should have `T₁[σ] < T₂[σ]`.
+
+When looking up hypotheses, we can deal with this non-totality by considering
+permutations of equivalent hyps. E.g. suppose we have
+```
+T₁ < T₂ ≈ T₃ ≈ T₄ < T₅
+```
+Then we need to query for
+```
+T₁, T₂, T₃, T₄, T₅
+T₁, T₃, T₂, T₄, T₅
+...
+```
+
+This is hopefully fine since the typical context won't contain many equivalent
+hyps.
 
 ## Incrementality Problem
 
