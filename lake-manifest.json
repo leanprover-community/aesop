@@ -4,9 +4,9 @@
  [{"git":
    {"url": "https://github.com/leanprover/std4",
     "subDir?": null,
-    "rev": "409a644492aaff846b6b2963e221c7f1ceaf30cc",
+    "rev": "fa849e09142a3cda1b64107d542abb08956ec069",
     "opts": {},
     "name": "std",
-    "inputRev?": "v4.2.0",
+    "inputRev?": "main",
     "inherited": false}}],
  "name": "aesop"}
