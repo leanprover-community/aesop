@@ -14,8 +14,8 @@ open Lean.Meta
 namespace Aesop
 
 structure Index (α : Type) [BEq α] [Hashable α] where
-  byTarget : DiscrTree α simpleReduce
-  byHyp : DiscrTree α simpleReduce
+  byTarget : DiscrTree α 
+  byHyp : DiscrTree α 
   unindexed : PHashSet α
   deriving Inhabited
 
@@ -56,9 +56,9 @@ partial def add (r : α) (imode : IndexingMode) (ri : Index α) :
   | IndexingMode.unindexed =>
     { ri with unindexed := ri.unindexed.insert r }
   | IndexingMode.target keys =>
-    { ri with byTarget := ri.byTarget.insertCore keys r }
+    { ri with byTarget := ri.byTarget.insertCore keys r discrTreeConfig }
   | IndexingMode.hyps keys =>
-    { ri with byHyp := ri.byHyp.insertCore keys r }
+    { ri with byHyp := ri.byHyp.insertCore keys r discrTreeConfig }
   | IndexingMode.or imodes =>
     imodes.foldl (init := ri) λ ri imode =>
       ri.add r imode
@@ -69,8 +69,8 @@ def unindex (ri : Index α) (p : α → Bool) : Index α :=
   { byTarget, byHyp, unindexed }
   where
     @[inline, always_inline]
-    filterDiscrTree' {s} (unindexed : PHashSet α) (t : DiscrTree α s) :
-        DiscrTree α s × PHashSet α :=
+    filterDiscrTree' (unindexed : PHashSet α) (t : DiscrTree α) :
+        DiscrTree α × PHashSet α :=
       filterDiscrTree (not ∘ p) (λ unindexed v => unindexed.insert v) unindexed
         t
 
@@ -95,7 +95,7 @@ def size : Index α → Nat
 private def applicableByTargetRules (ri : Index α) (goal : MVarId)
     (include? : α → Bool) : MetaM (Array (α × Array IndexMatchLocation)) :=
   goal.withContext do
-    let rules ← ri.byTarget.getUnify (← goal.getType)
+    let rules ← ri.byTarget.getUnify (← goal.getType) discrTreeConfig
     let mut rs := Array.mkEmpty rules.size
       -- Assumption: include? is true for most rules.
     for r in rules do
@@ -112,7 +112,7 @@ private def applicableByHypRules (ri : Index α) (goal : MVarId)
     for localDecl in ← getLCtx do
       if localDecl.isImplementationDetail then
         continue
-      let rules ← ri.byHyp.getUnify localDecl.type
+      let rules ← ri.byHyp.getUnify localDecl.type discrTreeConfig
       for r in rules do
         if include? r then
           rs := rs.push (r, #[.hyp localDecl])
