@@ -217,7 +217,7 @@ def handleFatalError (e : Exception) : SearchM Q α := do
 
 partial def searchLoop : SearchM Q (Array MVarId) :=
   withIncRecDepth do
-    checkMaxHeartbeats "aesop"
+    checkSystem "aesop"
     if let (some err) ← checkRootUnprovable then
       handleNonfatalError err
     else if ← finishIfProven then
