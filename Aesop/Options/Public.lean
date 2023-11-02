@@ -134,7 +134,7 @@ structure Options where
 /--
 Options which modify the behaviour of the builtin `simp` normalisation rule.
 Extends `Lean.Meta.Simp.ConfigCtx`, so any option declared there is also valid
-here. For example, you can use `aesop (simp_config := { arith := true })` to get
+here. For example, you can use `aesop (simp_options := { arith := true })` to get
 behaviour similar to `simp (config := { arith := true })` (aka `simp_arith`).
 -/
 structure SimpConfig extends Lean.Meta.Simp.ConfigCtx where

@@ -350,7 +350,7 @@ def renameInaccessibleFVarsWithScript (goal : MVarId) (generateScript : Bool) :
 
 def unfoldManyStarWithScript (goal : MVarId)
     (unfold? : Name → Option (Option Name)) (generateScript : Bool) :
-    MetaM (UnfoldResult × Option (ScriptBuilder MetaM)) := do
+    MetaM (UnfoldResult MVarId × Option (ScriptBuilder MetaM)) := do
   let result ← unfoldManyStar goal unfold?
   let scriptBuilder? := mkScriptBuilder? generateScript $
     .unfoldManyStar result.usedDecls
