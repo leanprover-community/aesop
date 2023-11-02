@@ -331,25 +331,20 @@ where
 -- Also, the `Try this:` suggestion in the infoview is not properly formatted.
 def addTryThisTacticSeqSuggestion (ref : Syntax)
     (suggestion : TSyntax ``Lean.Parser.Tactic.tacticSeq)
-    (origSpan? : Option Syntax := none)
-    (extraMsg : String := "") : MetaM Unit := do
+    (origSpan? : Option Syntax := none) : MetaM Unit := do
   let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq suggestion
-  let text := fmt.prettyExtra (indent := 0) (column := 0)
-  logInfoAt ref m!"Try this:\n  {text}"
+  let msgText := fmt.prettyExtra (indent := 0) (column := 0)
   if let some range := (origSpan?.getD ref).getRange? then
     let map ← getFileMap
     let start := findLineStart map.source range.start
     let indent := (range.start - start).1
     let text := fmt.prettyExtra (indent := indent - 2) (column := indent)
-    let stxRange := ref.getRange?.getD range
-    let stxRange :=
-      { start := map.lineStart (map.toPosition stxRange.start).line
-        stop := map.lineStart ((map.toPosition stxRange.stop).line + 1) }
-    let range := map.utf8RangeToLspRange range
-    let json := Json.mkObj
-      [("suggestion", text), ("range", toJson range), ("info", extraMsg)]
-    Widget.saveWidgetInfo ``Std.Tactic.TryThis.tryThisWidget json
-      (.ofRange stxRange)
+    let suggestion := {
+      suggestion := .string text
+      messageData? := some msgText
+    }
+    Std.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
+      (header := "Try this:\n  ")
 
 /--
 Runs a computation for at most the given number of heartbeats times 1000,
