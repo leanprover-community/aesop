@@ -164,7 +164,7 @@ We also have a similar problem with goal modifications between forward phases.
 Often, a backward rule applied between two forward phases will perform only small modifications of the context, in particular adding a few hypotheses.
 Incrementality would also help here.
    
-### Solution
+### Solution 1
 
 We first observe that we can simplify the problem by considering the new hypotheses one by one.
 Thus, we work in contexts `Γ₁`, `Γ₂ := Γ₁, h₁ : T₁`, `Γ₃ := Γ₂, h₂ : T₂`, etc., where `Φ₁ = h₁ : T₁, h₂ : T₂, ...`.
@@ -178,6 +178,41 @@ Thus, the new index acts like the naive scheme at the root, and like the ordered
 
 When querying the index, we can now look up `h` at the root.
 If it matches, we match the returned ordered iterated discrimination tree against `Γ` as usual.
+
+### Solution 2
+
+We again consider the new hypotheses one by one, but for this solution we use completely different data structures.
+The guiding principle is that we want to reuse work that's already been done, so we don't want to match on hypotheses that we've already processed.
+
+#### Data Structures
+
+We maintain three maps:
+
+- `M₁` maps rules `r : Φ → Ψ` (or rather rule names; we assume that rules are uniquely identified) to their number of input hypotheses, `|Φ|`.
+- `M₂` maps patterns `P` to pairs `(r, T)`, where `r : Φ → Ψ` is a rule, `T` is one of the input hypotheses of `r` and `P` is a generalisation of `T`.
+  Note that `T` may contain metavariables.
+  This is a discrimination tree, so we can approximately view it as a map from `T` to `r`.
+  However, since `P` generalises `T`, the map may contain false positives.
+- `M₃` maps rules `r : Φ → Ψ` to *partial matches* of `r`.
+  A partial match of `r` is a pair `(c, σ)`, where `c ≤ |Φ|` is a natural number and `σ` is a substitution for (some of) the variables in `Φ`.
+
+`M₁` and `M₂` form the rule index and are pre-computed.
+We use `M₂` to obtain all the rules for which a new hypothesis `h : T` may be useful.
+
+`M₃` is maintained throughout the forward phase (and possibly between forward phases as well).
+We use `M₃` to store partial matches, i.e. rules for which some of the input hypotheses are already discharged by the current context.
+As we iterate through successively larger contexts `∅`, `h₁ : T₁`, `h₁ : T₁, h₂ : T₂`, ..., we maintain the following invariant:
+
+Let `Γ` be the current context.
+Let `r : Φ → Ψ` be a rule.
+Let `σ` be a substitution of (some of) the variables in `Φ`.
+Let `Ξ` be a maximal subset of `Φ` which unifies with a subset `Δ` of `Γ` at `σ`.
+This means that `Ξ[σ]` unifies with `Δ[σ]` and there is no hypothesis `h : T` in `Φ \ Ξ` such that `(Ξ, h : T)[σ]` unifies with a subset `Δ'` of `Γ`.
+Then, `M₃(r)` contains the partial match `(|Ψ| - |Ξ|, σ)`.
+
+### Algorithm
+
+TODO
 
 ## Pattern-Based Forward Rules
 
