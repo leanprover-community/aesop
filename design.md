@@ -164,7 +164,7 @@ We also have a similar problem with goal modifications between forward phases.
 Often, a backward rule applied between two forward phases will perform only small modifications of the context, in particular adding a few hypotheses.
 Incrementality would also help here.
    
-### Solution 1
+### Solution 1: Partially Ordered Iterated Discrimination Trees
 
 We first observe that we can simplify the problem by considering the new hypotheses one by one.
 Thus, we work in contexts `Γ₁`, `Γ₂ := Γ₁, h₁ : T₁`, `Γ₃ := Γ₂, h₂ : T₂`, etc., where `Φ₁ = h₁ : T₁, h₂ : T₂, ...`.
@@ -179,40 +179,64 @@ Thus, the new index acts like the naive scheme at the root, and like the ordered
 When querying the index, we can now look up `h` at the root.
 If it matches, we match the returned ordered iterated discrimination tree against `Γ` as usual.
 
-### Solution 2
+### Solution 2: Accumulating Partial Matches
 
 We again consider the new hypotheses one by one, but for this solution we use completely different data structures.
-The guiding principle is that we want to reuse work that's already been done, so we don't want to match on hypotheses that we've already processed.
+The guiding principle is that we want to reuse work that's already been done, so we want to look at each new hypothesis exactly once.
 
 #### Data Structures
 
-We maintain three maps:
+In the following, we identify the input hypotheses of a rule `r : (h₁ : T₁) ... (hₙ : Tₙ) → Ψ` with their indices `1, ..., n`.
 
-- `M₁` maps rules `r : Φ → Ψ` (or rather rule names; we assume that rules are uniquely identified) to their number of input hypotheses, `|Φ|`.
-- `M₂` maps patterns `P` to pairs `(r, T)`, where `r : Φ → Ψ` is a rule, `T` is one of the input hypotheses of `r` and `P` is a generalisation of `T`.
-  Note that `T` may contain metavariables.
-  This is a discrimination tree, so we can approximately view it as a map from `T` to `r`.
-  However, since `P` generalises `T`, the map may contain false positives.
-- `M₃` maps rules `r : Φ → Ψ` to *partial matches* of `r`.
-  A partial match of `r` is a pair `(c, σ)`, where `c ≤ |Φ|` is a natural number and `σ` is a substitution for (some of) the variables in `Φ`.
+A *match* `m` for the rule `r` is a partial map from input hypotheses `1, ..., n` into hypotheses in the current context `Γ`.
+It indicates that hypotheses `m(k₁), ..., m(kₗ)` in `Γ` can possibly be used to discharge the input hypotheses `k₁, ..., kₗ` of `r`.
 
-`M₁` and `M₂` form the rule index and are pre-computed.
-We use `M₂` to obtain all the rules for which a new hypothesis `h : T` may be useful.
+A match `m` for `r` is *consistent* if the substitutions which arise from unifying each input hypothesis `hᵢ : Tᵢ ∈ dom(m)` with `m(i)` are consistent (i.e. they agree on variables shared between them).
+For example, for the rule `r : n ≥ 0 → n ≤ 0 → n = 0`, the match `1 ↦ (h₁ : x ≥ 0), 2 ↦ (h₂ : y ≤ 0)` (with `x ≠ y`) is not consistent since unifying `?n ≥ 0` with `x ≥ 0` yields the substitution `?n ↦ x` while `?n ≤ 0` and `y ≤ 0` yield the substitution `?n ↦ y`.
 
-`M₃` is maintained throughout the forward phase (and possibly between forward phases as well).
-We use `M₃` to store partial matches, i.e. rules for which some of the input hypotheses are already discharged by the current context.
-As we iterate through successively larger contexts `∅`, `h₁ : T₁`, `h₁ : T₁, h₂ : T₂`, ..., we maintain the following invariant:
+A match `m` for `r : Φ → Ψ` is *complete* if it covers all of `r`'s input hypotheses, i.e. `dom(m) = Φ`.
 
-Let `Γ` be the current context.
-Let `r : Φ → Ψ` be a rule.
-Let `σ` be a substitution of (some of) the variables in `Φ`.
-Let `Ξ` be a maximal subset of `Φ` which unifies with a subset `Δ` of `Γ` at `σ`.
-This means that `Ξ[σ]` unifies with `Δ[σ]` and there is no hypothesis `h : T` in `Φ \ Ξ` such that `(Ξ, h : T)[σ]` unifies with a subset `Δ'` of `Γ`.
-Then, `M₃(r)` contains the partial match `(|Ψ| - |Ξ|, σ)`.
+We maintain two maps:
+
+- `M₁` maps input hypothesis types `T` to pairs `(r, i)`, where `r : Φ → Ψ` is a rule and the `i`-th rule in `Φ` has type `T`.
+  This is a discrimination tree, so the mapping is approximate: if `M₁(T) = (r, i)`, then the `i`-th input hypothesis of `r` *may* unify with `T`.
+  The discrimination tree is pre-computed and forms the rule index.
+- `M₂` maps rules `r` to matches `m` of `r`.
+  This map is maintained throughout the forward phase (and hopefully between forward phases as well).
+  We maintain the invariant that `M₂` contains a superset of the valid, incomplete matches for all rules and the current context `Γ`.
 
 ### Algorithm
 
-TODO
+Let `Γ` be the current context and let `h : T` be the new hypothesis.
+We proceed as follows:
+
+```text
+For each rule r and input hypothesis index i in M₁(T):
+  For each match m in M₂(r):
+    If m(i) is not defined:
+      Add to M₂(r) the match m ∪ { i ↦ h }.
+  Add to M₂(r) the match { i ↦ h }.
+
+For all added matches m that are complete:
+  Remove m from M₂(r).
+  If m is valid:
+    Let Ψ be the result of applying r to the hypotheses in m.
+    Add the non-redundant hypotheses in Ψ to the context queue.
+```
+
+### Representation of a Set of Matches
+
+The above representation of sets of matches (as, well, sets of matches) is quite inefficient.
+A better representation is to map each input hypothesis index to a set of possibly matching hypotheses from `Γ`.
+The map `{ 1 ↦ {h₁, h₂}, 2 ↦ {h₃, h₄} }` then represents the matches `{ 1 ↦ h₁, 2 ↦ h₃ }`, `{ 1 ↦ h₁, 2 ↦ h₄ }`, `{ 1 ↦ h₂, 2 ↦ h₃ }`, `{ 1 ↦ h₂, 2 ↦ h₄ }`.
+That's an exponential win.
+(We must still eventually check the matches for validity one by one — but only the complete ones.)
+
+### Aside: Computation
+
+Lean natively performs most operations, including discrimination tree indexing, up to reducible computation.
+We should probably do the same for consistency.
+In that case, it might be advantageous to fully normalise the hypotheses (with reducible transparency) once and for all, instead of partially normalising during the discrimination tree lookups and again for the redundancy check.
 
 ## Pattern-Based Forward Rules
 
