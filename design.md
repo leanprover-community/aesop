@@ -116,6 +116,7 @@ We may pragmatically limit the number of indexed hypotheses to, say, 3, preferri
 The core issue with the naive scheme is that we have to index every permutation of the indexed hypotheses.
 We can avoid this by fixing a term order.
 We then index only one permutation of the indexed hypotheses, determined by the order, and when we look up matching hypotheses for a context, we go through the context in the same order.
+We call this indexing data structure an *ordered iterated discrimination tree*.
 
 However, suppose that the input hypotheses `h₁ : T₁, ..., hₙ : Tₙ` match the context hypotheses `k₁ : U₁, ..., kₙ : Uₙ`.
 This doesn't mean that `Tᵢ = Uᵢ` but merely that `Uᵢ` is an *instance* of `Tᵢ`, i.e. `Uᵢ = Tᵢ[σ]` for some substitution `σ`.
@@ -172,12 +173,11 @@ Each time we generate new output hypotheses, we add them to a queue.
 Now, suppose we operate in context `Γ, h : T` where `h` is the new hypothesis.
 We want to find rules `r : Φ → Ψ` such that `Φ ⊆ Γ, h : T` but `Φ ⊈ Γ`.
 
-To query such rules efficiently, we modify the ordered iterated discrimination tree index defined above as follows: for a rule `r : Φ → Ψ` with `Φ = h₁ : T₁, ..., hₙ : Tₙ`, we create an iterated discrimination tree which, at the root, maps each `hᵢ` to a nested iterated discrimination tree for `h₁, ..., hᵢ₋₁, hᵢ₊₁, ..., hₙ`.
-However, this nested discrimination tree is ordered, as above.
+To query such rules efficiently, we modify the ordered iterated discrimination tree index defined above as follows: for a rule `r : Φ → Ψ` with `Φ = h₁ : T₁, ..., hₙ : Tₙ`, we create an iterated discrimination tree which, at the root, maps each `hᵢ` to an ordered (!) iterated discrimination tree for `h₁, ..., hᵢ₋₁, hᵢ₊₁, ..., hₙ`.
 Thus, the new index acts like the naive scheme at the root, and like the ordered scheme everywhere else.
 
 When querying the index, we can now look up `h` at the root.
-If it matches, we match the returned iterated discrimination tree against `Γ` as usual (i.e. with `Γ` sorted beforehand).
+If it matches, we match the returned ordered iterated discrimination tree against `Γ` as usual.
 
 ## Pattern-Based Forward Rules
 
