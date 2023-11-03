@@ -27,6 +27,8 @@ Note that this notion of redundancy/saturation does not work for rules with non-
 For example, a rule application which splits the hypothesis `p : ℕ × ℕ` into `m : ℕ` and `n : ℕ` is not redundant just because we already have a natural number `k : ℕ` in the context, since `m`, `n` and `k` are all different.
 I suggest we ignore this complication and focus on `Prop`-valued forward rules.
 
+TODO NOTE: we don't do unification but just matching, meaning we don't instantiate mvars in the context when we match input hypotheses against them.
+
 ## Proposed Integration into Aesop Search
 
 Currently, Aesop proceeds in three phases when faced with a goal:
@@ -118,7 +120,7 @@ We then index only one permutation of the indexed hypotheses, determined by the 
 However, suppose that the input hypotheses `h₁ : T₁, ..., hₙ : Tₙ` match the context hypotheses `k₁ : U₁, ..., kₙ : Uₙ`.
 This doesn't mean that `Tᵢ = Uᵢ` but merely that `Uᵢ` is an *instance* of `Tᵢ`, i.e. `Uᵢ = Tᵢ[σ]` for some substitution `σ`.
 (I'm not sure whether `σ` is a substitution of `fvar`s, `mvar`s or both.)
-Thus, we need an order that is compatible with substitution, in the sense that `Tᵢ < Tⱼ` implies `Tᵢ[σ] < Tⱼ[σ]` (i.e., `Uᵢ < Uⱼ`) for any substitution `σ`.
+Thus, we need an order that is *stable under substitution*, in the sense that `Tᵢ < Tⱼ` implies `Tᵢ[σ] < Tⱼ[σ]` (i.e., `Uᵢ < Uⱼ`) for any substitution `σ`.
 For instance, we must ensure
 ```
 (?n = ?m) < (?n + ?m = ?k)    ⇒    (0 = ?m) < (?n + ?m = 4)
@@ -191,6 +193,7 @@ A *pattern-based forward rule* consists of
 
 - A *pattern* `p`.
   This is an expression with free variables (metavariables) `x₁ : T₁, ..., xₙ : Tₙ`.
+  For now, we only consider forward rules with a single pattern.
 - A forward rule `r : ∀ xᵢ : Tᵢ, Φ → Ψ`, where both the input and output hypotheses may depend on the variables `xᵢ`.
   (This notation is a bit fishy — the rule is really a tactic which receives a substitution for the `xᵢ` and can do whatever it wants with this.)
 
