@@ -113,7 +113,7 @@ Additionally, Tammet uses a number of tests that can quickly determine non-subsu
 For example:
 
 - If `A > B`, then `A` does not subsume `B`.
-- Is the set of predicate names (for us: constant names) in `A` a subset of those in `B`.
+- If the set of predicate names (for us: constant names) in `A` is not a subset of those in `B`, then `A` does not subsume `B`.
 
 This looks like a very good idea to me.
 
