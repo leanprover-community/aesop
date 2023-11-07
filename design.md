@@ -263,6 +263,19 @@ When applying a forward rule to a goal `Γ ⊢ T`, we first check whether any su
 If so, we obtain instantiations `u₁ : T₁, ..., uₙ : Tₙ` for the pattern variables.
 We then apply the forward rule `r u₁ ... uₙ` as usual.
 
+### Integration Into Accumulating Partial Matches Algorithm
+
+We extend the *match* structure with a substitution `σ` resulting from a pattern.
+
+We add a discrimination tree `M₃` to the rule index.
+This tree maps patterns to rules for which the pattern is relevant.
+
+When a new hypothesis `h : T` arrives, we look up every subterm of `T` in `M₃`.
+Each match yields a rule `r` and a substitution `σ`.
+We then add `σ` to the match map of `r`.
+
+When checking whether a match is valid, we now use `σ` as the initial substitution (rather than `∅`).
+
 ## Application: Positivity
 
 Mathlib's `positivity` tactic [1] establishes facts of the form `0 < t` (positivity), `0 ≤ t` (nonnegativity) and `0 ≠ t` (nonzeroness).
