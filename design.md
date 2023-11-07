@@ -198,14 +198,14 @@ A match `m` for `r : Φ → Ψ` is *complete* if it covers all of `r`'s input hy
 
 We maintain two maps:
 
-- `M₁` maps input hypothesis types `T` to pairs `(r, i)`, where `r : Φ → Ψ` is a rule and the `i`-th rule in `Φ` has type `T`.
+- `M₁` maps input hypothesis types `T` to pairs `(r, i)`, where `r : Φ → Ψ` is a rule and the `i`-th input hypothesis in `Φ` has type `T`.
   This is a discrimination tree, so the mapping is approximate: if `M₁(T) = (r, i)`, then the `i`-th input hypothesis of `r` *may* unify with `T`.
   The discrimination tree is pre-computed and forms the rule index.
 - `M₂` maps rules `r` to matches `m` of `r`.
   This map is maintained throughout the forward phase (and hopefully between forward phases as well).
   We maintain the invariant that `M₂` contains a superset of the valid, incomplete matches for all rules and the current context `Γ`.
 
-### Algorithm
+#### Algorithm
 
 Let `Γ` be the current context and let `h : T` be the new hypothesis.
 We proceed as follows:
@@ -224,15 +224,18 @@ For all added matches m that are complete:
     Add the non-redundant hypotheses in Ψ to the context queue.
 ```
 
-### Representation of a Set of Matches
+#### Representation of a Set of Matches
 
 The above representation of sets of matches (as, well, sets of matches) is quite inefficient.
 A better representation is to map each input hypothesis index to a set of possibly matching hypotheses from `Γ`.
 The map `{ 1 ↦ {h₁, h₂}, 2 ↦ {h₃, h₄} }` then represents the matches `{ 1 ↦ h₁, 2 ↦ h₃ }`, `{ 1 ↦ h₁, 2 ↦ h₄ }`, `{ 1 ↦ h₂, 2 ↦ h₃ }`, `{ 1 ↦ h₂, 2 ↦ h₄ }`.
 That's an exponential win.
-(We must still eventually check the matches for validity one by one — but only the complete ones.)
 
-### Aside: Computation
+We must still eventually check the matches for validity one by one — but only the complete ones.
+Additionally, the tree structure implied in the above representation lends itself to the backtracking algorithm described in <tammet-subsumption.md>.
+This also means that all the optimisations described there become relevant for us.
+
+#### Aside: Computation
 
 Lean natively performs most operations, including discrimination tree indexing, up to reducible computation.
 We should probably do the same for consistency.
