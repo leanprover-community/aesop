@@ -23,17 +23,21 @@ example (h : (α ∧ β) ∨ γ) : α ∨ γ := by
 
 -- This test checks that the norm simp config is passed around properly.
 example {α β : Prop} (ha : α) (h : α → β) : β := by
-  fail_if_success aesop (rule_sets [-builtin,-default])
-    (simp_options := { maxDischargeDepth := 0 })
-    (options := { terminal := true })
+  fail_if_success
+    aesop
+      (rule_sets [-builtin,-default])
+      (simp_config := { maxDischargeDepth := 0 })
+      (simp_all_config := { maxDischargeDepth := 0 })
+      (options := { terminal := true })
   aesop (rule_sets [-builtin,-default])
 
--- We can use the `useHyps` config option to switch between `simp_all` and
--- `simp at *`.
+-- We can use the `enableSimpAll` config option to switch off the `simp_all`
+-- rule.
 example {α : Prop} (ha : α) : α := by
-  fail_if_success aesop (rule_sets [-builtin,-default])
-    (simp_options := { useHyps := false })
-    (options := { terminal := true })
+  fail_if_success
+    aesop
+      (rule_sets [-builtin,-default])
+      (options := { enableSimpAll := false, terminal := true })
   aesop (rule_sets [-builtin,-default])
 
 -- We can give priorities to `simp` rules, corresponding to the priorities of

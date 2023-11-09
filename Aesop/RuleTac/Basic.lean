@@ -16,21 +16,28 @@ open Lean.Meta
 
 namespace Aesop
 
-
 /-! # Rule Tactic Types -/
 
 /--
-Input for a rule tactic. Contains:
-
-- `goal`: the goal on which the rule is run.
-- `mvars`: the set of mvars which occur in `goal`.
-- `indexMatchLocations`: if the rule is indexed, the locations (e.g. hyps or the
-  target) matched by the rule's index entries. Otherwise an empty set.
+Input for an Aesop rule tactic.
 -/
 structure RuleTacInput where
+  /--
+  The goal on which the rule is run.
+  -/
   goal : MVarId
+  /--
+  The set of mvars which `goal` depends on.
+  -/
   mvars : UnorderedArraySet MVarId
+  /--
+  If the rule is indexed, the locations (e.g. hyps or the
+  target) matched by the rule's index entries. Otherwise an empty set.
+  -/
   indexMatchLocations : UnorderedArraySet IndexMatchLocation
+  /--
+  The options given to the current Aesop call.
+  -/
   options : Options'
   deriving Inhabited
 

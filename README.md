@@ -16,9 +16,9 @@ like this:
   the goals in the search tree, visiting more promising goals before less
   promising ones.
 - Before any rules are applied to a goal, it is _normalised_, using a special
-  (customisable) set of _normalisation rules_. An important built-in
-  normalisation rule runs `simp_all`, so your `@[simp]` lemmas are taken into
-  account by Aesop.
+  (customisable) set of _normalisation rules_. Two important built-in
+  normalisation rules run `simp at *` and `simp_all`, so your `@[simp]` lemmas
+  are also used by Aesop.
 - Rules can be marked as _safe_ to optimise Aesop's performance. A safe rule is
   applied eagerly and is never backtracked. For example, Aesop's built-in rules
   safely split a goal `P ∧ Q` into goals for `P` and `Q`. After this split, the
@@ -112,8 +112,8 @@ theorem cons_append : cons x xs ++ ys = cons x (xs ++ ys) := rfl
 ```
 
 When Aesop first encounters a goal, it normalises it by running a customisable
-set of normalisation rules. One such normalisation rule effectively runs
-`simp_all`, so Aesop automatically takes `simp` lemmas into account.
+set of normalisation rules. Two such normalisation rule effectively run
+`simp at *` and `simp_all`, so Aesop automatically uses `simp` theorems.
 
 Now we define the `NonEmpty` predicate on `MyList`:
 
@@ -182,7 +182,7 @@ script. At time of writing, it looks like this:
 ``` lean
 intro a
 unhygienic aesop_cases a
-simp_all only [cons_append]
+simp only [cons_append] at *
 apply MyList.NonEmpty.cons
 ```
 
@@ -243,7 +243,7 @@ that Aesop applies other rules if possible.
 
 We also add a **norm** or **normalisation** rule. As mentioned above, these
 rules are used to normalise the goal before any other rules are applied. As part
-of this normalisation process, we run a variant of `simp_all` with the global
+of this normalisation process, we run `simp at *` and `simp_all` with the global
 `simp` set plus Aesop-specific `simp` lemmas. The **`simp`** builder adds such
 an Aesop-specific `simp` lemma which unfolds the `Not` definition. (There is
 also a built-in rule which performs the same unfolding, so this rule is
@@ -292,8 +292,8 @@ A rule is a tactic plus some associated metadata. Rules come in three flavours:
   the normalisation algorithm.
 
   Normalisation rules can also be simp lemmas. These are constructed with the
-  `simp` builder. They are used by a special `simp` call during
-  the normalisation process.
+  `simp` builder. They are used by two special `simp` calls during the
+  normalisation process.
 
 - **Safe rules** (keyword `safe`) are applied after normalisation but before any
   unsafe rules. When a safe rule is successfully applied to a goal, the goal
@@ -358,13 +358,16 @@ search depth.)
   it.
 - If the goal of `G` has not been normalised yet, normalise it. That means we
   run the following normalisation loop:
-  - Run the normalisation rules with negative penalty (lowest penalty first). If
-    any of these rules is successful, restart the normalisation loop with the
+  - Run the normalisation rules with negative penalty (lowest penalty first).
+    Whenever one of these rules succeeds, restart the normalisation loop with the
     goal produced by the rule.
-  - Run `simp` on all hypotheses and the target, using the global simp set (i.e.
-    lemmas tagged `@[simp]`) plus Aesop's `simp` rules.
+  - Run `unfold` repeatedly to unfold all definitions tagged with
+    `@[aesop unfold]`.
+  - Run `simp at *`,  using the global `simp` set (i.e. lemmas tagged `@[simp]`)
+    plus Aesop's `simp` rules.
   - Run the normalisation rules with positive penalty (lowest penalty first).
-    If any of these rules is successful, restart the normalisation loop.
+    Whenever one of these rules succeeds, restart the normalisation loop.
+  - Run `simp_all` with the same `simp` sets.
 
   The loop ends when all normalisation rules fail. It destructively updates
   the goal of `G` (and may prove it outright).
@@ -497,7 +500,7 @@ an Aesop rule. Currently available builders are:
   commas); the rule is then applied whenever at least one of the patterns
   matches a hypothesis.
 - **`simp`**: when applied to an equation `eq : A₁ → ... Aₙ → x = y`, registers
-  `eq` as a simp lemma for the built-in simp pass during normalisation. As such,
+  `eq` as a `simp` lemma for the built-in `simp` normalisation rules. As such,
   this builder can only build normalisation rules.
 - **`unfold`**: when applied to a definition or `let` hypothesis `f`, registers
   `f` to be unfolded (i.e. replaced with its definition) during normalisation.
@@ -508,7 +511,8 @@ an Aesop rule. Currently available builders are:
   that `simp` rules perform smart unfolding (like the `simp` tactic) and
   `unfold` rules perform non-smart unfolding (like the `unfold` tactic).
   Non-smart unfolding unfolds functions even when none of their equations
-  match, so `unfold` rules for recursive functions generally lead to looping.
+  match, so `unfold` rules for recursive functions generally lead to looping and
+  are therefore forbidden.
 - **`tactic`**: takes a tactic and directly turns it into a rule. The given
   declaration (the builder does not work for hypotheses) must have type `TacticM
   Unit`, `Aesop.SimpleRuleTac` or `Aesop.RuleTac`. The latter are Aesop data
@@ -825,15 +829,16 @@ details. A notable option is `strategy`, which is one of `.bestFirst`,
 `.depthFirst` and `.breadthFirst` and instructs Aesop to use the corresponding
 search strategy. Best-first is the default.
 
-Similarly, options for the built-in norm simp call can be set with
+Similarly, options for the built-in norm simp rules can be set with
 
 ``` text
-(simp_options := <term>)
+(simp_config := <term>)
+(simp_all_config := <term>)
 ```
 
-The term has type `Aesop.SimpConfig`; see there for details. The `useHyps`
-option may be particularly useful: when `true` (the default), norm simp behaves
-like the `simp_all` tactic; when `false`, norm simp behaves like `simp at *`.
+These are equivalent to `simp (config := <term>)`. The `simp_config`
+configuration applies to the `simp at *` rule; the `simp_all_config`
+configuration applies to the `simp_all` rule.
 
 ### Built-In Rules
 
@@ -857,7 +862,7 @@ may have to lightly adjust the proof scripts by hand.
 
 To see how Aesop proves a goal -- or why it doesn't prove a goal, or why it's
 slow to prove a goal -- it is useful to see what it's doing. To that end, you
-can enable various tracing options. These use the usual syntax, e.g.
+can enable various tracing options. The most important is
 
 ``` lean
 set_option trace.aesop true
@@ -871,7 +876,7 @@ The main options are:
 - `trace.aesop.proof`: if Aesop is successful, print the proof that was
   generated (as a Lean term). You should be able to copy-and-paste this proof
   to replace Aesop.
-  
+
 ### Profiling
 
 To get an idea of where Aesop spends its time, use

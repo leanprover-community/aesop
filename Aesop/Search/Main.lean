@@ -256,8 +256,10 @@ partial def searchLoop : SearchM Q (Array MVarId) :=
       searchLoop
 
 def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
-     (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
+     (options : Aesop.Options := {}) (simpConfig : Simp.Config := {})
      (simpConfigSyntax? : Option Term := none)
+     (simpAllConfig : Simp.ConfigCtx := {})
+     (simpAllConfigSyntax? : Option Term := none)
      (profile : Profile := {}) :
      MetaM (Array MVarId × Profile) := do
   goal.checkNotAssigned `aesop
@@ -270,7 +272,8 @@ def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
   let (goals, _, _, profile) ←
-    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal profile do
+    SearchM.run ruleSet options simpConfig simpConfigSyntax? simpAllConfig
+        simpAllConfigSyntax? goal profile do
       show SearchM Q _ from
       try searchLoop
       catch e => handleFatalError e

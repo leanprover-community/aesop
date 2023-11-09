@@ -13,7 +13,7 @@ set_option aesop.check.all true
 
 structure WalkingPair
 
-def WidePullbackShape A B := Sum A B
+def WidePullbackShape A B := A ⊕ B
 
 abbrev WalkingCospan : Type := WidePullbackShape Empty Empty
 

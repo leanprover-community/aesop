@@ -23,7 +23,8 @@ syntax " (" &"add " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
 syntax " (" &"erase " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
 syntax " (" &"rule_sets " "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
 syntax " (" &"options" " := " term ")" : Aesop.tactic_clause
-syntax " (" &"simp_options" " := " term ")" : Aesop.tactic_clause
+syntax " (" &"simp_config" " := " term ")" : Aesop.tactic_clause
+syntax " (" &"simp_all_config" " := " term ")" : Aesop.tactic_clause
 
 /--
 `aesop <clause>*` tries to solve the current goal by applying a set of rules
@@ -45,10 +46,12 @@ clauses are:
   Aesop.BuiltinRules.assumption)`.
 - `(rule_sets [<ruleset>,*])` enables or disables named sets of rules for this
   Aesop call. Example: `(rule_sets [-builtin, MyRuleSet])`.
-- `(options { <opt> := <value> })` adjusts Aesop's search options. See
+- `(options := { <opt> := <value> })` adjusts Aesop's search options. See
   `Aesop.Options`.
-- `(simp_options { <opt> := <value> })` adjusts options for Aesop's built-in
-  `simp` rule. See `Aesop.SimpConfig`.
+- `(simp_config := { <opt> := <value> })` adjusts options for Aesop's built-in
+  `simp at *` rule. See `Lean.Meta.Simp.Config`.
+- `(simp_all_config := { <opt> := <value> })` adjusts options for Aesop's built-in
+  `simp_all` rule. See `Lean.Meta.Simp.Config`.
 -/
 syntax (name := aesopTactic)  "aesop"  Aesop.tactic_clause* : tactic
 
@@ -72,19 +75,20 @@ unsafe def elabOptionsUnsafe : Syntax → TermElabM Aesop.Options :=
 @[implemented_by elabOptionsUnsafe]
 opaque elabOptions : Syntax → TermElabM Aesop.Options
 
-unsafe def elabSimpConfigUnsafe : Syntax → TermElabM Aesop.SimpConfig :=
-  elabConfigUnsafe ``Aesop.SimpConfig
-
-@[implemented_by elabSimpConfigUnsafe]
-opaque elabSimpConfig : Syntax → TermElabM Aesop.SimpConfig
-
 structure TacticConfig where
   additionalRules : Array RuleExpr
   erasedRules : Array RuleExpr
   enabledRuleSets : NameSet
   options : Aesop.Options
-  simpConfig : Aesop.SimpConfig
-  simpConfigSyntax? : Option Term
+  simpConfig : Simp.Config
+  simpConfigStx? : Option Term
+  simpAllConfig : Simp.ConfigCtx
+  simpAllConfigStx? : Option Term
+
+def elabSimpConfig (stx : Term) (kind : Tactic.SimpKind) :
+    TermElabM Meta.Simp.Config := do
+  let stx := mkNullNode #[← `(Parser.Tactic.config| (config := $stx))]
+  Tactic.elabSimpConfig stx kind
 
 namespace TacticConfig
 
@@ -103,7 +107,9 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
       enabledRuleSets := ← getDefaultRuleSetNames
       options := { traceScript }
       simpConfig := {}
-      simpConfigSyntax? := none
+      simpConfigStx? := none
+      simpAllConfig := {}
+      simpAllConfigStx? := none
     }
 
     addClause (traceScript : Bool) (c : TacticConfig) (stx : Syntax) :
@@ -139,11 +145,17 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
           let options :=
             { options with traceScript := options.traceScript || traceScript }
           return { c with options }
-        | `(tactic_clause| (simp_options := $t:term)) =>
+        | `(tactic_clause| (simp_config := $t:term)) =>
           return {
             c with
-            simpConfig := ← elabSimpConfig t
-            simpConfigSyntax? := some t
+            simpConfig := ← elabSimpConfig t .simp
+            simpConfigStx? := some t
+          }
+        | `(tactic_clause| (simp_all_config := $t:term)) =>
+          return {
+            c with
+            simpAllConfig := ⟨← elabSimpConfig t .simpAll⟩
+            simpAllConfigStx? := some t
           }
         | _ => throwUnsupportedSyntax
 

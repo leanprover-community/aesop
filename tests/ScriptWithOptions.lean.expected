@@ -1,2 +1,2 @@
 Try this:
-  simp_all only
+  simp only at *

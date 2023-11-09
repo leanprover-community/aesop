@@ -15,11 +15,35 @@ open Lean.Meta
 
 namespace Aesop
 
-structure NormSimpContext extends Simp.Context where
-  enabled : Bool
-  useHyps : Bool
-  configStx? : Option Term
+-- TODO upstream
+local instance : Inhabited Simp.ConfigCtx :=
+  ⟨⟨default⟩⟩
+
+structure NormSimpContext where
+  baseContext : Simp.Context
+  simpConfig : Simp.Config
+  simpConfigStx? : Option Term
+  simpAllConfig : Simp.ConfigCtx
+  simpAllConfigStx? : Option Term
   deriving Inhabited
+
+namespace NormSimpContext
+
+@[inline, always_inline]
+def context (ctx : NormSimpContext) (useSimpAll : Bool) : Simp.Context :=
+  if useSimpAll then
+    { ctx.baseContext with config := ctx.simpAllConfig.toConfig }
+  else
+    { ctx.baseContext with config := ctx.simpConfig }
+
+@[inline, always_inline]
+def configStx? (ctx : NormSimpContext) (useSimpAll : Bool) : Option Term :=
+  if useSimpAll then
+    ctx.simpAllConfigStx?
+  else
+    ctx.simpConfigStx?
+
+end NormSimpContext
 
 namespace SearchM
 
@@ -27,11 +51,7 @@ structure Context where
   ruleSet : RuleSet
   normSimpContext : NormSimpContext
   options : Aesop.Options'
-  deriving Nonempty
-
-def Context.normSimpConfig (ctx : Context) : SimpConfig where
-  useHyps := ctx.normSimpContext.useHyps
-  toConfigCtx := { ctx.normSimpContext.config with }
+  deriving Inhabited
 
 structure State (Q) [Aesop.Queue Q] where
   iteration : Iteration
@@ -81,17 +101,17 @@ protected def run' (profile : Profile) (ctx : SearchM.Context)
   return (a, σ, t, profile)
 
 protected def run (ruleSet : RuleSet) (options : Aesop.Options')
-    (simpConfig : Aesop.SimpConfig) (simpConfigStx? : Option Term)
+    (simpConfig : Simp.Config) (simpConfigStx? : Option Term)
+    (simpAllConfig : Simp.ConfigCtx) (simpAllConfigStx? : Option Term)
     (goal : MVarId) (profile : Profile) (x : SearchM Q α) :
     MetaM (α × State Q × Tree × Profile) := do
   let t ← mkInitialTree goal
   let normSimpContext := {
-    (← Simp.Context.mkDefault) with
-    config := simpConfig.toConfig
-    simpTheorems := ruleSet.globalNormSimpTheorems
-    configStx? := simpConfigStx?
-    enabled := simpConfig.enabled
-    useHyps := simpConfig.useHyps
+    baseContext := {
+      ← Simp.Context.mkDefault with
+      simpTheorems := ruleSet.globalNormSimpTheorems
+    }
+    simpConfig, simpConfigStx?, simpAllConfig, simpAllConfigStx?
   }
   let ctx := { ruleSet, options, normSimpContext }
   let #[rootGoal] := (← t.root.get).goals

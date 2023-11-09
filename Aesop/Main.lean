@@ -31,7 +31,8 @@ def evalAesop : Tactic := λ stx => do
       let (profile, searchTime) ← time do
         let (goals, profile) ←
           search goal ruleSet config.options config.simpConfig
-            config.simpConfigSyntax? profile
+            config.simpConfigStx? config.simpAllConfig config.simpAllConfigStx?
+            profile
         replaceMainGoal goals.toList
         pure profile
       pure { profile with search := searchTime }

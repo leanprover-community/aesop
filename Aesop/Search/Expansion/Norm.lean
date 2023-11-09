@@ -13,9 +13,7 @@ import Aesop.Search.SearchM
 open Lean
 open Lean.Meta
 
-namespace Aesop
-
-namespace NormM
+namespace Aesop.NormM
 
 structure Context where
   options : Options'
@@ -41,7 +39,7 @@ inductive NormRuleResult
       (scriptStep? : Except DisplayRuleName TacticInvocation)
   | proved (scriptStep? : Except DisplayRuleName TacticInvocation)
   | failed (scriptStep? : Option TacticInvocation)
-    -- `simp` may generate a 'dummy' script step even when it fails.
+    -- Rules may generate a 'dummy' script step even when they fail.
 
 namespace NormRuleResult
 
@@ -149,11 +147,11 @@ def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
 
 def mkNormSimpScriptStep
     (preGoal : MVarId) (postGoal? : Option GoalWithMVars)
-    (preState postState : Meta.SavedState) (usedTheorems : Simp.UsedSimps) :
-    NormM TacticInvocation := do
-  let ctx := (← read).normSimpContext
+    (preState postState : Meta.SavedState) (useSimpAll : Bool)
+    (usedTheorems : Simp.UsedSimps) : NormM TacticInvocation := do
+  let configStx? := (← read).normSimpContext.configStx? useSimpAll
   let tactic ←
-    mkNormSimpOnlySyntax preGoal ctx.useHyps ctx.configStx? usedTheorems
+    mkNormSimpOnlySyntax preGoal useSimpAll configStx? usedTheorems
   return {
     tacticSeq := #[tactic]
     postGoals := postGoal?.toArray
@@ -161,8 +159,8 @@ def mkNormSimpScriptStep
   }
 
 def SimpResult.toNormRuleResult (ruleName : DisplayRuleName)
-    (originalGoal : GoalWithMVars) (preState postState : Meta.SavedState) :
-    SimpResult → NormM NormRuleResult
+    (originalGoal : GoalWithMVars) (preState postState : Meta.SavedState)
+    (useSimpAll : Bool) : SimpResult → NormM NormRuleResult
   | .unchanged newGoal => do
     let scriptStep? :=
       if (← read).options.generateScript then
@@ -184,20 +182,21 @@ def SimpResult.toNormRuleResult (ruleName : DisplayRuleName)
       if (← read).options.generateScript then
         let newGoal? := newGoal?.map (⟨·, originalGoal.mvars⟩)
         .ok <$> mkNormSimpScriptStep originalGoal.goal newGoal? preState
-                  postState usedTheorems
+                  postState useSimpAll usedTheorems
       else
         return .error ruleName
 
-def normSimpCore (goal : MVarId)
-    (goalMVars : HashSet MVarId) : NormM NormRuleResult := do
-  let ctx := (← read).normSimpContext
+def normSimpCore (goal : MVarId) (goalMVars : HashSet MVarId)
+    (useSimpAll : Bool) : NormM NormRuleResult :=
   goal.withContext do
     let preState ← saveState
     let result ←
-      if ctx.useHyps then
-        Aesop.simpAll goal ctx.toContext
+      if useSimpAll then
+        let ctx := (← read).normSimpContext.context (useSimpAll := true)
+        Aesop.simpAll goal ctx
       else
         let lctx ← getLCtx
+        let ctx := (← read).normSimpContext.context (useSimpAll := false)
         let mut simpTheorems := ctx.simpTheorems
         for localRule in (← read).ruleSet.localNormSimpLemmas do
           let (some ldecl) := lctx.findFromUserName? localRule.fvarUserName
@@ -206,8 +205,7 @@ def normSimpCore (goal : MVarId)
             simpTheorems.addTheorem (.fvar ldecl.fvarId) ldecl.toExpr
             | continue
           simpTheorems := simpTheorems'
-        let ctx := { ctx with simpTheorems }
-        Aesop.simpGoalWithAllHypotheses goal ctx
+        Aesop.simpAtStar goal { ctx with simpTheorems }
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
     -- unassigned. In this case, we treat the goal as unchanged.
@@ -229,6 +227,7 @@ def normSimpCore (goal : MVarId)
 
     let postState ← saveState
     result.toNormRuleResult .normSimp ⟨goal, goalMVars⟩ preState postState
+      useSimpAll
 
 @[inline, always_inline]
 def checkSimp (name : String) (mayCloseGoal : Bool) (goal : MVarId)
@@ -253,19 +252,19 @@ def checkSimp (name : String) (mayCloseGoal : Bool) (goal : MVarId)
         throwError "{Check.rules.name}: {name} solved the goal"
     return result
 
-def checkedNormSimpCore (goal : MVarId) (goalMVars : HashSet MVarId) :
-    NormM NormRuleResult :=
+def checkedNormSimpCore (goal : MVarId) (goalMVars : HashSet MVarId)
+    (useSimpAll : Bool) : NormM NormRuleResult :=
   checkSimp "norm simp" (mayCloseGoal := true) goal do
     try
       withNormTraceNode .normSimp do
         withMaxHeartbeats (← read).options.maxSimpHeartbeats do
-          normSimpCore goal goalMVars
+          normSimpCore goal goalMVars useSimpAll
     catch e =>
       throwError "aesop: error in norm simp: {e.toMessageData}"
 
-def normSimp (goal : MVarId) (goalMVars : HashSet MVarId) :
+def normSimp (goal : MVarId) (goalMVars : HashSet MVarId) (useSimpAll : Bool) :
     ProfileT NormM NormRuleResult :=
-  profiling (checkedNormSimpCore goal goalMVars)
+  profiling (checkedNormSimpCore goal goalMVars useSimpAll)
     λ _ elapsed => recordRuleProfile
       { rule := .normSimp, elapsed, successful := true }
 
@@ -371,18 +370,23 @@ def NormStep.runPostSimpRules (mvars : UnorderedArraySet MVarId) : NormStep
 
 def NormStep.unfold (mvars : HashSet MVarId) : NormStep
   | goal, _, _ => do
-    if (← readThe NormM.Context).options.enableUnfold then
-      normUnfold goal mvars
-    else
+    if ! (← readThe NormM.Context).options.enableUnfold then
       aesop_trace[steps] "norm unfold is disabled (options := \{ ..., enableUnfold := false })"
       return .failed none
+    normUnfold goal mvars
 
-def NormStep.simp (mvars : HashSet MVarId) : NormStep
+def NormStep.simp (mvars : HashSet MVarId) (useSimpAll : Bool) : NormStep
   | goal, _, _ => do
-    if ! (← readThe NormM.Context).normSimpContext.enabled then
-      aesop_trace[steps] "norm simp is disabled (simp_options := \{ ..., enabled := false })"
-      return .failed none
-    normSimp goal mvars
+    let opts := (← read).options
+    if useSimpAll then
+      if ! opts.enableSimpAll then
+        aesop_trace[steps] "norm simp_all rule is disabled (options := \{ ..., enableSimpAll := false })"
+        return .failed none
+    else
+      if ! opts.enableSimp then
+        aesop_trace[steps] "norm simp at * rule is disabled (options := \{ ..., enableSimp := false })"
+        return .failed none
+    normSimp goal mvars useSimpAll
 
 partial def normalizeGoalMVar (goal : MVarId)
     (mvars : UnorderedArraySet MVarId) : ProfileT NormM NormSeqResult := do
@@ -390,8 +394,9 @@ partial def normalizeGoalMVar (goal : MVarId)
   let mut normSteps := #[
     NormStep.runPreSimpRules mvars,
     NormStep.unfold mvarsHashSet,
-    NormStep.simp mvarsHashSet,
-    NormStep.runPostSimpRules mvars
+    NormStep.simp mvarsHashSet (useSimpAll := false),
+    NormStep.runPostSimpRules mvars,
+    NormStep.simp mvarsHashSet (useSimpAll := true)
   ]
   runNormSteps goal normSteps (by simp (config := { decide := true }))
 

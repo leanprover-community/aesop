@@ -46,4 +46,4 @@ example {p : α → Type} (h : Σ' a, p a) : Sig α p := by
 
 -- Test case for a bug reported by Jakob von Raumer.
 example (x y : α × α) (h: p ∧ (x = y)) : x = y := by
-  aesop (simp_options := { enabled := false })
+  aesop (options := { enableSimp := false, enableSimpAll := false })
