@@ -8,6 +8,13 @@ import Aesop
 
 set_option aesop.check.all true
 
-set_option trace.aesop.proof true in
+set_option trace.aesop.proof true
+
 example : α := by
+  aesop
+
+@[aesop norm simp]
+def F := False
+
+example : F := by
   aesop
