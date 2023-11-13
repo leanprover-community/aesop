@@ -182,6 +182,27 @@ def finishIfProven : SearchM Q Bool := do
   traceTree
   return true
 
+def treeHasNonPreprocessingRapp : TreeM Bool := do
+  let resultRef ← IO.mkRef false
+  preTraverseDown
+    (λ gref => do
+      let g ← gref.get
+      if let some postGoal := g.normalizationState.normalizedGoal? then
+        if postGoal != g.preNormGoal then
+          resultRef.set true
+          return false
+      return true)
+    (λ rref => do
+      if (← rref.get).appliedRule.name != preprocessRule.name then
+        resultRef.set true
+        return false
+      else
+        return true
+      )
+    (λ _ => return true)
+    (.mvarCluster (← get).root)
+  resultRef.get
+
 -- When we hit a non-fatal error (i.e. the search terminates without a proof
 -- because the root goal is unprovable or because we hit a search limit), we
 -- usually:
@@ -198,9 +219,11 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
   let opts := (← read).options
   if opts.terminal then
     throwTacticEx `aesop (← getRootMVarId) err
+  expandSafePrefix
+  if ! (← treeHasNonPreprocessingRapp) then
+    throwTacticEx `aesop (← getRootMVarId) "made no progress"
   if opts.warnOnNonterminal then
     logWarning m!"aesop: {err}"
-  expandSafePrefix
   let goals ← extractSafePrefix
   aesop_trace[proof] do
     match ← getProof? with

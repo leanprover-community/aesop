@@ -1,0 +1,8 @@
+tests/NoProgress.lean:14:2: error: tactic 'aesop' failed, made no progress
+⊢ T
+tests/NoProgress.lean:20:2: warning: aesop: failed to prove the goal after exhaustive search.
+tests/NoProgress.lean:19:15: error: unsolved goals
+⊢ False
+tests/NoProgress.lean:28:2: warning: aesop: failed to prove the goal after exhaustive search.
+tests/NoProgress.lean:27:16: error: unsolved goals
+⊢ False

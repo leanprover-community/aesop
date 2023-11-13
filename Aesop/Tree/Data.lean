@@ -271,6 +271,10 @@ def isProvenByNormalization : NormalizationState → Bool
   | normal .. => false
   | provenByNormalization .. => true
 
+def normalizedGoal? : NormalizationState → Option MVarId
+  | notNormal .. | provenByNormalization .. => none
+  | normal (postGoal := g) .. => g
+
 end NormalizationState
 
 

@@ -312,8 +312,9 @@ def normUnfold (goal : MVarId) (goalMVars : HashSet MVarId) :
 
 inductive NormSeqResult where
   | proved (script? : Except DisplayRuleName UnstructuredScript)
-  | unproved (goal : MVarId)
+  | changed (goal : MVarId)
       (script? : Except DisplayRuleName UnstructuredScript)
+  | unchanged (script? : Except DisplayRuleName UnstructuredScript)
 
 abbrev NormStep :=
   MVarId → Array (IndexMatchResult NormRule) →
@@ -329,6 +330,7 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
   let mut script? : Except DisplayRuleName UnstructuredScript := .ok #[]
   let mut preSimpRules := ∅
   let mut postSimpRules := ∅
+  let mut anySuccess := false
   while iteration < maxIterations do
     if step.val == 0 then
       let rules ← ProfileT.liftBase (selectNormRules ctx.ruleSet goal)
@@ -338,6 +340,7 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
       postSimpRules := postSimpRules'
     match ← steps[step] goal preSimpRules postSimpRules with
     | .succeeded newGoal scriptStep? =>
+      anySuccess := true
       goal := newGoal
       script? := return (← script?).push (← scriptStep?)
       iteration := iteration + 1
@@ -353,7 +356,10 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
       if h : step.val + 1 < steps.size then
         step := ⟨step.val + 1, h⟩
       else
-        return .unproved goal script?
+        if anySuccess then
+          return .changed goal script?
+        else
+          return .unchanged script?
   throwError "aesop: exceeded maximum number of normalisation iterations ({maxIterations}). This means normalisation probably got stuck in an infinite loop."
 
 def NormStep.runPreSimpRules (mvars : UnorderedArraySet MVarId) : NormStep
@@ -393,11 +399,12 @@ partial def normalizeGoalMVar (goal : MVarId)
 def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
     SearchM Q Bool := do
   let g ← gref.get
+  let preGoal := g.preNormGoal
   if ← g.isRoot then
     -- For the root goal, we skip normalization.
     let rootState ← getRootMetaState
     gref.modify λ g =>
-      g.setNormalizationState (.normal g.preNormGoal rootState (.ok #[]))
+      g.setNormalizationState (.normal preGoal rootState (.ok #[]))
     return false
   match g.normalizationState with
   | .provenByNormalization .. => return true
@@ -405,10 +412,13 @@ def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
   | .notNormal => pure ()
   let (normResult, postState) ← controlAt MetaM λ runInBase => do
     (← gref.get).runMetaMInParentState do
-      runInBase $ normalizeGoalMVar g.preNormGoal g.mvars
+      runInBase $ normalizeGoalMVar preGoal g.mvars
   match normResult with
-  | .unproved postGoal script? =>
+  | .changed postGoal script? =>
     gref.modify (·.setNormalizationState (.normal postGoal postState script?))
+    return false
+  | .unchanged script? =>
+    gref.modify (·.setNormalizationState (.normal preGoal postState script?))
     return false
   | .proved script? =>
     gref.modify
