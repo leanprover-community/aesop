@@ -96,25 +96,31 @@ def mkNormSimpOnlySyntax (inGoal : MVarId) (useHyps : Bool)
 def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     (discharge? : Option Simp.Discharge := none)
     (simplifyTarget : Bool := true) (fvarIdsToSimp : Array FVarId := #[])
-    (usedSimps : UsedSimps := {}) : MetaM SimpResult := do
+    (usedSimps : UsedSimps := {}) : MetaM (SimpResult × Array FVarId) := do
   let mvarIdOld := mvarId
   let ctx := { ctx with config.failIfUnchanged := false }
   let (result, usedSimps) ←
     Meta.simpGoal mvarId ctx discharge? simplifyTarget fvarIdsToSimp usedSimps
-  if let some (_, mvarId) := result then
+  if let some (newFVarIds, mvarId) := result then
     if mvarId == mvarIdOld then
-      return .unchanged mvarId
+      return (.unchanged mvarId, #[])
     else
-      return .simplified mvarId usedSimps
+      return (.simplified mvarId usedSimps, newFVarIds)
   else
-    return .solved usedSimps
+    return (.solved usedSimps, #[])
 
 def simpAtStar (mvarId : MVarId) (ctx : Simp.Context)
-    (discharge? : Option Simp.Discharge := none)
-    (simplifyTarget : Bool := true) (usedSimps : UsedSimps := {}) :
-    MetaM SimpResult := do
-  let fvarIdsToSimp ← mvarId.getNondepPropHyps
-  Aesop.simpGoal mvarId ctx discharge? simplifyTarget fvarIdsToSimp usedSimps
+    (normalHypotheses : HashSet FVarId)
+    (discharge? : Option Simp.Discharge := none) (simplifyTarget : Bool := true)
+    (usedSimps : UsedSimps := {}) : MetaM (SimpResult × HashSet FVarId) := do
+  let mut fvarIdsToSimp := Array.mkEmpty (← getLCtx).numIndices
+  for fvarId in ← mvarId.getNondepPropHyps do
+    if ! normalHypotheses.contains fvarId then
+      fvarIdsToSimp := fvarIdsToSimp.push fvarId
+  let (result, newFVarIds) ←
+    Aesop.simpGoal mvarId ctx discharge? simplifyTarget fvarIdsToSimp usedSimps
+  let normalHypotheses := normalHypotheses.insertMany newFVarIds
+  return (result, normalHypotheses)
 
 def simpAll (mvarId : MVarId) (ctx : Simp.Context)
     (usedSimps : UsedSimps := {}) : MetaM SimpResult := do

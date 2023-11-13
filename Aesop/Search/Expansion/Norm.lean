@@ -20,16 +20,20 @@ structure Context where
   ruleSet : RuleSet
   normSimpContext : NormSimpContext
 
+structure State where
+  simpStarNormalHypotheses : HashSet FVarId
+
 end NormM
 
-abbrev NormM := ReaderT NormM.Context MetaM
+abbrev NormM := ReaderT NormM.Context $ StateRefT NormM.State MetaM
 
 instance : MonadBacktrack Meta.SavedState NormM where
   saveState := Meta.saveState
   restoreState s := s.restore
 
 instance [Queue Q] : MonadLift NormM (SearchBaseM Q) where
-  monadLift x := do x.run { (← read) with }
+  monadLift x := do
+    x.run { (← read) with } |>.run' { simpStarNormalHypotheses := ∅ }
 
 instance [Queue Q] : MonadLift (ProfileT NormM) (SearchM Q) where
   monadLift := ProfileT.liftBase
@@ -197,15 +201,23 @@ def normSimpCore (goal : MVarId) (goalMVars : HashSet MVarId)
       else
         let lctx ← getLCtx
         let ctx := (← read).normSimpContext.context (useSimpAll := false)
+        let localNormSimpLemmas := (← read).ruleSet.localNormSimpLemmas
         let mut simpTheorems := ctx.simpTheorems
-        for localRule in (← read).ruleSet.localNormSimpLemmas do
+        for localRule in localNormSimpLemmas do
           let (some ldecl) := lctx.findFromUserName? localRule.fvarUserName
             | continue
           let (some simpTheorems') ← observing? $
             simpTheorems.addTheorem (.fvar ldecl.fvarId) ldecl.toExpr
             | continue
           simpTheorems := simpTheorems'
-        Aesop.simpAtStar goal { ctx with simpTheorems }
+        let { simpStarNormalHypotheses } ← getModify λ s =>
+          { s with simpStarNormalHypotheses := ∅ }
+          -- Ensure that `simpStarNormalHypotheses` is used linearly.
+        let (result, simpStarNormalHypotheses) ←
+          Aesop.simpAtStar goal { ctx with simpTheorems }
+            simpStarNormalHypotheses
+        setThe NormM.State { simpStarNormalHypotheses }
+        pure result
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
     -- unassigned. In this case, we treat the goal as unchanged.
