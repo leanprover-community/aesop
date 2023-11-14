@@ -74,8 +74,6 @@ def RuleApplication.toRuleApplicationWithMVarInfo
     MetaM RuleApplicationWithMVarInfo :=
   let originalSubgoals := r.goals
   r.postState.runMetaM' do
-    -- Get assigned mvars
-    r.postState.runMetaM' do
     let assignedMVars ← parentMVars.filterM (·.isAssignedOrDelayedAssigned)
     let (goals, mvars) ← partitionGoalsAndMVars r.goals
     let introducedMVars := mvars.filter (! parentMVars.contains ·)

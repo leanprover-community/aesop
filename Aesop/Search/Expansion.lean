@@ -68,7 +68,7 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
   let mut rrefs := Array.mkEmpty rapps.size
   let mut subgoals := Array.mkEmpty $ rapps.size * 3
   for h : i in [:rapps.size] do
-    let rapp := rapps[i]'(by simp_all [Membership.mem])
+    let rapp := rapps[i]'h.2
     let successProbability :=
       parent.successProbability *
       (rapp.successProbability?.getD rule.successProbability)
@@ -212,7 +212,7 @@ def applyPostponedSafeRule (r : PostponedSafeRule) (parentRef : GoalRef) :
     let parentMVars := (← parentRef.get).mvars
     let rapps ← r.output.applications.mapM
       (·.toRuleApplicationWithMVarInfo parentMVars)
-    addRapps parentRef (.«unsafe» r.toUnsafeRule) rapps
+    addRapps parentRef (.unsafe r.toUnsafeRule) rapps
 
 partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
     (parentRef : GoalRef) : SearchM Q RuleResult := do

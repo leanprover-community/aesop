@@ -140,9 +140,8 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   if ← Check.rules.isEnabled then
     let (parentGoal, preState) ←
       (← r.parent.get).currentGoalAndMetaState (← getRootMetaState)
-    let (some msg) ← r.toRuleApplicationWithMVarInfo.check preState parentGoal
-      | pure ()
-    throwError "{Check.rules.name}: {msg}"
+    if let (some msg) ← r.toRuleApplicationWithMVarInfo.check preState parentGoal then
+      throwError "{Check.rules.name}: {msg}"
 
   let rref : RappRef ← IO.mkRef $ Rapp.mk {
     id := ← getAndIncrementNextRappId
