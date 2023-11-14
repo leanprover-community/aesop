@@ -224,16 +224,110 @@ For all added matches m that are complete:
     Add the non-redundant hypotheses in Ψ to the context queue.
 ```
 
-#### Representation of a Set of Matches
+#### Better Representation of Sets of Matches
 
 The above representation of sets of matches (as, well, sets of matches) is quite inefficient.
-A better representation is to map each input hypothesis index to a set of possibly matching hypotheses from `Γ`.
-The map `{ 1 ↦ {h₁, h₂}, 2 ↦ {h₃, h₄} }` then represents the matches `{ 1 ↦ h₁, 2 ↦ h₃ }`, `{ 1 ↦ h₁, 2 ↦ h₄ }`, `{ 1 ↦ h₂, 2 ↦ h₃ }`, `{ 1 ↦ h₂, 2 ↦ h₄ }`.
-That's an exponential win.
+We want a data structure that represents a set of matches for a specific rule `r` with input hypotheses `Ψ = h₁ : T₁, ..., hₙ : Tₙ`.
+When a new context hypothesis `h : T` with `T =[σ] Tᵢ` for some `i` and `σ` arrives, the data structure should allow us to quickly determine all complete and consistent matches for `r` in the current context that involve `h`.
+(I write `x =[σ] y` if `x` unifies with `y` with most general unifier `σ`.)
 
-We must still eventually check the matches for validity one by one — but only the complete ones.
-Additionally, the tree structure implied in the above representation lends itself to the backtracking algorithm described in <tammet-subsumption.md>.
-This also means that all the optimisations described there become relevant for us.
+##### Attempt 1: Candidate Map
+
+We use a finite map `F` from hypothesis indices `1, ..., n` to lists of candidate hypotheses `C₁ = c₁₁ : U₁₁, ..., c₁ₘ₁ : U₁ₘ₁` etc.
+When a new hypothesis `h : T` arrives, we proceed as follows:
+
+```
+For each i such that, according to the index, T may unify with Tᵢ:
+  Add h to the candidate list Cᵢ.
+  If F(j) is nonempty for all j:
+    Let σ ≔ ∅ be the empty substitution.
+    For all k ∈ 1, ..., n:
+      For all c : U ∈ Cₖ:
+        If Tₖ[σ] =[σ'] U[σ]:
+          σ ≔ σ'
+        Else:
+          Continue.
+      If the previous loop was unsuccessful for all c:
+        Continue.
+      Else if k = n:
+        Return the selected candidates as a complete and consistent match.
+```
+
+##### Attempt 2: Candidate Graph
+
+The previous algorithm has the disadvantage that it unifies the same hypotheses over and over again.
+We now try to cache the unifications by storing the substitutions and remembering which substitutions are consistent.
+
+Our data structure representing sets of matches is now a graph.
+Nodes are tuples `(i, h : T, σ)` where `i ∈ {1, ..., n}` is an input hypothesis index and `h : T` is a hypothesis in the context such that `T =[σ] Tᵢ`.
+Edges are undirected and are labelled with substitutions.
+An edge
+```
+(i, h : T, σ) --[τ]-- (i', h' : T', σ')
+```
+indicates that `σ =[τ] σ'`.
+This means that for each variable `?x ∈ dom(σ) ∩ dom(σ')`, `σ(?x) =[γ] σ'(?x)` and `τ` is the 'union' of the `γ`'s.
+In other words, `τ` is the most general unifier of `σ` and `σ'`.
+
+Now, when a new hypothesis `h : T` arrives, we proceed as follows:
+
+```
+For each i such that, according to the index, T may unify with Tᵢ:
+  If T =[σ] Tᵢ:
+    Add a new node (i, h : T, σ).
+    For each i' ≠ i and each node (i', h' : T', σ'):
+      If σ =[τ] σ':
+        Add an edge --[τ]-- between the two nodes.
+
+    For each path (1, h₁ : T₁, σ₁) --[τ₁]-- ... (i, h : T, σ) ... --[τₙ₋₁]-- (n, hₙ : Tₙ, σₙ):
+      If τ₁, ..., τₙ all unify:
+        Add h₁, ..., hₙ as a complete and consistent match.
+```
+
+This algorithm still has pretty bad complexity.
+But we only perform the complex unifications of hypothesis types once; the more frequent unifications of substitutions should be much simpler.
+
+###### Optimisation 1: Laziness
+
+The edges can be added lazily, avoiding exponential up-front work.
+
+###### Optimisation 2: Ordering
+
+In the end, we are only interested in paths from hypothesis index `1` to hypothesis index `n`.
+So a node for hypothesis index `i` only needs edges to nodes `i - 1` and `i + 1`.
+
+###### Optimisation 3: Variable Clusters
+
+Some of the input hypotheses `Φ` of a rule may be *independent*, in the sense that they don't share any variables.
+For example, in the rule
+```
+r : (h₁ : P x y) (h₂ : Q y z) (h₃ : R z a) (h₄ : S b c) → Ψ
+```
+the hypothesis `h₄` is independent of `h₁`, `h₂` and `h₃` while `h₁`, `h₂` and `h₃` share variables.
+In the graph, we may therefore omit edges between `h₃` and `h₄`, since their substitutions will always unify.
+
+TODO Can we treat `h₁` and `h₃` as independent?
+Or do we need to partition the input hyps into variable clusters, like Aesop?
+
+###### Optimisation 4: Path Compression
+
+Suppose we have a path
+
+```
+(1, h₁ : T₁, σ₁) --[τ₁]-- (2, h₂ : T₂, σ₂) --[τ₂]-- (3, h₃ : T₃, σ₃)
+```
+
+If we then determine that `τ₁ =[τ₃] τ₂`, we can add a shortcut edge
+
+```
+(1, h₁ : T₁, σ₁) --[τ₃]-- (3, h₃ : T₃, σ₃)
+```
+
+However, does this actually help us?
+We have to keep the `τ₁` and `τ₂` edges around, in case another edge from or to node `2` appears later.
+This means the shortcut edges consume a fair amount additional memory.
+Moreover, when such an edge from or to `2` appears, we have to walk the path from `1` again.
+However, we can skip unifications for nodes where we already have shortcut edges.
 
 #### Aside: Computation
 
