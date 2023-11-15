@@ -289,7 +289,28 @@ For each i such that, according to the index, T may unify with Tᵢ:
       Extract the corresponding match, which is also complete and consistent.
 ```
 
-TODO We still need a way to efficiently find the complete and consistent matches in `G` that involve a particular node `(i, h : T, σ)`.
+We still need a way to efficiently find the complete and consistent matches in `G` that involve a particular node.
+To that end, we add to each node in the candidate graph a set of hypothesis indices `W`.
+This set indicates which edges the node is still waiting for.
+When we add an edge between `(i, h : T, σ, W)` and `(i', h' : T', σ', W')`, we then remove `i'` from `W` and `i` from `W'`.
+To extract a complete and consistent match involving `(i, h : T, σ, W)`, we now just have to follow edges from `i` in the variable graph, and this traversal fails as soon as we encounter a node whose waiting set `W'` is nonempty.
+
+It's still a bit unclear to me, though, how to efficiently do this traversal.
+For example, take a lemma with hypotheses
+```
+1 : P ?x   2 : Q ?x ?y   3 : R ?x ?y   4 : S ?y
+```
+The pattern graph is
+```
+ ?x ----2---- ?y
+   /    |?x  \
+  1     |?y   4
+   \    |    /
+ ?x ----3---- ?y
+```
+So we must reach the same node for `4` from `1` via `2` and `3`.
+In general, finding a subgraph of the candidate graph `G` isomorphic to the variable graph `P` is an instance of the subgraph isomorphism problem, which is NP-complete.
+However, we have the additional constraint that we know one node that must be included in the subgraph, which probably simplifies the problem.
 
 ## Pattern-Based Forward Rules
 
