@@ -253,21 +253,26 @@ For each i such that, according to the index, T may unify with Tᵢ:
         Return the selected candidates as a complete and consistent match.
 ```
 
+This algorithm has the major disadvantage that it unifies the same hypotheses over and over again.
+
 ##### Attempt 2: Candidate Graph
 
-The previous algorithm has the disadvantage that it unifies the same hypotheses over and over again.
-We now try to cache the unifications by storing the substitutions and remembering which substitutions are consistent.
+We first pre-compute an undirected, simple *variable graph* `P` for the rule `r`:
 
-Our data structure representing sets of matches is now a graph.
-Nodes are tuples `(i, h : T, σ)` where `i ∈ {1, ..., n}` is an input hypothesis index and `h : T` is a hypothesis in the context such that `T =[σ] Tᵢ`.
-Edges are undirected and are labelled with substitutions.
-An edge
-```
-(i, h : T, σ) --[τ]-- (i', h' : T', σ')
-```
-indicates that `σ =[τ] σ'`.
-This means that for each variable `?x ∈ dom(σ) ∩ dom(σ')`, `σ(?x) =[γ] σ'(?x)` and `τ` is the 'union' of the `γ`'s.
-In other words, `τ` is the most general unifier of `σ` and `σ'`.
+- Nodes are input hypothesis indices `i ∈ {1, ..., n}`.
+- Edges are labelled with nonempty sets of variables.
+  An edge `i --{x₁, ..., xₘ}-- j` indicates that `Tᵢ` and `Tⱼ` share exactly the variables `x₁, ..., xₘ`.
+
+During the forward reasoning phase, we maintain an undirected, simple *candidate graph* `G` for `r`:
+
+- Nodes are tuples `(i, h : T, σ)` where `i` is an input hypothesis index and `h : T` is a hypothesis in the context such that `T =[σ] Tᵢ`.
+- Edges unlabelled.
+  An edge between `(i, h : T, σ)` and `(i', h' : T', σ')` indicates that there is an edge `i --V-- i'` in the variable graph and `σ` and `σ'` are *consistent* on the variables in `V`.
+  This means that for each variable `?x ∈ V`, `σ(?x) = σ'(?x)`.
+  Note that in our setup, the variable assignments `σ(?x)` and `σ'(?x)` don't contain metavariables (or rather, we don't want to assign any metavariables in there).
+  So unification of `σ(?x)` and `σ'(?x)` reduces to equality (possibly up to computation).
+
+A *complete and consistent match* in `G` is a subset `(1, h₁ : T₁, σ₁), ..., (n, hₙ : Tₙ, σₙ)` such that for each edge `i --V-- i'` in the variable graph, `G` contains an edge between the nodes with indices `i` and `i'`.
 
 Now, when a new hypothesis `h : T` arrives, we proceed as follows:
 
@@ -275,65 +280,16 @@ Now, when a new hypothesis `h : T` arrives, we proceed as follows:
 For each i such that, according to the index, T may unify with Tᵢ:
   If T =[σ] Tᵢ:
     Add a new node (i, h : T, σ).
-    For each i' ≠ i and each node (i', h' : T', σ'):
-      If σ =[τ] σ':
-        Add an edge --[τ]-- between the two nodes.
+    For each i' such that there is an edge with label V between `i` and `i'`:
+      For each node (i', h' : T', σ'):
+        If σ and σ' are consistent on V:
+          Add an edge between the two nodes in the candidate graph.
 
-    For each path (1, h₁ : T₁, σ₁) --[τ₁]-- ... (i, h : T, σ) ... --[τₙ₋₁]-- (n, hₙ : Tₙ, σₙ):
-      If τ₁, ..., τₙ all unify:
-        Add h₁, ..., hₙ as a complete and consistent match.
+    For each complete and consistent match in G that contains the new node (i', h' : T', σ'):
+      Extract the corresponding match, which is also complete and consistent.
 ```
 
-This algorithm still has pretty bad complexity.
-But we only perform the complex unifications of hypothesis types once; the more frequent unifications of substitutions should be much simpler.
-
-###### Optimisation 1: Laziness
-
-The edges can be added lazily, avoiding exponential up-front work.
-
-###### Optimisation 2: Ordering
-
-In the end, we are only interested in paths from hypothesis index `1` to hypothesis index `n`.
-So a node for hypothesis index `i` only needs edges to nodes `i - 1` and `i + 1`.
-
-###### Optimisation 3: Variable Clusters
-
-Some of the input hypotheses `Φ` of a rule may be *independent*, in the sense that they don't share any variables.
-For example, in the rule
-```
-r : (h₁ : P x y) (h₂ : Q y z) (h₃ : R z a) (h₄ : S b c) → Ψ
-```
-the hypothesis `h₄` is independent of `h₁`, `h₂` and `h₃` while `h₁`, `h₂` and `h₃` share variables.
-In the graph, we may therefore omit edges between `h₃` and `h₄`, since their substitutions will always unify.
-
-TODO Can we treat `h₁` and `h₃` as independent?
-Or do we need to partition the input hyps into variable clusters, like Aesop?
-
-###### Optimisation 4: Path Compression
-
-Suppose we have a path
-
-```
-(1, h₁ : T₁, σ₁) --[τ₁]-- (2, h₂ : T₂, σ₂) --[τ₂]-- (3, h₃ : T₃, σ₃)
-```
-
-If we then determine that `τ₁ =[τ₃] τ₂`, we can add a shortcut edge
-
-```
-(1, h₁ : T₁, σ₁) --[τ₃]-- (3, h₃ : T₃, σ₃)
-```
-
-However, does this actually help us?
-We have to keep the `τ₁` and `τ₂` edges around, in case another edge from or to node `2` appears later.
-This means the shortcut edges consume a fair amount additional memory.
-Moreover, when such an edge from or to `2` appears, we have to walk the path from `1` again.
-However, we can skip unifications for nodes where we already have shortcut edges.
-
-#### Aside: Computation
-
-Lean natively performs most operations, including discrimination tree indexing, up to reducible computation.
-We should probably do the same for consistency.
-In that case, it might be advantageous to fully normalise the hypotheses (with reducible transparency) once and for all, instead of partially normalising during the discrimination tree lookups and again for the redundancy check.
+TODO We still need a way to efficiently find the complete and consistent matches in `G` that involve a particular node `(i, h : T, σ)`.
 
 ## Pattern-Based Forward Rules
 
@@ -369,6 +325,8 @@ Each match yields a rule `r` and a substitution `σ`.
 We then add `σ` to the match map of `r`.
 
 When checking whether a match is valid, we now use `σ` as the initial substitution (rather than `∅`).
+
+TODO integration into candidate graph algorithm.
 
 ## Application: Positivity
 
