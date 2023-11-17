@@ -193,6 +193,27 @@ def checkMVars (root : MVarClusterRef) (rootMetaState : Meta.SavedState) :
             postGoal
         go parentMetaState postMetaState introduced
 
+-- Check that each mvar ocurring in a goal is either present in the root meta
+-- state or has an introducing rapp.
+def checkIntroducedMVars (root : MVarClusterRef)
+    (rootMetaState : Meta.SavedState) : MetaM Unit := do
+  let declaredAtRoot : HashSet MVarId :=
+    rootMetaState.meta.mctx.decls.foldl (init := ∅) λ acc mvarId _ =>
+      acc.insert mvarId
+  let introducedMVarsRef ← IO.mkRef declaredAtRoot
+  preTraverseDown
+    (λ gref => do
+      for mvarId in (← gref.get).mvars do
+        unless (← introducedMVarsRef.get).contains mvarId do
+          throwError "{Check.tree.name}: at goal {(← gref.get).id}: no introducing rapp found for mvarId {mvarId.name}"
+      return true)
+    (λ rref => do
+      let introduced := (← rref.get).introducedMVars
+      introducedMVarsRef.modify λ mvars => mvars.insertMany introduced
+      return true)
+    (λ _ => return true)
+    (.mvarCluster root)
+
 def checkInvariants (root : MVarClusterRef) (rootMetaState : Meta.SavedState) :
     MetaM Unit := do
   root.checkAcyclic
@@ -201,6 +222,7 @@ def checkInvariants (root : MVarClusterRef) (rootMetaState : Meta.SavedState) :
   root.checkState
   root.checkIrrelevance
   root.checkMVars rootMetaState
+  root.checkIntroducedMVars rootMetaState
 
 def checkInvariantsIfEnabled (root : MVarClusterRef)
     (rootMetaState : Meta.SavedState) : MetaM Unit := do
