@@ -89,13 +89,13 @@ private partial def copyExprMVar (s : Meta.SavedState) (mvarId : MVarId) :
   if ← mvarId.isAssignedOrDelayedAssigned then
     return
   unless ← mvarId.isDeclared do
-    let decl ← s.runMetaM' $ do
+    let (decl, depMVarIds) ← s.runMetaM' $ do
       mvarId.instantiateMVars
       let decl ← mvarId.getDecl
+      let depMVarIds ← mvarId.getMVarDependencies (includeDelayed := true)
       aesop_trace[extraction] "declare ?{mvarId.name}:{indentD $ toMessageData mvarId}"
-      pure decl
+      pure (decl, depMVarIds)
     modifyMCtx λ mctx => { mctx with decls := mctx.decls.insert mvarId decl }
-    let depMVarIds ← mvarId.getMVarDependencies (includeDelayed := true)
     for depMVarId in depMVarIds do
       copyExprMVar s depMVarId
   let assignment? ← s.runMetaM' do
