@@ -10,6 +10,7 @@ import Aesop.Util.EqualUpToIds
 import Std.Lean.Meta.Clear
 import Std.Lean.Meta.Inaccessible
 import Std.Lean.HashSet
+import Std.Tactic.Ext
 
 open Lean
 open Lean.Elab.Tactic

@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Std.Data.HashMap
+import Std.Data.HashMap.Basic
 
 open Std (HashMap)
 
