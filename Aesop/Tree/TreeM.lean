@@ -102,15 +102,13 @@ def incrementNumRapps (increment := 1) : TreeM Unit := do
   modify λ s => { s with numRapps := s.numRapps + increment }
 
 def getAndIncrementNextGoalId : TreeM GoalId := do
-  let t ← get
-  let curr := t.nextGoalId
-  set { t with nextGoalId := curr.succ }
-  return curr
+  modifyGet λ t =>
+    let curr := t.nextGoalId
+    (curr, { t with nextGoalId := curr.succ })
 
 def getAndIncrementNextRappId : TreeM RappId := do
-  let t ← get
-  let curr := t.nextRappId
-  set { t with nextRappId := curr.succ }
-  return curr
+  modifyGet λ t =>
+    let curr := t.nextRappId
+    (curr, { t with nextRappId := curr.succ })
 
 end Aesop
