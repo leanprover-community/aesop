@@ -6,8 +6,6 @@ Authors: Jannis Limperg
 
 import Aesop
 
-set_option trace.debug true
-
 example {a y : α} {l : List α} : a ≠ y → a ∉ l → a ∉ y::l := by
   aesop?
 

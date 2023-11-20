@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Check
-import Aesop.RuleTac.RuleApplicationWithMVarInfo
 import Aesop.Tree.Traversal
 import Aesop.Tree.TreeM
 
@@ -14,7 +13,7 @@ open Lean.Meta
 
 namespace Aesop
 
-structure AddRapp extends RuleApplicationWithMVarInfo where
+structure AddRapp extends RuleApplication where
   parent : GoalRef
   appliedRule : RegularRule
   successProbability : Percent
@@ -137,12 +136,6 @@ private def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
   }
 
 private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
-  if ← Check.rules.isEnabled then
-    let (parentGoal, preState) ←
-      (← r.parent.get).currentGoalAndMetaState (← getRootMetaState)
-    if let (some msg) ← r.toRuleApplicationWithMVarInfo.check preState parentGoal then
-      throwError "{Check.rules.name}: {msg}"
-
   let rref : RappRef ← IO.mkRef $ Rapp.mk {
     id := ← getAndIncrementNextRappId
     parent := r.parent
@@ -151,68 +144,84 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     isIrrelevant := false
     appliedRule := r.appliedRule
     scriptBuilder? := r.scriptBuilder?
-    originalSubgoals := r.originalSubgoals
+    originalSubgoals := r.goals
     successProbability := r.successProbability
     metaState := r.postState
     introducedMVars := {} -- will be filled in later
-    assignedMVars := r.assignedMVars
+    assignedMVars   := {} -- will be filled in later
   }
 
   let parentGoal ← r.parent.get
   let goalDepth := parentGoal.depth + 1
+  let originalSubgoals := r.goals
 
-  -- Check if the rapp dropped mvars. A dropped mvar is one that appears in the
-  -- parent of the rapp but not in any of its subgoals. A dropped mvar is
-  -- treated like an assigned mvar for the purposes of copying.
-  let droppedMVars := parentGoal.mvars.filter λ m =>
-    ! r.mvars.contains m && ! r.assignedMVars.contains m
+  let (originalSubgoalMVars, assignedMVars, assignedOrDroppedMVars) ←
+    r.postState.runMetaM' do
+      -- Get mvars which the original subgoals depend on.
+      let originalSubgoalMVars : HashSet MVarId ←
+        originalSubgoals.foldlM (init := ∅) λ acc mvarId =>
+          return acc.insertMany (← mvarId.getMVarDependencies)
+
+      -- Get mvars which were either assigned or dropped by the rapp. We assume
+      -- that rules only assign mvars which appear in the rapp's parent goal. A
+      -- dropped mvar is one that appears in the parent of the rapp but is
+      -- neither assigned by the rapp nor does it appear in any of its subgoals.
+      -- A dropped mvar is treated like an assigned mvar for the purposes of
+      -- copying.
+      let mut assignedMVars : UnorderedArraySet MVarId := ∅
+      let mut assignedOrDroppedMVars : UnorderedArraySet MVarId := ∅
+      for mvarId in parentGoal.mvars do
+        if ← mvarId.isAssignedOrDelayedAssigned then
+          -- mvar was assigned
+          assignedMVars := assignedMVars.insert mvarId
+          assignedOrDroppedMVars := assignedOrDroppedMVars.insert mvarId
+        else if ! originalSubgoalMVars.contains mvarId then
+          -- mvar was dropped
+          assignedOrDroppedMVars := assignedOrDroppedMVars.insert mvarId
+      pure (originalSubgoalMVars, assignedMVars, assignedOrDroppedMVars)
 
   -- If the rapp assigned or dropped any mvars, copy the related goals.
-  let quasiAssignedMVars := r.assignedMVars ++ droppedMVars
   let copiedGoals : Array Goal ←
-    if quasiAssignedMVars.isEmpty then
-      pure #[]
-    else
-      copyGoals quasiAssignedMVars r.parent r.postState
-        r.successProbability goalDepth
+    copyGoals assignedOrDroppedMVars r.parent r.postState
+      r.successProbability goalDepth
+  let copiedMVars := copiedGoals.map (·.preNormGoal)
 
-  -- Collect the mvars which occur in the copied goals.
-  let copiedGoalMVars := copiedGoals.foldl (init := HashSet.empty)
-    λ copiedGoalMVars g => copiedGoalMVars.insertMany g.mvars
+  -- Collect the mvars which occur in the original subgoals and copied goals.
+  let originalSubgoalAndCopiedGoalMVars :=
+    copiedGoals.foldl (init := originalSubgoalMVars)
+       λ copiedGoalMVars g => copiedGoalMVars.insertMany g.mvars
 
-  -- If a dropped mvar does not occur in the copied goals, turn it into a
-  -- regular subgoal.
-  let droppedGoals ← droppedMVars.toArray.filterMapM λ m => do
-    if copiedGoalMVars.contains m then
-      return none
-    else
-      let mvars ← r.postState.runMetaM' $ .ofHashSet <$> m.getMVarDependencies
-      let g ← makeInitialGoal m mvars (unsafeCast ()) goalDepth
-        r.successProbability .droppedMVar
-        -- The parent (`unsafeCast ()`) will be patched up later.
-      return some g
+  -- Turn the dropped mvars into subgoals. Note: an mvar that was dropped by the
+  -- rapp may occur in the copied goals, in which case we don't count it as
+  -- dropped any more.
+  let droppedMVars ← r.postState.runMetaM' do
+    let mut droppedMVars := #[]
+    for mvarId in parentGoal.mvars do
+      unless ← (pure $ originalSubgoalAndCopiedGoalMVars.contains mvarId) <||>
+               mvarId.isAssignedOrDelayedAssigned do
+        droppedMVars := droppedMVars.push mvarId
+    pure droppedMVars
 
-  -- Turn proper goals into proper mvars if they appear in any of the copied
-  -- goals.
-  let mut goals := Array.mkEmpty r.goals.size
-  let mut introducedMVars := r.introducedMVars
-  for (g, mvars) in r.goals do
-    if copiedGoalMVars.contains g then
-      introducedMVars := introducedMVars.insert g
-    else
-      goals := goals.push (g, mvars)
+  -- Partition the subgoals into 'proper goals' and 'proper mvars'. A proper
+  -- mvar is an mvar that occurs in any of the other subgoal mvars. Any other
+  -- mvar is a proper goal.
+  let (properGoals, _) ← r.postState.runMetaM' do
+    partitionGoalsAndMVars $ originalSubgoals ++ copiedMVars ++ droppedMVars
 
   -- Construct the subgoals
-  let subgoals ← goals.mapM λ (goal, mvars) =>
-    makeInitialGoal goal mvars (unsafeCast ()) goalDepth
-      r.successProbability .subgoal
-      -- The parent (`unsafeCast ()`) will be patched up later.
-
-  let newGoals := subgoals ++ copiedGoals ++ droppedGoals
+  let subgoals ← properGoals.mapM λ (goal, mvars) =>
+    if let some copiedGoal := copiedGoals.find? (·.preNormGoal == goal) then
+      pure copiedGoal
+    else
+      let origin :=
+        if droppedMVars.contains goal then .droppedMVar else .subgoal
+      makeInitialGoal goal mvars (unsafeCast ()) goalDepth
+        r.successProbability origin
+        -- The parent (`unsafeCast ()`) will be patched up later.
 
   -- Construct the new mvar clusters.
   let crefs : Array MVarClusterRef ←
-    clusterGoals newGoals |>.mapM λ gs => do
+    clusterGoals subgoals |>.mapM λ gs => do
       let grefs ← gs.mapM (IO.mkRef ·)
       let cref ← IO.mkRef $ MVarCluster.mk {
         parent? := some rref
@@ -220,28 +229,48 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
         isIrrelevant := false
         state := NodeState.unknown
       }
-      -- Patch up information we left out earlier (to break cyclic dependencies).
+      -- Patch up information we left out earlier (to break cyclic
+      -- dependencies).
       grefs.forM λ gref => gref.modify λ g => g.setParent cref
       return cref
 
+  -- Get the introduced mvars. An mvar counts as introduced by this rapp if it
+  -- appears in a subgoal, but not in the parent goal.
+  let mut introducedMVars : UnorderedArraySet MVarId := ∅
+  let mut allIntroducedMVars ← modifyGet λ t =>
+    (t.allIntroducedMVars, { t with allIntroducedMVars := ∅ })
+    -- We set `allIntroducedMVars := ∅` to make sure that the hash set is used
+    -- linearly.
+  for g in subgoals do
+    for mvarId in g.mvars do
+      if ! parentGoal.mvars.contains mvarId &&
+         ! allIntroducedMVars.contains mvarId then
+        introducedMVars := introducedMVars.insert mvarId
+        allIntroducedMVars := allIntroducedMVars.insert mvarId
+  modify λ t => { t with allIntroducedMVars }
+
   -- Patch up more information we left out earlier.
   rref.modify λ r =>
-    r.setChildren crefs |>.setIntroducedMVars introducedMVars
+    r.setChildren crefs
+    |>.setIntroducedMVars introducedMVars
+    |>.setAssignedMVars assignedMVars
   r.parent.modify λ g => g.setChildren $ g.children.push rref
 
   -- Increment goal and rapp counters.
-  incrementNumGoals newGoals.size
+  incrementNumGoals subgoals.size
   incrementNumRapps
   return rref
 
--- Adds a new rapp and its subgoals. If the rapp assigns mvars, all relevant
--- goals containing these mvars are copied as children of the rapp as well. If
--- the rapp drops mvars, these are treated as assigned mvars, in the sense that
--- the same goals are copied as if the dropped mvar had been assigned.
---
--- Note that adding a rapp may prove the parent goal, but this function does not
--- make the necessary changes. So after calling it, you should check whether the
--- rapp's parent goal is proven and mark it accordingly.
+/--
+Adds a new rapp and its subgoals. If the rapp assigns mvars, all relevant
+goals containing these mvars are copied as children of the rapp as well. If
+the rapp drops mvars, these are treated as assigned mvars, in the sense that
+the same goals are copied as if the dropped mvar had been assigned.
+
+Note that adding a rapp may prove the parent goal, but this function does not
+make the necessary changes. So after calling it, you should check whether the
+rapp's parent goal is proven and mark it accordingly.
+-/
 @[implemented_by addRappUnsafe]
 opaque addRapp : AddRapp → TreeM RappRef
 

@@ -18,6 +18,10 @@ structure Tree where
   numRapps : Nat
   nextGoalId : GoalId
   nextRappId : RappId
+  /--
+  Union of the mvars introduced by all rapps.
+  -/
+  allIntroducedMVars : HashSet MVarId
 
 def mkInitialTree (goal : MVarId) : MetaM Tree := do
   let rootClusterRef ← IO.mkRef $ MVarCluster.mk {
@@ -51,8 +55,9 @@ def mkInitialTree (goal : MVarId) : MetaM Tree := do
     rootMetaState := ← saveState
     numGoals := 1
     numRapps := 0
-    nextGoalId := GoalId.one
-    nextRappId := RappId.zero
+    nextGoalId := .one
+    nextRappId := .zero
+    allIntroducedMVars := ∅
   }
 
 structure TreeM.Context where
@@ -100,6 +105,9 @@ def incrementNumGoals (increment := 1) : TreeM Unit := do
 
 def incrementNumRapps (increment := 1) : TreeM Unit := do
   modify λ s => { s with numRapps := s.numRapps + increment }
+
+def getAllIntroducedMVars : TreeM (HashSet MVarId) :=
+  return (← get).allIntroducedMVars
 
 def getAndIncrementNextGoalId : TreeM GoalId := do
   modifyGet λ t =>

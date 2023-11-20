@@ -61,8 +61,7 @@ def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
   runRuleTac options tac ruleName postNormState input
 
 def addRapps (parentRef : GoalRef) (rule : RegularRule)
-    (rapps : Array RuleApplicationWithMVarInfo) :
-    SearchM Q RuleResult := do
+    (rapps : Array RuleApplication) : SearchM Q RuleResult := do
   let parent ← parentRef.get
 
   let mut rrefs := Array.mkEmpty rapps.size
@@ -132,13 +131,15 @@ def runSafeRuleCore (parentRef : GoalRef) (rule : SafeRule)
         runRegularRuleCore parentRef (.safe rule) indexMatchLocations
       | do addRuleFailure (.safe rule) parentRef; return .regular .failed
     let parentMVars := (← parentRef.get).mvars
-    let rapps ←
-      output.applications.mapM (·.toRuleApplicationWithMVarInfo parentMVars)
+    let rapps := output.applications
     if rapps.size != 1 then
       aesop_trace[steps] "Safe rule did not produce exactly one rule application"
       addRuleFailure (.safe rule) parentRef
       return .regular .failed
-    else if rapps.any (! ·.assignedMVars.isEmpty) then
+    let anyParentMVarAssigned ← rapps.anyM λ rapp => do
+      rapp.postState.runMetaM' do
+        parentMVars.anyM (·.isAssignedOrDelayedAssigned)
+    if anyParentMVarAssigned then
       aesop_trace[steps] "Safe rule assigned metavariables, so we postpone it"
       return .postponed ⟨rule, output⟩
     else
@@ -161,10 +162,7 @@ def runUnsafeRuleCore (parentRef : GoalRef) (rule : UnsafeRule)
     let some output ←
         runRegularRuleCore parentRef (.unsafe rule) indexMatchLocations
       | do addRuleFailure (.unsafe rule) parentRef; return .failed
-    let parentMVars := (← parentRef.get).mvars
-    let rapps ←
-      output.applications.mapM (·.toRuleApplicationWithMVarInfo parentMVars)
-    addRapps parentRef (.unsafe rule) rapps
+    addRapps parentRef (.unsafe rule) output.applications
 
 def runUnsafeRule (parentRef : GoalRef) (rule : UnsafeRule)
     (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
@@ -209,10 +207,7 @@ def runFirstSafeRule (gref : GoalRef) : SearchM Q SafeRulesResult := do
 def applyPostponedSafeRule (r : PostponedSafeRule) (parentRef : GoalRef) :
     SearchM Q RuleResult := do
   withRuleTraceNode r.rule.name (·.toEmoji) " (postponed)" do
-    let parentMVars := (← parentRef.get).mvars
-    let rapps ← r.output.applications.mapM
-      (·.toRuleApplicationWithMVarInfo parentMVars)
-    addRapps parentRef (.unsafe r.toUnsafeRule) rapps
+    addRapps parentRef (.unsafe r.toUnsafeRule) r.output.applications
 
 partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
     (parentRef : GoalRef) : SearchM Q RuleResult := do
