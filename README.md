@@ -32,15 +32,14 @@ like this:
   Aesop all the time. However, the script generation is currently not fully
   reliable, so you may have to adjust the generated script.
 
-Aesop should be suitable for two main use cases:
+Aesop is suitable for two main use cases:
 
 - General-purpose automation, where Aesop is used to dispatch 'trivial' goals.
-  Once mathlib is ported to Lean 4 and we have registered many lemmas as Aesop
-  rules, Aesop will hopefully serve as a much more powerful `simp`.
+  By registering enough lemmas as Aesop rules, you can turn Aesop into a much
+  more powerful `simp`.
 - Special-purpose automation, where specific Aesop rule sets are built to
-  address a certain class of goals. Tactics such as `measurability`,
-  `continuity` or `tidy`, which perform some sort of recursive search, can
-  hopefully be replaced by Aesop rule sets.
+  address a certain class of goals. Mathlib tactics such as `measurability`
+  and `continuity` are implemented by Aesop.
 
 I only occasionally update this README, so details may be out of date. If you
 have questions, please create an issue or ping me (Jannis Limperg) on the [Lean
@@ -745,9 +744,11 @@ example : α → α := by
   aesop
 ```
 
-This will use the rules in the `default` rule set (i.e. those added via the
-attribute with no explicit rule set specified) and the rules in the `builtin`
-rule set (i.e. those provided by Aesop itself).
+This will use the rules in the default rule sets. Out of the box, these are the
+`default` rule set, containing rules tagged with the `@[aesop]` attribute
+without mentioning a specific rule set, and the `builtin` rule set, containing
+rules built into Aesop. However, other rule sets can also be enabled by default;
+see the `declare_aesop_rule_sets` command.
 
 The tactic's behaviour can also be customised with various options. A more
 involved Aesop call might look like this:
@@ -806,15 +807,17 @@ associated with `x` and `y`, write
 
 #### Selecting Rule Sets
 
-By default, Aesop uses the `default` and `builtin` rule sets. A `rule_sets`
-clause can be given to include additional rule sets, e.g.
+By default, Aesop uses the `default` and `builtin` rule sets, as well as rule
+sets which are declared as default rule sets. A `rule_sets` clause can be given
+to include additional rule sets, e.g.
 
 ``` text
 (rule_sets [A, B])
 ```
 
-This will use rule sets `A`, `B`, `default` and `builtin`. Rule sets can also
-be disabled with `rule_sets [-default, -builtin]`.
+This will use rule sets `A`, `B`, `default` and `builtin` (and any rule sets
+declared as default rule sets). Rule sets can also be disabled with
+`rule_sets [-default, -builtin]`.
 
 #### Setting Options
 
@@ -842,9 +845,9 @@ configuration applies to the `simp_all` rule.
 
 ### Built-In Rules
 
-The set of built-in rules (those in the `builtin` rule set) is currently quite
-unstable, so for now I won't document them in detail. See
-`Aesop/BuiltinRules.lean` and `Aesop/BuiltinRules/*.lean`
+The set of built-in rules (those in the `builtin` rule set) is a bit unstable,
+so for now I won't document them in detail. See `Aesop/BuiltinRules.lean` and
+`Aesop/BuiltinRules/*.lean`
 
 ### Proof Scripts
 
