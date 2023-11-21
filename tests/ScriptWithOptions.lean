@@ -9,4 +9,4 @@ import Aesop
 set_option aesop.check.all true
 
 example : True := by
-  aesop? (options := {})
+  aesop? (config := {})

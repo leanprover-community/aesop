@@ -15,10 +15,10 @@ inductive Even : Nat → Prop
 
 example : Even 10 := by
   fail_if_success
-    aesop (options := { maxRuleHeartbeats := 1, terminal := true })
+    aesop (config := { maxRuleHeartbeats := 1, terminal := true })
   aesop
 
 example (n m k : Nat) : n + m + k = (n + m) + k := by
   fail_if_success
-    aesop (options := { maxSimpHeartbeats := 1, terminal := true })
+    aesop (config := { maxSimpHeartbeats := 1, terminal := true })
   aesop

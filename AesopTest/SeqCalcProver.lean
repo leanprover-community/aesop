@@ -423,7 +423,7 @@ theorem weaken (Γ Δ : List (Form Φ)) (prf : Proof Γ Δ) (δ : Form Φ)
   | imp_r Γ Δ φ ψ =>
     have ih' : Proof (φ :: Γ) (ψ :: δ :: Δ) := by aesop
     aesop
-  | _ => aesop (options := { maxRuleApplications := 250 })
+  | _ => aesop (config := { maxRuleApplications := 250 })
 
 
 --- Soundness

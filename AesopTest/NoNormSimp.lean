@@ -10,5 +10,5 @@ set_option aesop.check.all true
 
 example : 1 = 2 → False := by
   fail_if_success
-    aesop (options := { enableSimp := false, enableSimpAll := false, terminal := true })
+    aesop (config := { enableSimp := false, enableSimpAll := false, terminal := true })
   aesop

@@ -27,10 +27,10 @@ example : MyFalse := by
   aesop
 
 example : MyFalse := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
 
 example : MyFalse := by
-  aesop (options := { warnOnNonterminal := false })
+  aesop (config := { warnOnNonterminal := false })
 
 @[aesop safe]
 structure MyFalse₂ where

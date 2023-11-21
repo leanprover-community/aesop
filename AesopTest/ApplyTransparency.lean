@@ -12,21 +12,21 @@ def T := True
 
 example : T := by
   fail_if_success
-    aesop (add safe apply True.intro) (options := { terminal := true })
+    aesop (add safe apply True.intro) (config := { terminal := true })
   fail_if_success
     aesop (add safe (apply (transparency := default)) True.intro)
-      (options := { terminal := true })
+      (config := { terminal := true })
   aesop (add safe (apply (transparency! := default)) True.intro)
 
 @[irreducible] def U := T
 
 example : U := by
   fail_if_success
-    aesop (add safe apply True.intro) (options := { terminal := true })
+    aesop (add safe apply True.intro) (config := { terminal := true })
   fail_if_success
     aesop (add safe (apply (transparency := default)) True.intro)
-      (options := { terminal := true })
+      (config := { terminal := true })
   fail_if_success
     aesop (add safe (apply (transparency! := default)) True.intro)
-      (options := { terminal := true })
+      (config := { terminal := true })
   aesop (add safe (apply (transparency! := all)) True.intro)

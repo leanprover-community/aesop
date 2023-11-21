@@ -757,7 +757,7 @@ aesop
   (add safe foo, 10% cases Or, safe cases Empty)
   (erase A, baz)
   (rule_sets [A, B])
-  (options := { maxRuleApplicationDepth := 10 })
+  (config := { maxRuleApplicationDepth := 10 })
 ```
 
 Here we add some rules with an `add` clause, erase other rules with an `erase`
@@ -818,10 +818,10 @@ be disabled with `rule_sets [-default, -builtin]`.
 
 #### Setting Options
 
-Various options can be set with an `options` clause, whose syntax is:
+Various options can be set with a `config` clause, whose syntax is:
 
 ``` text
-(options := <term>)
+(config := <term>)
 ```
 
 The term is an arbitrary Lean expression of type `Aesop.Options`; see there for

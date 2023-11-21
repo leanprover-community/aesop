@@ -13,12 +13,12 @@ def T := Empty
 example (h : T) : Empty := by
   fail_if_success
     aesop (erase Aesop.BuiltinRules.applyHyps)
-      (options := { assumptionTransparency := .reducible, terminal := true })
+      (config := { assumptionTransparency := .reducible, terminal := true })
   aesop (erase Aesop.BuiltinRules.applyHyps)
 
 @[irreducible] def U := False
 
 example (h : U) : False := by
   fail_if_success
-    aesop (options := { terminal := true })
-  aesop (options := { assumptionTransparency := .all })
+    aesop (config := { terminal := true })
+  aesop (config := { assumptionTransparency := .all })

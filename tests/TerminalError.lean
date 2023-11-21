@@ -9,4 +9,4 @@ import Aesop
 set_option aesop.check.all true
 
 example : False := by
-  aesop (options := { terminal := true })
+  aesop (config := { terminal := true })

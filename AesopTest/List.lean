@@ -654,7 +654,7 @@ theorem X.eq_of_mem_replicate {a b : α} {n} (h : b ∈ replicate n a) : b = a :
 
 -- attribute [-simp] eq_replicate_of_mem
 theorem X.eq_replicate_of_mem {a : α} {l : List α} : (∀ b, b ∈ l → b = a) → l = replicate l.length a := by
-  induction l <;> aesop (options := { enableSimpAll := false })
+  induction l <;> aesop (config := { enableSimpAll := false })
 
 theorem eq_replicate' {a : α} {l : List α} : l = replicate l.length a ↔ ∀ b, b ∈ l → b = a := by
   induction l
@@ -701,12 +701,12 @@ theorem replicate_left_injective {n : Nat} (hn : n ≠ 0) :
 theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) := by
   unfold Injective; intro x y
   induction x generalizing y <;> induction y <;>
-    aesop (options := { enableSimpAll := false })
+    aesop (config := { enableSimpAll := false })
 
 @[simp] theorem replicate_right_inj {a : α} {n m : Nat} :
     replicate n a = replicate m a ↔ n = m := by
   induction n generalizing m <;>
-    aesop (add 1% cases Nat) (options := { enableSimp := false })
+    aesop (add 1% cases Nat) (config := { enableSimp := false })
 
 /-! ### pure -/
 

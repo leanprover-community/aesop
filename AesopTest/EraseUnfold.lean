@@ -14,7 +14,7 @@ set_option aesop.check.all true
 def foo : Nat := 37
 
 example : foo = 37 := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
   unfold foo
   rfl
 
@@ -25,6 +25,6 @@ example : foo = 37 := by aesop
 attribute [-aesop] foo
 
 example : foo = 37 := by
-  fail_if_success aesop? (options := { terminal := true })
+  fail_if_success aesop? (config := { terminal := true })
   unfold foo
   rfl

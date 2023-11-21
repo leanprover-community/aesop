@@ -11,7 +11,7 @@ set_option aesop.check.all true
 def Foo := True
 
 example : Foo := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
   simp [Foo]
 
 open Lean.Elab.Tactic in

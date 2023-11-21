@@ -28,7 +28,7 @@ example {α β : Prop} (ha : α) (h : α → β) : β := by
       (rule_sets [-builtin,-default])
       (simp_config := { maxDischargeDepth := 0 })
       (simp_all_config := { maxDischargeDepth := 0 })
-      (options := { terminal := true })
+      (config := { terminal := true })
   aesop (rule_sets [-builtin,-default])
 
 -- We can use the `enableSimpAll` config option to switch off the `simp_all`
@@ -37,7 +37,7 @@ example {α : Prop} (ha : α) : α := by
   fail_if_success
     aesop
       (rule_sets [-builtin,-default])
-      (options := { enableSimpAll := false, terminal := true })
+      (config := { enableSimpAll := false, terminal := true })
   aesop (rule_sets [-builtin,-default])
 
 -- We can give priorities to `simp` rules, corresponding to the priorities of
@@ -57,5 +57,5 @@ attribute [-aesop] TF
 attribute [aesop simp 3] TF
 
 example : T := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
   rw [TT]; trivial

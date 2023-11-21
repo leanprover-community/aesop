@@ -20,10 +20,10 @@ theorem Perm.any {xs ys : List α} (perm : Perm xs ys) (P : α → Prop)
 
 theorem error (P : Nat → Prop) (Δ : List Nat) : Any P Δ := by
   aesop (add 50% [constructors Perm, constructors Any, Perm.any])
-    (options := { maxRuleApplications := 100, terminal := true })
+    (config := { maxRuleApplications := 100, terminal := true })
   sorry
 
 theorem fine (P : α → Prop) (Δ : List α) : Any P Δ := by
   aesop (add unsafe [50% constructors Perm, 50% constructors Any, apply 50% Perm.any])
-    (options := { maxRuleApplications := 10, terminal := true })
+    (config := { maxRuleApplications := 10, terminal := true })
   sorry

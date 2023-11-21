@@ -14,5 +14,5 @@ macro "aesop_test" : tactic => `(tactic| aesop (rule_sets [test]))
 structure TT
 
 example : TT := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
   aesop_test
