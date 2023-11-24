@@ -188,7 +188,7 @@ The guiding principle is that we want to reuse work that's already been done, so
 
 In the following, we identify the input hypotheses of a rule `r : (h₁ : T₁) ... (hₙ : Tₙ) → Ψ` with their indices `1, ..., n`.
 
-A *match* `m` for the rule `r` is a partial map from input hypotheses `1, ..., n` into hypotheses in the current context `Γ`.
+A *match* `m` for the rule `r` is a partial map from input hypothesis indices `1, ..., n` into hypotheses in the current context `Γ`.
 It indicates that hypotheses `m(k₁), ..., m(kₗ)` in `Γ` can possibly be used to discharge the input hypotheses `k₁, ..., kₗ` of `r`.
 
 A match `m` for `r` is *consistent* if the substitutions which arise from unifying each input hypothesis `hᵢ : Tᵢ ∈ dom(m)` with `m(i)` are consistent (i.e. they agree on variables shared between them).
@@ -233,6 +233,8 @@ When a new context hypothesis `h : T` with `T =[σ] Tᵢ` for some `i` and `σ` 
 
 ##### Attempt 1: Candidate Map
 
+TODO cache substitutions
+
 We use a finite map `F` from hypothesis indices `1, ..., n` to lists of candidate hypotheses `C₁ = c₁₁ : U₁₁, ..., c₁ₘ₁ : U₁ₘ₁` etc.
 When a new hypothesis `h : T` arrives, we proceed as follows:
 
@@ -266,7 +268,7 @@ We first pre-compute an undirected, simple *variable graph* `P` for the rule `r`
 During the forward reasoning phase, we maintain an undirected, simple *candidate graph* `G` for `r`:
 
 - Nodes are tuples `(i, h : T, σ)` where `i` is an input hypothesis index and `h : T` is a hypothesis in the context such that `T =[σ] Tᵢ`.
-- Edges unlabelled.
+- Edges are unlabelled.
   An edge between `(i, h : T, σ)` and `(i', h' : T', σ')` indicates that there is an edge `i --V-- i'` in the variable graph and `σ` and `σ'` are *consistent* on the variables in `V`.
   This means that for each variable `?x ∈ V`, `σ(?x) = σ'(?x)`.
   Note that in our setup, the variable assignments `σ(?x)` and `σ'(?x)` don't contain metavariables (or rather, we don't want to assign any metavariables in there).
