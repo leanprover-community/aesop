@@ -312,7 +312,11 @@ The pattern graph is
 ```
 So we must reach the same node for `4` from `1` via `2` and `3`.
 In general, finding a subgraph of the candidate graph `G` isomorphic to the variable graph `P` is an instance of the subgraph isomorphism problem, which is NP-complete.
-However, we have the additional constraint that we know one node that must be included in the subgraph, which probably simplifies the problem.
+We have the additional constraint that we know one node that must be included in the subgraph, but this doesn't change the complexity.
+
+Proof: by reduction.
+To transform a regular subgraph iso problem into a constrained subgraph iso problem, add a node and connect it to all other nodes in the graph.
+Finding a subgraph iso involving the new node in the new graph is then equivalent to finding a subgraph iso in the old graph.
 
 ## Pattern-Based Forward Rules
 
