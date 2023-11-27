@@ -318,6 +318,159 @@ Proof: by reduction.
 To transform a regular subgraph iso problem into a constrained subgraph iso problem, add a node and connect it to all other nodes in the graph.
 Finding a subgraph iso involving the new node in the new graph is then equivalent to finding a subgraph iso in the old graph.
 
+### Attempt 3: Candidate Tree
+
+As usual, let `r : h₁ : T₁ → ... → hₙ : Tₙ → Ψ` be a forward rule.
+We want to represent a set of partial matches for `r`.
+
+#### Precomputation: Hypothesis Tree
+
+When we index `r`, we arrange the `Tᵢ` into a *hypothesis tree* with two alternating types of nodes:
+
+- *Index nodes* store
+  - the index of an input hypothesis;
+  - a hash map of the node's children, which are variable nodes.
+- *Variable nodes* store
+  - a list of variables;
+  - an ordered list of the node's children, which are index nodes.
+
+For an input hypothesis `hᵢ : Tᵢ`, the corresponding index node in the tree has index `i`.
+The children of an index node are variable nodes containing subsets of the variables which occur in the input hypothesis referenced by the index node.
+The children of a variable node are index nodes whose input hypotheses share exactly the variables of the variable node with the variable node's parent.
+
+Example: the tree
+
+```
+         1
+        / \
+ [?x, ?y] [?x, ?z]
+   |        /  \
+   2       3    4
+   |
+  [ ]
+   |
+   5
+```
+
+indicates that `T₁` and `T₂` have exactly the variables `?x` and `?y` in common; `T₁` and `T₃` as well as `T₁` and `T₄` have exactly `?x` and `?z` in common; and `T₂` and `T₅` have no variables in common.
+
+A hypothesis tree `t` is *valid for `r`* if it has the following properties:
+
+- For each input hypothesis `hᵢ : Tᵢ`, `t` contains exactly one index node with index `i`.
+- The childrens' children of an index node for `Tᵢ` are exactly those `j ≠ i` such that `Tᵢ` and `Tⱼ` share at least one variable.
+
+This means that the hypothesis tree is a sort of covering for the hypotheses' dependency graph.
+We assume henceforth that each rule `r` is associated with a valid hypothesis tree.
+(TODO show that this is always possible.)
+
+To limit the tree's size, it is probably preferable to put input hypotheses with many variables close to the root.
+
+#### Runtime: Candidate Tree
+
+At runtime, we store the partial matches in a *candidate tree* with three alternating types of nodes:
+
+- *Index nodes* store
+  - the index of an input hypothesis;
+  - a hash map of the node's children, which are variable nodes.
+- *Variable nodes* store
+  - an `n`-tuple of variables (for some `m`);
+  - an iterated discrimination tree mapping `m`-tuples of terms to the node's children, which are instantiation nodes.
+- *Instantiation nodes* store
+  - a nonempty list of hypotheses
+  - an ordered list of the node's children, which are index nodes.
+
+The index nodes and variable nodes mirror the precomputed hypothesis tree.
+An instantiation node for terms `(a₁, ..., aₘ)` with hypotheses `hᵢ₁, hᵢ₂, ...`, parent variables `(?x₁, ..., ?xₘ)` and parent's parent index `k` indicates that the types of the hypotheses `hᵢⱼ` unify with `Tₖ` with a substitution that maps `?x₁` to `a₁`, `?x₂` to `?a₂`, etc.
+
+Example: the tree
+
+```
+                 1
+                / \
+        [?x, ?y]   [?x, ?z]
+        /     \
+(a, b) /       \ (a, c)
+      /         \
+    [h₁, h₂]   [h₃]
+       |
+       2
+       |
+      [ ]
+       |
+      [h₄]
+```
+
+indicates that
+
+- `h₁ : T₁[?x := a, ?y := b]`
+- `h₂ : T₁[?x := a, ?y := b]`
+- `h₃ : T₁[?x := a, ?y := c]`
+- `h₄ : T₂`
+
+Note that `T₁` and `T₂` may contain additional metavariables.
+E.g. `T₁` may contain a metavariable `?z` which doesn't occur in `T₂` (otherwise it would show up in the left variable node of `1`.)
+So when we write `h₁ : T₁[?x := a, ?y := b]`, we mean that `T₁[?x := a, ?y := b]` unifies with the type of `h₁`.
+
+A candidate tree `t` *matches* a hypothesis tree `u` if `t` becomes a subtree of `u` when we remove instantiation nodes.
+More precisely, if we replace each subtree of the form
+```
+  [?x₁, ...]
+    /      \
+   /   ...  \
+  /          \
+[h₁₁, ...]    [hₖ₁, ...]
+  |     |       |     |
+  | ... |       | ... |
+  |     |       |     |
+  i₁₁  ...      iₖ₁  ...
+```
+with one of the trees
+```
+[?x₁, ...]  ...   [hₖ₁, ...]
+  |     |           |     |
+  | ... |           | ... |
+  |     |           |     |
+  i₁₁  ...          iₖ₁  ...
+```
+then the resulting overall tree must be a subtree of `u`, regardless of which replacement trees we chose.
+
+We maintain the invariant that our candidate trees always match the hypothesis tree of `r`.
+
+##### Insertion
+
+Let `h : T` be a new hypothesis such that `T =[σ] Tᵢ` for some `i`.
+To insert `h` into the candidate tree, we proceed as follows.
+
+Let `(I₁, V₁, ..., Iₘ)` with `Iₘ = i` be the path to `i` in the hypothesis tree.
+The `Iⱼ` are indices (or index nodes); the `Vⱼ` are sets of variables (or variable nodes).
+This path can be precomputed for each `i`.
+
+We follow the same path in the candidate tree.
+When we encounter a variable node for `?x₁, ..., ?xₖ`, we look up `(σ(?x₁), ..., σ(?xₖ))` in the variable node's discrimination tree.
+We then recurse into the instantiation node returned by this lookup and continue to follow `p`.
+If the lookup is unsuccessful, we create a new instantiation node, insert it into the discrimination tree and continue to follow `p`.
+
+Once we've reached the end of `p`, let `V₁, ..., Vₗ` be the sets of hypotheses that are children of `i` in the hypothesis tree.
+For each such set `Vⱼ = {?x₁, ..., ?xₒ}`, add the corresponding variable node to `i`.
+In the variable node's discrimination tree, add the mapping `(σ(?x₁), ..., σ(?xₒ)) ↦ [h]` (or add `h` to this instantiation node if it already exists).
+
+We have so far ignored the complication that some of the intermediate index nodes on the path `p` may not exist because we haven't found suitable hypotheses yet.
+In this case, we put `h` into a waiting list.
+When we later add one of the intermediate index nodes, we try to insert `h` again.
+This can be made more efficient, for example by having waiting lists at each node in the graph.
+Then we don't have to walk parts of the path over and over again.
+
+##### Extraction
+
+A complete match is a subtree of the candidate tree which covers all input hypotheses `Tᵢ`, subject to the following coherence condition:
+If an index node for `Tᵢ` has children `V₁, ..., Vₘ`, then there must be a hypothesis `h` such that for each instantiation node that is a child of `Vⱼ` and is present in the complete match subtree, `h` is contained in the instantiation node.
+In other words: For each index node, we must choose *one* hypotheses to include in the match.
+
+We can speed up the search for a complete match by tracking which subtrees are already complete.
+When we insert a hypothesis, we can then determine, bottom-up, which subtrees have become complete.
+As soon as the root becomes complete, we have a complete match.
+However, we need to take care to report each complete match only once.
+
 ## Pattern-Based Forward Rules
 
 For the applications below, our notion of forward rules is too restrictive.
@@ -353,7 +506,7 @@ We then add `σ` to the match map of `r`.
 
 When checking whether a match is valid, we now use `σ` as the initial substitution (rather than `∅`).
 
-TODO integration into candidate graph algorithm.
+(TODO integration into more advanced algorithms.)
 
 ## Application: Positivity
 
