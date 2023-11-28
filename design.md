@@ -358,12 +358,33 @@ A hypothesis tree `t` is *valid for `r`* if it has the following properties:
 
 - For each input hypothesis `hᵢ : Tᵢ`, `t` contains exactly one index node with index `i`.
 - The childrens' children of an index node for `Tᵢ` are exactly those `j ≠ i` such that `Tᵢ` and `Tⱼ` share at least one variable.
+  (TODO this condition is hot garbage. But what's the right one?)
 
 This means that the hypothesis tree is a sort of covering for the hypotheses' dependency graph.
 We assume henceforth that each rule `r` is associated with a valid hypothesis tree.
-(TODO show that this is always possible.)
 
 To limit the tree's size, it is probably preferable to put input hypotheses with many variables close to the root.
+
+##### Running Example
+
+Let `r : Φ → Ψ` have input hypotheses
+
+```
+Φ = h₁ : T₁[?x], h₂ : T₂[?x], h₃ : T₃[?x,?y], h₄ : T₄[?y,?z], h₅ : T₅[?y], h₆ : T₆[?w]
+```
+
+We select `h₃ : T₃[?x, ?y]` as the root since it has the most variable connections to other hypotheses.
+This forces us to add children for `h₁ : T₁[?x]`, `h₂ : T₂[?x]`, `h₄ : T₄[?y, ?z]`, `h₅ : T₅[?y]` with corresponding variable nodes.
+The leftover hypothesis `h₆ : T₆[?w]` can be added anywhere; we choose the root.
+This results in the following hypothesis tree:
+
+```
+           --- 3 ---
+          /     |   \
+        [?x]   [?y] [ ]
+        / \    / \   |
+       1   2  4   5  6
+```
 
 #### Runtime: Candidate Tree
 
@@ -459,6 +480,105 @@ In this case, we put `h` into a waiting list.
 When we later add one of the intermediate index nodes, we try to insert `h` again.
 This can be made more efficient, for example by having waiting lists at each node in the graph.
 Then we don't have to walk parts of the path over and over again.
+
+###### Running Example
+
+Suppose the following hypotheses arrive one by one:
+
+- `h₁ : T₁[?x ↦ a]`
+  Path: `(3, [?x], 1)`
+  The intermediate node `3` is not present, so `h₁` goes on the waiting list.
+- `h₂ : T₃[?x ↦ a, ?y ↦ b]`
+  Path: `(3)`
+  ```
+          3
+        /   \
+      [?x]  [?y]
+    a /      | b
+    [h₂]    [h₂]
+    /
+   1
+   |
+  [ ]
+   |
+  [h₁]
+  ```
+  It's now possible to insert `h₁`, so we remove it from the waiting list.
+- `h₃ : T₃[?x ↦ a, ?y ↦ c]`
+  Path: `(3)`
+  ```
+          3
+        /   \
+      [?x]  [?y]--
+    a /      | b  \ c
+    [h₂,h₃] [h₂]  [h₃]
+    /
+   1
+   |
+  [ ]
+   |
+  [h₁]
+  ```
+- `h₄ : T₂[?x ↦ a]`
+  Path: `(3, [?x], 2)`
+  ```
+          3
+        /   \
+      [?x]  [?y]--
+    a /      | b  \ c
+    [h₂,h₃] [h₂]  [h₃]
+    /  \
+   1    2
+   |    |
+  [ ]  [ ]
+   |    |
+  [h₁] [h₄]
+  ```
+- `h₅ : T₄[?y ↦ b, ?z ↦ c]`
+  Path: `(3, [?y], 4)`
+  ```
+          3
+        /   \
+      [?x]  [?y]--
+    a /      | b  \ c
+    [h₂,h₃] [h₂]  [h₃]
+    /  \     |
+   1    2    4
+   |    |    |
+  [ ]  [ ]  [ ]
+   |    |    |
+  [h₁] [h₄] [h₅]
+  ```
+- `h₆ : T₅[?y ↦ b]`
+  Path: `(3, [?y], 5)`
+  ```
+          3
+        /   \
+      [?x]  [?y]--
+    a /      | b  \ c
+    [h₂,h₃] [h₂]  [h₃]
+    /  \     |  \
+   1    2    4   5
+   |    |    |   |
+  [ ]  [ ]  [ ] [ ]
+   |    |    |   |
+  [h₁] [h₄] [h₅] [h₆]
+  ```
+- `h₇ : T₆[?w ↦ d]`
+  Path: `(3, [], 6)`
+  ```
+          3 ----------------
+        /   \              |
+      [?x]  [?y]--        [ ]
+    a /      | b  \ c      |
+    [h₂,h₃] [h₂]  [h₃]     6
+    /  \     |  \          |
+   1    2    4   5        [ ]
+   |    |    |   |         |
+  [ ]  [ ]  [ ] [ ]       [h₇]
+   |    |    |   |
+  [h₁] [h₄] [h₅] [h₆]
+  ```
 
 ##### Extraction
 
