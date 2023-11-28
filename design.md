@@ -464,12 +464,128 @@ Then we don't have to walk parts of the path over and over again.
 
 A complete match is a subtree of the candidate tree which covers all input hypotheses `Tᵢ`, subject to the following coherence condition:
 If an index node for `Tᵢ` has children `V₁, ..., Vₘ`, then there must be a hypothesis `h` such that for each instantiation node that is a child of `Vⱼ` and is present in the complete match subtree, `h` is contained in the instantiation node.
-In other words: For each index node, we must choose *one* hypotheses to include in the match.
+In other words: For each index node, we must choose *one* hypothesis to include in the match.
 
 We can speed up the search for a complete match by tracking which subtrees are already complete.
 When we insert a hypothesis, we can then determine, bottom-up, which subtrees have become complete.
 As soon as the root becomes complete, we have a complete match.
 However, we need to take care to report each complete match only once.
+
+### Attempt 4: Hypothesis Maps
+
+(Chronologically, this is attempt 3.)
+
+#### Precomputation
+
+Let `r : Φ → Ψ` with `Φ = h₁ : T₁, ..., hₙ : Tₙ` be the rule for which we collect partial matches.
+
+For each subset `V` of the variables in `Φ`, we define the *hypothesis set*
+```
+π_V = { Tᵢ | vars(Tᵢ) ⊆ V }
+```
+where `vars(Tᵢ)` is the set of variables in `Tᵢ`.
+
+Note that for `|V| = n + 1`, we have
+```
+π_V = (⋃_{|V'| = n} π_V') ∪ { Tᵢ | vars(Tᵢ) = V }
+```
+This gives us an inductive characterisation of the sets `π_V`.
+
+##### Running Example
+
+Let `r : Φ → Ψ` have input hypotheses
+
+```
+Φ = h₁ : T₁[?x], h₂ : T₂[?x], h₃ : T₃[?x,?y], h₄ : T₄[?y,?z], h₅ : T₅[?y], h₆ : T₆[?w]
+```
+
+We precompute the hypothesis sets
+```
+π_{?x} = { T₁[?x], T₂[?x] }
+π_{?y} = { T₅[?y] }
+π_{?z} = ∅
+π_{?w} = { T₆[?w] }
+
+π_{?x,?y} = π_{?x} ∪ π_{?y} ∪ { T₃[?x,?y] }
+π_{?x,?z} = π_{?x} ∪ π_{?z} ∪ ∅
+π_{?x,?w} = π_{?x} ∪ π_{?w} ∪ ∅
+π_{?y,?z} = π_{?y} ∪ π_{?z} ∪ { T₄[?y,?z] }
+π_{?y,?w} = π_{?y} ∪ π_{?w} ∪ ∅
+π_{?z,?w} = π_{?z} ∪ π_{?w} ∪ ∅
+
+π_{?x,?y,?z} = π_{?x,?y} ∪ π_{?y,?z} ∪ π_{?x,?z} ∪ ∅
+π_{?x,?y,?w} = π_{?x,?y} ∪ π_{?y,?w} ∪ π_{?x,?w} ∪ ∅
+π_{?x,?z,?w} = π_{?x,?z} ∪ π_{?z,?w} ∪ π_{?x,?w} ∪ ∅
+π_{?y,?z,?w} = π_{?y,?z} ∪ π_{?z,?w} ∪ π_{?y,?w} ∪ ∅
+
+π_{?x,?y,?z,?w} = π_{?x,?y,?z} ∪ {?x,?y,?w} ∪ π_{?x,?z,?w} ∪ π_{?y,?z,?w}
+```
+
+In this example, many combinations of variables don't occur, so as an optimisation, we restrict ourselves to the *relevant hypothesis sets* (TODO what are these in general?):
+```
+π_{?x} = { T₁[?x], T₂[?x] }
+π_{?y} = { T₅[?y] }
+π_{?z} = ∅
+π_{?w} = { T₆[?w] }
+
+π_{?x,?y} = π_{?x} ∪ π_{?y} ∪ { T₃[?x,?y] }
+π_{?y,?z} = π_{?y} ∪ π_{?z} ∪ { T₄[?y,?z] }
+
+π_{?x,?y,?z,?w} = π_{?x,?y} ∪ π_{?y,?z} ∪ π_{?w}
+```
+Note that we've also changed the definition of the last hypothesis set.
+It now refers to 2- and 1-variable sets instead of 3-variable sets.
+
+We say that `T₃` is *fresh* in `π_{?x,?y}` since it doesn't appear in `π_{?x}` or `π_{?y}`.
+
+#### Runtime
+
+For each relevant hypothesis set `π_V`, we maintain a *hypothesis map* `μ_V` from `|V|`-tuples of terms to `|μ_V|`-tuples of hypotheses.
+Each hypothesis in a tuple can also be undefined.
+Let `V = {?x₁, ..., ?xₘ}`, `μ_V = {T₁, ..., Tₖ}` and `σ = {?x₁ ↦ a₁, ..., ?xₘ ↦ aₘ}`.
+If `μ_V(a₁, ..., aₘ) = (h₁, ..., hₖ)`, this means that `h₁ : T₁[σ]`, ..., `hₖ : Tₖ[σ]`.
+Thus, `(h₁, ..., hₖ)` is a match for the input hypotheses which depend only on `V`.
+If some of the `hᵢ` are missing from the tuple (we write `(..., ?, ...)`), the match is partial.
+
+To implement `μ_V`, we take advantage of the fact that the hypothesis map `π_V` can be partly expressed in terms of hypothesis sets `π_V'` with `|V'| < |V|`.
+Let `π_V = π_V₁ ∪ ... ∪ π_Vₘ ∪ { T₁, ..., Tₒ }`.
+We implement `μ_V` as a discrimination tree `t` which maps `|V|`-tuples of terms to tuples of hypotheses `(h₁ : T₁, ..., hₒ : Tₒ)`.
+We then define `μ_V(A) = μ_V₁(A) ⊕ ... ⊕ μ_Vₘ(A) ⊕ t(A)` where `⊕` is concatenation of tuples (possibly with some reordering) and `A` is a tuple of terms.
+
+#### Insertion
+
+Let `h : T` be a new hypothesis such that `T =[σ] Tᵢ` for some `i`.
+
+To insert `h` into the hypothesis maps, consider the relevant hypothesis sets `π_V`.
+For each such `π_V = ⋃_j π_Vⱼ ∪ V`:
+
+- If `Tᵢ ∉ V`, leave `μ_V` unchanged.
+- Otherwise, let `A = (σ(?x₁), ..., σ(?xₘ))`.
+  The `?xⱼ` are the variables in `V`.
+  (We assume here that `σ(?xⱼ)` is defined for all `?xⱼ`, but I think this is guaranteed by the construction of the hypothesis sets.)
+  Now update the mapping `A ↦ (h₁, ..., hᵢ₋₁, ?, hᵢ₊₁, ..., hₖ)` in `μ_V` by replacing the `?` with `h`.
+  If the mapping does not exist yet, create it, setting `hⱼ ≔ ?` for all `j ≠ i`.
+
+##### Running Example
+
+TODO
+
+#### Extraction
+
+When we insert `h : T` into `μ_V` with instantiating terms `A`, we must check whether this leads to a complete match.
+To that end, we check:
+
+- Is the tuple into which `h` was inserted now fully defined (i.e., doesn't contain any `?`s)?
+  This can be optimised by keeping track of the number of `?`s in each tuple.
+- For all `π_V'` on which `π_V` depends, is `μ_V'(A)` fully defined?
+  The answers can be partially cached.
+- For all `π_V''` which depend on `π_V`, is `μ_V''(A')` fully defined for any
+  tuple `A'` of which `A` is a subsequence/subset?
+  TODO this I don't know how to do efficiently.
+
+##### Running Example
+
+TODO
 
 ## Pattern-Based Forward Rules
 
