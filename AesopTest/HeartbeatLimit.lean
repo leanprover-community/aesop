@@ -8,6 +8,9 @@ import Aesop
 import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+-- There is incorrectly a `linter.unreachableTactic` warning on
+-- `aesop (options := { maxRuleHeartbeats := 1, terminal := true })`
+-- below. This is perhaps because of a bad interaction with `#guard_msgs`?
 set_option linter.unreachableTactic false
 
 @[aesop safe constructors]
