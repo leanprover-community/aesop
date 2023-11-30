@@ -273,14 +273,14 @@ abbrev Prove (φ : Form Φ) : Prop := Cal [] [] [] [φ]
 example : Prove (⊥ ⇒ ♩0) := by simp
 example : Prove (♩0 ⇒ ♩0) := by simp
 example : Prove (♩0 ⇒ ♩1 ⇒ ♩0) := by simp
-example : ¬ Prove (♩0 ⇒ ♩1) := by simp
+example : ¬ Prove (♩0 ⇒ ♩1) := by simp (config := {decide := true})
 
 
 --- Soundness and Completeness
 
 @[simp]
 def SC' (i : Φ → Prop) (l r : List Φ) (Γ Δ : List (Form Φ)) : Prop :=
-  SC i (Γ ++ l.map (♩·)) (Δ ++ r.map (♩·)) 
+  SC i (Γ ++ l.map (♩·)) (Δ ++ r.map (♩·))
 
 theorem Cal_sound_complete [DecidableEq Φ]
   (l r : List Φ) (Γ Δ : List (Form Φ))
@@ -439,7 +439,7 @@ end Proof
 
 @[simp]
 def Proof' (l r : List Φ) (Γ Δ : List (Form Φ)) : Prop :=
-  Proof (Γ ++ l.map (♩·)) (Δ ++ r.map (♩·)) 
+  Proof (Γ ++ l.map (♩·)) (Δ ++ r.map (♩·))
 
 theorem Cal_Proof [DecidableEq Φ]
   (l r : List Φ) (Γ Δ : List (Form Φ)) (h : Cal l r Γ Δ)
