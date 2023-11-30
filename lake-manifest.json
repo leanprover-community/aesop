@@ -1,12 +1,14 @@
-{"version": 6,
- "packagesDir": "lake-packages",
+{"version": 7,
+ "packagesDir": ".lake/packages",
  "packages":
- [{"git":
-   {"url": "https://github.com/leanprover/std4",
-    "subDir?": null,
-    "rev": "415a6731db08f4d98935e5d80586d5a5499e02af",
-    "opts": {},
-    "name": "std",
-    "inputRev?": "main",
-    "inherited": false}}],
- "name": "aesop"}
+ [{"url": "https://github.com/leanprover/std4",
+   "type": "git",
+   "subDir": null,
+   "rev": "415a6731db08f4d98935e5d80586d5a5499e02af",
+   "name": "std",
+   "manifestFile": "lake-manifest.json",
+   "inputRev": "main",
+   "inherited": false,
+   "configFile": "lakefile.lean"}],
+ "name": "aesop",
+ "lakeDir": ".lake"}
