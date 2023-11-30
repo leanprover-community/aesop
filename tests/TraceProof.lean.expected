@@ -4,4 +4,4 @@ tests/TraceProof.lean:14:2: error: tactic 'aesop' failed, made no progress
 tests/TraceProof.lean:20:2: warning: aesop: failed to prove the goal after exhaustive search.
 tests/TraceProof.lean:19:15: error: unsolved goals
 ⊢ False
-[aesop.proof] id ?m.38
+[aesop.proof] id ?m.36
