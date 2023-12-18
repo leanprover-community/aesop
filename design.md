@@ -318,12 +318,12 @@ Proof: by reduction.
 To transform a regular subgraph iso problem into a constrained subgraph iso problem, add a node and connect it to all other nodes in the graph.
 Finding a subgraph iso involving the new node in the new graph is then equivalent to finding a subgraph iso in the old graph.
 
-### Attempt 3: Candidate Tree
+##### Attempt 3: Candidate Tree
 
 As usual, let `r : h₁ : T₁ → ... → hₙ : Tₙ → Ψ` be a forward rule.
 We want to represent a set of partial matches for `r`.
 
-#### Precomputation: Hypothesis Tree
+###### Precomputation: Hypothesis Tree
 
 When we index `r`, we arrange the `Tᵢ` into a *hypothesis tree* with two alternating types of nodes:
 
@@ -365,7 +365,7 @@ We assume henceforth that each rule `r` is associated with a valid hypothesis tr
 
 To limit the tree's size, it is probably preferable to put input hypotheses with many variables close to the root.
 
-##### Running Example
+###### Running Example
 
 Let `r : Φ → Ψ` have input hypotheses
 
@@ -386,7 +386,7 @@ This results in the following hypothesis tree:
        1   2  4   5  6
 ```
 
-#### Runtime: Candidate Tree
+###### Runtime: Candidate Tree
 
 At runtime, we store the partial matches in a *candidate tree* with three alternating types of nodes:
 
@@ -457,7 +457,7 @@ then the resulting overall tree must be a subtree of `u`, regardless of which re
 
 We maintain the invariant that our candidate trees always match the hypothesis tree of `r`.
 
-##### Insertion
+###### Insertion
 
 Let `h : T` be a new hypothesis such that `T =[σ] Tᵢ` for some `i`.
 To insert `h` into the candidate tree, we proceed as follows.
@@ -580,7 +580,7 @@ Suppose the following hypotheses arrive one by one:
   [h₁] [h₄] [h₅] [h₆]
   ```
 
-##### Extraction
+###### Extraction
 
 A complete match is a subtree of the candidate tree which covers all input hypotheses `Tᵢ`, subject to the following coherence condition:
 If an index node for `Tᵢ` has children `V₁, ..., Vₘ`, then there must be a hypothesis `h` such that for each instantiation node that is a child of `Vⱼ` and is present in the complete match subtree, `h` is contained in the instantiation node.
@@ -591,11 +591,11 @@ When we insert a hypothesis, we can then determine, bottom-up, which subtrees ha
 As soon as the root becomes complete, we have a complete match.
 However, we need to take care to report each complete match only once.
 
-### Attempt 4: Hypothesis Maps
+##### Attempt 4: Hypothesis Maps
 
 (Chronologically, this is attempt 3.)
 
-#### Precomputation
+###### Precomputation
 
 Let `r : Φ → Ψ` with `Φ = h₁ : T₁, ..., hₙ : Tₙ` be the rule for which we collect partial matches.
 
@@ -611,7 +611,7 @@ Note that for `|V| = n + 1`, we have
 ```
 This gives us an inductive characterisation of the sets `π_V`.
 
-##### Running Example
+###### Running Example
 
 Let `r : Φ → Ψ` have input hypotheses
 
@@ -658,7 +658,7 @@ It now refers to 2- and 1-variable sets instead of 3-variable sets.
 
 We say that `T₃` is *fresh* in `π_{?x,?y}` since it doesn't appear in `π_{?x}` or `π_{?y}`.
 
-#### Runtime
+###### Runtime
 
 For each relevant hypothesis set `π_V`, we maintain a *hypothesis map* `μ_V` from `|V|`-tuples of terms to `|μ_V|`-tuples of hypotheses.
 Each hypothesis in a tuple can also be undefined.
@@ -672,7 +672,7 @@ Let `π_V = π_V₁ ∪ ... ∪ π_Vₘ ∪ { T₁, ..., Tₒ }`.
 We implement `μ_V` as a discrimination tree `t` which maps `|V|`-tuples of terms to tuples of hypotheses `(h₁ : T₁, ..., hₒ : Tₒ)`.
 We then define `μ_V(A) = μ_V₁(A) ⊕ ... ⊕ μ_Vₘ(A) ⊕ t(A)` where `⊕` is concatenation of tuples (possibly with some reordering) and `A` is a tuple of terms.
 
-#### Insertion
+###### Insertion
 
 Let `h : T` be a new hypothesis such that `T =[σ] Tᵢ` for some `i`.
 
@@ -686,11 +686,11 @@ For each such `π_V = ⋃_j π_Vⱼ ∪ V`:
   Now update the mapping `A ↦ (h₁, ..., hᵢ₋₁, ?, hᵢ₊₁, ..., hₖ)` in `μ_V` by replacing the `?` with `h`.
   If the mapping does not exist yet, create it, setting `hⱼ ≔ ?` for all `j ≠ i`.
 
-##### Running Example
+###### Running Example
 
 TODO
 
-#### Extraction
+###### Extraction
 
 When we insert `h : T` into `μ_V` with instantiating terms `A`, we must check whether this leads to a complete match.
 To that end, we check:
@@ -703,7 +703,7 @@ To that end, we check:
   tuple `A'` of which `A` is a subsequence/subset?
   TODO this I don't know how to do efficiently.
 
-##### Running Example
+###### Running Example
 
 TODO
 
