@@ -707,6 +707,55 @@ To that end, we check:
 
 TODO
 
+##### Attempt 5: Variable Maps
+
+Let `r : Φ → Ψ` with `Φ = h₁ : T₁, ..., hₙ : Tₙ` be the rule for which we collect partial matches.
+We go back to a representation of partial matches as simply pairs `(σ, M = {1 ↦ H₁, ..., n ↦ Hₙ})`, where `σ` is a substitution and `H₁ : U₁, ..., Hₙ : Uₙ` are hypotheses such that `Uᵢ[σ] = Tᵢ`.
+If a match is incomplete, it lacks mappings for some of the indices `1, ..., n`.
+We require that the substitution `σ` covers exactly the variables occurring in the `Tᵢ` for which `M` contains a mapping, so `dom(σ) = { vars(Tᵢ) | M(i) is defined }`.
+In other words, `σ` does not unnecessarily constrain variables other than those 'forced' by the `Hᵢ`.
+This means that `σ` is uniquely determined by the `Hᵢ`.
+
+It suffices to store one hypothesis per input hypothesis index, rather than a set of hypotheses.
+To see why, suppose we have `H : U` with `U ≡[τ] Tᵢ` and a partial match `(σ, M)` with `M(i) = V`.
+Since `σ` covers all variables in `Tᵢ`, we must have `τ = σ|vars(Tᵢ)` (the restriction of `σ` to `vars(Tᵢ)`).
+Thus, `U = Tᵢ[τ] = Tᵢ[σ]`, so `M(i)` and `H` have the same type, making them duplicates.
+We can therefore ignore `H`.
+
+###### Data Structure
+
+We now construct an efficient data structure representing a set of partial matches.
+
+The data structure consists of the following:
+
+- A bijective map `N` from natural numbers to partial matches.
+  The natural numbers are arbitrary and are used as identifiers for the partial matches.
+- For each variable `?x` in `Φ`, a map `μₓ` which maps terms to sets of natural numbers.
+  Invariant: the set `μₓ(t)` contains exactly the identifiers of the partial matches `(σ, _)` in `N` with `σ(?x) = t`.
+- For each variable `?x` in `Φ`, a set `πₓ` of natural numbers.
+  Invariant: `πₓ` contains exactly the identifiers of the partial matches `(σ, _)` in `N` with `?x ∉ dom(σ)`.
+  
+###### Insertion
+
+The data structure supports a single operation, `insert(H : U, i, τ)`, which extends the current partial matches with `H : U`, where `U ≡[τ] i`, and returns a set of complete matches.
+The returned complete matches are those previously incomplete matches that are completed by adding `H`.
+(This set is often empty.)
+
+The `insert(H : U, i, τ)` operation works as follows:
+
+1. Retrieve the set `Σ` of (indices of) partial matches compatible with `τ`.
+   For each variable `?xᵢ` in `dom(τ)`, let `Σₓᵢ = μₓᵢ(τ(xᵢ)) ∪ μₓᵢ`.
+   This is the set of partial matches whose substitutions are compatible with `τ` along `?xᵢ`.
+   For `Σ`, we then have `Σ = ⋂ᵢ Σₓᵢ`.
+2. For each partial match `(σ, M)` in `Σ`:
+   - If `M(i)` is defined: return `∅`.
+   - If `dom(τ) ⊆ dom(σ)`: replace `(σ, M)` with `(σ, M[i ↦ H])`, keeping the same identifier.
+   - If `dom(τ) ⊈ dom(σ)`:
+     - Let `ν = σ ∪ τ`. This is well-defined since `σ` and `τ` agree on all shared variables.
+     - Insert the partial match `(ν, M[i ↦ H])` into `N` with fresh identifier `k`.
+     - For each `?x` in `dom(ν)`, insert the mapping `ν(?x) ↦ k` into `μₓ`.
+     - For each `?x` in `vars(Φ) ∖ dom(ν)`, insert `k` into `πₓ`.
+
 ## Pattern-Based Forward Rules
 
 For the applications below, our notion of forward rules is too restrictive.
