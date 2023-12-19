@@ -737,18 +737,21 @@ The data structure consists of the following:
   
 ###### Insertion
 
-The data structure supports a single operation, `insert(H : U, i, τ)`, which extends the current partial matches with `H : U`, where `U ≡[τ] i`, and returns a set of complete matches.
+The data structure supports a single operation, `insert(H : U, i, τ)`, which extends the current partial matches with `H : U`, where `U ≡[τ] Tᵢ`, and returns a set of complete matches.
 The returned complete matches are those previously incomplete matches that are completed by adding `H`.
 (This set is often empty.)
 
 The `insert(H : U, i, τ)` operation works as follows:
 
 1. Retrieve the set `Σ` of (indices of) partial matches compatible with `τ`.
-   For each variable `?xᵢ` in `dom(τ)`, let `Σₓᵢ = μₓᵢ(τ(xᵢ)) ∪ μₓᵢ`.
-   This is the set of partial matches whose substitutions are compatible with `τ` along `?xᵢ`.
-   For `Σ`, we then have `Σ = ⋂ᵢ Σₓᵢ`.
+   For each variable `?xᵢ` in `vars(Φ)`:
+   - If `?xᵢ ∈ dom(τ)`, let `Σₓᵢ = μₓᵢ(τ(xᵢ)) ∪ πₓᵢ`.
+   - Otherwise, TODO
+   This makes `Σₓᵢ` the set of partial matches whose substitutions are compatible with `τ` along `?xᵢ`.
+   We then have `Σ = ⋂ᵢ Σₓᵢ`.
 2. For each partial match `(σ, M)` in `Σ`:
-   - If `M(i)` is defined: return `∅`.
+   - If `M(i)` is already defined: skip the following steps.
+   - If `M[i ↦ H]` is complete: add `M[i ↦ H]` to the output and skip the following steps.
    - If `dom(τ) ⊆ dom(σ)`: replace `(σ, M)` with `(σ, M[i ↦ H])`, keeping the same identifier.
    - If `dom(τ) ⊈ dom(σ)`:
      - Let `ν = σ ∪ τ`. This is well-defined since `σ` and `τ` agree on all shared variables.
