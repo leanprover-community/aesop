@@ -21,8 +21,8 @@ private partial def makeForwardHyps (e : Expr)
     let app := mkAppN e argMVars
     let mut instMVars := Array.mkEmpty argMVars.size
     let mut immediateMVars := Array.mkEmpty argMVars.size
-    for i in [:argMVars.size] do
-      let mvarId := argMVars[i]!.mvarId!
+    for h : i in [:argMVars.size] do
+      let mvarId := argMVars[i]'h.2 |>.mvarId!
       if immediate.contains i then
         immediateMVars := immediateMVars.push mvarId
       else if binderInfos[i]!.isInstImplicit then
