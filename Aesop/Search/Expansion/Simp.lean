@@ -44,12 +44,22 @@ def mkSimpOnly (stx : Syntax) (usedSimps : UsedSimps) (includeFVars : Bool) :
   let env ← getEnv
   for (thm, _) in usedSimps.toArray.qsort (·.2 < ·.2) do
     match thm with
-    | .decl declName inv => -- global definitions in the environment
-      if env.contains declName && !Lean.Elab.Tactic.simpOnlyBuiltins.contains declName then
-        args := args.push (← if inv then
-          `(Parser.Tactic.simpLemma| ← $(mkIdent (← unresolveNameGlobal declName)):ident)
-        else
-          `(Parser.Tactic.simpLemma| $(mkIdent (← unresolveNameGlobal declName)):ident))
+    | .decl declName post inv => -- global definitions in the environment
+      if env.contains declName &&
+          (inv || !Lean.Elab.Tactic.simpOnlyBuiltins.contains declName) then
+        let decl : Term ← `($(mkIdent (← unresolveNameGlobal declName)):ident)
+        let arg ← match post, inv with
+          | true,  true  => `(Parser.Tactic.simpLemma| ← $decl:term)
+          | true,  false => `(Parser.Tactic.simpLemma| $decl:term)
+          | false, true  => `(Parser.Tactic.simpLemma| ↓ ← $decl:term)
+          | false, false => `(Parser.Tactic.simpLemma| ↓ $decl:term)
+        args := args.push arg
+      else if (← Simp.isBuiltinSimproc declName) then
+        let decl := mkIdent declName
+        let arg ← match post with
+          | true  => `(Parser.Tactic.simpLemma| $decl:term)
+          | false => `(Parser.Tactic.simpLemma| ↓ $decl:term)
+        args := args.push arg
     | .fvar fvarId => -- local hypotheses in the context
       if ! includeFVars then
         continue
@@ -106,13 +116,14 @@ def mkNormSimpContext (rs : RuleSet) (simpConfig : Aesop.SimpConfig) :
   }
 
 def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
-    (discharge? : Option Simp.Discharge := none)
+    (simprocs : Simprocs := {}) (discharge? : Option Simp.Discharge := none)
     (simplifyTarget : Bool := true) (fvarIdsToSimp : Array FVarId := #[])
     (usedSimps : UsedSimps := {}) : MetaM SimpResult := do
   let mvarIdOld := mvarId
   let ctx := { ctx with config.failIfUnchanged := false }
   let (result, usedSimps) ←
-    Meta.simpGoal mvarId ctx discharge? simplifyTarget fvarIdsToSimp usedSimps
+    Meta.simpGoal mvarId ctx simprocs discharge? simplifyTarget fvarIdsToSimp
+      usedSimps
   if let some (_, mvarId) := result then
     if mvarId == mvarIdOld then
       return .unchanged mvarId
@@ -122,7 +133,7 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     return .solved usedSimps
 
 def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
-    (discharge? : Option Simp.Discharge := none)
+    (simprocs : Simprocs := {}) (discharge? : Option Simp.Discharge := none)
     (simplifyTarget : Bool := true) (usedSimps : UsedSimps := {}) :
     MetaM SimpResult :=
   mvarId.withContext do
@@ -132,12 +143,14 @@ def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
       if ldecl.isImplementationDetail then
         continue
       fvarIdsToSimp := fvarIdsToSimp.push ldecl.fvarId
-    Aesop.simpGoal mvarId ctx discharge? simplifyTarget fvarIdsToSimp usedSimps
+    Aesop.simpGoal mvarId ctx simprocs discharge? simplifyTarget fvarIdsToSimp
+      usedSimps
 
 def simpAll (mvarId : MVarId) (ctx : Simp.Context)
-    (usedSimps : UsedSimps := {}) : MetaM SimpResult := do
+    (simprocs : Simprocs := {}) (usedSimps : UsedSimps := {}) :
+    MetaM SimpResult := do
   let ctx := { ctx with config.failIfUnchanged := false }
-  match ← Lean.Meta.simpAll mvarId ctx usedSimps with
+  match ← Lean.Meta.simpAll mvarId ctx simprocs usedSimps with
   | (none, usedSimps) => return .solved usedSimps
   | (some mvarIdNew, usedSimps) =>
     if mvarIdNew == mvarId then
