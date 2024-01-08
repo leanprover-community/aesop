@@ -759,6 +759,67 @@ The `insert(H : U, i, τ)` operation works as follows:
      - For each `?x` in `dom(ν)`, insert the mapping `ν(?x) ↦ k` into `μₓ`.
      - For each `?x` in `vars(Φ) ∖ dom(ν)`, insert `k` into `πₓ`.
 
+##### Attempt 6: Variable Map Tree
+
+Same setup as in the previous attempt.
+
+###### Data Structure
+
+For each variable `?x ∈ vars(Φ)`, let `h₁ : T₁, ..., hₖ : Tₖ` be those input hypotheses with `?x ∈ vars(Tᵢ)`.
+If `k > 1`, we maintain a map (discrimination tree or hash map) `μₓ` from terms `t` to tuples `(H₁, ..., Hₖ)` (called *connections*).
+Each component `Hᵢ` of such a connection is a list of hypotheses `h : T` such that `T ≡ Tᵢ[?x ↦ t]`.
+A connection is *full* if every component `Hᵢ` is nonempty.
+
+Additionally, we superimpose a tree onto this data structure.
+Let `<` be an arbitrary total order on the variables `vars(Φ)`.
+We maintain the invariant that whenever a hypothesis `h` appears in `μᵤ` and `μᵥ` with `?u < ?v`, there is an edge from the occurrence of `h` in `μᵤ` to the connection in which `h` occurs in `μᵥ`.
+
+###### Insertion
+
+As above, we define an operation `insert(H : U, i, τ)` where `U ≡[τ] Tᵢ`.
+
+Let `dom(τ) = ?x₁, ..., ?xₖ` with `?x₁ < ... < ?xₖ`.
+For each `?xᵢ` such that `μ_xᵢ` exists, let `μ_xᵢ(τ(xᵢ)) = C` be the connection associated to the value of `xᵢ` in `τ` (or an empty connection if `τ(xᵢ) ∉ dom(μ_xᵢ)`).
+Now:
+
+- Update `C` by adding `H` to the tuple component corresponding to `i`.
+- Add an edge from the previously added entry in `μ_xᵢ₋₁` to `C`.
+
+###### Complete Match Detection
+
+Let `C` be a connection in one of the `μₓ`.
+`C` is *complete* if
+
+- `C` is full and
+- for every hypothesis list `Hᵢ` in `C`, there is a hypothesis `h ∈ Hᵢ` such that all edges from `h` point to complete connections.
+
+If `?x` is minimal in `vars(Φ)` and a connection in `μₓ` is complete, then we have a complete match.
+
+To incrementalise this notion of completeness, we add the following components to the data structure:
+
+- One backward edge for each existing forward edge.
+- A boolean for each connection, indicating whether the connection is complete.
+- A boolean for each hypothesis list of each connection, indicating whether there is a hypothesis `h` in the list such that all outgoing edges from `h` point to complete connections.
+  If so, we say that the hypothesis list is *complete*.
+- A natural number `ic(h)` for each hypothesis `h`, indicating the number of outgoing edges from `h` that point to incomplete connections.
+
+Now, when inserting a hypothesis `h` into hypothesis list `H` of connection `C`, we proceed as follows:
+
+```
+Update ic(h).
+If H is not already complete:
+  If ic(h) = 0:
+    Mark H as complete.
+    If all other hypothesis lists of C are complete:
+      Mark C as complete.
+      If C belongs to μ_x₁ (with x₁ minimal):
+        Extract the complete match from C.
+      For each hypothesis h' reachable via a backward edge from C:
+        Decrement ic(h').
+        If ic(h') = 0:
+          recurse.
+```
+
 ## Pattern-Based Forward Rules
 
 For the applications below, our notion of forward rules is too restrictive.
