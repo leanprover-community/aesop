@@ -801,7 +801,7 @@ To incrementalise this notion of completeness, we add the following components t
 - A boolean for each connection, indicating whether the connection is complete.
 - A boolean for each hypothesis list of each connection, indicating whether there is a hypothesis `h` in the list such that all outgoing edges from `h` point to complete connections.
   If so, we say that the hypothesis list is *complete*.
-- A natural number `ic(h)` for each hypothesis `h`, indicating the number of outgoing edges from `h` that point to incomplete connections.
+- A natural number `ic(h)` for each occurrence of a hypothesis `h`, indicating the number of outgoing edges from `h` that point to incomplete connections.
 
 Now, when inserting a hypothesis `h` into hypothesis list `H` of connection `C`, we proceed as follows:
 
@@ -819,6 +819,13 @@ If H is not already complete:
         If ic(h') = 0:
           recurse.
 ```
+
+###### Problem
+
+The above notion of completeness is unsound because it can pick connections `C`, `D` such that `C` selects hypothesis `h₁` and `D` selects hypothesis `h₂` (with `h₁ ≠ h₂`) for a given input hypothesis index.
+We then can't extract a complete match.
+To fix this, we can adjust the complete match detection algorithm to remember which hypothesis was previously selected for any given index.
+But this defeats much of the caching we do during complete match detection; in fact, it requires backtracking.
 
 ## Pattern-Based Forward Rules
 
