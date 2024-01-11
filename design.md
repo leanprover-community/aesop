@@ -827,6 +827,102 @@ We then can't extract a complete match.
 To fix this, we can adjust the complete match detection algorithm to remember which hypothesis was previously selected for any given index.
 But this defeats much of the caching we do during complete match detection; in fact, it requires backtracking.
 
+##### Attempt 7: Travelling Partial Matches
+
+Let `h₁ : T₁, ..., hₙ : Tₙ` be the input hypotheses.
+The central idea of this technique is to tightly restrict the 'progression' of a partial match towards completeness:
+we first add a hypothesis matching `T₁`, then add a compatible hypothesis for `T₂`, etc.
+If this process reaches `Tₙ`, the match is complete.
+
+Let partial matches be defined as tuples `(σ, M)` where `σ` is a substitution and `M` is a partial map from input hypothesis indices to hypotheses.
+As above, we require that the hypotheses in `cod(M)` have compatible substitutions and that `σ` is exactly the union of these substitutions (so this representation is redundant).
+Our algorithm ensures that `M` is downward closed, so if `M(i)` is defined, then `M(j)` is also defined for every `j` with `1 ≤ j ≤ i`.
+This means the partial matches progress through `T₁`, `T₂`, etc. in order.
+The *level* `lvl(σ, M)` of a partial match `(σ, M)` is the maximal `i` such that `M(i)` is defined.
+It indicates how far along a partial match is on its way to `Tₙ`.
+
+###### Data Structure Interface
+
+We maintain *index maps* `μₘ` and `μₕ`.
+The map `μₘ` maps tuples `(τ, i)`, where `τ` is a substitution and `i` is a natural number, to partial matches which are compatible with `τ` and have level `i`.
+The map `μₕ` maps tuples `(τ, i)` as above to tuples `(H : T, ρ)`, where `H` is a hypothesis with `T ≡[ρ] Tᵢ` and `ρ` is compatible with `τ`.
+
+###### Insertion
+
+```
+Insert(H : U, i, τ):
+  Insert into μₕ: μₕ(τ, i) ≔ H.
+  If i = 1:
+    AddPartialMatch(τ, {i ↦ H}).
+  Else:
+    For each partial match (ρ, M) in μₘ(τ, i - 1):
+      AddPartialMatch(τ ∪ ρ, M ∪ {i ↦ H}).
+
+AddPartialMatch(τ, M):
+  Let i ≔ lvl(M).
+  Insert into μₘ: μₘ(τ, i) ≔ (τ, M).
+  If i = n:
+    Return (τ, M) as a complete match.
+  Else:
+    For each (H, ρ) in μₕ(τ, i + 1):
+      AddPartialMatch(τ ∪ ρ, M ∪ {i + 1 ↦ H}).
+```
+
+###### Data Structure Implementation
+
+For this algorithm to be efficient, we must efficiently implement the maps `μₘ` and `μₕ`.
+Note that `μₘ` and `μₕ` have the same domain, so we actually implement one map, `μ`, which maps tuples `(τ, i)` to lists of partial matches and lists of hypotheses.
+Thus, the codomain of `μ` is the type of tuples `(Ms, Hs)` where `Ms` is a list of partial matches and `Hs` is a list of hypotheses.
+We call such tuples *μ-values*.
+Further, we can curry and implement a map `μ` which maps substitutions `τ` to maps from `i` to μ-values.
+
+The tricky part is thus to design a data structure which allows us to efficiently look up all substitutions `ρ` compatible with a given substitution `τ`.
+For this, I see two options.
+
+First, we can use a standard substitution tree, but I suspect this has questionable performance.
+In particular, insertions are quite expensive and we do a lot of them.
+
+Second, we can use the following custom data structure.
+For each variable `?x`, we create a discrimination tree `μₓ` which maps terms `t` to maps from indices `i` to μ-values.
+We write `μₓ(t, i)ₕ` for the hypotheses at `μₓ(t)(i)`, and `μₓ(t, i)ₘ` for the partial matches.
+We then maintain the invariant that `μₓ(t, i)ₕ` is the set of all hypotheses `H : Tᵢ[ρ]` with `ρ(x) = t`.
+Similarly, `μₓ(t, i)ₘ` is the set of partial matches `(ρ, M)` with `lvl(M) = i` and `ρ(x) = t`.
+
+During insertion, we perform two types of lookups:
+
+1. Look up `μ(τ, i - 1)ₘ`, where `τ` is the substitution of a hypothesis matching type `Tᵢ`.
+   This lookup should return all partial matches `(ρ, M)` with `lvl(M) = i - 1` and `ρ` compatible with `τ`.
+   To that end, we take the set of variables that occur both in `{T₁, ..., Tᵢ₋₁}` and `Tᵢ`.
+   For each such variable `x`, we look up `μₓ(τ(x), i - 1)ₘ`.
+   The intersection of these sets is the desired set of partial matches.
+2. Look up `μ(τ, i + 1)ₕ`, where `τ` is the substitution of a partial match at level `i`.
+   This lookup should return all hypotheses at level `i + 1` with a substitution `ρ` compatible with `τ`.
+   To that end, we take the set of variables that occur both in `{T₁, ..., Tᵢ}` and `Tᵢ₊₁`.
+   For each such variable `x`, we look up `μₓ(τ(x), i + 1)ₕ`.
+   The intersection of these sets is the desired set of partial matches.
+
+The previous algorithm becomes unsound if the sets of common variables are empty.
+It always return the empty set in this case, even though there may be hypotheses/matches with a substitution `ρ` that is entirely disjoint from `τ` (and therefore certainly compatible with it).
+
+However, we can ensure that the sets of common variables are never empty.
+If the input hypothesis types `T₁, ..., Tₙ` are all part of the same metavariable cluster, then they can be ordered in such a way that `Tᵢ₁` shares a variable with `Tᵢ₂`, `Tᵢ₁` or `Tᵢ₂` share a variable with `Tᵢ₃`, etc.
+This implies that there is always a common variable.
+If the input hypotheses form multiple metavariable clusters, we can use separate data structures for these (which should also be good for performance).
+
+###### Optimisations
+
+1. When we create new partial matches, we always do so by adding data to existing partial matches.
+   As a result, much data is shared between partial matches.
+   We should choose a data representation (e.g. linked lists) that allows us to exploit this sharing.
+2. A partial match at level 1 is just a hypothesis.
+   Storing these partial matches is therefore redundant when we're already storing the hypotheses.
+   Similarly, we don't need to store partial matches at the maximal level `n`.
+3. The intersection of sets of hypotheses/matches can be computed efficiently if we give each hypothesis and each partial match a unique identifier.
+   In this case, the intersection comes down to an intersection of sets of natural numbers, which is very efficient.
+4. Similarly, we can give a unique identifier to each instantiation of a variable.
+   This should speed up lookups and insertions into the variable maps `μₓ`, which are quite frequent.
+5. If a variable `x` occurs in only one hypothesis, we don't need to maintain a map `μₓ`.
+
 ## Pattern-Based Forward Rules
 
 For the applications below, our notion of forward rules is too restrictive.
