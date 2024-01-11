@@ -9,6 +9,7 @@ import Aesop.Script
 import Aesop.RuleSet
 
 open Lean Lean.Meta
+open Lean.Elab.Tactic (mkSimpOnly)
 open Simp (UsedSimps)
 
 namespace Aesop
@@ -48,7 +49,7 @@ def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
     MetaM Syntax.Tactic := do
   let originalStx ← mkNormSimpSyntax normSimpUseHyps configStx?
   let stx ← inGoal.withContext do
-    Lean.Elab.Tactic.mkSimpOnly originalStx usedTheorems
+    mkSimpOnly originalStx usedTheorems
   return ⟨stx⟩
 
 def mkNormSimpContext (rs : RuleSet) (simpConfig : Aesop.SimpConfig) :
