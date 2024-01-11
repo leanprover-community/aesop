@@ -912,6 +912,8 @@ theorem last_replicate_succ (a m : Nat) :
   induction m <;> aesop
 
 /-! ### last' -/
+section
+set_option linter.deprecated false
 
 @[simp] theorem last'_is_none :
   ∀ {l : List α}, (last' l).isNone ↔ l = []
@@ -988,6 +990,8 @@ theorem last'_append_of_ne_nil (l₁ : List α) : ∀ {l₂ : List α} (_ : l₂
 theorem last'_append {l₁ l₂ : List α} {x : α} (h : x ∈ l₂.last') :
   x ∈ (l₁ ++ l₂).last' := by
   aesop (add 1% cases List)
+
+end
 
 /-! ### head(') and tail -/
 
