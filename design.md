@@ -876,38 +876,54 @@ Thus, the codomain of `μ` is the type of tuples `(Ms, Hs)` where `Ms` is a list
 We call such tuples *μ-values*.
 Further, we can curry and implement a map `μ` which maps substitutions `τ` to maps from `i` to μ-values.
 
-The tricky part is thus to design a data structure which allows us to efficiently look up all substitutions `ρ` compatible with a given substitution `τ`.
-For this, I see two options.
-
-First, we can use a standard substitution tree, but I suspect this has questionable performance.
-In particular, insertions are quite expensive and we do a lot of them.
-
-Second, we can use the following custom data structure.
+To implement this map, we use the following data structure.
 For each variable `?x`, we create a discrimination tree `μₓ` which maps terms `t` to maps from indices `i` to μ-values.
 We write `μₓ(t, i)ₕ` for the hypotheses at `μₓ(t)(i)`, and `μₓ(t, i)ₘ` for the partial matches.
 We then maintain the invariant that `μₓ(t, i)ₕ` is the set of all hypotheses `H : Tᵢ[ρ]` with `ρ(x) = t`.
 Similarly, `μₓ(t, i)ₘ` is the set of partial matches `(ρ, M)` with `lvl(M) = i` and `ρ(x) = t`.
 
-During insertion, we perform two types of lookups:
+We now define lookup functions for matches and hypotheses:
+
+```
+Lookup(τ, i, j):
+  Let cv ≔ vars{T₁, ..., Tᵢ} ∩ vars(Tᵢ₊₁).
+  For each variable xₖ in cv:
+    Let vₖ ≔ μₓₖ(τ(xₖ), j)
+  Return ⋂ₖ vₖ
+  
+LookupMatches(τ, i):
+  Lookup(τ, i, i).1.
+
+LookupHypotheses(τ, i):
+  Lookup(τ, i, i + 1).2.
+```
+
+The intersection of μ-values is defined componentwise, so `(Ms, Hs) ∩ (Ms', Hs') = (Ms ∩ Ms', Hs ∩ Hs')`.
+
+In the above insertion algorithm, we use these lookup functions in two ways:
 
 1. Look up `μ(τ, i - 1)ₘ`, where `τ` is the substitution of a hypothesis matching type `Tᵢ`.
    This lookup should return all partial matches `(ρ, M)` with `lvl(M) = i - 1` and `ρ` compatible with `τ`.
-   To that end, we take the set of variables that occur both in `{T₁, ..., Tᵢ₋₁}` and `Tᵢ`.
-   For each such variable `x`, we look up `μₓ(τ(x), i - 1)ₘ`.
-   The intersection of these sets is the desired set of partial matches.
+   `LookupMatches(τ, i - 1)` implements this specification.
 2. Look up `μ(τ, i + 1)ₕ`, where `τ` is the substitution of a partial match at level `i`.
    This lookup should return all hypotheses at level `i + 1` with a substitution `ρ` compatible with `τ`.
-   To that end, we take the set of variables that occur both in `{T₁, ..., Tᵢ}` and `Tᵢ₊₁`.
-   For each such variable `x`, we look up `μₓ(τ(x), i + 1)ₕ`.
-   The intersection of these sets is the desired set of partial matches.
+   `LookupHypotheses(τ, i)` implements this specification.
 
-The previous algorithm becomes unsound if the sets of common variables are empty.
-It always return the empty set in this case, even though there may be hypotheses/matches with a substitution `ρ` that is entirely disjoint from `τ` (and therefore certainly compatible with it).
+The function `Lookup(τ, i, j)` has two preconditions:
 
-However, we can ensure that the sets of common variables are never empty.
-If the input hypothesis types `T₁, ..., Tₙ` are all part of the same metavariable cluster, then they can be ordered in such a way that `Tᵢ₁` shares a variable with `Tᵢ₂`, `Tᵢ₁` or `Tᵢ₂` share a variable with `Tᵢ₃`, etc.
-This implies that there is always a common variable.
-If the input hypotheses form multiple metavariable clusters, we can use separate data structures for these (which should also be good for performance).
+1. `τ(x)` is defined for every `x ∈ vars{T₁, ..., Tᵢ} ∩ vars(Tᵢ₊₁)`.
+   This is the case in both of our use cases.
+   When looking up matches for a hypothesis for `Tᵢ₊₁` with substitution `τ`, `τ` covers `Tᵢ₊₁`.
+   When looking up hypotheses for a match at level `i` with substitution `τ`, `τ` covers `{T₁, ..., Tᵢ}`.
+2. `vars{T₁, ..., Tᵢ} ∩ vars(Tᵢ₊₁)` is not empty.
+   If this precondition is violated, the lookup function will always return the empty set, even though any partial match for `T₁, ..., Tᵢ` is compatible with any hypothesis for `Tᵢ₊₁` (as they don't share any variables).
+   However, we can ensure that the set of common variables is never empty.
+   If the input hypothesis types `T₁, ..., Tₙ` are all part of the same metavariable cluster, then they can be ordered in such a way that `Tᵢ₁` shares a variable with `Tᵢ₂`, `Tᵢ₁` or `Tᵢ₂` share a variable with `Tᵢ₃`, etc.
+   If the input hypotheses form multiple metavariable clusters, we can use separate data structures for these (which should also be good for performance).
+
+As an alternative to this whole data structure, we could use a standard substitution tree.
+A substitution tree stores substitutions and supports queries for compatible substitutions.
+However, it likely performs badly since insertion into a substitution tree is expensive, and we do a lot of insertions.
 
 ###### Optimisations
 
