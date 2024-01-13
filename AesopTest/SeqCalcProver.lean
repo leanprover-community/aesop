@@ -98,7 +98,6 @@ theorem mem (P : α → Prop) (xs : List α)
   case mpr =>
     intro ⟨a, Pa, Ea⟩
     induction Ea <;> aesop
-termination_by _ => List.length xs
 
 theorem map (P : β → Prop) (f : α → β) (xs : List α)
   : Any P (xs.map f) ↔ Any (fun x => P (f x)) xs := by
@@ -241,8 +240,8 @@ def Cal (l r : List Φ) : (Γ Δ : List (Form Φ)) → Prop
   | Γ, ♩n :: Δ => Cal l (n :: r) Γ Δ
   | φ ⇒ ψ :: Γ, [] => Cal l r Γ [φ] ∧ Cal l r (ψ :: Γ) []
   | Γ, φ ⇒ ψ :: Δ => Cal l r (φ :: Γ) (ψ :: Δ)
-termination_by _ Γ Δ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
-decreasing_by simp_wf <;> simp_arith
+termination_by Γ Δ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
+decreasing_by all_goals simp_wf <;> simp_arith
 
 instance Cal.instDecidable [DecidableEq Φ] (l r : List Φ) (Γ Δ : List (Form Φ))
   : Decidable (Cal l r Γ Δ) := by
@@ -265,8 +264,8 @@ instance Cal.instDecidable [DecidableEq Φ] (l r : List Φ) (Γ Δ : List (Form 
   | Γ, φ ⇒ ψ :: Δ =>
     have ih : Decidable (Cal l r (φ :: Γ) (ψ :: Δ)) := instDecidable l r (φ :: Γ) (ψ :: Δ)
     aesop
-termination_by _ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
-decreasing_by simp_wf <;> simp_arith
+termination_by sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
+decreasing_by all_goals simp_wf <;> simp_arith
 
 abbrev Prove (φ : Form Φ) : Prop := Cal [] [] [] [φ]
 
@@ -385,8 +384,8 @@ theorem Cal_sound_complete [DecidableEq Φ]
         have AllΓ : All (Val i) (Γ ++ l.map (♩·)) := by simp_all
         have AnyφψΔ : Any (Val i) (φ ⇒ ψ :: Δ ++ r.map (♩·)) := h i dec AllΓ
         simp_all
-termination_by _ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
-decreasing_by simp_wf <;> simp_arith
+termination_by sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
+decreasing_by all_goals simp_wf <;> simp_arith
 
 theorem Prove_sound_complete [DecidableEq Φ] (φ : Form Φ)
   : Prove φ ↔ Valid φ := by
@@ -477,8 +476,8 @@ theorem Cal_Proof [DecidableEq Φ]
     simp at h
     have ih : Proof' l r (φ :: Γ) (ψ :: Δ) := Cal_Proof l r (φ :: Γ) (ψ :: Δ) h
     aesop
-termination_by _ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
-decreasing_by simp_wf <;> simp_arith
+termination_by sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
+decreasing_by all_goals simp_wf <;> simp_arith
 
 theorem Proof_sound_complete [DecidableEq Φ] (φ : Form Φ)
   : Proof [] [φ] ↔ Valid φ := by
