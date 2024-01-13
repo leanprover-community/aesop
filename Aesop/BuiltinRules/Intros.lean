@@ -5,17 +5,14 @@ Authors: Jannis Limperg, Kyle Miller
 -/
 
 import Aesop.Frontend.Attribute
+import Std.Tactic.OpenPrivate
 
 open Lean
 open Lean.Meta
 
 namespace Aesop.BuiltinRules
 
-private def getIntrosSize : Expr → Nat
-  | .forallE _ _ b _ => getIntrosSize b + 1
-  | .letE _ _ _ b _  => getIntrosSize b + 1
-  | .mdata _ b       => getIntrosSize b
-  | _                => 0
+open private getIntrosSize in Lean.MVarId.intros
 
 /-- Introduce as many binders as possible while unfolding definitions with the
 ambient transparency. -/
