@@ -203,7 +203,7 @@ declare_syntax_cat Aesop.builder_option
 
 syntax " (" &"immediate" " := " "[" ident,+,? "]" ")" : Aesop.builder_option
 syntax " (" &"index" " := " "[" Aesop.indexing_mode,+,? "]" ")" : Aesop.builder_option
-syntax " (" &"patterns" " := " "[" term,+,? "]" ")" : Aesop.builder_option
+syntax " (" &"cases_patterns" " := " "[" term,+,? "]" ")" : Aesop.builder_option
 syntax " (" &"transparency" " := " transparency ")" : Aesop.builder_option
 syntax " (" &"transparency!" " := " transparency ")" : Aesop.builder_option
 
@@ -214,7 +214,7 @@ end Parser
 inductive BuilderOption
   | immediate (names : Array Name)
   | index (imode : IndexingMode)
-  | patterns (pats : Array CasesPattern)
+  | casesPatterns (pats : Array CasesPattern)
   | transparency (md : TransparencyMode) (alsoForIndex : Bool)
 
 namespace BuilderOption
@@ -226,8 +226,8 @@ def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
       return immediate $ (ns : Array Syntax).map (·.getId)
     | `(builder_option| (index := [$imodes:Aesop.indexing_mode,*])) =>
       index <$> IndexingMode.elab imodes
-    | `(builder_option| (patterns := [$pats:term,*])) =>
-      patterns <$> (pats : Array Syntax).mapM (CasesPattern.elab ·)
+    | `(builder_option| (cases_patterns := [$pats:term,*])) =>
+      casesPatterns <$> (pats : Array Syntax).mapM (CasesPattern.elab ·)
     | `(builder_option| (transparency := $md)) =>
       let md ← elabTransparency md
       return transparency md (alsoForIndex := false)
@@ -239,13 +239,13 @@ def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
 protected def name : BuilderOption → String
   | immediate .. => "immediate"
   | index .. => "index"
-  | patterns .. => "patterns"
+  | casesPatterns .. => "patterns"
   | transparency .. => "transparency"
 
 protected def toCtorIdx : BuilderOption → Nat
   | immediate .. => 0
   | index .. => 1
-  | patterns .. => 2
+  | casesPatterns .. => 2
   | transparency .. => 3
 
 end BuilderOption
@@ -316,7 +316,7 @@ def cases : BuilderOptions CasesBuilderOptions where
   builderName := .regular .cases
   init := default
   add
-    | opts, .patterns patterns => some { opts with patterns }
+    | opts, .casesPatterns patterns => some { opts with patterns }
     | opts, .index indexingMode? => some { opts with indexingMode? }
     | opts, .transparency transparency alsoForIndex =>
       let opts := { opts with transparency }

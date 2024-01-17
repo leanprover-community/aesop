@@ -231,7 +231,7 @@ theorem X.exists_cons_of_ne_nil : l ≠ nil → ∃ b L, l = b :: L := by
 /-! ### mem -/
 
 attribute [aesop safe constructors] List.Mem
-attribute [aesop safe (cases (patterns := [List.Mem _ [], List.Mem _ (_ :: _)]))] List.Mem
+attribute [aesop safe (cases (cases_patterns := [List.Mem _ [], List.Mem _ (_ :: _)]))] List.Mem
 
 -- attribute [-simp] mem_singleton_self
 @[simp]

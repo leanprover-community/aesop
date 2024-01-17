@@ -7,11 +7,11 @@ import Aesop
 
 set_option aesop.check.all true
 
-attribute [aesop safe (cases (patterns := [List.Mem _ []]))] List.Mem
+attribute [aesop safe (cases (cases_patterns := [List.Mem _ []]))] List.Mem
 attribute [aesop unsafe 50% constructors] List.Mem
-attribute [aesop unsafe 50% (cases (patterns := [List.Mem _ (_ :: _)]))] List.Mem
+attribute [aesop unsafe 50% (cases (cases_patterns := [List.Mem _ (_ :: _)]))] List.Mem
 
-@[aesop safe [constructors, (cases (patterns := [All _ [], All _ (_ :: _)]))]]
+@[aesop safe [constructors, (cases (cases_patterns := [All _ [], All _ (_ :: _)]))]]
 inductive All (P : α → Prop) : List α → Prop where
   | none : All P []
   | more {x xs} : P x → All P xs → All P (x :: xs)

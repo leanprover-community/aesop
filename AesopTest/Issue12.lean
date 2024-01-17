@@ -9,7 +9,7 @@ set_option aesop.check.all true
 
 attribute [aesop unsafe 50% constructors] List.Mem
 
-@[aesop safe [constructors, (cases (patterns := [All _ [], All _ (_ :: _)]))]]
+@[aesop safe [constructors, (cases (cases_patterns := [All _ [], All _ (_ :: _)]))]]
 inductive All (P : α → Prop) : List α → Prop where
   | none : All P []
   | more (x xs) : P x → All P xs → All P (x :: xs)

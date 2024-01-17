@@ -17,9 +17,9 @@ attribute [aesop safe apply] instDecidableAnd
 
 --- Mem
 
-attribute [aesop safe (cases (patterns := [List.Mem _ []]))] List.Mem
+attribute [aesop safe (cases (cases_patterns := [List.Mem _ []]))] List.Mem
 attribute [aesop unsafe 50% constructors] List.Mem
-attribute [aesop unsafe 50% (cases (patterns := [List.Mem _ (_ :: _)]))] List.Mem
+attribute [aesop unsafe 50% (cases (cases_patterns := [List.Mem _ (_ :: _)]))] List.Mem
 
 theorem Mem.map {x : α} {xs : List α} (f : α → β) (h : x ∈ xs) : f x ∈ xs.map f := by
   induction h <;> aesop
@@ -43,7 +43,7 @@ theorem Mem.split [DecidableEq α] {xs : List α} {v : α} (h : v ∈ xs)
 
 --- All
 
-@[aesop safe [constructors, (cases (patterns := [All _ [], All _ (_ :: _)]))]]
+@[aesop safe [constructors, (cases (cases_patterns := [All _ [], All _ (_ :: _)]))]]
 inductive All (P : α → Prop) : List α → Prop
   | nil : All P []
   | cons {x xs} : P x → All P xs → All P (x :: xs)
@@ -76,8 +76,8 @@ end All
 
 --- Any
 
-@[aesop safe (cases (patterns := [Any _ []])),
-  aesop unsafe [50% constructors, 50% (cases (patterns := [Any _ (_ :: _ )]))]]
+@[aesop safe (cases (cases_patterns := [Any _ []])),
+  aesop unsafe [50% constructors, 50% (cases (cases_patterns := [Any _ (_ :: _ )]))]]
 inductive Any (P : α → Prop) : List α → Prop
   | here {x xs} : P x → Any P (x :: xs)
   | there {x xs} : Any P xs → Any P (x :: xs)
@@ -144,7 +144,7 @@ end Common
 --- List Permutations
 
 -- From https://github.com/agda/agda-stdlib/blob/master/src/Data/List/Relation/Binary/Permutation/Propositional.agda
-@[aesop unsafe [50% constructors, 25% (cases (patterns := [Perm (_ :: _) (_ :: _ )]))]]
+@[aesop unsafe [50% constructors, 25% (cases (cases_patterns := [Perm (_ :: _) (_ :: _ )]))]]
 inductive Perm : (xs ys : List α) → Type
   | refl {xs} : Perm xs xs
   | prep {xs ys} x : Perm xs ys → Perm (x :: xs) (x :: ys)
