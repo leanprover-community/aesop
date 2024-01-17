@@ -1036,3 +1036,14 @@ However, there are various challenges:
   So we're looking to copy Polya's architecture, but not necessarily the specific modules.
 - Polya includes a normalisation pass that canonises terms.
   We could implement this as a normalisation rule.
+
+# Meeting with Son 2024-01-16
+
+- feature request for conditional rewrite rules: either leave as Aesop subgoals or to prove manually
+  - example: in ℤ/qℤ, `x invertible → xx⁻¹ = 1`.
+    But in Son's use case, `x` is always invertible, so Aesop should either prove this goal or leave it to the user.
+  - solution: add a `simp` discharger that 'solves' preconditions with mvars and either adds these as subgoals or leaves them to the user
+  - needs new annotation for "leave this goal to the user"
+- feature request: forward rules with multiple subgoals
+  - possible solution: generate `P ∨ Q` and split later
+  - use case: `linarith` wants `x ≠ y` to be split into `x < y ∨ x > y`
