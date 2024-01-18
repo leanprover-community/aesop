@@ -3,7 +3,8 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-
+-- import Std
+import Std.Data.List.Lemmas
 -- Ported from mathlib3, file src/data/list/basic.lean,
 -- commit a945b3769cb82bc238ee004b4327201a6864e7e0
 
@@ -913,8 +914,13 @@ theorem last_replicate_succ (a m : Nat) :
 
 /-! ### last' -/
 
+section last'
+set_option linter.deprecated false
+-- TODO `last'` has been deprecated in favour of `getLast?`
+-- unfortunately a simple replacement breaks the tests below.
+
 @[simp] theorem last'_is_none :
-  ∀ {l : List α}, (last' l).isNone ↔ l = []
+  ∀ {l : List α}, (getLast? l).isNone ↔ l = []
   | [] => by aesop
   | [a] => by aesop
   | a :: a' :: as => by
@@ -977,8 +983,8 @@ theorem ilast_eq_last' [Inhabited α] : ∀ l : List α, l.ilast = l.last'.iget
     have ih := last'_append_cons (c :: l₁) a
     by aesop
 
-@[simp] theorem last'_cons_cons (x y : α) (l : List α) :
-  last' (x :: y :: l) = last' (y :: l) := rfl
+@[simp] theorem getLast?_cons_cons (x y : α) (l : List α) :
+  getLast? (x :: y :: l) = getLast? (y :: l) := rfl
 
 theorem last'_append_of_ne_nil (l₁ : List α) : ∀ {l₂ : List α} (_ : l₂ ≠ []),
   last' (l₁ ++ l₂) = last' l₂
@@ -988,6 +994,8 @@ theorem last'_append_of_ne_nil (l₁ : List α) : ∀ {l₂ : List α} (_ : l₂
 theorem last'_append {l₁ l₂ : List α} {x : α} (h : x ∈ l₂.last') :
   x ∈ (l₁ ++ l₂).last' := by
   aesop (add 1% cases List)
+
+end last'
 
 /-! ### head(') and tail -/
 
