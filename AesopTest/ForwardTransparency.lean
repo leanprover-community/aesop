@@ -12,7 +12,7 @@ def T := Unit → Empty
 
 example (h : T) (u : Unit) : α := by
   fail_if_success aesop (config := { terminal := true })
-  fail_if_success aesop (add (forward (transparency := reducible)) safe h)
+  fail_if_success aesop (add forward (transparency := reducible) safe h)
     (config := { terminal := true })
   aesop (add forward safe h)
 
@@ -20,13 +20,13 @@ def U := Unit
 
 example (h : T) (u : U) : α := by
   fail_if_success aesop (config := { terminal := true })
-  fail_if_success aesop (add (forward (transparency := reducible)) safe h)
+  fail_if_success aesop (add forward (transparency := reducible) safe h)
     (config := { terminal := true })
   fail_if_success aesop (add forward safe h) (config := { terminal := true })
-  aesop (add (forward (transparency! := default)) safe h)
+  aesop (add forward (transparency! := default) safe h)
 
 abbrev V := Unit
 
 example (h : Unit → Empty) (u : V) : α := by
   fail_if_success aesop (config := { terminal := true })
-  aesop (add (forward (transparency := reducible)) safe h)
+  aesop (add forward (transparency := reducible) safe h)

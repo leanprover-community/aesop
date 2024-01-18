@@ -7,8 +7,8 @@ import Aesop
 
 set_option aesop.check.all true
 
-attribute [aesop safe (cases (cases_patterns := [List.Mem _ []]))] List.Mem
-attribute [aesop unsafe 50% (cases (cases_patterns := [List.Mem _ (_ :: _)]))] List.Mem
+attribute [aesop safe cases (cases_patterns := [List.Mem _ []])] List.Mem
+attribute [aesop unsafe 50% cases (cases_patterns := [List.Mem _ (_ :: _)])] List.Mem
 
 theorem Mem.split [DecidableEq α] (xs : List α) (v : α) (h : v ∈ xs)
   : ∃ l r, xs = l ++ v :: r := by

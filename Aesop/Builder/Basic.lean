@@ -11,6 +11,37 @@ open Lean.Meta
 
 namespace Aesop
 
+/--
+Options for the builders. Most options are only relevant for certain builders.
+-/
+structure RuleBuilderOptions where
+  immediatePremises? : Option (Array Name)
+  indexingMode? : Option IndexingMode
+  casesPatterns? : Option (Array CasesPattern)
+  /-- The transparency used by the rule tactic. -/
+  transparency? : Option TransparencyMode
+  /-- The transparency used for indexing the rule. Currently, the rule is not
+  indexed unless this is `.reducible`. -/
+  indexTransparency? : Option TransparencyMode
+  deriving Inhabited
+
+namespace RuleBuilderOptions
+
+protected def default : RuleBuilderOptions :=
+  ⟨none, none, none, none, none⟩
+
+instance : EmptyCollection RuleBuilderOptions :=
+  ⟨.default⟩
+
+def getIndexingModeM [Monad m] (dflt : m IndexingMode)
+    (opts : RuleBuilderOptions) : m IndexingMode :=
+  match opts.indexingMode? with
+  | none => dflt
+  | some imode => return imode
+
+end RuleBuilderOptions
+
+
 inductive RuleBuilderKind
   | global (decl : Name)
   | «local» (fvarUserName : Name) (goal : MVarId)
@@ -22,6 +53,7 @@ def RuleBuilderKind.toRuleIdent : RuleBuilderKind → RuleIdent
 structure RuleBuilderInput where
   phase : PhaseName
   kind : RuleBuilderKind
+  options : RuleBuilderOptions
 
 structure RegularRuleBuilderResult where
   builder : BuilderName
@@ -58,30 +90,12 @@ def checkConstIsInductive (builderName : BuilderName) (decl : Name) :
   return info
 
 def ofGlobalRuleBuilder (name : BuilderName)
-    (globalBuilder : PhaseName → Name → MetaM RuleBuilderResult) :
+    (globalBuilder : PhaseName → Name → RuleBuilderOptions → MetaM RuleBuilderResult) :
     RuleBuilder := λ input =>
   match input.kind with
   | RuleBuilderKind.local .. =>
     throwError "aesop: {name} builder does not support local hypotheses"
   | RuleBuilderKind.global decl =>
-    RuleBuilderOutput.global <$> globalBuilder input.phase decl
+    RuleBuilderOutput.global <$> globalBuilder input.phase decl input.options
 
 end RuleBuilder
-
--- Options shared by all regular (meaning non-simp) builders.
-structure RegularBuilderOptions where
-  indexingMode? : Option IndexingMode
-  deriving Inhabited
-
-namespace RegularBuilderOptions
-
-protected def default : RegularBuilderOptions where
-  indexingMode? := none
-
-def getIndexingModeM [Monad m] (dflt : m IndexingMode)
-    (opts : RegularBuilderOptions) : m IndexingMode :=
-  match opts.indexingMode? with
-  | none => dflt
-  | some imode => return imode
-
-end RegularBuilderOptions

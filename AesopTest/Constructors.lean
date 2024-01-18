@@ -22,4 +22,4 @@ def T n := Even n
 
 example : T 6 := by
   fail_if_success aesop (config := { terminal := true })
-  aesop (add safe (constructors (transparency! := default)) Even)
+  aesop (add safe constructors (transparency! := default) Even)

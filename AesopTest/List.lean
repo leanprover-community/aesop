@@ -45,7 +45,7 @@ theorem injective_intro (h : ∀ a b, f a = f b → a = b) : Injective f :=
 def Surjective (f : α → β) : Prop :=
   ∀ b, ∃ a, f a = b
 
-@[aesop norm (forward (immediate := [h]))]
+@[aesop norm forward (immediate := [h])]
 theorem surjective_elim (h : Surjective f) : ∀ b, ∃ a, f a = b :=
   h
 
@@ -231,7 +231,7 @@ theorem X.exists_cons_of_ne_nil : l ≠ nil → ∃ b L, l = b :: L := by
 /-! ### mem -/
 
 attribute [aesop safe constructors] List.Mem
-attribute [aesop safe (cases (cases_patterns := [List.Mem _ [], List.Mem _ (_ :: _)]))] List.Mem
+attribute [aesop safe cases (cases_patterns := [List.Mem _ [], List.Mem _ (_ :: _)])] List.Mem
 
 -- attribute [-simp] mem_singleton_self
 @[simp]

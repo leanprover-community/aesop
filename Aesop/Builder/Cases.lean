@@ -27,58 +27,52 @@ def toIndexingMode (p : CasesPattern) : MetaM IndexingMode :=
 end CasesPattern
 
 
-structure CasesBuilderOptions extends RegularBuilderOptions where
-  patterns : Array CasesPattern
-  /-- The transparency used by the rule tactic when searching for hypotheses to
-  run `cases` on. -/
-  transparency : TransparencyMode
-  /-- The transparency used to index the rule. The rule is not indexed unless
-  this is `.reducible`. -/
-  indexTransparency : TransparencyMode
+namespace RuleBuilderOptions
 
-namespace CasesBuilderOptions
+def casesTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
+  opts.transparency?.getD .reducible
 
-instance : Inhabited CasesBuilderOptions where
-  default := {
-    toRegularBuilderOptions := default
-    patterns := #[]
-    transparency := .reducible
-    indexTransparency := .reducible
-  }
+def casesIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
+  opts.indexTransparency?.getD .reducible
 
-def indexingMode (decl : Name) (opts : CasesBuilderOptions) :
+def casesPatterns (opts : RuleBuilderOptions) : Array CasesPattern :=
+  opts.casesPatterns?.getD #[]
+
+def casesIndexingMode (decl : Name) (opts : RuleBuilderOptions) :
     MetaM IndexingMode :=
   opts.getIndexingModeM do
-    if opts.indexTransparency != .reducible then
+    if opts.casesIndexTransparency != .reducible then
       return .unindexed
-    if opts.patterns.isEmpty then
+    let casesPatterns := opts.casesPatterns
+    if casesPatterns.isEmpty then
       IndexingMode.hypsMatchingConst decl
     else
-      .or <$> opts.patterns.mapM (·.toIndexingMode)
+      .or <$> casesPatterns.mapM (·.toIndexingMode)
 
-def target (decl : Name) (opts : CasesBuilderOptions) : CasesTarget :=
-  if opts.patterns.isEmpty then
+def casesTarget (decl : Name) (opts : RuleBuilderOptions) : CasesTarget :=
+  let casesPatterns := opts.casesPatterns
+  if opts.casesPatterns.isEmpty then
     .decl decl
   else
-    .patterns opts.patterns
+    .patterns casesPatterns
 
-end CasesBuilderOptions
+end RuleBuilderOptions
 
 
-def RuleBuilder.cases (opts : CasesBuilderOptions) : RuleBuilder :=
-  RuleBuilder.ofGlobalRuleBuilder BuilderName.cases λ phase decl => do
+def RuleBuilder.cases : RuleBuilder :=
+  RuleBuilder.ofGlobalRuleBuilder BuilderName.cases λ phase decl opts => do
     if let .norm := phase then throwError
       "cases builder cannot currently be used for norm rules."
       -- TODO `Meta.cases` may assign and introduce metavariables.
       -- (Specifically, it can *replace* existing metavariables, which Aesop
       -- counts as an assignment and an introduction.)
     let inductInfo ← RuleBuilder.checkConstIsInductive name decl
-    opts.patterns.forM (·.check decl)
-    let indexingMode ← opts.indexingMode decl
-    let target := opts.target decl
+    opts.casesPatterns.forM (·.check decl)
+    let indexingMode ← opts.casesIndexingMode decl
+    let target := opts.casesTarget decl
     return RuleBuilderResult.regular {
       builder := name
-      tac := .cases target opts.transparency (isRecursiveType := inductInfo.isRec)
+      tac := .cases target opts.casesTransparency inductInfo.isRec
       indexingMode
     }
   where

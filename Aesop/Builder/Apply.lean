@@ -11,39 +11,37 @@ open Lean.Meta
 
 namespace Aesop
 
-structure ApplyBuilderOptions extends RegularBuilderOptions where
-  /-- The transparency used by the rule tactic. -/
-  transparency : TransparencyMode
-  /-- The transparency used to index the rule. The rule is not indexed unless
-  this is `.reducible`. -/
-  indexTransparency : TransparencyMode
+namespace RuleBuilderOptions
 
-instance : Inhabited ApplyBuilderOptions where
-  default := {
-    toRegularBuilderOptions := default
-    transparency := .default
-    indexTransparency := .reducible
-  }
+def applyTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
+  opts.transparency?.getD .default
 
-def RuleBuilder.apply (opts : ApplyBuilderOptions) : RuleBuilder := λ input =>
+def applyIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
+  opts.indexTransparency?.getD .reducible
+
+end RuleBuilderOptions
+
+def RuleBuilder.apply : RuleBuilder := λ input =>
+  let opts := input.options
   match input.kind with
   | RuleBuilderKind.global decl => do
-    let tac := .applyConst decl opts.transparency
+    let tac := .applyConst decl opts.applyTransparency
     let type := (← getConstInfo decl).type
-    RuleBuilderOutput.global <$> mkResult tac type
+    RuleBuilderOutput.global <$> mkResult opts tac type
   | RuleBuilderKind.local fvarUserName goal =>
     goal.withContext do
-      let tac := RuleTacDescr.applyFVar fvarUserName opts.transparency
+      let tac := RuleTacDescr.applyFVar fvarUserName opts.applyTransparency
       let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
-      let result ← mkResult tac type
+      let result ← mkResult opts tac type
       return RuleBuilderOutput.local goal result
   where
-    mkResult (tac : RuleTacDescr) (type : Expr) : MetaM RuleBuilderResult :=
+    mkResult (opts : RuleBuilderOptions) (tac : RuleTacDescr) (type : Expr) :
+        MetaM RuleBuilderResult :=
       return RuleBuilderResult.regular {
         builder := BuilderName.apply
         tac := tac
         indexingMode := ← opts.getIndexingModeM do
-          if opts.indexTransparency != .reducible then
+          if opts.applyIndexTransparency != .reducible then
             return .unindexed
           else
             IndexingMode.targetMatchingConclusion type

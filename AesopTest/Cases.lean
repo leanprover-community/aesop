@@ -17,7 +17,7 @@ attribute [aesop safe -51 cases] Empty
 example {α β} (h : FancyAnd α β) : α ∧ β := by
   aesop
 
-@[aesop safe (cases (cases_patterns := [All _ [], All _ (_ :: _)]))]
+@[aesop safe cases (cases_patterns := [All _ [], All _ (_ :: _)])]
 inductive All (P : α → Prop) : List α → Prop
   | nil : All P []
   | cons : P x → All P xs → All P (x :: xs)
