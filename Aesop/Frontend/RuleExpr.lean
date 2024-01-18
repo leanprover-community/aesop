@@ -417,6 +417,20 @@ structure RuleConfig (f : Type → Type) where
 
 namespace RuleConfig
 
+def addFeature (c : RuleConfig Option) : Feature → RuleConfig Option
+  | .phase phase => { c with phase }
+  | .priority priority => { c with priority }
+  | .ident ident => { c with ident }
+  | .builder builder => { c with builder }
+  | .builderOption opt =>
+    { c with builderOptions := addBuilderOption c.builderOptions opt }
+  | .ruleSets newRuleSets =>
+    have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
+    let ruleSets :=
+      ⟨Array.mergeSortedDeduplicating c.ruleSets.ruleSets
+        newRuleSets.ruleSets.qsortOrd⟩
+    { c with ruleSets }
+
 def getPenalty (phase : PhaseName) (c : RuleConfig Id) : m Int := do
   let (some penalty) := c.priority.toInt? | throwError
     "{phase} rules must specify an integer penalty (not a success probability)"
@@ -536,37 +550,15 @@ end RuleConfig
 
 namespace RuleExpr
 
+def toRuleConfigs (e : RuleExpr) (init : RuleConfig Option) :
+    Array (RuleConfig Option) :=
+  e.foldBranchesM (m := Id) (init := init) λ c feature => c.addFeature feature
+
 def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
     (defaultRuleSet : RuleSetName) : m (Array (RuleConfig Id)) := do
-  let cs ← e.foldBranchesM (init := init) go
+  let cs := e.toRuleConfigs init
   cs.mapM finish
   where
-    go (r : RuleConfig Option) : Feature → m (RuleConfig Option)
-      | .phase p => do
-        if let (some previous) := r.phase then throwError
-          "duplicate phase declaration: '{p}'\n(previous declaration: '{previous}')"
-        return { r with phase := some p }
-      | .priority p => do
-        if let (some previous) := r.priority then throwError
-          "duplicate priority declaration: '{p}'\n(previous declaration: '{previous}')"
-        return { r with priority := some p }
-      | .builder b => do
-        if let (some previous) := r.builder then throwError
-          "duplicate builder declaration: '{b}'\n(previous declaration: '{previous}')"
-        return { r with builder := some b }
-      | .builderOption opt => do
-        return { r with builderOptions := addBuilderOption r.builderOptions opt }
-      | .ident ident => do
-        if let (some previous) := r.ident then throwError
-          "duplicate rule name: '{ident}'\n(previous rule name: '{previous}')"
-        return { r with ident }
-      | .ruleSets newRuleSets =>
-        have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
-        let ruleSets :=
-          ⟨Array.mergeSortedDeduplicating r.ruleSets.ruleSets $
-            newRuleSets.ruleSets.qsortOrd⟩
-        return { r with ruleSets }
-
     getPhaseAndPriority (c : RuleConfig Option) :
         m (PhaseName × Priority) :=
       match c.builder, c.phase, c.priority with
@@ -652,32 +644,8 @@ def toRuleNameFilters (e : RuleExpr) :
       builderOptions := ∅
       ruleSets := ⟨#[]⟩
   }
-  let configs ← e.foldBranchesM (init := initialConfig) go
+  let configs := e.toRuleConfigs initialConfig
   configs.mapM (·.toRuleNameFilter)
-  where
-    go (r : RuleConfig Option) : Feature → m (RuleConfig Option)
-      | .phase p => do
-        if let (some previous) := r.phase then throwError
-          "duplicate phase declaration: '{p}'\n(previous declaration: '{previous}')"
-        return { r with phase := some p }
-      | .priority prio =>
-        throwError "unexpected priority '{prio}'"
-      | .ident ident => do
-        if let (some previous) := r.ident then throwError
-          "duplicate rule name: '{ident}'\n(previous rule name: '{previous}')"
-        return { r with ident }
-      | .builder b => do
-        if let (some previous) := r.builder then throwError
-          "duplicate builder declaration: '{b}'\n(previous declaration: '{previous}')"
-        return { r with builder := some b }
-      | .builderOption opt => do
-        return { r with builderOptions := addBuilderOption r.builderOptions opt }
-      | .ruleSets newRuleSets =>
-        have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
-        let ruleSets :=
-          ⟨Array.mergeSortedDeduplicating r.ruleSets.ruleSets $
-            newRuleSets.ruleSets.qsortOrd⟩
-        return { r with ruleSets }
 
 def toGlobalRuleNameFilters (e : RuleExpr) :
     m (Array (RuleSetNameFilter × RuleNameFilter)) :=
