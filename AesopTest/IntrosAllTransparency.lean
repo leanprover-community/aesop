@@ -11,5 +11,5 @@ set_option aesop.check.all true
 @[irreducible] def T := False → True
 
 example : T := by
-  fail_if_success aesop (options := { terminal := true })
-  aesop (options := { introsTransparency? := some .all })
+  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { introsTransparency? := some .all })

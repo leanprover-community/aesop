@@ -378,7 +378,7 @@ attribute [-simp] length_singleton
 
 -- attribute [-simp] length_pos_of_mem
 theorem X.length_pos_of_mem {a : α} : ∀ {l : List α}, a ∈ l → 0 < length l := by
-  aesop (add 1% cases List) (simp_options := { arith := true })
+  aesop (add 1% cases List) (simp_config := { arith := true })
 
 -- attribute [-simp] exists_mem_of_length_pos
 theorem X.exists_mem_of_length_pos : ∀ {l : List α}, 0 < length l → ∃ a, a ∈ l := by
@@ -392,7 +392,7 @@ theorem ne_nil_of_length_pos {l : List α} : 0 < length l → l ≠ [] := by
   aesop (add 1% cases List)
 
 theorem length_pos_of_ne_nil {l : List α} : l ≠ [] → 0 < length l := by
-  aesop (add 1% cases List) (simp_options := { arith := true })
+  aesop (add 1% cases List) (simp_config := { arith := true })
 
 theorem length_pos_iff_ne_nil {l : List α} : 0 < length l ↔ l ≠ [] := by
   aesop (add unsafe [ne_nil_of_length_pos, length_pos_of_ne_nil])
@@ -407,7 +407,7 @@ theorem X.length_eq_one : length l = 1 ↔ ∃ a, l = [a] := by
 
 theorem exists_of_length_succ {n} :
   ∀ l : List α, l.length = n + 1 → ∃ h t, l = h :: t := by
-  intro l; induction l <;> aesop (simp_options := { arith := true })
+  intro l; induction l <;> aesop (simp_config := { arith := true })
 
 @[simp] theorem length_injective_iff : Injective (length : List α → Nat) ↔ Subsingleton α :=
   ADMIT -- Requires induction after case split.
@@ -600,7 +600,7 @@ set_option linter.unusedVariables false in
 theorem X.append_inj' {s₁ s₂ t₁ t₂ : List α} (h : s₁ ++ t₁ = s₂ ++ t₂) (hl : length t₁ = length t₂) :
   s₁ = s₂ ∧ t₁ = t₂ := by
   induction s₁ generalizing s₂ <;> induction s₂ <;>
-    aesop (simp_options := { arith := true })
+    aesop (simp_config := { arith := true })
 
 -- attribute [-simp] append_inj_right'
 theorem X.append_inj_right' {s₁ s₂ t₁ t₂ : List α} (h : s₁ ++ t₁ = s₂ ++ t₂)
@@ -656,7 +656,7 @@ theorem X.eq_of_mem_replicate {a b : α} {n} (h : b ∈ replicate n a) : b = a :
 
 -- attribute [-simp] eq_replicate_of_mem
 theorem X.eq_replicate_of_mem {a : α} {l : List α} : (∀ b, b ∈ l → b = a) → l = replicate l.length a := by
-  induction l <;> aesop (options := { useSimpAll := false })
+  induction l <;> aesop (config := { useSimpAll := false })
 
 theorem eq_replicate' {a : α} {l : List α} : l = replicate l.length a ↔ ∀ b, b ∈ l → b = a := by
   induction l <;> aesop
@@ -703,7 +703,7 @@ theorem replicate_left_injective {n : Nat} (hn : n ≠ 0) :
 theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) := by
   unfold Injective; intro x y
   induction x generalizing y <;> induction y <;>
-    aesop (options := { useSimpAll := false })
+    aesop (config := { useSimpAll := false })
 
 @[simp] theorem replicate_right_inj {a : α} {n m : Nat} :
     replicate n a = replicate m a ↔ n = m := by

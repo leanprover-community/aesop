@@ -16,4 +16,4 @@ inductive Even : Nat → Prop
 attribute [aesop safe] Even.zero Even.plus_two
 
 example : Even 500 := by
-  aesop (options := { maxRuleApplications := 0, maxRuleApplicationDepth := 0 })
+  aesop (config := { maxRuleApplications := 0, maxRuleApplicationDepth := 0 })

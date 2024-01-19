@@ -12,12 +12,12 @@ set_option aesop.check.all true
 def T := True
 
 example : T := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
   aesop (rule_sets [regular₁])
 
 @[aesop norm unfold (rule_sets [regular₂, dflt₁])]
 def U := True
 
 example : U := by
-  fail_if_success aesop (rule_sets [-dflt₁]) (options := { terminal := true })
+  fail_if_success aesop (rule_sets [-dflt₁]) (config := { terminal := true })
   aesop

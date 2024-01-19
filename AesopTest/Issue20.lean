@@ -25,7 +25,7 @@ theorem mem (P : α → Prop) (xs : List α)
   : All P xs ↔ ∀ a : α, a ∈ xs → P a := by
   induction xs
   case nil => aesop
-  case cons x xs ih => aesop (options := { useSimpAll := false })
+  case cons x xs ih => aesop (config := { useSimpAll := false })
 
 theorem mem' (P : α → Prop) (xs : List α)
   : All P xs ↔ ∀ a : α, a ∈ xs → P a := by

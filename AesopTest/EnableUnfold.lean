@@ -12,5 +12,5 @@ set_option aesop.check.all true
 def T := True
 
 example : T := by
-  fail_if_success aesop (options := { enableUnfold := false, terminal := true })
+  fail_if_success aesop (config := { enableUnfold := false, terminal := true })
   aesop
