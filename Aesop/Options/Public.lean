@@ -126,32 +126,18 @@ structure Options where
   -/
   traceScript := false
   /--
+  Enable the builtin `simp` normalisation rule.
+  -/
+  enableSimp := true
+  /--
+  Use `simp_all`, rather than `simp at *`, for the builtin `simp` normalisation
+  rule.
+  -/
+  useSimpAll := true
+  /--
   Enable the builtin `unfold` normalisation rule.
   -/
   enableUnfold := true
   deriving Inhabited, BEq, Repr
-
-/--
-Options which modify the behaviour of the builtin `simp` normalisation rule.
-Extends `Lean.Meta.Simp.ConfigCtx`, so any option declared there is also valid
-here. For example, you can use `aesop (simp_options := { arith := true })` to get
-behaviour similar to `simp (config := { arith := true })` (aka `simp_arith`).
--/
-structure SimpConfig extends Lean.Meta.Simp.ConfigCtx where
-   -- We reduce the default max discharge depth from 2 to 1.
-  maxDischargeDepth := 1
-  /--
-  If `false`, the builtin `simp` normalisation rule is not used at all.
-  -/
-  enabled := true
-  /--
-  If `true`, the `simp` normalisation rule works like `simp_all`. This means it
-  uses hypotheses which are propositions or equations to simplify other
-  hypotheses and the target.
-
-  If `false`, the `simp` normalisation rule works like `simp at *`. This means
-  hypotheses are simplified, but are not used to simplify other hypotheses and
-  the target. -/
-  useHyps := true
 
 end Aesop
