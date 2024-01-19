@@ -431,7 +431,7 @@ an Aesop rule. Currently available builders are:
   The forward builder may also be given a list of *immediate names*:
 
   ```
-  (forward (immediate := [n])) even_or_odd 
+  forward (immediate := [n]) even_or_odd
   ```
 
   The immediate names, here `n`, refer to the arguments of `even_or_odd`. When
@@ -490,9 +490,9 @@ an Aesop rule. Currently available builders are:
   if `T` is a recursive type (e.g. `List`), we only perform case analysis once
   on each hypothesis. Otherwise we would loop infinitely.
 
-  The `patterns` option can be used to apply the rule only on hypotheses of a
-  certain shape. E.g. the rule `(cases (patterns := [Fin 0])) Fin` will perform
-  case analysis only on hypotheses of type `Fin 0`. Patterns can contain
+  The `cases_patterns` option can be used to apply the rule only on hypotheses
+  of a certain shape. E.g. the rule `cases (cases_patterns := [Fin 0]) Fin` will
+  perform case analysis only on hypotheses of type `Fin 0`. Patterns can contain
   underscores, e.g. `0 ≤ _`. Multiple patterns can be given (separated by
   commas); the rule is then applied whenever at least one of the patterns
   matches a hypothesis.
@@ -514,10 +514,6 @@ an Aesop rule. Currently available builders are:
   Unit`, `Aesop.SimpleRuleTac` or `Aesop.RuleTac`. The latter are Aesop data
   types which associate a tactic with additional metadata; using them may allow
   the rule to operate somewhat more efficiently.
-
-  The builder may be given an option `uses_branch_state := <boolean>` (default
-  true). This indicates whether the given tactic uses the branch state; see
-  below.
 
   Rule tactics should not be 'no-ops': if a rule tactic is not applicable to a
   goal, it should fail rather than return the goal unchanged. All no-op rules
@@ -541,7 +537,7 @@ an Aesop rule. Currently available builders are:
 The rule builders `apply`, `forward`, `destruct`, `constructors` and `cases`
 each have a `transparency` option. This option controls the transparency at
 which the rule is executed. For example, registering a rule with the builder
-`(apply (transparency := reducible))` makes the rule act like the tactic
+`apply (transparency := reducible)` makes the rule act like the tactic
 `with_reducible apply`.
 
 However, even if you change the transparency of a rule, it is still indexed at
@@ -553,7 +549,7 @@ since it can unfold `T` at `default` transparency to discover `A ∧ B`. However
 the rule is never applied because the indexing procedure sees only `T` and does
 not consider the rule potentially applicable.
 
-To override this behaviour, you can write `(apply (transparency! := default))`
+To override this behaviour, you can write `apply (transparency! := default)`
 (note the bang). This disables indexing, so the rule is tried on every goal.
 
 ### Rule Sets
@@ -594,7 +590,7 @@ In most cases, you'll want to add one rule for the declaration. The syntax for
 this is
 
 ``` lean
-@[aesop <phase>? <priority>? <builder>? <rule_sets>?]
+@[aesop <phase>? <priority>? <builder>? <builder_option>* <rule_sets>?]
 ```
 
 where
@@ -613,16 +609,14 @@ where
     You may omit the `unsafe` phase specification when giving a percentage.
   - For `unfold` rules, a penalty can be given, but it is currently ignored.
 
-- `<builder>` is one of the builders given above. If you want to pass options to
-  a builder, write it like this (with mandatory parentheses):
+- `<builder>` is one of the builders given above. If no builder is specified,
+  the default builder for the given phase is used.
 
-  ```text
-  (tactic (uses_branch_state := true))
-  ```
+  When the `simp` builder is used, the `norm` phase may be omitted since this
+  builder can only generate normalisation rules.
 
-  If no builder is specified, the default builder for the given phase is used.
-  Since the `simp` builder generates only normalisation rules, the `norm` phase
-  may be omitted.
+- `<builder_option>*` is a list of zero or more builder options. See above
+  for the different builders' options.
 
 - `<rule_sets>` is a clause of the form
 
@@ -647,7 +641,7 @@ inductive T ...
 @[aesop apply [safe (rule_sets [A]), 70% (rule_sets [B])]]
 def foo ...
 
-@[aesop [80% apply, safe 5 (forward (immediate := x))]]
+@[aesop [80% apply, safe 5 forward (immediate := x)]]
 def bar (x : T) ...
 ```
 
