@@ -821,19 +821,21 @@ Various options can be set with an `options` clause, whose syntax is:
 ```
 
 The term is an arbitrary Lean expression of type `Aesop.Options`; see there for
-details. A notable option is `strategy`, which is one of `.bestFirst`,
-`.depthFirst` and `.breadthFirst` and instructs Aesop to use the corresponding
-search strategy. Best-first is the default.
+details. Notable options include:
 
-Similarly, options for the built-in norm simp call can be set with
+- `strategy` selects a best-first, depth-first or breadth-first search strategy.
+  The default is best-first.
+- `useSimpAll := false` makes the built-in `simp` rule use `simp at *` rather
+  than `simp_all`.
+- `enableSimp := false` disables the built-in `simp` rule altogether.
+
+Similarly, options for the built-in norm simp rule can be set with
 
 ``` text
 (simp_options := <term>)
 ```
 
-The term has type `Aesop.SimpConfig`; see there for details. The `useHyps`
-option may be particularly useful: when `true` (the default), norm simp behaves
-like the `simp_all` tactic; when `false`, norm simp behaves like `simp at *`.
+You can give the same options here as in `simp (config := ...)`.
 
 ### Built-In Rules
 
