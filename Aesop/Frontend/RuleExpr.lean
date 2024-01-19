@@ -201,7 +201,6 @@ namespace Parser
 
 declare_syntax_cat Aesop.builder_option
 
-syntax " (" &"uses_branch_state" " := " Aesop.bool_lit ")" : Aesop.builder_option
 syntax " (" &"immediate" " := " "[" ident,+,? "]" ")" : Aesop.builder_option
 syntax " (" &"index" " := " "[" Aesop.indexing_mode,+,? "]" ")" : Aesop.builder_option
 syntax " (" &"patterns" " := " "[" term,+,? "]" ")" : Aesop.builder_option
