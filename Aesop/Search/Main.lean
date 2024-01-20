@@ -256,7 +256,7 @@ partial def searchLoop : SearchM Q (Array MVarId) :=
       searchLoop
 
 def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
-     (options : Aesop.Options := {}) (simpConfig : Aesop.SimpConfig := {})
+     (options : Aesop.Options := {}) (simpConfig : Simp.Config := {})
      (simpConfigSyntax? : Option Term := none)
      (profile : Profile := {}) :
      MetaM (Array MVarId × Profile) := do

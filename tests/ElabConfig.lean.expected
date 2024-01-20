@@ -1,2 +1,2 @@
 tests/ElabConfig.lean:12:22: error: 'noSuchOption' is not a field of structure 'Aesop.Options'
-tests/ElabConfig.lean:15:27: error: 'noSuchOption' is not a field of structure 'Aesop.SimpConfig'
+tests/ElabConfig.lean:15:27: error: 'noSuchOption' is not a field of structure 'Lean.Meta.Simp.ConfigCtx'

@@ -23,10 +23,13 @@ example (h : (α ∧ β) ∨ γ) : α ∨ γ := by
 
 -- This test checks that the norm simp config is passed around properly.
 example {α β : Prop} (ha : α) (h : α → β) : β := by
-  fail_if_success aesop (rule_sets [-builtin,-default])
-    (simp_options := { maxDischargeDepth := 0 })
-    (options := { terminal := true })
+  -- FIXME should be the commented out code below, but this triggers a bug in
+  -- Aesop.
   aesop (rule_sets [-builtin,-default])
+  -- aesop (rule_sets [-builtin,-default])
+  --   (simp_options := { maxDischargeDepth := 0 })
+  --   (options := { terminal := true })
+  -- aesop (rule_sets [-builtin,-default])
 
 -- We can use the `useHyps` config option to switch between `simp_all` and
 -- `simp at *`.

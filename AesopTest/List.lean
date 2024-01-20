@@ -656,7 +656,7 @@ theorem X.eq_of_mem_replicate {a b : α} {n} (h : b ∈ replicate n a) : b = a :
 
 -- attribute [-simp] eq_replicate_of_mem
 theorem X.eq_replicate_of_mem {a : α} {l : List α} : (∀ b, b ∈ l → b = a) → l = replicate l.length a := by
-  induction l <;> aesop (simp_options := { useHyps := false })
+  induction l <;> aesop (options := { useSimpAll := false })
 
 theorem eq_replicate' {a : α} {l : List α} : l = replicate l.length a ↔ ∀ b, b ∈ l → b = a := by
   induction l <;> aesop
@@ -703,7 +703,7 @@ theorem replicate_left_injective {n : Nat} (hn : n ≠ 0) :
 theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) := by
   unfold Injective; intro x y
   induction x generalizing y <;> induction y <;>
-    aesop (simp_options := { useHyps := false })
+    aesop (options := { useSimpAll := false })
 
 @[simp] theorem replicate_right_inj {a : α} {n m : Nat} :
     replicate n a = replicate m a ↔ n = m := by
@@ -913,7 +913,6 @@ theorem last_replicate_succ (a m : Nat) :
   induction m <;> aesop
 
 /-! ### last' -/
-
 section last'
 set_option linter.deprecated false
 -- TODO `last'` has been deprecated in favour of `getLast?`
