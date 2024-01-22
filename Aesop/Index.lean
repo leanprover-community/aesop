@@ -56,9 +56,9 @@ partial def add (r : α) (imode : IndexingMode) (ri : Index α) :
   | IndexingMode.unindexed =>
     { ri with unindexed := ri.unindexed.insert r }
   | IndexingMode.target keys =>
-    { ri with byTarget := ri.byTarget.insertCore keys r discrTreeConfig }
+    { ri with byTarget := ri.byTarget.insertCore keys r }
   | IndexingMode.hyps keys =>
-    { ri with byHyp := ri.byHyp.insertCore keys r discrTreeConfig }
+    { ri with byHyp := ri.byHyp.insertCore keys r }
   | IndexingMode.or imodes =>
     imodes.foldl (init := ri) λ ri imode =>
       ri.add r imode
