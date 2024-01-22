@@ -5,6 +5,8 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Index.Basic
+import Aesop.Index.MatchRulePatterns
+import Aesop.Rule.Basic
 import Aesop.Tracing
 import Std.Lean.Meta.InstantiateMVars
 
@@ -13,17 +15,17 @@ open Lean.Meta
 
 namespace Aesop
 
-structure Index (α : Type) [BEq α] [Hashable α] where
-  byTarget : DiscrTree α
-  byHyp : DiscrTree α
-  unindexed : PHashSet α
+structure Index (α : Type) where
+  byTarget : DiscrTree (Rule α)
+  byHyp : DiscrTree (Rule α)
+  unindexed : PHashSet (Rule α)
   deriving Inhabited
 
 namespace Index
 
-variable [BEq α] [Hashable α]
+variable [BEq α] [Ord α] [Hashable α]
 
-def trace [ToString α] (ri : Index α) (traceOpt : TraceOption) :
+def trace [ToString (Rule α)] (ri : Index α) (traceOpt : TraceOption) :
     CoreM Unit := do
   if ! (← traceOpt.isEnabled) then
     return
@@ -34,7 +36,7 @@ def trace [ToString α] (ri : Index α) (traceOpt : TraceOption) :
   withConstAesopTraceNode traceOpt (return "Unindexed") do
     traceArray $ PersistentHashSet.toArray ri.unindexed
   where
-    traceArray (as : Array α) : CoreM Unit :=
+    traceArray (as : Array (Rule α)) : CoreM Unit :=
       as.map toString |>.qsortOrd.forM λ r => do aesop_trace![traceOpt] r
 
 instance : EmptyCollection (Index α) where
@@ -50,7 +52,7 @@ def merge (ri₁ ri₂ : Index α) : Index α where
   unindexed := ri₁.unindexed.merge ri₂.unindexed
 
 @[specialize]
-partial def add (r : α) (imode : IndexingMode) (ri : Index α) :
+partial def add (r : Rule α) (imode : IndexingMode) (ri : Index α) :
     Index α :=
   match imode with
   | IndexingMode.unindexed =>
@@ -63,18 +65,18 @@ partial def add (r : α) (imode : IndexingMode) (ri : Index α) :
     imodes.foldl (init := ri) λ ri imode =>
       ri.add r imode
 
-def unindex (ri : Index α) (p : α → Bool) : Index α :=
+def unindex (ri : Index α) (p : Rule α → Bool) : Index α :=
   let (byTarget, unindexed) := filterDiscrTree' ri.unindexed ri.byTarget
   let (byHyp,    unindexed) := filterDiscrTree' unindexed ri.byHyp
   { byTarget, byHyp, unindexed }
   where
     @[inline, always_inline]
-    filterDiscrTree' (unindexed : PHashSet α) (t : DiscrTree α) :
-        DiscrTree α × PHashSet α :=
+    filterDiscrTree' (unindexed : PHashSet (Rule α)) (t : DiscrTree (Rule α)) :
+        DiscrTree (Rule α) × PHashSet (Rule α) :=
       filterDiscrTree (not ∘ p) (λ unindexed v => unindexed.insert v) unindexed
         t
 
-def foldM [Monad m] (ri : Index α) (f : σ → α → m σ) (init : σ) : m σ :=
+def foldM [Monad m] (ri : Index α) (f : σ → Rule α → m σ) (init : σ) : m σ :=
   match ri with
   | { byHyp, byTarget, unindexed} => do
     let mut s := init
@@ -83,7 +85,7 @@ def foldM [Monad m] (ri : Index α) (f : σ → α → m σ) (init : σ) : m σ 
     unindexed.foldM (init := s) f
 
 @[inline]
-def fold (ri : Index α) (f : σ → α → σ) (init : σ) : σ :=
+def fold (ri : Index α) (f : σ → Rule α → σ) (init : σ) : σ :=
   Id.run $ ri.foldM (init := init) f
 
 def size : Index α → Nat
@@ -93,7 +95,8 @@ def size : Index α → Nat
 -- May return duplicate `IndexMatchLocation`s.
 @[inline]
 private def applicableByTargetRules (ri : Index α) (goal : MVarId)
-    (include? : α → Bool) : MetaM (Array (α × Array IndexMatchLocation)) :=
+    (include? : Rule α → Bool) :
+    MetaM (Array (Rule α × Array IndexMatchLocation)) :=
   goal.withContext do
     let rules ← ri.byTarget.getUnify (← goal.getType) discrTreeConfig
     let mut rs := Array.mkEmpty rules.size
@@ -106,7 +109,8 @@ private def applicableByTargetRules (ri : Index α) (goal : MVarId)
 -- May return duplicate `IndexMatchLocation`s.
 @[inline]
 private def applicableByHypRules (ri : Index α) (goal : MVarId)
-    (include? : α → Bool) : MetaM (Array (α × Array IndexMatchLocation)) :=
+    (include? : Rule α → Bool) :
+    MetaM (Array (Rule α × Array IndexMatchLocation)) :=
   goal.withContext do
     let mut rs := #[]
     for localDecl in ← getLCtx do
@@ -120,8 +124,8 @@ private def applicableByHypRules (ri : Index α) (goal : MVarId)
 
 -- May return duplicate `IndexMatchLocation`s.
 @[inline]
-private def applicableUnindexedRules (ri : Index α) (include? : α → Bool) :
-    Array (α × Array IndexMatchLocation) :=
+private def applicableUnindexedRules (ri : Index α) (include? : Rule α → Bool) :
+    Array (Rule α × Array IndexMatchLocation) :=
   -- Assumption: include? is true for most rules.
   ri.unindexed.fold (init := Array.mkEmpty ri.unindexed.size) λ acc r =>
     if include? r then
@@ -132,23 +136,40 @@ private def applicableUnindexedRules (ri : Index α) (include? : α → Bool) :
 -- Returns the rules in the order given by the `Ord α` instance.
 set_option linter.unusedVariables false in
 @[specialize]
-def applicableRules [ord : Ord α] (ri : Index α) (goal : MVarId)
-    (include? : α → Bool) : MetaM (Array (IndexMatchResult α)) := do
+def applicableRules (ri : Index α) (goal : MVarId)
+    (include? : Rule α → Bool) :
+    MetaM (Array (IndexMatchResult (Rule α))) := do
   goal.instantiateMVars
-  let mut result := mkRBMap α (Array IndexMatchLocation) compare
+  let mut result :=
+    mkRBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName
   result := insertIndexMatchResults result
     (← applicableByTargetRules ri goal include?)
   result := insertIndexMatchResults result
     (← applicableByHypRules ri goal include?)
   result := insertIndexMatchResults result
     (applicableUnindexedRules ri include?)
+  let patterns :=
+    result.fold (init := Array.mkEmpty result.size) λ pats rule _ =>
+      if let some pattern := rule.pattern? then
+        pats.push (rule.name, pattern)
+      else
+        pats
+  let patternInstsMap ← matchRulePatterns patterns goal
   return result.fold (init := Array.mkEmpty result.size) λ rs rule locs =>
-    rs.push { rule := rule, locations := .ofArray locs }
+    let_fun locations := (∅ : HashSet _).insertMany locs
+    if rule.pattern?.isSome then
+      if let some patternInstantiations := patternInstsMap.find? rule.name then
+        rs.push { rule, locations, patternInstantiations }
+      else
+        rs
+    else
+      rs.push { rule, locations, patternInstantiations := ∅ }
   where
     @[inline]
-    insertIndexMatchResults (m : RBMap α (Array IndexMatchLocation) compare)
-        (rs : Array (α × Array IndexMatchLocation)) :
-        RBMap α (Array IndexMatchLocation) compare :=
+    insertIndexMatchResults
+        (m : RBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName)
+        (rs : Array (Rule α × Array IndexMatchLocation)) :
+        RBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName :=
       rs.foldl (init := m) λ m (rule, locs) =>
         match m.find? rule with
         | none => m.insert rule locs

@@ -15,6 +15,7 @@ namespace Aesop
 structure Rule (α : Type) where
   name : RuleName
   indexingMode : IndexingMode
+  pattern? : Option RulePattern
   extra : α
   tac : RuleTacDescr
   deriving Inhabited
@@ -37,9 +38,7 @@ def compareByName (r s : Rule α) : Ordering :=
   r.name.compare s.name
 
 def compareByPriorityThenName [Ord α] (r s : Rule α) : Ordering :=
-  match compareByPriority r s with
-  | Ordering.eq => compareByName r s
-  | ord => ord
+  compareByPriority r s |>.then $ compareByName r s
 
 @[inline]
 protected def map (f : α → β) (r : Rule α) : Rule β :=

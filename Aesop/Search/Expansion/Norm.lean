@@ -123,6 +123,7 @@ def runNormRuleCore (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (rule : IndexMatchResult NormRule) : NormM NormRuleResult := do
   let ruleInput := {
     indexMatchLocations := rule.locations
+    patternInstantiations := rule.patternInstantiations
     options := (← read).options
     goal, mvars
   }

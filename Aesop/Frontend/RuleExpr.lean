@@ -457,7 +457,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
       tac := res.tac
       indexingMode := res.indexingMode
       extra := { penalty, safety := Safety.safe }
-      -- TODO support 'almost safe' rules
+      pattern? := none -- TODO
     }
     return (goal, rule, c.ruleSets.ruleSets)
   | phase@PhaseName.«unsafe» =>
@@ -468,6 +468,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
       tac := res.tac
       indexingMode := res.indexingMode
       extra := { successProbability }
+      pattern? := none -- TODO
     }
     return (goal, rule, c.ruleSets.ruleSets)
   | phase@PhaseName.norm =>
@@ -480,6 +481,7 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
           res with
           name := c.ident.toRuleName phase res.builder
           extra := { penalty }
+          pattern? := none -- TODO
         }
       | .globalSimp entries => do
         let prio ← c.getSimpPriority
