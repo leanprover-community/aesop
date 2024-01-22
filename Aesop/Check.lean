@@ -30,10 +30,6 @@ initialize checkTreeOption : Lean.Option Bool ←
   registerCheckOption `tree false
     "(aesop) Check search tree invariants after every iteration of the search loop. Very expensive."
 
-initialize checkUnificationGoalAssignmentsOption : Lean.Option Bool ←
-  registerCheckOption `unificationGoalAssignments false
-    "(aesop) Typecheck assignments to unification goal metavariables."
-
 initialize checkRulesOption : Lean.Option Bool ←
   registerCheckOption `rules false
     "(aesop) Check that information reported by rules is correct."
@@ -50,7 +46,6 @@ inductive Check
   | all
   | tree
   | proofReconstruction
-  | unificationGoalAssignments
   | rules
   | script
   | scriptSteps
@@ -62,7 +57,6 @@ def toOption : Check → Lean.Option Bool
   | all => checkAllOption
   | tree => checkTreeOption
   | proofReconstruction => checkProofReconstructionOption
-  | unificationGoalAssignments => checkUnificationGoalAssignmentsOption
   | rules => checkRulesOption
   | script => checkScriptOption
   | scriptSteps => checkScriptStepsOption
