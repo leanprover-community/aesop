@@ -5,7 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Index.Basic
-import Aesop.Index.MatchRulePatterns
+import Aesop.RulePattern
 import Aesop.Rule.Basic
 import Aesop.Tracing
 import Std.Lean.Meta.InstantiateMVars
