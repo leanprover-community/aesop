@@ -6,25 +6,11 @@ Authors: Jannis Limperg
 
 import Aesop.Util.Basic
 import Aesop.Rule.Name
+import Aesop.RulePattern
 
-open Lean
-open Lean.Meta
+open Lean Lean.Meta
 
 namespace Aesop
-
-def RulePattern := AbstractMVarsResult
-  deriving Inhabited
-
-namespace RulePattern
-
-def «open» (pat : RulePattern) : MetaM (Array MVarId × Expr) := do
-  let (mvarIds, _, p) ← openAbstractMVarsResult pat
-  return (mvarIds.map (·.mvarId!), p)
-
-end RulePattern
-
-def RulePatternInstantiation := Array Expr
-  deriving Inhabited, BEq, Hashable
 
 -- This value controls whether we use 'powerful' reductions, e.g. iota, when
 -- indexing Aesop rules. See the `DiscrTree` docs for details.

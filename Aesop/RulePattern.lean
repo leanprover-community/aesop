@@ -4,11 +4,25 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Index.Basic
+import Aesop.Rule.Name
 
 open Lean Lean.Meta
 
 namespace Aesop
+
+def RulePattern := AbstractMVarsResult
+  deriving Inhabited
+
+namespace RulePattern
+
+def «open» (pat : RulePattern) : MetaM (Array MVarId × Expr) := do
+  let (mvarIds, _, p) ← openAbstractMVarsResult pat
+  return (mvarIds.map (·.mvarId!), p)
+
+end RulePattern
+
+def RulePatternInstantiation := Array Expr
+  deriving Inhabited, BEq, Hashable
 
 section
 
@@ -47,7 +61,7 @@ def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
           let instances ← mvarIds.mapM λ mvarId => do
             let result ← instantiateMVars (.mvar mvarId)
             if result.isMVar then
-              throwError "matchRulePatterns: expected {mvarId.name} to be assigned"
+              throwError "matchRulePatterns: while matching pattern '{p}' against expression '{e}': expected metavariable ?{(← mvarId.getDecl).userName} ({mvarId.name}) to be assigned"
             pure result
           modify λ m =>
             -- TODO loss of linearity?
