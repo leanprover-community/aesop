@@ -48,7 +48,8 @@ def isSuccessfulOrPostponed
 end SafeRuleResult
 
 def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
-    (indexMatchLocations : UnorderedArraySet IndexMatchLocation)
+    (indexMatchLocations : HashSet IndexMatchLocation)
+    (patternInstantiations : HashSet RulePatternInstantiation)
     (options : Options') :
     MetaM (Sum Exception RuleTacOutput) := do
   let some (postNormGoal, postNormState) := goal.postNormGoalAndMetaState? | throwError
@@ -56,7 +57,7 @@ def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
   let input := {
     goal := postNormGoal
     mvars := goal.mvars
-    indexMatchLocations, options
+    indexMatchLocations, patternInstantiations, options
   }
   runRuleTac options tac ruleName postNormState input
 
@@ -107,12 +108,13 @@ def withRuleTraceNode (ruleName : RuleName)
       return m!"{emoji} {ruleName}{suffix}"
 
 def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
-    (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
+    (indexMatchLocations : HashSet IndexMatchLocation)
+    (patternInstantiations : HashSet RulePatternInstantiation) :
     SearchM Q (Option RuleTacOutput) := do
   let parent ← parentRef.get
   let ruleOutput? ←
     runRegularRuleTac parent rule.tac.run rule.name indexMatchLocations
-      (← read).options
+      patternInstantiations (← read).options
   match ruleOutput? with
   | Sum.inl exc =>
     aesop_trace[steps] exc.toMessageData
@@ -123,12 +125,13 @@ def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
   | Sum.inr output =>
     return some output
 
-def runSafeRuleCore (parentRef : GoalRef) (rule : SafeRule)
-    (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
-    SearchM Q SafeRuleResult := do
+def runSafeRuleCore (parentRef : GoalRef)
+    (matchResult : IndexMatchResult SafeRule) : SearchM Q SafeRuleResult := do
+  let rule := matchResult.rule
   withRuleTraceNode rule.name (·.toEmoji) "" do
     let some output ←
-        runRegularRuleCore parentRef (.safe rule) indexMatchLocations
+        runRegularRuleCore parentRef (.safe matchResult.rule)
+          matchResult.locations matchResult.patternInstantiations
       | do addRuleFailure (.safe rule) parentRef; return .regular .failed
     let parentMVars := (← parentRef.get).mvars
     let rapps := output.applications
@@ -145,31 +148,30 @@ def runSafeRuleCore (parentRef : GoalRef) (rule : SafeRule)
     else
       return .regular (← addRapps parentRef (.safe rule) rapps)
 
-def runSafeRule (parentRef : GoalRef) (rule : SafeRule)
-    (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
+def runSafeRule (parentRef : GoalRef) (matchResult : IndexMatchResult SafeRule) :
     SearchM Q SafeRuleResult :=
-  profiling (runSafeRuleCore parentRef rule indexMatchLocations)
+  profiling (runSafeRuleCore parentRef matchResult)
     λ result elapsed => recordRuleProfile {
-        rule := .ruleName rule.name
+        rule := .ruleName matchResult.rule.name
         successful := result.isSuccessfulOrPostponed
         elapsed
       }
 
-def runUnsafeRuleCore (parentRef : GoalRef) (rule : UnsafeRule)
-    (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
-    SearchM Q RuleResult := do
+def runUnsafeRuleCore (parentRef : GoalRef)
+    (matchResult : IndexMatchResult UnsafeRule) : SearchM Q RuleResult := do
+  let rule := matchResult.rule
   withRuleTraceNode rule.name (·.toEmoji) "" do
     let some output ←
-        runRegularRuleCore parentRef (.unsafe rule) indexMatchLocations
+        runRegularRuleCore parentRef (.unsafe rule) matchResult.locations
+          matchResult.patternInstantiations
       | do addRuleFailure (.unsafe rule) parentRef; return .failed
     addRapps parentRef (.unsafe rule) output.applications
 
-def runUnsafeRule (parentRef : GoalRef) (rule : UnsafeRule)
-    (indexMatchLocations : UnorderedArraySet IndexMatchLocation) :
-    SearchM Q RuleResult :=
-  profiling (runUnsafeRuleCore parentRef rule indexMatchLocations)
+def runUnsafeRule (parentRef : GoalRef)
+    (matchResult : IndexMatchResult UnsafeRule) : SearchM Q RuleResult :=
+  profiling (runUnsafeRuleCore parentRef matchResult)
     λ result elapsed => recordRuleProfile {
-        rule := .ruleName rule.name
+        rule := .ruleName matchResult.rule.name
         successful := result.isSuccessful
         elapsed
       }
@@ -195,7 +197,7 @@ def runFirstSafeRule (gref : GoalRef) : SearchM Q SafeRulesResult := do
   let rules ← selectSafeRules g
   let mut postponedRules := {}
   for r in rules do
-    let result ← runSafeRule gref r.rule r.locations
+    let result ← runSafeRule gref r
     match result with
     | .regular .failed => continue
     | .regular (.proved newRapps) => return .proved newRapps
@@ -225,7 +227,7 @@ partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
         | return (queue, RuleResult.failed)
       match r with
       | .unsafeRule r =>
-        let result ← runUnsafeRule parentRef r.rule r.locations
+        let result ← runUnsafeRule parentRef r
         match result with
         | .proved .. => return (queue, result)
         | .succeeded .. => return (queue, result)

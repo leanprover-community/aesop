@@ -60,9 +60,9 @@ end RuleNameFilter
 
 
 structure RuleSet where
-  normRules : Index NormRule
-  unsafeRules : Index UnsafeRule
-  safeRules : Index SafeRule
+  normRules : Index NormRuleInfo
+  unsafeRules : Index UnsafeRuleInfo
+  safeRules : Index SafeRuleInfo
   normSimpLemmas : SimpTheorems
   normSimpLemmaDescrs : PHashMap RuleName (Array SimpEntry)
     -- A cache of the norm simp rules added to `normSimpLemmas`. Invariant: the
@@ -309,18 +309,15 @@ def rulesMatching (rs : RuleSet) (f : RuleNameFilter) :
 
 def applicableNormalizationRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult NormRule)) :=
-  rs.normRules.applicableRules (ord := ⟨Rule.compareByPriorityThenName⟩) goal
-    (!rs.isErased ·.name)
+  rs.normRules.applicableRules goal (!rs.isErased ·.name)
 
 def applicableUnsafeRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult UnsafeRule)) := do
-  rs.unsafeRules.applicableRules (ord := ⟨Rule.compareByPriorityThenName⟩) goal
-    (!rs.isErased ·.name)
+  rs.unsafeRules.applicableRules goal (!rs.isErased ·.name)
 
 def applicableSafeRules (rs : RuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult SafeRule)) := do
-  rs.safeRules.applicableRules (ord := ⟨Rule.compareByPriorityThenName⟩) goal
-    (!rs.isErased ·.name)
+  rs.safeRules.applicableRules goal (!rs.isErased ·.name)
 
 def globalNormSimpTheorems (rs : RuleSet) : SimpTheoremsArray :=
   Array.mkEmpty (rs.simpAttrNormSimpLemmas.size + 1)
