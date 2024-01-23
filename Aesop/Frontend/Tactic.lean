@@ -45,11 +45,11 @@ clauses are:
   Aesop.BuiltinRules.assumption)`.
 - `(rule_sets [<ruleset>,*])` enables or disables named sets of rules for this
   Aesop call. Example: `(rule_sets [-builtin, MyRuleSet])`.
-- `(options { <opt> := <value> })` adjusts Aesop's search options. See
+- `(config { <opt> := <value> })` adjusts Aesop's search options. See
   `Aesop.Options`.
-- `(simp_options { <opt> := <value> })` adjusts options for Aesop's built-in
+- `(simp_config { <opt> := <value> })` adjusts options for Aesop's built-in
   `simp` rule. The given options are directly passed to `simp`. For example,
-  `(simp_options := { zeta := false })` makes Aesop use
+  `(simp_config := { zeta := false })` makes Aesop use
   `simp (config := { zeta := false })`.
 -/
 syntax (name := aesopTactic)  "aesop"  Aesop.tactic_clause* : tactic
