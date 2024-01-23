@@ -50,7 +50,7 @@ initialize registerBuiltinAttribute {
   applicationTime := .afterCompilation
   add := λ decl stx attrKind => withRef stx do
     let config ← runTermElabMAsCoreM $ AttrConfig.elab stx
-    let rules ← runMetaMAsCoreM $
+    let rules ← runTermElabMAsCoreM $
       config.rules.concatMapM (·.buildAdditionalGlobalRules decl)
     for (rule, rsNames) in rules do
       for rsName in rsNames do

@@ -158,7 +158,7 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
         | _ => throwUnsupportedSyntax
 
 def updateRuleSets (goal : MVarId) (rss : Aesop.RuleSets) (c : TacticConfig) :
-    MetaM (MVarId × Aesop.RuleSets) := do
+    TermElabM (MVarId × Aesop.RuleSets) := do
   let mut rss := rss
 
   -- Add additional rules
@@ -178,7 +178,7 @@ def updateRuleSets (goal : MVarId) (rss : Aesop.RuleSets) (c : TacticConfig) :
   return (goal, rss)
 
 def getRuleSet (goal : MVarId) (c : TacticConfig) :
-    MetaM (MVarId × Aesop.RuleSet) := do
+    TermElabM (MVarId × Aesop.RuleSet) := do
   let rss ← getRuleSets c.enabledRuleSets (includeGlobalSimpTheorems := true)
   let (goal, rss) ← c.updateRuleSets goal rss
   return (goal, rss.getMergedRuleSet c.options)
