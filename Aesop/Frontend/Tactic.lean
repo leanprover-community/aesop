@@ -22,8 +22,8 @@ syntax ruleSetSpec := "-"? ident
 syntax " (" &"add " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
 syntax " (" &"erase " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
 syntax " (" &"rule_sets " "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
-syntax " (" &"options" " := " term ")" : Aesop.tactic_clause
-syntax " (" &"simp_options" " := " term ")" : Aesop.tactic_clause
+syntax " (" &"config" " := " term ")" : Aesop.tactic_clause
+syntax " (" &"simp_config" " := " term ")" : Aesop.tactic_clause
 
 /--
 `aesop <clause>*` tries to solve the current goal by applying a set of rules
@@ -48,7 +48,9 @@ clauses are:
 - `(options { <opt> := <value> })` adjusts Aesop's search options. See
   `Aesop.Options`.
 - `(simp_options { <opt> := <value> })` adjusts options for Aesop's built-in
-  `simp` rule. See `Aesop.SimpConfig`.
+  `simp` rule. The given options are directly passed to `simp`. For example,
+  `(simp_options := { zeta := false })` makes Aesop use
+  `simp (config := { zeta := false })`.
 -/
 syntax (name := aesopTactic)  "aesop"  Aesop.tactic_clause* : tactic
 
@@ -66,24 +68,21 @@ unsafe def elabConfigUnsafe (type : Name) (stx : Syntax) : TermElabM α :=
       instantiateMVars e
     evalExpr' α type e
 
-unsafe def elabOptionsUnsafe : Syntax → TermElabM Aesop.Options :=
-  elabConfigUnsafe ``Aesop.Options
+def elabOptions : Syntax → TermElabM Aesop.Options :=
+  unsafe elabConfigUnsafe ``Aesop.Options
 
-@[implemented_by elabOptionsUnsafe]
-opaque elabOptions : Syntax → TermElabM Aesop.Options
+def elabSimpConfig : Syntax → TermElabM Simp.Config :=
+  unsafe elabConfigUnsafe ``Simp.Config
 
-unsafe def elabSimpConfigUnsafe : Syntax → TermElabM Aesop.SimpConfig :=
-  elabConfigUnsafe ``Aesop.SimpConfig
-
-@[implemented_by elabSimpConfigUnsafe]
-opaque elabSimpConfig : Syntax → TermElabM Aesop.SimpConfig
+def elabSimpConfigCtx : Syntax → TermElabM Simp.ConfigCtx :=
+  unsafe elabConfigUnsafe ``Simp.ConfigCtx
 
 structure TacticConfig where
   additionalRules : Array RuleExpr
   erasedRules : Array RuleExpr
   enabledRuleSets : NameSet
   options : Aesop.Options
-  simpConfig : Aesop.SimpConfig
+  simpConfig : Simp.Config
   simpConfigSyntax? : Option Term
 
 namespace TacticConfig
@@ -92,34 +91,49 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
   withRef stx do
     match stx with
     | `(tactic| aesop $clauses:Aesop.tactic_clause*) =>
-      clauses.foldlM (addClause false) (← init false)
+      go (traceScript := false) clauses
     | `(tactic| aesop? $clauses:Aesop.tactic_clause*) =>
-      clauses.foldlM (addClause true) (← init true)
+      go (traceScript := true) clauses
     | _ => throwUnsupportedSyntax
   where
-    init (traceScript : Bool) : CoreM TacticConfig := return {
-      additionalRules := #[]
-      erasedRules := #[]
-      enabledRuleSets := ← getDefaultRuleSetNames
-      options := { traceScript }
-      simpConfig := {}
-      simpConfigSyntax? := none
-    }
+    go (traceScript : Bool) (clauses : Array (TSyntax `Aesop.tactic_clause)) :
+        TermElabM TacticConfig := do
+      let init : TacticConfig := {
+        additionalRules := #[]
+        erasedRules := #[]
+        enabledRuleSets := ← getDefaultRuleSetNames
+        options := { traceScript }
+        simpConfig := {}
+        simpConfigSyntax? := none
+      }
+      let (_, config) ← clauses.forM (addClause traceScript) |>.run init
+      let simpConfig ←
+        if let some stx := config.simpConfigSyntax? then
+          if config.options.useSimpAll then
+            (·.toConfig) <$> elabSimpConfigCtx stx
+          else
+            elabSimpConfig stx
+        else
+          if config.options.useSimpAll then
+            pure { : Simp.ConfigCtx}.toConfig
+          else
+            pure { : Simp.Config }
+        return { config with simpConfig }
 
-    addClause (traceScript : Bool) (c : TacticConfig) (stx : Syntax) :
-        TermElabM TacticConfig :=
+    addClause (traceScript : Bool) (stx : TSyntax `Aesop.tactic_clause) :
+        StateRefT TacticConfig TermElabM Unit :=
       withRef stx do
         match stx with
         | `(tactic_clause| (add $es:Aesop.rule_expr,*)) => do
           let rs ← (es : Array Syntax).mapM λ e =>
             RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
-          return { c with additionalRules := c.additionalRules ++ rs }
+          modify λ c => { c with additionalRules := c.additionalRules ++ rs }
         | `(tactic_clause| (erase $es:Aesop.rule_expr,*)) => do
           let rs ← (es : Array Syntax).mapM λ e =>
             RuleExpr.elab e |>.run ElabOptions.forErasing
-          return { c with erasedRules := c.erasedRules ++ rs }
+          modify λ c => { c with erasedRules := c.erasedRules ++ rs }
         | `(tactic_clause| (rule_sets [ $specs:ruleSetSpec,* ])) => do
-          let mut enabledRuleSets := c.enabledRuleSets
+          let mut enabledRuleSets := (← get).enabledRuleSets
           for spec in (specs : Array Syntax) do
             match spec with
             | `(Parser.ruleSetSpec| - $rsName:ident) => do
@@ -133,18 +147,14 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
                 "aesop: rule set '{rsName}' is already active"
               enabledRuleSets := enabledRuleSets.insert rsName
             | _ => throwUnsupportedSyntax
-          return { c with enabledRuleSets }
-        | `(tactic_clause| (options := $t:term)) =>
+          modify λ c => { c with enabledRuleSets }
+        | `(tactic_clause| (config := $t:term)) =>
           let options ← elabOptions t
           let options :=
             { options with traceScript := options.traceScript || traceScript }
-          return { c with options }
-        | `(tactic_clause| (simp_options := $t:term)) =>
-          return {
-            c with
-            simpConfig := ← elabSimpConfig t
-            simpConfigSyntax? := some t
-          }
+          modify λ c => { c with options }
+        | `(tactic_clause| (simp_config := $t:term)) =>
+          modify λ c => { c with simpConfigSyntax? := some t }
         | _ => throwUnsupportedSyntax
 
 def updateRuleSets (goal : MVarId) (rss : Aesop.RuleSets) (c : TacticConfig) :

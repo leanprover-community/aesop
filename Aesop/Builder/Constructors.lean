@@ -9,37 +9,31 @@ import Aesop.Builder.Apply
 open Lean
 open Lean.Meta
 
-namespace Aesop
+namespace Aesop.RuleBuilderOptions
 
-structure ConstructorsBuilderOptions extends RegularBuilderOptions where
-  /-- The transparency used by the rule tactic. -/
-  transparency : TransparencyMode
-  /-- The transparency used to index the rule. The rule is not indexed unless
-  this is `.reducible`. -/
-  indexTransparency : TransparencyMode
+def constructorsTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
+  opts.transparency?.getD .default
 
-instance : Inhabited ConstructorsBuilderOptions where
-  default := {
-    toRegularBuilderOptions := default
-    transparency := .default
-    indexTransparency := .reducible
-  }
+def constructorsIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
+  opts.indexTransparency?.getD .reducible
 
-def RuleBuilder.constructors (opts : ConstructorsBuilderOptions) :
-    RuleBuilder :=
-  ofGlobalRuleBuilder name λ _ decl => do
+end RuleBuilderOptions
+
+def RuleBuilder.constructors : RuleBuilder :=
+  ofGlobalRuleBuilder name λ _ decl opts => do
     let info ← RuleBuilder.checkConstIsInductive name decl
     return RuleBuilderResult.regular {
       builder := name
-      tac := .constructors info.ctors.toArray opts.transparency
-      indexingMode := ← opts.getIndexingModeM $ getIndexingMode info
+      tac := .constructors info.ctors.toArray opts.constructorsTransparency
+      indexingMode := ← getIndexingMode opts info
     }
   where
     name := BuilderName.constructors
 
-    getIndexingMode (info : InductiveVal) : MetaM IndexingMode :=
+    getIndexingMode (opts : RuleBuilderOptions) (info : InductiveVal) :
+        MetaM IndexingMode :=
       opts.getIndexingModeM do
-        if opts.indexTransparency != .reducible then
+        if opts.constructorsIndexTransparency != .reducible then
           return .unindexed
         else
           let mut imodes := Array.mkEmpty info.numCtors

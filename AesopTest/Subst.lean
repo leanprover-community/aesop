@@ -14,17 +14,15 @@ example (h₁ : x = 5) (h₂ : y = 5) : x = y := by
   fail_if_success
     aesop
       (erase Aesop.BuiltinRules.subst)
-      (simp_options := { useHyps := false })
-      (options := { terminal := true })
-  aesop (simp_options := { useHyps := false })
+      (config := { useSimpAll := false, terminal := true })
+  aesop (config := { useSimpAll := false })
 
 example (h₁ : x = y) (h₂ : y = z) : x = z := by
   fail_if_success
     aesop
       (erase Aesop.BuiltinRules.subst)
-      (simp_options := { useHyps := false })
-      (options := { terminal := true })
-  aesop (simp_options := { useHyps := false })
+      (config := { useSimpAll := false, terminal := true })
+  aesop (config := { useSimpAll := false })
 
 example (P : ∀ x y, x = y → Prop) (h₁ : x = y) (h₂ : P x y h₁) : x = y := by
   fail_if_success
@@ -32,21 +30,19 @@ example (P : ∀ x y, x = y → Prop) (h₁ : x = y) (h₂ : P x y h₁) : x = y
       (erase Aesop.BuiltinRules.subst,
              Aesop.BuiltinRules.assumption,
              Aesop.BuiltinRules.applyHyps)
-      (simp_options := { useHyps := false })
-      (options := { terminal := true })
+      (config := { useSimpAll := false, terminal := true })
   aesop
     (erase Aesop.BuiltinRules.assumption,
            Aesop.BuiltinRules.applyHyps)
-    (simp_options := { useHyps := false })
+    (config := { useSimpAll := false })
 
 -- Subst also works for bi-implications.
 example (h₁ : P ↔ Q) (h₂ : Q ↔ R) (h₃ : P) : R  := by
   fail_if_success
     aesop
       (erase Aesop.BuiltinRules.subst)
-      (simp_options := { useHyps := false })
-      (options := { terminal := true })
-  aesop (simp_options := { useHyps := false })
+      (config := { useSimpAll := false, terminal := true })
+  aesop (config := { useSimpAll := false })
 
 -- Subst also works for morally-homogeneous heterogeneous equalities (using a
 -- builtin simp rule which turns these into actual homogeneous equalities).
@@ -55,6 +51,5 @@ example {P : α → Prop} {x y z : α} (h₁ : HEq x y) (h₂ : HEq y z) (h₃ :
   fail_if_success
     aesop
       (erase Aesop.BuiltinRules.subst)
-      (simp_options := { useHyps := false })
-      (options := { terminal := true })
-  aesop (simp_options := { useHyps := false })
+      (config := { useSimpAll := false, terminal := true })
+  aesop (config := { useSimpAll := false })

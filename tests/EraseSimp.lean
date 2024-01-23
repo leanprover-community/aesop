@@ -17,11 +17,11 @@ example (n : Nat) : n + m = m + n := by
   aesop
 
 example (n : Nat) : n + m = m + n := by
-  aesop (erase Nat.add_comm) (options := { warnOnNonterminal := false })
+  aesop (erase Nat.add_comm) (config := { warnOnNonterminal := false })
   aesop
 
 example (n : Nat) : n + m = m + n := by
-  aesop (erase norm simp Nat.add_comm) (options := { warnOnNonterminal := false })
+  aesop (erase norm simp Nat.add_comm) (config := { warnOnNonterminal := false })
   aesop
 
 example (n : Nat) : n + m = m + n := by

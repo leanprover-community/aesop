@@ -21,7 +21,7 @@ example : Even 2 := by
 attribute [-aesop] Even
 
 example : Even 2 := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
   aesop (add safe Even)
 
 -- We can also selectively remove rules in a certain phase or with a certain
@@ -36,5 +36,5 @@ example : Even 2 := by
 erase_aesop_rules [ constructors Even ]
 
 example : Even 2 := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
   aesop (add safe constructors Even)

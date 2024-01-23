@@ -38,7 +38,7 @@ attribute [aesop 50%] Even.zero Even.plus_two
 -- We can also erase global rules...
 example : EvenOrOdd 2 := by
   fail_if_success aesop (add safe EvenOrOdd.even) (erase Even.zero)
-    (options := { terminal := true })
+    (config := { terminal := true })
   aesop (add safe EvenOrOdd.even)
 
 -- ... as well as local ones (but what for?).
@@ -46,5 +46,5 @@ example : EvenOrOdd 2 := by
   have h : ∀ n, Even n → EvenOrOdd n := λ _ p => EvenOrOdd.even p
   fail_if_success
     aesop (add safe h) (erase Aesop.BuiltinRules.applyHyps, h)
-      (options := { terminal := true })
+      (config := { terminal := true })
   aesop (add safe h) (erase Aesop.BuiltinRules.applyHyps)

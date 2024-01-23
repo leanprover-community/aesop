@@ -12,14 +12,14 @@ def T := Unit → Nat
 
 example (h : T) : Nat := by
   fail_if_success
-    aesop (options := { applyHypsTransparency := .reducible, terminal := true })
+    aesop (config := { applyHypsTransparency := .reducible, terminal := true })
   aesop
 
 @[irreducible] def U := Empty
 
 example (h : Unit → Empty) : U := by
   fail_if_success
-    aesop (options := { applyHypsTransparency := .reducible, terminal := true })
+    aesop (config := { applyHypsTransparency := .reducible, terminal := true })
   fail_if_success
-    aesop (options := { terminal := true })
-  aesop (options := { applyHypsTransparency := .all })
+    aesop (config := { terminal := true })
+  aesop (config := { applyHypsTransparency := .all })

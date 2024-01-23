@@ -18,6 +18,6 @@ theorem weaken (Γ Δ : List Φ) (prf : Proof Γ Δ) (δ : Φ) : Proof Γ (δ ::
   induction prf
   case basic Γ Δ n =>
     aesop (add unsafe [constructors Proof, constructors Perm])
-      (options := { maxRuleApplications := 50, terminal := true })
+      (config := { maxRuleApplications := 50, terminal := true })
   case per_l Γ Γ' Δ _ perm ih =>
     apply Proof.per_l Γ Γ' (δ :: Δ) ih perm

@@ -32,7 +32,7 @@ def checkUnfoldableConst (decl : Name) : MetaM Unit :=
           throwError "Recursive definition '{decl}' cannot be used as an unfold rule (it would be unfolded infinitely often). Try adding a simp rule for it."
 
 def unfold : RuleBuilder :=
-  ofGlobalRuleBuilder .unfold λ _ decl => do
+  ofGlobalRuleBuilder .unfold λ _ decl _ => do
     checkUnfoldableConst decl
     return .unfold { decl, unfoldThm? := ← getUnfoldEqnFor? decl }
 

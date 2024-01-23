@@ -29,10 +29,6 @@ structure Context where
   options : Aesop.Options'
   deriving Nonempty
 
-def Context.normSimpConfig (ctx : Context) : SimpConfig where
-  useHyps := ctx.normSimpContext.useHyps
-  toConfigCtx := { ctx.normSimpContext.config with }
-
 structure State (Q) [Aesop.Queue Q] where
   iteration : Iteration
   queue : Q
@@ -81,17 +77,17 @@ protected def run' (profile : Profile) (ctx : SearchM.Context)
   return (a, σ, t, profile)
 
 protected def run (ruleSet : RuleSet) (options : Aesop.Options')
-    (simpConfig : Aesop.SimpConfig) (simpConfigStx? : Option Term)
+    (simpConfig : Simp.Config) (simpConfigStx? : Option Term)
     (goal : MVarId) (profile : Profile) (x : SearchM Q α) :
     MetaM (α × State Q × Tree × Profile) := do
   let t ← mkInitialTree goal
   let normSimpContext := {
     (← Simp.Context.mkDefault) with
-    config := simpConfig.toConfig
+    config := simpConfig
     simpTheorems := ruleSet.globalNormSimpTheorems
     configStx? := simpConfigStx?
-    enabled := simpConfig.enabled
-    useHyps := simpConfig.useHyps
+    enabled := options.enableSimp
+    useHyps := options.useSimpAll
   }
   let ctx := { ruleSet, options, normSimpContext }
   let #[rootGoal] := (← t.root.get).goals

@@ -30,35 +30,24 @@ end SimpResult
 
 variable [Monad m] [MonadQuotation m] [MonadError m]
 
--- TODO this way to handle (config := ...) is ugly.
 def mkNormSimpSyntax (normSimpUseHyps : Bool)
     (configStx? : Option Term) : MetaM Syntax.Tactic := do
   if normSimpUseHyps then
     match configStx? with
     | none => `(tactic| simp_all)
-    | some cfg =>
-      `(tactic| simp_all (config := ($cfg : Aesop.SimpConfig).toConfigCtx))
+    | some cfg => `(tactic| simp_all (config := $cfg))
   else
     match configStx? with
     | none => `(tactic| simp at *)
-    | some cfg =>
-      `(tactic| simp (config := ($cfg : Aesop.SimpConfig).toConfig) at *)
+    | some cfg => `(tactic| simp (config := $cfg) at *)
 
 def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
     (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
     MetaM Syntax.Tactic := do
   let originalStx ← mkNormSimpSyntax normSimpUseHyps configStx?
   let stx ← inGoal.withContext do
-    mkSimpOnly originalStx usedTheorems
+    Elab.Tactic.mkSimpOnly originalStx usedTheorems
   return ⟨stx⟩
-
-def mkNormSimpContext (rs : RuleSet) (simpConfig : Aesop.SimpConfig) :
-    MetaM Simp.Context :=
-  return {
-    ← Simp.Context.mkDefault with
-    simpTheorems := #[rs.normSimpLemmas]
-    config := simpConfig.toConfig
-  }
 
 def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     (simprocs : Simprocs := {}) (discharge? : Option Simp.Discharge := none)

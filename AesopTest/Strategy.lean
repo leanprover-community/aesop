@@ -17,18 +17,18 @@ example : I₁ := by
   aesop
 
 example : I₁ := by
-  aesop (options := { strategy := .bestFirst })
+  aesop (config := { strategy := .bestFirst })
 
 example : I₁ := by
-  aesop (options := { strategy := .breadthFirst })
+  aesop (config := { strategy := .breadthFirst })
 
 example : I₁ := by
   fail_if_success
-    aesop (options :=
+    aesop (config :=
       { strategy := .depthFirst,
         maxRuleApplicationDepth := 0,
         maxRuleApplications := 10,
         terminal := true })
-  aesop (options :=
+  aesop (config :=
     { strategy := .depthFirst,
       maxRuleApplicationDepth := 10 })

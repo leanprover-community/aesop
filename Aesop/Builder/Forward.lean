@@ -11,23 +11,15 @@ open Lean.Meta
 
 namespace Aesop
 
-structure ForwardBuilderOptions extends RegularBuilderOptions where
-  immediateHyps : Option (Array Name)
-  clear : Bool
-  /-- The transparency used by the rule tactic. -/
-  transparency : TransparencyMode
-  /-- The transparency used to index the rule. The rule is not indexed unless
-  this is `.reducible`. -/
-  indexTransparency : TransparencyMode
-  deriving Inhabited
+namespace RuleBuilderOptions
 
-protected def ForwardBuilderOptions.default (clear : Bool) :
-    ForwardBuilderOptions where
-  toRegularBuilderOptions := .default
-  immediateHyps := none
-  clear := clear
-  transparency := .default
-  indexTransparency := .reducible
+def forwardTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
+  opts.transparency?.getD .default
+
+def forwardIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
+  opts.indexTransparency?.getD .reducible
+
+end RuleBuilderOptions
 
 namespace RuleBuilder
 
@@ -81,35 +73,45 @@ private def getIndexingMode (type : Expr) (immediate : UnorderedArraySet Nat)
         "aesop: internal error: immediate arg for forward rule is out of range"
   | none => return .unindexed
 
-def forward (opts : ForwardBuilderOptions) : RuleBuilder := λ input => do
-  if let .all := opts.transparency then
+def forwardCore (isDestruct : Bool) : RuleBuilder := λ input => do
+  let opts := input.options
+  if let .all := opts.forwardTransparency then
     throwError "aesop: forward builder currently does not support transparency 'all'"
   match input.kind with
   | .global decl => do
     let type := (← getConstInfo decl).type
     let immediate ←
-      getImmediatePremises decl type opts.transparency opts.immediateHyps
-    let tac := .forwardConst decl immediate opts.clear opts.transparency
-    .global <$> mkResult tac type immediate
+      getImmediatePremises decl type opts.forwardTransparency
+        opts.immediatePremises?
+    let tac :=
+      .forwardConst decl immediate isDestruct opts.forwardTransparency
+    .global <$> mkResult opts tac type immediate
   | .«local» fvarUserName goal => do
     goal.withContext do
       let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
       let immediate ←
-        getImmediatePremises fvarUserName type opts.transparency
-          opts.immediateHyps
-      let tac := .forwardFVar fvarUserName immediate opts.clear opts.transparency
-      .«local» goal <$> mkResult tac type immediate
+        getImmediatePremises fvarUserName type opts.forwardTransparency
+          opts.immediatePremises?
+      let tac :=
+        .forwardFVar fvarUserName immediate isDestruct opts.forwardTransparency
+      .«local» goal <$> mkResult opts tac type immediate
   where
-    mkResult (tac : RuleTacDescr) (type : Expr)
+    mkResult (opts : RuleBuilderOptions) (tac : RuleTacDescr) (type : Expr)
         (immediate : UnorderedArraySet Nat) : MetaM RuleBuilderResult := do
       let indexingMode ← opts.getIndexingModeM do
-        if opts.indexTransparency != .reducible then
+        if opts.forwardIndexTransparency != .reducible then
           return .unindexed
         else
-          getIndexingMode type immediate opts.transparency
+          getIndexingMode type immediate opts.forwardTransparency
       return .regular {
         builder := .forward
         tac, indexingMode
       }
+
+def forward : RuleBuilder :=
+  forwardCore (isDestruct := false)
+
+def destruct : RuleBuilder :=
+  forwardCore (isDestruct := true)
 
 end Aesop.RuleBuilder

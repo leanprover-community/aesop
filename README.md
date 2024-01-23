@@ -32,15 +32,14 @@ like this:
   Aesop all the time. However, the script generation is currently not fully
   reliable, so you may have to adjust the generated script.
 
-Aesop should be suitable for two main use cases:
+Aesop is suitable for two main use cases:
 
 - General-purpose automation, where Aesop is used to dispatch 'trivial' goals.
-  Once mathlib is ported to Lean 4 and we have registered many lemmas as Aesop
-  rules, Aesop will hopefully serve as a much more powerful `simp`.
+  By registering enough lemmas as Aesop rules, you can turn Aesop into a much
+  more powerful `simp`.
 - Special-purpose automation, where specific Aesop rule sets are built to
-  address a certain class of goals. Tactics such as `measurability`,
-  `continuity` or `tidy`, which perform some sort of recursive search, can
-  hopefully be replaced by Aesop rule sets.
+  address a certain class of goals. Mathlib tactics such as `measurability`
+  and `continuity` are implemented by Aesop.
 
 I only occasionally update this README, so details may be out of date. If you
 have questions, please create an issue or ping me (Jannis Limperg) on the [Lean
@@ -431,7 +430,7 @@ an Aesop rule. Currently available builders are:
   The forward builder may also be given a list of *immediate names*:
 
   ```
-  (forward (immediate := [n])) even_or_odd 
+  forward (immediate := [n]) even_or_odd
   ```
 
   The immediate names, here `n`, refer to the arguments of `even_or_odd`. When
@@ -490,9 +489,9 @@ an Aesop rule. Currently available builders are:
   if `T` is a recursive type (e.g. `List`), we only perform case analysis once
   on each hypothesis. Otherwise we would loop infinitely.
 
-  The `patterns` option can be used to apply the rule only on hypotheses of a
-  certain shape. E.g. the rule `(cases (patterns := [Fin 0])) Fin` will perform
-  case analysis only on hypotheses of type `Fin 0`. Patterns can contain
+  The `cases_patterns` option can be used to apply the rule only on hypotheses
+  of a certain shape. E.g. the rule `cases (cases_patterns := [Fin 0]) Fin` will
+  perform case analysis only on hypotheses of type `Fin 0`. Patterns can contain
   underscores, e.g. `0 ≤ _`. Multiple patterns can be given (separated by
   commas); the rule is then applied whenever at least one of the patterns
   matches a hypothesis.
@@ -514,10 +513,6 @@ an Aesop rule. Currently available builders are:
   Unit`, `Aesop.SimpleRuleTac` or `Aesop.RuleTac`. The latter are Aesop data
   types which associate a tactic with additional metadata; using them may allow
   the rule to operate somewhat more efficiently.
-
-  The builder may be given an option `uses_branch_state := <boolean>` (default
-  true). This indicates whether the given tactic uses the branch state; see
-  below.
 
   Rule tactics should not be 'no-ops': if a rule tactic is not applicable to a
   goal, it should fail rather than return the goal unchanged. All no-op rules
@@ -541,7 +536,7 @@ an Aesop rule. Currently available builders are:
 The rule builders `apply`, `forward`, `destruct`, `constructors` and `cases`
 each have a `transparency` option. This option controls the transparency at
 which the rule is executed. For example, registering a rule with the builder
-`(apply (transparency := reducible))` makes the rule act like the tactic
+`apply (transparency := reducible)` makes the rule act like the tactic
 `with_reducible apply`.
 
 However, even if you change the transparency of a rule, it is still indexed at
@@ -553,7 +548,7 @@ since it can unfold `T` at `default` transparency to discover `A ∧ B`. However
 the rule is never applied because the indexing procedure sees only `T` and does
 not consider the rule potentially applicable.
 
-To override this behaviour, you can write `(apply (transparency! := default))`
+To override this behaviour, you can write `apply (transparency! := default)`
 (note the bang). This disables indexing, so the rule is tried on every goal.
 
 ### Rule Sets
@@ -594,7 +589,7 @@ In most cases, you'll want to add one rule for the declaration. The syntax for
 this is
 
 ``` lean
-@[aesop <phase>? <priority>? <builder>? <rule_sets>?]
+@[aesop <phase>? <priority>? <builder>? <builder_option>* <rule_sets>?]
 ```
 
 where
@@ -613,16 +608,14 @@ where
     You may omit the `unsafe` phase specification when giving a percentage.
   - For `unfold` rules, a penalty can be given, but it is currently ignored.
 
-- `<builder>` is one of the builders given above. If you want to pass options to
-  a builder, write it like this (with mandatory parentheses):
+- `<builder>` is one of the builders given above. If no builder is specified,
+  the default builder for the given phase is used.
 
-  ```text
-  (tactic (uses_branch_state := true))
-  ```
+  When the `simp` builder is used, the `norm` phase may be omitted since this
+  builder can only generate normalisation rules.
 
-  If no builder is specified, the default builder for the given phase is used.
-  Since the `simp` builder generates only normalisation rules, the `norm` phase
-  may be omitted.
+- `<builder_option>*` is a list of zero or more builder options. See above
+  for the different builders' options.
 
 - `<rule_sets>` is a clause of the form
 
@@ -647,7 +640,7 @@ inductive T ...
 @[aesop apply [safe (rule_sets [A]), 70% (rule_sets [B])]]
 def foo ...
 
-@[aesop [80% apply, safe 5 (forward (immediate := x))]]
+@[aesop [80% apply, safe 5 forward (immediate := x)]]
 def bar (x : T) ...
 ```
 
@@ -741,9 +734,11 @@ example : α → α := by
   aesop
 ```
 
-This will use the rules in the `default` rule set (i.e. those added via the
-attribute with no explicit rule set specified) and the rules in the `builtin`
-rule set (i.e. those provided by Aesop itself).
+This will use the rules in the default rule sets. Out of the box, these are the
+`default` rule set, containing rules tagged with the `@[aesop]` attribute
+without mentioning a specific rule set, and the `builtin` rule set, containing
+rules built into Aesop. However, other rule sets can also be enabled by default;
+see the `declare_aesop_rule_sets` command.
 
 The tactic's behaviour can also be customised with various options. A more
 involved Aesop call might look like this:
@@ -753,7 +748,7 @@ aesop
   (add safe foo, 10% cases Or, safe cases Empty)
   (erase A, baz)
   (rule_sets [A, B])
-  (options := { maxRuleApplicationDepth := 10 })
+  (config := { maxRuleApplicationDepth := 10 })
 ```
 
 Here we add some rules with an `add` clause, erase other rules with an `erase`
@@ -802,44 +797,48 @@ associated with `x` and `y`, write
 
 #### Selecting Rule Sets
 
-By default, Aesop uses the `default` and `builtin` rule sets. A `rule_sets`
-clause can be given to include additional rule sets, e.g.
+By default, Aesop uses the `default` and `builtin` rule sets, as well as rule
+sets which are declared as default rule sets. A `rule_sets` clause can be given
+to include additional rule sets, e.g.
 
 ``` text
 (rule_sets [A, B])
 ```
 
-This will use rule sets `A`, `B`, `default` and `builtin`. Rule sets can also
-be disabled with `rule_sets [-default, -builtin]`.
+This will use rule sets `A`, `B`, `default` and `builtin` (and any rule sets
+declared as default rule sets). Rule sets can also be disabled with
+`rule_sets [-default, -builtin]`.
 
 #### Setting Options
 
-Various options can be set with an `options` clause, whose syntax is:
+Various options can be set with a `config` clause, whose syntax is:
 
 ``` text
-(options := <term>)
+(config := <term>)
 ```
 
 The term is an arbitrary Lean expression of type `Aesop.Options`; see there for
-details. A notable option is `strategy`, which is one of `.bestFirst`,
-`.depthFirst` and `.breadthFirst` and instructs Aesop to use the corresponding
-search strategy. Best-first is the default.
+details. Notable options include:
 
-Similarly, options for the built-in norm simp call can be set with
+- `strategy` selects a best-first, depth-first or breadth-first search strategy.
+  The default is best-first.
+- `useSimpAll := false` makes the built-in `simp` rule use `simp at *` rather
+  than `simp_all`.
+- `enableSimp := false` disables the built-in `simp` rule altogether.
+
+Similarly, options for the built-in norm simp rule can be set with
 
 ``` text
-(simp_options := <term>)
+(simp_config := <term>)
 ```
 
-The term has type `Aesop.SimpConfig`; see there for details. The `useHyps`
-option may be particularly useful: when `true` (the default), norm simp behaves
-like the `simp_all` tactic; when `false`, norm simp behaves like `simp at *`.
+You can give the same options here as in `simp (config := ...)`.
 
 ### Built-In Rules
 
-The set of built-in rules (those in the `builtin` rule set) is currently quite
-unstable, so for now I won't document them in detail. See
-`Aesop/BuiltinRules.lean` and `Aesop/BuiltinRules/*.lean`
+The set of built-in rules (those in the `builtin` rule set) is a bit unstable,
+so for now I won't document them in detail. See `Aesop/BuiltinRules.lean` and
+`Aesop/BuiltinRules/*.lean`
 
 ### Proof Scripts
 

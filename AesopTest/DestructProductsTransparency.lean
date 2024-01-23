@@ -16,15 +16,15 @@ structure Sig (α : Sort u) (β : α → Sort v) : Sort _ where
 def T α β := α ∧ β
 
 example (h : T α β) : Sig α (λ _ => β) := by
-  fail_if_success aesop (options := { terminal := true })
-  aesop (options := { destructProductsTransparency := .default })
+  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { destructProductsTransparency := .default })
 
 def U := T
 
 example (h : U α β) : Sig α (λ _ => β) := by
-  fail_if_success aesop (options := { terminal := true })
-  aesop (options := { destructProductsTransparency := .default })
+  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { destructProductsTransparency := .default })
 
 example (h : U α β ∧ U γ δ) : Sig α (λ _ => γ) := by
-  fail_if_success aesop (options := { terminal := true })
-  aesop (options := { destructProductsTransparency := .default })
+  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { destructProductsTransparency := .default })
