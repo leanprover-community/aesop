@@ -147,7 +147,7 @@ def checkScriptSteps (script : UnstructuredScript) : SearchM Q Unit := do
   try
     script.validate
   catch e =>
-    throwError "{Check.scriptSteps.name}: {e.toMessageData}"
+    throwError "{Check.script.steps.name}: {e.toMessageData}"
 
 def traceScript : SearchM Q Unit := do
   let options := (← read).options
@@ -155,7 +155,7 @@ def traceScript : SearchM Q Unit := do
     return
   try
     let uscript ← (← getRootMVarCluster).extractScript
-    if ← Check.scriptSteps.isEnabled then
+    if ← Check.script.steps.isEnabled then
       checkScriptSteps uscript
     let goal ← getRootMVarId
     let goalMVars ← goal.getMVarDependencies

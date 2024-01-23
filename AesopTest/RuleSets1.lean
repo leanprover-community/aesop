@@ -24,14 +24,14 @@ inductive D : Prop where
 | intro
 
 example : A := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
   aesop (rule_sets [test_A])
 
 example : B := by
   aesop (rule_sets [test_A, test_B])
 
 example : C := by
-  fail_if_success aesop (rule_sets [-default]) (options := { terminal := true })
+  fail_if_success aesop (rule_sets [-default]) (config := { terminal := true })
   aesop
 
 attribute [aesop safe (rule_sets [test_C])] C
@@ -41,7 +41,7 @@ attribute [aesop safe (rule_sets [test_C])] C
 attribute [-aesop] C
 
 example : C := by
-  fail_if_success aesop (rule_sets [test_C]) (options := { terminal := true })
+  fail_if_success aesop (rule_sets [test_C]) (config := { terminal := true })
   aesop (add safe C)
 
 @[aesop norm simp]
@@ -54,7 +54,7 @@ example : D := by
 attribute [-aesop] ad
 
 example : D := by
-  fail_if_success aesop (rule_sets [test_A]) (options := { terminal := true })
+  fail_if_success aesop (rule_sets [test_A]) (config := { terminal := true })
   aesop (add norm ad) (rule_sets [test_A])
 
 -- Rules can also be local.
@@ -72,7 +72,7 @@ example : E := by
 end
 
 example : E := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
   constructor
 
 -- Rules can also be scoped.
@@ -87,5 +87,5 @@ example : E := by
 end EScope
 
 example : E := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
   open EScope in aesop

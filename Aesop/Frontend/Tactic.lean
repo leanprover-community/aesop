@@ -22,8 +22,8 @@ syntax ruleSetSpec := "-"? ident
 syntax " (" &"add " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
 syntax " (" &"erase " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
 syntax " (" &"rule_sets " "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
-syntax " (" &"options" " := " term ")" : Aesop.tactic_clause
-syntax " (" &"simp_options" " := " term ")" : Aesop.tactic_clause
+syntax " (" &"config" " := " term ")" : Aesop.tactic_clause
+syntax " (" &"simp_config" " := " term ")" : Aesop.tactic_clause
 
 /--
 `aesop <clause>*` tries to solve the current goal by applying a set of rules
@@ -148,12 +148,12 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
               enabledRuleSets := enabledRuleSets.insert rsName
             | _ => throwUnsupportedSyntax
           modify λ c => { c with enabledRuleSets }
-        | `(tactic_clause| (options := $t:term)) =>
+        | `(tactic_clause| (config := $t:term)) =>
           let options ← elabOptions t
           let options :=
             { options with traceScript := options.traceScript || traceScript }
           modify λ c => { c with options }
-        | `(tactic_clause| (simp_options := $t:term)) =>
+        | `(tactic_clause| (simp_config := $t:term)) =>
           modify λ c => { c with simpConfigSyntax? := some t }
         | _ => throwUnsupportedSyntax
 

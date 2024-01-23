@@ -13,13 +13,13 @@ def Injective₁ (f : α → β) := ∀ x y, f x = f y → x = y
 abbrev Injective₂ (f : α → β) := ∀ x y, f x = f y → x = y
 
 example : Injective₁ (@id Nat) := by
-  fail_if_success aesop (options := { terminal := true })
-  fail_if_success aesop (options := { introsTransparency? := some .reducible, terminal := true })
-  aesop (options := { introsTransparency? := some .default })
+  fail_if_success aesop (config := { terminal := true })
+  fail_if_success aesop (config := { introsTransparency? := some .reducible, terminal := true })
+  aesop (config := { introsTransparency? := some .default })
 
 example : Injective₂ (@id Nat) := by
-  fail_if_success aesop (options := { terminal := true })
-  aesop (options := { introsTransparency? := some .reducible })
+  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { introsTransparency? := some .reducible })
 
 example : Injective₂ (@id Nat) := by
-  aesop (options := { introsTransparency? := some .default })
+  aesop (config := { introsTransparency? := some .default })

@@ -136,6 +136,17 @@ def toBuilderName? : DBuilderName → Option BuilderName
   | regular b => some b
   | _ => none
 
+def toRuleBuilder : DBuilderName → RuleBuilder
+  | .regular .apply => RuleBuilder.apply
+  | .regular .cases => RuleBuilder.cases
+  | .regular .constructors => RuleBuilder.constructors
+  | .regular .destruct => RuleBuilder.destruct
+  | .regular .forward => RuleBuilder.forward
+  | .regular .simp => RuleBuilder.simp
+  | .regular .tactic => RuleBuilder.tactic
+  | .regular .unfold => RuleBuilder.unfold
+  | .default => RuleBuilder.default
+
 end DBuilderName
 
 
@@ -201,10 +212,9 @@ namespace Parser
 
 declare_syntax_cat Aesop.builder_option
 
-syntax " (" &"uses_branch_state" " := " Aesop.bool_lit ")" : Aesop.builder_option
 syntax " (" &"immediate" " := " "[" ident,+,? "]" ")" : Aesop.builder_option
 syntax " (" &"index" " := " "[" Aesop.indexing_mode,+,? "]" ")" : Aesop.builder_option
-syntax " (" &"patterns" " := " "[" term,+,? "]" ")" : Aesop.builder_option
+syntax " (" &"cases_patterns" " := " "[" term,+,? "]" ")" : Aesop.builder_option
 syntax " (" &"transparency" " := " transparency ")" : Aesop.builder_option
 syntax " (" &"transparency!" " := " transparency ")" : Aesop.builder_option
 
@@ -215,7 +225,7 @@ end Parser
 inductive BuilderOption
   | immediate (names : Array Name)
   | index (imode : IndexingMode)
-  | patterns (pats : Array CasesPattern)
+  | casesPatterns (pats : Array CasesPattern)
   | transparency (md : TransparencyMode) (alsoForIndex : Bool)
 
 namespace BuilderOption
@@ -227,8 +237,8 @@ def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
       return immediate $ (ns : Array Syntax).map (·.getId)
     | `(builder_option| (index := [$imodes:Aesop.indexing_mode,*])) =>
       index <$> IndexingMode.elab imodes
-    | `(builder_option| (patterns := [$pats:term,*])) =>
-      patterns <$> (pats : Array Syntax).mapM (CasesPattern.elab ·)
+    | `(builder_option| (cases_patterns := [$pats:term,*])) =>
+      casesPatterns <$> (pats : Array Syntax).mapM (CasesPattern.elab ·)
     | `(builder_option| (transparency := $md)) =>
       let md ← elabTransparency md
       return transparency md (alsoForIndex := false)
@@ -237,192 +247,21 @@ def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
       return transparency md (alsoForIndex := true)
     | _ => throwUnsupportedSyntax
 
-protected def name : BuilderOption → String
-  | immediate .. => "immediate"
-  | index .. => "index"
-  | patterns .. => "patterns"
-  | transparency .. => "transparency"
-
-protected def toCtorIdx : BuilderOption → Nat
-  | immediate .. => 0
-  | index .. => 1
-  | patterns .. => 2
-  | transparency .. => 3
-
 end BuilderOption
 
 
-structure BuilderOptions (σ : Type _) where
-  builderName : DBuilderName
-  init : σ
-  add : σ → BuilderOption → Option σ
+def addBuilderOption (bos : RuleBuilderOptions) :
+    BuilderOption → RuleBuilderOptions
+  | .immediate ns => { bos with immediatePremises? := ns }
+  | .index imode => { bos with indexingMode? := imode }
+  | .casesPatterns ps => { bos with casesPatterns? := ps }
+  | .transparency md alsoForIndex =>
+    let bos := { bos with transparency? := md }
+    if alsoForIndex then
+      { bos with indexTransparency? := md }
+    else
+      bos
 
-namespace BuilderOptions
-
-def «elab» (bo : BuilderOptions α) (stx : Syntax) : ElabM α :=
-  withRef stx do
-    match stx with
-    | `(Parser.builderOptions| $stxs:Aesop.builder_option*) => do
-      let mut opts := bo.init
-      let mut seen : HashSet Nat := {}
-      for stx in stxs do
-        let opt ← BuilderOption.elab stx
-        let idx := opt.toCtorIdx
-        if seen.contains idx then withRef stx $ throwError
-          "duplicate builder option '{opt.name}'"
-        seen := seen.insert idx
-        match bo.add opts opt with
-        | some opts' => opts := opts'
-        | none => withRef stx $ throwError
-          "builder '{bo.builderName}' does not accept option '{opt.name}'"
-      return opts
-    | _ => throwUnsupportedSyntax
-
-protected def none (builderName : DBuilderName) : BuilderOptions Unit where
-  builderName := builderName
-  init := ()
-  add _ _ := none
-
-def regular (builderName : BuilderName) :
-    BuilderOptions RegularBuilderOptions where
-  builderName := .regular builderName
-  init := default
-  add
-    | opts, .index imode => some { opts with indexingMode? := imode }
-    | _, _ => none
-
-@[inline, always_inline]
-private def forwardCore (clear : Bool) :
-    BuilderOptions ForwardBuilderOptions where
-  builderName := .regular $ if clear then .destruct else .forward
-  init := .default clear
-  add
-    | opts, .immediate ns => some { opts with immediateHyps := ns }
-    | opts, .index imode => some { opts with indexingMode? := imode }
-    | opts, .transparency transparency alsoForIndex =>
-      let opts := { opts with transparency }
-      if alsoForIndex then
-        some { opts with indexTransparency := transparency }
-      else
-        some opts
-    | _, _ => none
-
-def forward : BuilderOptions ForwardBuilderOptions :=
-  forwardCore (clear := false)
-
-def destruct : BuilderOptions ForwardBuilderOptions :=
-  forwardCore (clear := true)
-
-def cases : BuilderOptions CasesBuilderOptions where
-  builderName := .regular .cases
-  init := default
-  add
-    | opts, .patterns patterns => some { opts with patterns }
-    | opts, .index indexingMode? => some { opts with indexingMode? }
-    | opts, .transparency transparency alsoForIndex =>
-      let opts := { opts with transparency }
-      if alsoForIndex then
-        some { opts with indexTransparency := transparency }
-      else
-        some opts
-    | _, _ => none
-
-def apply : BuilderOptions ApplyBuilderOptions where
-  builderName := .regular .cases
-  init := default
-  add
-    | opts, .index indexingMode? => some { opts with indexingMode? }
-    | opts, .transparency transparency alsoForIndex =>
-      let opts := { opts with transparency }
-      if alsoForIndex then
-        some { opts with indexTransparency := transparency }
-      else
-        some opts
-    | _, _ => none
-
-def constructors : BuilderOptions ConstructorsBuilderOptions where
-  builderName := .regular .cases
-  init := default
-  add
-    | opts, .index indexingMode? => some { opts with indexingMode? }
-    | opts, .transparency transparency alsoForIndex =>
-      let opts := { opts with transparency }
-      if alsoForIndex then
-        some { opts with indexTransparency := transparency }
-      else
-        some opts
-    | _, _ => none
-
-end BuilderOptions
-
-
-namespace Parser
-
-declare_syntax_cat Aesop.builder (behavior := symbol)
-
-syntax Aesop.builder_name : Aesop.builder
-syntax "(" Aesop.builder_name builderOptions ")" : Aesop.builder
-
-end Parser
-
-inductive Builder
-  | apply (opts : ApplyBuilderOptions)
-  | simp
-  | unfold
-  | tactic (opts : RegularBuilderOptions)
-  | constructors (opts : ConstructorsBuilderOptions)
-  | forward (opts : ForwardBuilderOptions)
-  | cases (opts : CasesBuilderOptions)
-  | «default»
-  deriving Inhabited
-
-namespace Builder
-
-def elabOptions (b : DBuilderName) (opts : Syntax) : ElabM Builder := do
-  match b with
-  | .regular .apply => apply <$> BuilderOptions.apply.elab opts
-  | .regular .simp => checkNoOptions; return simp
-  | .regular .unfold => checkNoOptions; return unfold
-  | .regular .tactic => tactic <$> (BuilderOptions.regular .tactic |>.elab opts)
-  | .regular .constructors => constructors <$> BuilderOptions.constructors.elab opts
-  | .regular .forward => forward <$> BuilderOptions.forward.elab opts
-  | .regular .destruct => forward <$> BuilderOptions.destruct.elab opts
-  | .regular .cases => «cases» <$> BuilderOptions.cases.elab opts
-  | .default => checkNoOptions; return default
-  where
-    checkNoOptions := BuilderOptions.none b |>.«elab» opts
-
-def «elab» (stx : Syntax) : ElabM Builder :=
-  withRef stx do
-    match stx with
-    | `(builder| $b:Aesop.builder_name) => do
-      elabOptions (← DBuilderName.elab b) (mkNode ``Parser.builderOptions #[])
-    | `(builder| ($b:Aesop.builder_name $opts:builderOptions)) => do
-      elabOptions (← DBuilderName.elab b) opts
-    | _ => throwUnsupportedSyntax
-
-def toRuleBuilder : Builder → RuleBuilder
-  | apply opts  => RuleBuilder.apply opts
-  | simp => RuleBuilder.simp
-  | unfold => RuleBuilder.unfold
-  | tactic opts => RuleBuilder.tactic opts
-  | constructors opts => RuleBuilder.constructors opts
-  | forward opts => RuleBuilder.forward opts
-  | cases opts => RuleBuilder.cases opts
-  | «default» => RuleBuilder.default
-
-open DBuilderName in
-def toDBuilderName : Builder → DBuilderName
-  | apply .. => regular .apply
-  | simp => regular .simp
-  | unfold => regular .unfold
-  | tactic .. => regular .tactic
-  | constructors .. => regular .constructors
-  | forward .. => regular .forward
-  | cases .. => regular .cases
-  | .«default» => .default
-
-end Builder
 
 namespace Parser
 
@@ -457,14 +296,16 @@ namespace Parser
 
 declare_syntax_cat Aesop.feature (behavior := symbol)
 
--- NOTE: This grammar has overlapping rules (`ident`, `Aesop.builder` and
--- `Aesop.phase` since they can all consist of a single ident). For ambiguous
--- parses, a `choice` node with two children is created; one being a
--- `featPhase` or `featBuilder` node and the second being a `featIdent` node.
--- When we process these `choice` nodes, we select the non-`ident` one.
+-- NOTE: This grammar has overlapping rules `ident`, `Aesop.phase` and
+-- `Aesop.builder_name`, which can all consist of a single ident. For ambiguous
+-- parses, a `choice` node with two children is created; one being an
+-- `Aesop.phase` or `Aesop.builder_name` node and the other being a `featIdent`
+-- node. When we process these `choice` nodes, we select the non-`ident` one.
+
 syntax Aesop.phase : Aesop.feature
 syntax Aesop.priority : Aesop.feature
-syntax Aesop.builder : Aesop.feature
+syntax Aesop.builder_name : Aesop.feature
+syntax Aesop.builder_option : Aesop.feature
 syntax ruleSetsFeature : Aesop.feature
 syntax (name := featIdent) ident : Aesop.feature
 
@@ -473,7 +314,8 @@ end Parser
 inductive Feature
   | phase (p : PhaseName)
   | priority (p : Priority)
-  | builder (b : Builder)
+  | builder (b : DBuilderName)
+  | builderOption (o : BuilderOption)
   | ident (i : RuleIdent)
   | ruleSets (rs : RuleSets)
   deriving Inhabited
@@ -502,7 +344,8 @@ partial def «elab» (stx : Syntax) : ElabM Feature :=
     match stx with
     | `(feature| $p:Aesop.priority) => priority <$> Priority.elab p
     | `(feature| $p:Aesop.phase) => phase <$> PhaseName.elab p
-    | `(feature| $b:Aesop.builder) => builder <$> Builder.elab b
+    | `(feature| $b:Aesop.builder_name) => builder <$> DBuilderName.elab b
+    | `(feature| $o:Aesop.builder_option) => builderOption <$> BuilderOption.elab o
     | `(feature| $rs:ruleSetsFeature) => ruleSets <$> RuleSets.elab rs
     | `(feature| $i:ident) => ident <$> elabRuleIdent i
     | stx =>
@@ -568,10 +411,25 @@ structure RuleConfig (f : Type → Type) where
   ident : f RuleIdent
   phase : f PhaseName
   priority : f Priority
-  builder : f Builder
+  builder : f DBuilderName
+  builderOptions : RuleBuilderOptions
   ruleSets : RuleSets
 
 namespace RuleConfig
+
+def addFeature (c : RuleConfig Option) : Feature → RuleConfig Option
+  | .phase phase => { c with phase }
+  | .priority priority => { c with priority }
+  | .ident ident => { c with ident }
+  | .builder builder => { c with builder }
+  | .builderOption opt =>
+    { c with builderOptions := addBuilderOption c.builderOptions opt }
+  | .ruleSets newRuleSets =>
+    have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
+    let ruleSets :=
+      ⟨Array.mergeSortedDeduplicating c.ruleSets.ruleSets
+        newRuleSets.ruleSets.qsortOrd⟩
+    { c with ruleSets }
 
 def getPenalty (phase : PhaseName) (c : RuleConfig Id) : m Int := do
   let (some penalty) := c.priority.toInt? | throwError
@@ -636,26 +494,28 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
       | .unfold r => pure $ .unfoldRule r
     return (goal, rule, c.ruleSets.ruleSets)
   where
-    runBuilder (goal : MVarId) (phase : PhaseName) (b : Builder) :
+    runBuilder (goal : MVarId) (phase : PhaseName) (b : DBuilderName) :
         MetaM (MVarId × RuleBuilderResult) := do
       let builderInput : RuleBuilderInput :=
         match c.ident with
         | RuleIdent.const decl => {
             phase := phase
             kind := RuleBuilderKind.global decl
+            options := c.builderOptions
           }
         | RuleIdent.fvar fvarUserName => {
             phase := phase
             kind := RuleBuilderKind.local fvarUserName goal
+            options := c.builderOptions
           }
       match ← b.toRuleBuilder builderInput with
       | .global r => return (goal, r)
       | .«local» goal r => return (goal, r)
 
-    runRegularBuilder (goal : MVarId) (phase : PhaseName) (b : Builder) :
+    runRegularBuilder (goal : MVarId) (phase : PhaseName) (b : DBuilderName) :
         MetaM (MVarId × RegularRuleBuilderResult) := do
       let (goal, RuleBuilderResult.regular r) ← runBuilder goal phase b
-        | throwError "builder {b.toDBuilderName} cannot be used for {phase} rules"
+        | throwError "builder {b} cannot be used for {phase} rules"
       return (goal, r)
 
 -- Precondition: `c.ident = RuleIdent.const _`.
@@ -673,8 +533,8 @@ def toRuleNameFilter (c : RuleConfig Option) :
     match c.builder with
     | none => pure #[]
     | some b => do
-      let (some builder) := b.toDBuilderName.toBuilderName? | throwError
-        "{b.toDBuilderName} cannot be used when erasing rules.\nUse the corresponding non-default builder (e.g. 'apply' or 'constructors') instead."
+      let (some builder) := b.toBuilderName? | throwError
+        "{b} cannot be used when erasing rules.\nUse the corresponding non-default builder (e.g. 'apply' or 'constructors') instead."
         -- We could instead look for the correct non-default builder ourselves
         -- by re-running the logic that determines which builder to use.
       pure #[builder]
@@ -690,45 +550,25 @@ end RuleConfig
 
 namespace RuleExpr
 
+def toRuleConfigs (e : RuleExpr) (init : RuleConfig Option) :
+    Array (RuleConfig Option) :=
+  e.foldBranchesM (m := Id) (init := init) λ c feature => c.addFeature feature
+
 def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
     (defaultRuleSet : RuleSetName) : m (Array (RuleConfig Id)) := do
-  let cs ← e.foldBranchesM (init := init) go
+  let cs := e.toRuleConfigs init
   cs.mapM finish
   where
-    go (r : RuleConfig Option) : Feature → m (RuleConfig Option)
-      | .phase p => do
-        if let (some previous) := r.phase then throwError
-          "duplicate phase declaration: '{p}'\n(previous declaration: '{previous}')"
-        return { r with phase := some p }
-      | .priority p => do
-        if let (some previous) := r.priority then throwError
-          "duplicate priority declaration: '{p}'\n(previous declaration: '{previous}')"
-        return { r with priority := some p }
-      | .builder b => do
-        if let (some previous) := r.builder then throwError
-          "duplicate builder declaration: '{b.toDBuilderName}'\n(previous declaration: '{previous.toDBuilderName}')"
-        return { r with builder := some b }
-      | .ident ident => do
-        if let (some previous) := r.ident then throwError
-          "duplicate rule name: '{ident}'\n(previous rule name: '{previous}')"
-        return { r with ident }
-      | .ruleSets newRuleSets =>
-        have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
-        let ruleSets :=
-          ⟨Array.mergeSortedDeduplicating r.ruleSets.ruleSets $
-            newRuleSets.ruleSets.qsortOrd⟩
-        return { r with ruleSets }
-
     getPhaseAndPriority (c : RuleConfig Option) :
         m (PhaseName × Priority) :=
       match c.builder, c.phase, c.priority with
       | _, some phase, some prio =>
         return (phase, prio)
-      | some .simp, none, none =>
+      | some (.regular .simp), none, none =>
         return (.norm, .int defaultSimpRulePriority)
-      | some .simp, none, some prio =>
+      | some (.regular .simp), none, some prio =>
         return (.norm, prio)
-      | some .simp, some phase, none =>
+      | some (.regular .simp), some phase, none =>
         return (phase, .int defaultSimpRulePriority)
       | _, some .unsafe, none =>
         return (.unsafe, .percent defaultSuccessProbability)
@@ -746,12 +586,13 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
         "rule name not specified"
       let (phase, priority) ← getPhaseAndPriority c
       let builder := c.builder.getD .default
+      let builderOptions := c.builderOptions
       let ruleSets :=
         if c.ruleSets.ruleSets.isEmpty then
           ⟨#[defaultRuleSet]⟩
         else
           c.ruleSets
-      return { ident, phase, priority, builder, ruleSets }
+      return { ident, phase, priority, builder, builderOptions, ruleSets }
 
 def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
     m (Array (RuleConfig Id)) :=
@@ -760,6 +601,7 @@ def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
     phase := none
     priority := none
     builder := none
+    builderOptions := ∅
     ruleSets := ⟨#[]⟩
   }
   toAdditionalRules e init defaultRuleSetName
@@ -776,6 +618,7 @@ def toAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
       phase := none
       priority := none
       builder := none
+      builderOptions := ∅
       ruleSets := ⟨#[]⟩
     }
     toAdditionalRules e init localRuleSetName
@@ -798,32 +641,11 @@ def toRuleNameFilters (e : RuleExpr) :
       phase := none
       priority := none
       builder := none
+      builderOptions := ∅
       ruleSets := ⟨#[]⟩
   }
-  let configs ← e.foldBranchesM (init := initialConfig) go
+  let configs := e.toRuleConfigs initialConfig
   configs.mapM (·.toRuleNameFilter)
-  where
-    go (r : RuleConfig Option) : Feature → m (RuleConfig Option)
-      | .phase p => do
-        if let (some previous) := r.phase then throwError
-          "duplicate phase declaration: '{p}'\n(previous declaration: '{previous}')"
-        return { r with phase := some p }
-      | .priority prio =>
-        throwError "unexpected priority '{prio}'"
-      | .ident ident => do
-        if let (some previous) := r.ident then throwError
-          "duplicate rule name: '{ident}'\n(previous rule name: '{previous}')"
-        return { r with ident }
-      | .builder b => do
-        if let (some previous) := r.builder then throwError
-          "duplicate builder declaration: '{b.toDBuilderName}'\n(previous declaration: '{previous.toDBuilderName}')"
-        return { r with builder := some b }
-      | .ruleSets newRuleSets =>
-        have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
-        let ruleSets :=
-          ⟨Array.mergeSortedDeduplicating r.ruleSets.ruleSets $
-            newRuleSets.ruleSets.qsortOrd⟩
-        return { r with ruleSets }
 
 def toGlobalRuleNameFilters (e : RuleExpr) :
     m (Array (RuleSetNameFilter × RuleNameFilter)) :=

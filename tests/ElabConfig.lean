@@ -9,7 +9,7 @@ import Aesop
 set_option aesop.check.all true
 
 example : True := by
-  aesop (options := { noSuchOption := true })
+  aesop (config := { noSuchOption := true })
 
 example : True := by
-  aesop (simp_options := { noSuchOption := true })
+  aesop (simp_config := { noSuchOption := true })

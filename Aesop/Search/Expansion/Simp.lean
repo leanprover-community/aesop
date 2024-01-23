@@ -48,14 +48,6 @@ def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
     Elab.Tactic.mkSimpOnly originalStx usedTheorems
   return ⟨stx⟩
 
-def mkNormSimpContext (rs : RuleSet) (simpConfig : Simp.ConfigCtx) :
-    MetaM Simp.Context :=
-  return {
-    ← Simp.Context.mkDefault with
-    simpTheorems := #[rs.normSimpLemmas]
-    config := simpConfig.toConfig
-  }
-
 def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     (simprocs : Simprocs := {}) (discharge? : Option Simp.Discharge := none)
     (simplifyTarget : Bool := true) (fvarIdsToSimp : Array FVarId := #[])

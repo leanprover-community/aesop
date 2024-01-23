@@ -8,22 +8,22 @@ import Aesop
 
 set_option aesop.check.all true
 
-def T := False
-
-def U := T
-
 example (h : False) : α := by
   aesop
 
+def T := False
+
 example (h : T) : α := by
-  fail_if_success aesop (options := { terminal := true })
+  fail_if_success aesop (config := { terminal := true })
   fail_if_success
-    aesop (add safe (cases (transparency! := reducible)) False)
-      (options := { terminal := true })
+    aesop (add safe cases (transparency! := reducible) False)
+      (config := { terminal := true })
   fail_if_success
-    aesop (add safe (cases (transparency := default)) False)
-      (options := { terminal := true })
-  aesop (add safe (cases (transparency! := default)) False)
+    aesop (add safe cases (transparency := default) False)
+      (config := { terminal := true })
+  aesop (add safe cases (transparency! := default) False)
+
+def U := T
 
 example (h : U) : α := by
-  aesop (add safe (cases (transparency! := default)) False)
+  aesop (add safe cases (transparency! := default) False)

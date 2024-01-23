@@ -21,5 +21,5 @@ attribute [-aesop] Even
 def T n := Even n
 
 example : T 6 := by
-  fail_if_success aesop (options := { terminal := true })
-  aesop (add safe (constructors (transparency! := default)) Even)
+  fail_if_success aesop (config := { terminal := true })
+  aesop (add safe constructors (transparency! := default) Even)

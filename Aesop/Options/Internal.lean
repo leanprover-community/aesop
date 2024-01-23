@@ -21,7 +21,7 @@ def Options.toOptions' [Monad m] [MonadOptions m] (opts : Options) :
   let generateScript ←
     pure opts.traceScript <||>
     Check.script.isEnabled <||>
-    Check.scriptSteps.isEnabled
+    Check.script.steps.isEnabled
   return { opts with generateScript }
 
 end Aesop

@@ -29,7 +29,7 @@ macro_rules
 | `([Com| ( $x:com )]) => `([Com| $x])
 | `([Com| $x:term ]) => `($x)
 
-@[aesop safe [constructors, -100 (cases (index := [hyp BigStep Com.Skip _ _, hyp BigStep [Com| _;_] _ _]))]]
+@[aesop safe [constructors, -100 cases (index := [hyp BigStep Com.Skip _ _, hyp BigStep [Com| _;_] _ _])]]
 inductive BigStep : Com → State → State → Prop where
 | Skip : BigStep Com.Skip s s
 | Seq (h1 : BigStep c₁ s t) (h2 : BigStep c₂ t u) : BigStep [Com| c₁;c₂] s u

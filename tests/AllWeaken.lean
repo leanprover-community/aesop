@@ -17,4 +17,4 @@ axiom weaken {α} (P Q : α → Prop) (wk : ∀ x, P x → Q x) (xs : List α)
   (h : All P xs) : All Q xs
 
 example : All (· ∈ []) (@List.nil α) := by
-  aesop (options := { maxRuleApplications := 50, terminal := true })
+  aesop (config := { maxRuleApplications := 50, terminal := true })
