@@ -404,22 +404,21 @@ partial def foldBranchesM {m} [Monad m] (f : σ → Feature → m σ) (init : σ
 
 end RuleExpr
 
-
-structure RuleConfig (f : Type → Type) where
-  ident : f RuleIdent
-  phase : f PhaseName
-  priority : f Priority
-  builder : f DBuilderName
+structure RuleConfig where
+  ident? : Option RuleIdent
+  phase? : Option PhaseName
+  priority? : Option Priority
+  builder? : Option DBuilderName
   builderOptions : RuleBuilderOptions
   ruleSets : RuleSets
 
 namespace RuleConfig
 
-def addFeature (c : RuleConfig Option) : Feature → RuleConfig Option
-  | .phase phase => { c with phase }
-  | .priority priority => { c with priority }
-  | .ident ident => { c with ident }
-  | .builder builder => { c with builder }
+def addFeature (c : RuleConfig) : Feature → RuleConfig
+  | .phase phase => { c with phase? := phase }
+  | .priority priority => { c with priority? := priority }
+  | .ident ident => { c with ident? := ident }
+  | .builder builder => { c with builder? := builder }
   | .builderOption opt =>
     { c with builderOptions := addBuilderOption c.builderOptions opt }
   | .ruleSets newRuleSets =>
@@ -427,33 +426,56 @@ def addFeature (c : RuleConfig Option) : Feature → RuleConfig Option
     let ruleSets :=
       ⟨Array.mergeSortedDeduplicating c.ruleSets.ruleSets
         newRuleSets.ruleSets.qsortOrd⟩
-    { c with ruleSets }
+    { c with ruleSets := ruleSets }
 
-def getPenalty (phase : PhaseName) (c : RuleConfig Id) : m Int := do
-  let (some penalty) := c.priority.toInt? | throwError
+def getPenalty (phase : PhaseName) (c : RuleConfig) : m Int := do
+  let (some priority) := c.priority? | throwError
+    "{phase} rules must specify an integer penalty"
+  let (some penalty) := priority.toInt? | throwError
     "{phase} rules must specify an integer penalty (not a success probability)"
   return penalty
 
-def getSuccessProbability (c : RuleConfig Id) : m Percent := do
-  let (some prob) := c.priority.toPercent? | throwError
+def getSuccessProbability (c : RuleConfig) : m Percent := do
+  let (some priority) := c.priority? | throwError
+    "unsafe rules must specify a success probability"
+  let (some prob) := priority.toPercent? | throwError
     "unsafe rules must specify a success probability (not an integer penalty)"
   return prob
 
-def getSimpPriority (c : RuleConfig Id) : m Nat := do
-  let prio? := c.priority.toInt?.bind λ prio =>
-    if prio < 0 then none else some prio.toNat
+def getSimpPriority (c : RuleConfig) : m Nat := do
+  let prio? := do
+    let priority ← (← c.priority?).toInt?
+    guard $ priority ≥ 0
+    return priority.toNat
   let (some prio) := prio? | throwError
     "simp rules must specify a non-negative integer priority"
   return prio
 
-def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
-    MetaM (MVarId × RuleSetMember × Array RuleSetName) := do
-  match c.phase with
+def getIdent (c : RuleConfig) : m RuleIdent := do
+  let some ident := c.ident? | throwError
+    "missing rule name"
+  return ident
+
+def getPhase (c : RuleConfig) : m PhaseName := do
+  let some phase := c.phase? | throwError
+    "missing phase (norm/safe/unsafe)"
+  return phase
+
+def getBuilder (c : RuleConfig) : m DBuilderName := do
+  let some builder := c.builder? | throwError
+    "missing rule builder (apply, forward, simp, ...)"
+  return builder
+
+def buildLocalRule (c : RuleConfig) (goal : MVarId) :
+    TermElabM (MVarId × RuleSetMember × Array RuleSetName) := do
+  let ident ← c.getIdent
+  let builder ← c.getBuilder
+  match ← c.getPhase with
   | phase@PhaseName.safe =>
     let penalty ← c.getPenalty phase
-    let (goal, res) ← runRegularBuilder goal phase c.builder
+    let (goal, res) ← runRegularBuilder goal ident phase builder
     let rule := RuleSetMember.safeRule {
-      name := c.ident.toRuleName phase res.builder
+      name := ident.toRuleName phase res.builder
       tac := res.tac
       indexingMode := res.indexingMode
       extra := { penalty, safety := Safety.safe }
@@ -462,9 +484,9 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
     return (goal, rule, c.ruleSets.ruleSets)
   | phase@PhaseName.«unsafe» =>
     let successProbability ← c.getSuccessProbability
-    let (goal, res) ← runRegularBuilder goal phase c.builder
+    let (goal, res) ← runRegularBuilder goal ident phase builder
     let rule := RuleSetMember.unsafeRule {
-      name := c.ident.toRuleName phase res.builder
+      name := ident.toRuleName phase res.builder
       tac := res.tac
       indexingMode := res.indexingMode
       extra := { successProbability }
@@ -472,14 +494,14 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
     }
     return (goal, rule, c.ruleSets.ruleSets)
   | phase@PhaseName.norm =>
-    let (goal, res) ← runBuilder goal phase c.builder
+    let (goal, res) ← runBuilder goal ident phase builder
     let rule ←
       match res with
       | .regular res => do
         let penalty ← c.getPenalty phase
         pure $ .normRule {
           res with
-          name := c.ident.toRuleName phase res.builder
+          name := ident.toRuleName phase res.builder
           extra := { penalty }
           pattern? := none -- TODO
         }
@@ -488,16 +510,16 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
         let entries := entries.map (updateSimpEntryPriority prio)
         pure $ .normSimpRule {
           entries
-          name := c.ident.toRuleName phase .simp
+          name := ident.toRuleName phase .simp
         }
       | .localSimp fvarUserName => pure $ .localNormSimpRule { fvarUserName }
       | .unfold r => pure $ .unfoldRule r
     return (goal, rule, c.ruleSets.ruleSets)
   where
-    runBuilder (goal : MVarId) (phase : PhaseName) (b : DBuilderName) :
-        MetaM (MVarId × RuleBuilderResult) := do
+    runBuilder (goal : MVarId) (ident : RuleIdent) (phase : PhaseName)
+        (b : DBuilderName) : TermElabM (MVarId × RuleBuilderResult) := do
       let builderInput : RuleBuilderInput :=
-        match c.ident with
+        match ident with
         | RuleIdent.const decl => {
             phase := phase
             kind := RuleBuilderKind.global decl
@@ -512,25 +534,24 @@ def buildLocalRule (c : RuleConfig Id) (goal : MVarId) :
       | .global r => return (goal, r)
       | .«local» goal r => return (goal, r)
 
-    runRegularBuilder (goal : MVarId) (phase : PhaseName) (b : DBuilderName) :
-        MetaM (MVarId × RegularRuleBuilderResult) := do
-      let (goal, RuleBuilderResult.regular r) ← runBuilder goal phase b
+    runRegularBuilder (goal : MVarId) (ident : RuleIdent) (phase : PhaseName)
+        (b : DBuilderName) : TermElabM (MVarId × RegularRuleBuilderResult) := do
+      let (goal, RuleBuilderResult.regular r) ← runBuilder goal ident phase b
         | throwError "builder {b} cannot be used for {phase} rules"
       return (goal, r)
 
 -- Precondition: `c.ident = RuleIdent.const _`.
-def buildGlobalRule (c : RuleConfig Id) :
-    MetaM (RuleSetMember × Array RuleSetName) :=
+def buildGlobalRule (c : RuleConfig) :
+    TermElabM (RuleSetMember × Array RuleSetName) :=
   Prod.snd <$> buildLocalRule c ⟨`_dummy⟩
   -- NOTE: We assume here that global rule builders ignore the dummy
   -- metavariable.
 
-def toRuleNameFilter (c : RuleConfig Option) :
+def toRuleNameFilter (c : RuleConfig) :
     m (RuleSetNameFilter × RuleNameFilter) := do
-  let (some ident) := c.ident | throwError
-    "rule name not specified"
+  let ident ← c.getIdent
   let builders ←
-    match c.builder with
+    match c.builder? with
     | none => pure #[]
     | some b => do
       let (some builder) := b.toBuilderName? | throwError
@@ -539,92 +560,97 @@ def toRuleNameFilter (c : RuleConfig Option) :
         -- by re-running the logic that determines which builder to use.
       pure #[builder]
   let phases :=
-    match c.phase with
+    match c.phase? with
     | none => #[]
     | some p => #[p]
   let ruleSetNames := c.ruleSets.ruleSets
   return ({ ns := ruleSetNames }, { ident, builders, phases })
+
+def validateForAdditionalRules (c : RuleConfig) (defaultRuleSet : RuleSetName) :
+    m RuleConfig := do
+  let ident ← c.getIdent
+  let (phase, priority) ← getPhaseAndPriority c
+  let builder := c.builder?.getD .default
+  let builderOptions := c.builderOptions
+  let ruleSets :=
+    if c.ruleSets.ruleSets.isEmpty then
+      ⟨#[defaultRuleSet]⟩
+    else
+      c.ruleSets
+  return {
+    ident? := ident
+    phase? := phase
+    priority? := priority
+    builder? := builder
+    builderOptions, ruleSets
+  }
+where
+  getPhaseAndPriority (c : RuleConfig) : m (PhaseName × Priority) :=
+    match c.builder?, c.phase?, c.priority? with
+    | _, some phase, some prio =>
+      return (phase, prio)
+    | some (.regular .simp), none, none =>
+      return (.norm, .int defaultSimpRulePriority)
+    | some (.regular .simp), none, some prio =>
+      return (.norm, prio)
+    | some (.regular .simp), some phase, none =>
+      return (phase, .int defaultSimpRulePriority)
+    | _, some .unsafe, none =>
+      return (.unsafe, .percent defaultSuccessProbability)
+    | _, some .safe, none =>
+      return (.safe, .int defaultSafePenalty)
+    | _, some .norm, none =>
+      return (.norm, .int defaultNormPenalty)
+    | _, none, some prio@(.percent _) =>
+      return (.unsafe, prio)
+    | _, none, _ =>
+      throwError "phase (safe/unsafe/norm) not specified."
 
 end RuleConfig
 
 
 namespace RuleExpr
 
-def toRuleConfigs (e : RuleExpr) (init : RuleConfig Option) :
-    Array (RuleConfig Option) :=
+def toRuleConfigs (e : RuleExpr) (init : RuleConfig) :
+    Array RuleConfig :=
   e.foldBranchesM (m := Id) (init := init) λ c feature => c.addFeature feature
 
-def toAdditionalRules (e : RuleExpr) (init : RuleConfig Option)
-    (defaultRuleSet : RuleSetName) : m (Array (RuleConfig Id)) := do
+def toAdditionalRules (e : RuleExpr) (init : RuleConfig)
+    (defaultRuleSet : RuleSetName) : m (Array RuleConfig) := do
   let cs := e.toRuleConfigs init
-  cs.mapM finish
-  where
-    getPhaseAndPriority (c : RuleConfig Option) :
-        m (PhaseName × Priority) :=
-      match c.builder, c.phase, c.priority with
-      | _, some phase, some prio =>
-        return (phase, prio)
-      | some (.regular .simp), none, none =>
-        return (.norm, .int defaultSimpRulePriority)
-      | some (.regular .simp), none, some prio =>
-        return (.norm, prio)
-      | some (.regular .simp), some phase, none =>
-        return (phase, .int defaultSimpRulePriority)
-      | _, some .unsafe, none =>
-        return (.unsafe, .percent defaultSuccessProbability)
-      | _, some .safe, none =>
-        return (.safe, .int defaultSafePenalty)
-      | _, some .norm, none =>
-        return (.norm, .int defaultNormPenalty)
-      | _, none, some prio@(.percent _) =>
-        return (.unsafe, prio)
-      | _, none, _ =>
-        throwError "phase (safe/unsafe/norm) not specified."
-
-    finish (c : RuleConfig Option) : m (RuleConfig Id) := do
-      let (some ident) := c.ident | throwError
-        "rule name not specified"
-      let (phase, priority) ← getPhaseAndPriority c
-      let builder := c.builder.getD .default
-      let builderOptions := c.builderOptions
-      let ruleSets :=
-        if c.ruleSets.ruleSets.isEmpty then
-          ⟨#[defaultRuleSet]⟩
-        else
-          c.ruleSets
-      return { ident, phase, priority, builder, builderOptions, ruleSets }
+  cs.mapM (·.validateForAdditionalRules defaultRuleSet)
 
 def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
-    m (Array (RuleConfig Id)) :=
+    m (Array RuleConfig) :=
   let init := {
-    ident := RuleIdent.const decl
-    phase := none
-    priority := none
-    builder := none
+    ident? := RuleIdent.const decl
+    phase? := none
+    priority? := none
+    builder? := none
     builderOptions := ∅
     ruleSets := ⟨#[]⟩
   }
   toAdditionalRules e init defaultRuleSetName
 
 def buildAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
-    MetaM (Array (RuleSetMember × Array RuleSetName)) := do
+    TermElabM (Array (RuleSetMember × Array RuleSetName)) := do
   (← e.toAdditionalGlobalRules decl).mapM (·.buildGlobalRule)
 
 def toAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
-    MetaM (Array (RuleConfig Id)) :=
+    MetaM (Array RuleConfig) :=
   goal.withContext do
     let init := {
-      ident := none
-      phase := none
-      priority := none
-      builder := none
+      ident? := none
+      phase? := none
+      priority? := none
+      builder? := none
       builderOptions := ∅
       ruleSets := ⟨#[]⟩
     }
     toAdditionalRules e init localRuleSetName
 
 def buildAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
-    MetaM (MVarId × Array (RuleSetMember × Array RuleSetName)) := do
+    TermElabM (MVarId × Array (RuleSetMember × Array RuleSetName)) := do
   let configs ← e.toAdditionalLocalRules goal
   let mut goal := goal
   let mut rs := Array.mkEmpty configs.size
@@ -637,10 +663,10 @@ def buildAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
 def toRuleNameFilters (e : RuleExpr) :
     m (Array (RuleSetNameFilter × RuleNameFilter)) := do
   let initialConfig := {
-      ident := none
-      phase := none
-      priority := none
-      builder := none
+      ident? := none
+      phase? := none
+      priority? := none
+      builder? := none
       builderOptions := ∅
       ruleSets := ⟨#[]⟩
   }
