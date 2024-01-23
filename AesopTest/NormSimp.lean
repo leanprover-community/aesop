@@ -35,8 +35,8 @@ example {α β : Prop} (ha : α) (h : α → β) : β := by
 -- `simp at *`.
 example {α : Prop} (ha : α) : α := by
   fail_if_success aesop (rule_sets [-builtin,-default])
-    (simp_options := { useHyps := false })
-    (options := { terminal := true })
+    (simp_config := { useHyps := false })
+    (config := { terminal := true })
   aesop (rule_sets [-builtin,-default])
 
 -- We can give priorities to `simp` rules, corresponding to the priorities of
