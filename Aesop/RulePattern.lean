@@ -10,19 +10,52 @@ open Lean Lean.Meta
 
 namespace Aesop
 
-def RulePattern := AbstractMVarsResult
+/--
+A rule pattern. For a rule of type `∀ (x₀ : T₀) ... (xₙ : Tₙ), U`, a valid rule
+pattern is an expression `p` such that `x₀ : T₁, ..., xₙ : Tₙ ⊢ p : P`. Let
+`y₀, ..., yₖ` be those variables `xᵢ` that occur in `p`. When `p` matches an
+expression `e`, this means that `e` is defeq to `p` (where each `yᵢ` is replaced
+with a metavariable) and we obtain a substitution
+
+    {y₀ ↦ t₀ : T₀, y₁ ↦ t₁ : T₁[x₀ := t₀], ...}
+
+Now suppose we want to match the above rule type against a type `V` (where `V`
+is the target for an `apply`-like rule and a hypothesis type for a
+`forward`-like rule). To that end, we take `U` and replace each `xᵢ` where
+`xᵢ = yⱼ` with `tⱼ` and each `xᵢ` with `xᵢ ≠ yⱼ ∀ j` with a metavariable. The
+resulting expression `U'` is then matched against `V`.
+-/
+structure RulePattern where
+  /--
+  An expression of the form `λ y₀ ... yₖ, p` representing the
+  pattern.
+  -/
+  pattern : AbstractMVarsResult
+  /--
+  A type of the form `∀ (x₀ : T₀) ... (xₙ : Tₙ), U` representing the rule type.
+  -/
+  ruleType : Expr
+  /--
+  A partial map from the index set `{0, ..., n-1}` into `{0, ..., k-1}`. If
+  `argMap[i] = j`, this indicates that when matching against the rule type, the
+  instantiation `tⱼ` of `yⱼ` should be substituted for `xᵢ`.
+  -/
+  argMap : Array (Option Nat)
   deriving Inhabited
 
 namespace RulePattern
 
 def «open» (pat : RulePattern) : MetaM (Array MVarId × Expr) := do
-  let (mvarIds, _, p) ← openAbstractMVarsResult pat
+  let (mvarIds, _, p) ← openAbstractMVarsResult pat.pattern
   return (mvarIds.map (·.mvarId!), p)
 
 end RulePattern
 
 def RulePatternInstantiation := Array Expr
   deriving Inhabited, BEq, Hashable
+
+def RulePatternInstantiation.toArray : RulePatternInstantiation → Array Expr :=
+  id
 
 section
 
@@ -60,7 +93,7 @@ def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
         if ← isDefEq e p then
           let instances ← mvarIds.mapM λ mvarId => do
             let result ← instantiateMVars (.mvar mvarId)
-            if result.isMVar then
+            if result == .mvar mvarId then
               throwError "matchRulePatterns: while matching pattern '{p}' against expression '{e}': expected metavariable ?{(← mvarId.getDecl).userName} ({mvarId.name}) to be assigned"
             pure result
           modify λ m =>
@@ -73,6 +106,67 @@ def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
 def matchRulePatterns (pats : Array (RuleName × RulePattern))
     (mvarId : MVarId) :
     MetaM (HashMap RuleName (HashSet RulePatternInstantiation)) :=
-  return (← matchRulePatternsCore pats mvarId |>.run ∅).snd
+  (·.snd) <$> (matchRulePatternsCore pats mvarId |>.run ∅)
 
-end Aesop
+namespace RulePattern
+
+def openRuleType (pat : RulePattern) (inst : RulePatternInstantiation) :
+    MetaM (Array MVarId × Expr) := do
+  let (argMVars, _, body) ← forallMetaTelescope pat.ruleType
+  let mut remainingMVars := Array.mkEmpty (argMVars.size - pat.pattern.numMVars)
+  for h : i in [:argMVars.size] do
+    let mvarId := argMVars[i]'h.2 |>.mvarId!
+    let some instIndex? := pat.argMap[i]?
+      | throwError "instantiateRuleType: expected {i} to be a valid argMap index, but argMap has size {pat.argMap.size}"
+    if let some instIndex := instIndex? then
+      let some inst := inst.toArray[instIndex]?
+        | throwError "instantiateRuleType: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
+      mvarId.assign inst
+    else
+      remainingMVars := remainingMVars.push mvarId
+  return (remainingMVars, body)
+
+open Lean.Elab Lean.Elab.Term
+
+def «elab» (stx : Term) (ruleType : Expr) : TermElabM RulePattern :=
+  withLCtx {} {} $ withoutModifyingState do
+    forallTelescope ruleType λ fvars _ => do
+      let pat ← elabPattern stx
+      let (pat, mvarIds) ← fvarsToMVars fvars pat
+      let (pat, mvarIdToPatternPos) ← abstractMVars' pat
+      let mut argMap := Array.mkEmpty mvarIds.size
+      for h : i in [:mvarIds.size] do
+        let mvarId := mvarIds[i]'h.2
+        let pos := mvarIdToPatternPos[mvarId]!
+        argMap := argMap.push pos
+      return { pattern := pat, ruleType, argMap }
+where
+  fvarsToMVars (fvars : Array Expr) (e : Expr) :
+      MetaM (Expr × Array MVarId) := do
+    let e ← mkLambdaFVars fvars (← instantiateMVars e)
+    let (mvars, _, e) ← lambdaMetaTelescope e (maxMVars? := some fvars.size)
+    return (e, mvars.map (·.mvarId!))
+
+  setMVarUserNamesToUniqueNames (e : Expr) : MetaM Unit := do
+    e.forEachWhere (·.isMVar) λ e =>
+      let mvarId := e.mvarId!
+      mvarId.setUserName mvarId.name
+
+  -- Largely copy-pasta of `abstractMVars`.
+  abstractMVars' (e : Expr) : MetaM (AbstractMVarsResult × HashMap MVarId Nat) := do
+    let e ← instantiateMVars e
+    setMVarUserNamesToUniqueNames e
+    let (e, s) := AbstractMVars.abstractExprMVars e
+      { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen) }
+    setNGen s.ngen
+    setMCtx s.mctx
+    let e := s.lctx.mkLambda s.fvars e
+    let mut mvarIdToPos := ∅
+    for h : i in [:s.fvars.size] do
+      let name := s.lctx.get! (s.fvars[i]'h.2).fvarId! |>.userName
+      mvarIdToPos := mvarIdToPos.insert ⟨name⟩ i
+    let result :=
+      { paramNames := s.paramNames, numMVars := s.fvars.size, expr := e }
+    return (result, mvarIdToPos)
+
+end Aesop.RulePattern

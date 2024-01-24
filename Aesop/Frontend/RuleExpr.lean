@@ -160,20 +160,6 @@ syntax "unindexed " : Aesop.indexing_mode
 
 end Parser
 
-def elabPattern (stx : Syntax) : TermElabM Expr :=
-  withRef stx $ withReader adjustCtx $ withSynthesize do
-    instantiateMVars (← elabTerm stx none)
-  where
-    adjustCtx (old : Term.Context) : Term.Context := {
-      old with
-      mayPostpone := false
-      errToSorry := false
-      autoBoundImplicit := false
-      sectionVars := {}
-      sectionFVars := {}
-      inPattern := true
-    }
-
 def elabSingleIndexingMode (stx : Syntax) : ElabM IndexingMode :=
   withRef stx do
     match stx with
@@ -185,7 +171,7 @@ def elabSingleIndexingMode (stx : Syntax) : ElabM IndexingMode :=
     elabKeys (stx : Syntax) : ElabM (Array DiscrTree.Key) :=
       show TermElabM _ from withoutModifyingState do
         let e ← elabPattern stx
-        DiscrTree.mkPath e discrTreeConfig
+        DiscrTree.mkPath (← instantiateMVars e) discrTreeConfig
 
 def IndexingMode.elab (stxs : Array Syntax) : ElabM IndexingMode :=
   .or <$> stxs.mapM elabSingleIndexingMode
@@ -214,6 +200,7 @@ declare_syntax_cat Aesop.builder_option
 
 syntax " (" &"immediate" " := " "[" ident,+,? "]" ")" : Aesop.builder_option
 syntax " (" &"index" " := " "[" Aesop.indexing_mode,+,? "]" ")" : Aesop.builder_option
+syntax " (" &"pattern" " := " term ")" : Aesop.builder_option
 syntax " (" &"cases_patterns" " := " "[" term,+,? "]" ")" : Aesop.builder_option
 syntax " (" &"transparency" " := " transparency ")" : Aesop.builder_option
 syntax " (" &"transparency!" " := " transparency ")" : Aesop.builder_option
@@ -223,6 +210,7 @@ end Parser
 inductive BuilderOption
   | immediate (names : Array Name)
   | index (imode : IndexingMode)
+  | pattern (stx : Term)
   | casesPatterns (pats : Array CasesPattern)
   | transparency (md : TransparencyMode) (alsoForIndex : Bool)
 
@@ -235,6 +223,8 @@ def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
       return immediate $ (ns : Array Syntax).map (·.getId)
     | `(builder_option| (index := [$imodes:Aesop.indexing_mode,*])) =>
       index <$> IndexingMode.elab imodes
+    | `(builder_option| (pattern := $pat:term)) =>
+      return pattern pat
     | `(builder_option| (cases_patterns := [$pats:term,*])) =>
       casesPatterns <$> (pats : Array Syntax).mapM (CasesPattern.elab ·)
     | `(builder_option| (transparency := $md)) =>
@@ -248,17 +238,35 @@ def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
 end BuilderOption
 
 
-def addBuilderOption (bos : RuleBuilderOptions) :
-    BuilderOption → RuleBuilderOptions
-  | .immediate ns => { bos with immediatePremises? := ns }
-  | .index imode => { bos with indexingMode? := imode }
-  | .casesPatterns ps => { bos with casesPatterns? := ps }
+structure RuleBuilderOptions' where
+  opts : RuleBuilderOptions
+  pattern? : Option Term
+
+instance : EmptyCollection RuleBuilderOptions' :=
+  ⟨∅, none⟩
+
+namespace RuleBuilderOptions'
+
+def add (bos : RuleBuilderOptions') : BuilderOption → RuleBuilderOptions'
+  | .immediate ns => { bos with opts.immediatePremises? := ns }
+  | .index imode => { bos with opts.indexingMode? := imode }
+  | .pattern pat => { bos with pattern? := pat }
+  | .casesPatterns ps => { bos with opts.casesPatterns? := ps }
   | .transparency md alsoForIndex =>
-    let bos := { bos with transparency? := md }
+    let bos := { bos with opts.transparency? := md }
     if alsoForIndex then
-      { bos with indexTransparency? := md }
+      { bos with opts.indexTransparency? := md }
     else
       bos
+
+def finish (ruleType : Expr) (bos : RuleBuilderOptions') :
+    TermElabM RuleBuilderOptions := do
+  let some patStx := bos.pattern?
+    | return bos.opts
+  let pat ← RulePattern.elab patStx ruleType
+  return { bos.opts with pattern? := pat }
+
+end RuleBuilderOptions'
 
 
 namespace Parser
@@ -409,7 +417,7 @@ structure RuleConfig where
   phase? : Option PhaseName
   priority? : Option Priority
   builder? : Option DBuilderName
-  builderOptions : RuleBuilderOptions
+  builderOptions : RuleBuilderOptions'
   ruleSets : RuleSets
 
 namespace RuleConfig
@@ -420,7 +428,7 @@ def addFeature (c : RuleConfig) : Feature → RuleConfig
   | .ident ident => { c with ident? := ident }
   | .builder builder => { c with builder? := builder }
   | .builderOption opt =>
-    { c with builderOptions := addBuilderOption c.builderOptions opt }
+    { c with builderOptions := c.builderOptions.add opt }
   | .ruleSets newRuleSets =>
     have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
     let ruleSets :=
@@ -473,28 +481,28 @@ def buildLocalRule (c : RuleConfig) (goal : MVarId) :
   match ← c.getPhase with
   | phase@PhaseName.safe =>
     let penalty ← c.getPenalty phase
-    let (goal, res) ← runRegularBuilder goal ident phase builder
+    let (goal, res, pattern?) ← runRegularBuilder goal ident phase builder
     let rule := RuleSetMember.safeRule {
       name := ident.toRuleName phase res.builder
       tac := res.tac
       indexingMode := res.indexingMode
       extra := { penalty, safety := Safety.safe }
-      pattern? := none -- TODO
+      pattern?
     }
     return (goal, rule, c.ruleSets.ruleSets)
   | phase@PhaseName.«unsafe» =>
     let successProbability ← c.getSuccessProbability
-    let (goal, res) ← runRegularBuilder goal ident phase builder
+    let (goal, res, pattern?) ← runRegularBuilder goal ident phase builder
     let rule := RuleSetMember.unsafeRule {
       name := ident.toRuleName phase res.builder
       tac := res.tac
       indexingMode := res.indexingMode
       extra := { successProbability }
-      pattern? := none -- TODO
+      pattern?
     }
     return (goal, rule, c.ruleSets.ruleSets)
   | phase@PhaseName.norm =>
-    let (goal, res) ← runBuilder goal ident phase builder
+    let (goal, res, pattern?) ← runBuilder goal ident phase builder
     let rule ←
       match res with
       | .regular res => do
@@ -503,7 +511,7 @@ def buildLocalRule (c : RuleConfig) (goal : MVarId) :
           res with
           name := ident.toRuleName phase res.builder
           extra := { penalty }
-          pattern? := none -- TODO
+          pattern?
         }
       | .globalSimp entries => do
         let prio ← c.getSimpPriority
@@ -517,28 +525,35 @@ def buildLocalRule (c : RuleConfig) (goal : MVarId) :
     return (goal, rule, c.ruleSets.ruleSets)
   where
     runBuilder (goal : MVarId) (ident : RuleIdent) (phase : PhaseName)
-        (b : DBuilderName) : TermElabM (MVarId × RuleBuilderResult) := do
-      let builderInput : RuleBuilderInput :=
+        (b : DBuilderName) :
+        TermElabM (MVarId × RuleBuilderResult × Option RulePattern) := do
+      let builderInput : RuleBuilderInput ←
         match ident with
-        | RuleIdent.const decl => {
+        | RuleIdent.const decl =>
+          let type := (← getConstInfo decl).type
+          pure {
             phase := phase
             kind := RuleBuilderKind.global decl
-            options := c.builderOptions
+            options := ← c.builderOptions.finish type
           }
-        | RuleIdent.fvar fvarUserName => {
+        | RuleIdent.fvar fvarUserName =>
+          let type ← inferType (← getFVarFromUserName fvarUserName)
+          pure {
             phase := phase
             kind := RuleBuilderKind.local fvarUserName goal
-            options := c.builderOptions
+            options := ← c.builderOptions.finish type
           }
       match ← b.toRuleBuilder builderInput with
-      | .global r => return (goal, r)
-      | .«local» goal r => return (goal, r)
+      | .global r => return (goal, r, builderInput.options.pattern?)
+      | .«local» goal r => return (goal, r, builderInput.options.pattern?)
 
     runRegularBuilder (goal : MVarId) (ident : RuleIdent) (phase : PhaseName)
-        (b : DBuilderName) : TermElabM (MVarId × RegularRuleBuilderResult) := do
-      let (goal, RuleBuilderResult.regular r) ← runBuilder goal ident phase b
+        (b : DBuilderName) :
+        TermElabM (MVarId × RegularRuleBuilderResult × Option RulePattern) := do
+      let (goal, RuleBuilderResult.regular r, pattern?) ←
+        runBuilder goal ident phase b
         | throwError "builder {b} cannot be used for {phase} rules"
-      return (goal, r)
+      return (goal, r, pattern?)
 
 -- Precondition: `c.ident = RuleIdent.const _`.
 def buildGlobalRule (c : RuleConfig) :
