@@ -18,6 +18,7 @@ structure RuleBuilderOptions where
   immediatePremises? : Option (Array Name)
   indexingMode? : Option IndexingMode
   casesPatterns? : Option (Array CasesPattern)
+  pattern? : Option RulePattern
   /-- The transparency used by the rule tactic. -/
   transparency? : Option TransparencyMode
   /-- The transparency used for indexing the rule. Currently, the rule is not
@@ -28,7 +29,7 @@ structure RuleBuilderOptions where
 namespace RuleBuilderOptions
 
 protected def default : RuleBuilderOptions :=
-  ⟨none, none, none, none, none⟩
+  ⟨none, none, none, none, none, none⟩
 
 instance : EmptyCollection RuleBuilderOptions :=
   ⟨.default⟩

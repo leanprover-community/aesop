@@ -361,4 +361,22 @@ def withMaxHeartbeats [Monad m] [MonadLiftT BaseIO m]
   }
   withReader f x
 
+open Lean.Elab Lean.Elab.Term in
+def elabPattern (stx : Syntax) : TermElabM Expr :=
+  withRef stx $ withReader adjustCtx $ withSynthesize $ elabTerm stx none
+  where
+    adjustCtx (old : Term.Context) : Term.Context := {
+      old with
+      mayPostpone := false
+      errToSorry := false
+      autoBoundImplicit := false
+      sectionVars := {}
+      sectionFVars := {}
+      isNoncomputableSection := false
+      ignoreTCFailures := true
+      inPattern := true
+      saveRecAppSyntax := false
+      holesAsSyntheticOpaque := false
+    }
+
 end Aesop
