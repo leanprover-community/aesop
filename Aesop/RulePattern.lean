@@ -66,6 +66,8 @@ def forEachExprInGoalCore (mvarId : MVarId) (g : Expr → m Bool) :
     MonadCacheT Expr Unit m Unit :=
   mvarId.withContext do
     for ldecl in ← show MetaM _ from getLCtx do
+      if ldecl.isImplementationDetail then
+        continue
       ForEachExpr.visit g ldecl.type
       if let some value := ldecl.value? then
         ForEachExpr.visit g value
