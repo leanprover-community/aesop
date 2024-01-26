@@ -59,6 +59,10 @@ initialize profile : TraceOption ←
   registerTraceOption `profile
     "(aesop) If the search is successful, print a summary of where Aesop spent its time. Enable the `profiler` and `trace.aesop` options for finer-grained information."
 
+initialize debug : TraceOption ←
+  registerTraceOption `debug
+    "(aesop) Print various debugging information."
+
 end TraceOption
 
 section
