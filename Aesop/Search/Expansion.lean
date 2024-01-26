@@ -239,10 +239,11 @@ def expandGoal (gref : GoalRef) : SearchM Q RuleResult := do
   let provedByNorm ←
     withAesopTraceNode .steps fmtNorm (normalizeGoalIfNecessary gref)
   aesop_trace[steps] do
-    let (goal, metaState) ←
-      (← gref.get).currentGoalAndMetaState (← getRootMetaState)
-    metaState.runMetaM' do
-      aesop_trace![steps] "Goal after normalisation:{indentD goal}"
+    unless provedByNorm do
+      let (goal, metaState) ←
+        (← gref.get).currentGoalAndMetaState (← getRootMetaState)
+      metaState.runMetaM' do
+        aesop_trace![steps] "Goal after normalisation:{indentD goal}"
   if provedByNorm then
     return .proved #[]
   let safeResult ←
