@@ -5,8 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 @[aesop [10% cases, safe constructors]]
 inductive Even : Nat → Prop
@@ -20,8 +22,14 @@ example : Even 2 := by
 -- from all rule sets.
 attribute [-aesop] Even
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : Even 2 := by
-  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+example : Even 2 := by
   aesop (add safe Even)
 
 -- We can also selectively remove rules in a certain phase or with a certain
@@ -35,6 +43,12 @@ example : Even 2 := by
 
 erase_aesop_rules [ constructors Even ]
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : Even 2 := by
-  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+example : Even 2 := by
   aesop (add safe constructors Even)

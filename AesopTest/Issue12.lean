@@ -18,7 +18,6 @@ theorem weaken (P Q : α → Prop) (wk : ∀ x, P x → Q x) (xs : List α) (h :
   : All Q xs := by
   induction h <;> aesop
 
-set_option linter.unusedVariables false in
 theorem in_self (xs : List α) : All (· ∈ xs) xs := by
   induction xs
   case nil =>

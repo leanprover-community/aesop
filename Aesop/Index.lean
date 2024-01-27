@@ -134,7 +134,6 @@ private def applicableUnindexedRules (ri : Index α) (include? : Rule α → Boo
       acc
 
 -- Returns the rules in the order given by the `Ord α` instance.
-set_option linter.unusedVariables false in
 @[specialize]
 def applicableRules (ri : Index α) (goal : MVarId)
     (include? : Rule α → Bool) :

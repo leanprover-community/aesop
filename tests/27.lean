@@ -23,7 +23,6 @@ theorem All.split_cons (P : α → Prop) (x : α) (xs : List α) (h : All P (x :
   set_option trace.aesop.proof true in
   aesop
 
-set_option linter.unusedVariables false in
 theorem All.split_cons₂ (P : α → Prop) (x : α) (xs : List α) (h : All P (x :: xs))
   : P x ∧ All P xs :=
       (fun (h_1 : All P (x :: xs)) =>

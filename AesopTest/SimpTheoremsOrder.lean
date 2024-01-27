@@ -15,6 +15,5 @@ axiom comp : A → A → A
 @[simp]
 axiom comp_id : ∀ f, comp f idA = f
 
-set_option linter.unusedVariables false in
 example (w : ∀ h, comp f h = comp g h) : f = comp f idA := by
   aesop

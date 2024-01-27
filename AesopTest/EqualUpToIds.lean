@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Util.EqualUpToIds
+import Std.Tactic.GuardMsgs
 
 -- Some simple test cases for the EqualUpToIds module. The module is mostly
 -- tested by using it in script validation, which is run on almost all Aesop
@@ -42,7 +43,6 @@ example : True := by
   assert_equal_tactics { open Classical in trivial } { trivial }
   trivial
 
-set_option linter.unusedVariables false in
 example (n m : Nat) : True := by
   fail_if_success assert_equal_tactics { cases n } { cases m }
   trivial
