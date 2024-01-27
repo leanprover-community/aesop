@@ -7,14 +7,22 @@ Authors: Jireh Loreaux, Jannis Limperg
 -- Thanks to Jireh Loreaux for reporting this MWE.
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 @[irreducible]
 def foo : Nat := 37
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : foo = 37 := by
-  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+example : foo = 37 := by
   unfold foo
   rfl
 
@@ -24,7 +32,13 @@ example : foo = 37 := by aesop
 
 attribute [-aesop] foo
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : foo = 37 := by
-  fail_if_success aesop? (config := { terminal := true })
+  aesop? (config := { terminal := true })
+
+example : foo = 37 := by
   unfold foo
   rfl

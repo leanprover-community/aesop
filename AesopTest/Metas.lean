@@ -23,7 +23,6 @@ example (P : α → β → Type) (a : α) (b : β) (h : P a b) : Σ a b, P a b :
 example (P Q : α → Prop) (hPQ : ∀ a, P a → Q a) (a : α) (h : P a) : ∃ a, Q a := by
   aesop
 
-set_option linter.unusedVariables false in
 example (P Q Dead R : α → Prop)
     (hPQ : ∀ a, P a → Q a)
     (hDeadR : ∀ a, Dead a → R a)

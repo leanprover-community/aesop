@@ -5,11 +5,19 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 @[irreducible] def T := False → True
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : T := by
-  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+example : T := by
   aesop (config := { introsTransparency? := some .all })

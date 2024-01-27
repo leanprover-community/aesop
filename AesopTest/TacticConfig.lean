@@ -5,8 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 inductive Even : Nat → Prop
 | zero : Even 0
@@ -36,15 +38,30 @@ example : EvenOrOdd 3 := by
 attribute [aesop 50%] Even.zero Even.plus_two
 
 -- We can also erase global rules...
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : EvenOrOdd 2 := by
-  fail_if_success aesop (add safe EvenOrOdd.even) (erase Even.zero)
+  aesop (add safe EvenOrOdd.even) (erase Even.zero)
     (config := { terminal := true })
+
+example : EvenOrOdd 2 := by
   aesop (add safe EvenOrOdd.even)
 
 -- ... as well as local ones (but what for?).
+
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : EvenOrOdd 2 := by
   have h : ∀ n, Even n → EvenOrOdd n := λ _ p => EvenOrOdd.even p
-  fail_if_success
-    aesop (add safe h) (erase Aesop.BuiltinRules.applyHyps, h)
-      (config := { terminal := true })
+  aesop (add safe h) (erase Aesop.BuiltinRules.applyHyps, h)
+    (config := { terminal := true })
+
+example : EvenOrOdd 2 := by
+  have h : ∀ n, Even n → EvenOrOdd n := λ _ p => EvenOrOdd.even p
   aesop (add safe h) (erase Aesop.BuiltinRules.applyHyps)

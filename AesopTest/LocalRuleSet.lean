@@ -5,16 +5,20 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
--- We used to add local rules to the `default` rule set, but this is doesn't
--- work well when the default rule set is disabled. Now we add local rules to
--- a separate `local` rule set.
+-- We used to add local rules to the `default` rule set, but this doesn't work
+-- well when the default rule set is disabled.
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : Unit := by
-  fail_if_success
-    aesop (rule_sets [-default, -builtin]) (config := { terminal := true })
-  fail_if_success
-    aesop (add safe PUnit.unit) (rule_sets [-default, -builtin, -«local»])
-      (config := { terminal := true })
+  aesop (rule_sets [-default, -builtin]) (config := { terminal := true })
+
+example : Unit := by
   aesop (add safe PUnit.unit) (rule_sets [-default, -builtin])

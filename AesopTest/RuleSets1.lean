@@ -5,8 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import AesopTest.RuleSets0
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 @[aesop safe (rule_sets [test_A])]
 inductive A : Prop where
@@ -23,15 +25,27 @@ inductive C : Prop where
 inductive D : Prop where
 | intro
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : A := by
-  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+example : A := by
   aesop (rule_sets [test_A])
 
 example : B := by
   aesop (rule_sets [test_A, test_B])
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : C := by
-  fail_if_success aesop (rule_sets [-default]) (config := { terminal := true })
+  aesop (rule_sets [-default]) (config := { terminal := true })
+
+example : C := by
   aesop
 
 attribute [aesop safe (rule_sets [test_C])] C
@@ -40,8 +54,14 @@ attribute [aesop safe (rule_sets [test_C])] C
 -- sets.
 attribute [-aesop] C
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : C := by
-  fail_if_success aesop (rule_sets [test_C]) (config := { terminal := true })
+  aesop (rule_sets [test_C]) (config := { terminal := true })
+
+example : C := by
   aesop (add safe C)
 
 @[aesop norm simp]
@@ -53,8 +73,14 @@ example : D := by
 
 attribute [-aesop] ad
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : D := by
-  fail_if_success aesop (rule_sets [test_A]) (config := { terminal := true })
+  aesop (rule_sets [test_A]) (config := { terminal := true })
+
+example : D := by
   aesop (add norm ad) (rule_sets [test_A])
 
 -- Rules can also be local.
@@ -71,8 +97,14 @@ example : E := by
 
 end
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : E := by
-  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+example : E := by
   constructor
 
 -- Rules can also be scoped.
@@ -86,6 +118,12 @@ example : E := by
 
 end EScope
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : E := by
-  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+example : E := by
   open EScope in aesop

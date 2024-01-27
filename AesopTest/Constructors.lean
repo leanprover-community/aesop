@@ -5,8 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 @[aesop safe]
 inductive Even : Nat → Type
@@ -20,6 +22,12 @@ attribute [-aesop] Even
 
 def T n := Even n
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : T 6 := by
-  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+example : T 6 := by
   aesop (add safe constructors (transparency! := default) Even)

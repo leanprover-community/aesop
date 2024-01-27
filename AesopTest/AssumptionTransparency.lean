@@ -5,20 +5,40 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 def T := Empty
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example (h : T) : Empty := by
-  fail_if_success
-    aesop (erase Aesop.BuiltinRules.applyHyps)
-      (config := { assumptionTransparency := .reducible, terminal := true })
+  aesop (erase Aesop.BuiltinRules.applyHyps)
+    (config := { assumptionTransparency := .reducible, terminal := true })
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
+example (h : T) : Empty := by
+  aesop (erase Aesop.BuiltinRules.applyHyps)
+    (config := { assumptionTransparency := .reducible, terminal := true })
+
+example (h : T) : Empty := by
   aesop (erase Aesop.BuiltinRules.applyHyps)
 
 @[irreducible] def U := False
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example (h : U) : False := by
-  fail_if_success
-    aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+example (h : U) : False := by
   aesop (config := { assumptionTransparency := .all })

@@ -5,14 +5,22 @@ Authors: Jannis Limperg
 -/
 
 import AesopTest.RuleSetNameHygiene0
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 macro "aesop_test" : tactic => `(tactic| aesop (rule_sets [test]))
 
 @[aesop safe (rule_sets [test])]
 structure TT
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : TT := by
-  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+example : TT := by
   aesop_test

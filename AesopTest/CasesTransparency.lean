@@ -5,22 +5,42 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 example (h : False) : α := by
   aesop
 
 def T := False
 
+variable {α : Type}
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example (h : T) : α := by
-  fail_if_success aesop (config := { terminal := true })
-  fail_if_success
-    aesop (add safe cases (transparency! := reducible) False)
-      (config := { terminal := true })
-  fail_if_success
-    aesop (add safe cases (transparency := default) False)
-      (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
+example (h : T) : α := by
+  aesop (add safe cases (transparency! := reducible) False)
+    (config := { terminal := true })
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
+example (h : T) : α := by
+  aesop (add safe cases (transparency := default) False)
+    (config := { terminal := true })
+
+example (h : T) : α := by
   aesop (add safe cases (transparency! := default) False)
 
 def U := T

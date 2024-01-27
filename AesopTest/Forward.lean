@@ -5,8 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 open Aesop Lean Lean.Meta Lean.Elab.Tactic
 
@@ -42,13 +44,11 @@ example (rule : (a : α) → (b : β) → γ) (h₁ : α) (h₂ : β) : γ := by
   forward rule [a b]
   assumption
 
-set_option linter.unusedVariables false in
 example {P Q R : α → Type} (rule : ∀ a (p : P a) (q : Q a), R a)
     (h₁ : P a) (h₁' : P a) (h₂ : Q a) (h₃ : P b) (h₄ : Q c) : R a := by
   forward rule [p q]
   assumption
 
-set_option linter.unusedVariables false in
 example {P Q R : α → Type} (rule : ∀ a (p : P a) (q : Q a), R a)
     (h₁ : P a) (h₁' : P a) (h₂ : Q a) (h₃ : P b) (h₄ : Q c) : R a := by
   forward rule
@@ -69,9 +69,15 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
   aesop (add safe [forward r₁, forward (immediate := [a]) r₂])
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
-  fail_if_success
-    aesop (add safe [destruct r₁, destruct (immediate := [a]) r₂])
-      (config := { terminal := true })
+  aesop (add safe [destruct r₁, destruct (immediate := [a]) r₂])
+    (config := { terminal := true })
+
+example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
+    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
   aesop (add safe [forward r₁], 90% destruct r₂)
