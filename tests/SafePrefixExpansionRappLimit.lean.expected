@@ -1,0 +1,5 @@
+tests/SafePrefixExpansionRappLimit.lean:13:2: warning: aesop: safe prefix was not fully expanded because the maximum number of rule applications (50) was reached.
+tests/SafePrefixExpansionRappLimit.lean:13:2: warning: aesop: failed to prove the goal. Some goals were not explored because the maximum rule application depth (30) was reached. Set option 'maxRuleApplicationDepth' to increase the limit.
+tests/SafePrefixExpansionRappLimit.lean:12:19: error: unsolved goals
+case a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a
+⊢ False

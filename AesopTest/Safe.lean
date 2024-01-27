@@ -29,6 +29,6 @@ example : Even' 2 := by
     (add safe [even'_of_false 0, Even'.mk 1]) (config := { terminal := true })
   fail_if_success aesop
     (add safe [even'_of_even'], unsafe [Even'.mk 100%])
-    (config := { maxRuleApplications := 10 })
+    (config := { maxRuleApplications := 10, terminal := true })
   aesop
     (add safe [even'_of_false 1, Even'.mk 0])
