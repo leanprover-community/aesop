@@ -1,7 +1,0 @@
-tests/EraseSimp.lean:20:2: error: tactic 'aesop' failed, made no progress
-m n : Nat
-⊢ n + m = m + n
-tests/EraseSimp.lean:24:2: error: tactic 'aesop' failed, made no progress
-m n : Nat
-⊢ n + m = m + n
-tests/EraseSimp.lean:28:2: error: aesop: 'Nat.add_comm' is not registered (with the given features) in any rule set.

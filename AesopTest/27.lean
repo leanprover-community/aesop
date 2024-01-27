@@ -10,6 +10,7 @@ Authors: Asta H. From, Jannis Limperg
 -- still works.
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
 
@@ -18,6 +19,28 @@ inductive All (P : α → Prop) : List α → Prop
   | nil : All P []
   | cons {x xs} : P x → All P xs → All P (x :: xs)
 
+/--
+info: [aesop.proof] Final proof:
+      (fun (h_1 : All P (x :: xs)) =>
+          ((fun (h_2 : All P (x :: xs)) =>
+                (All.casesOn (P := P) (motive := fun a x_1 => x :: xs = a → HEq h x_1 → P x ∧ All P xs) h_2
+                    (fun h_1 => List.noConfusion h_1) fun {x_1} {xs_1} a a_1 h_1 =>
+                    List.noConfusion h_1 fun head_eq =>
+                      Eq.ndrec (motive := fun {x_1} =>
+                        ∀ (a : P x_1), xs = xs_1 → HEq h (All.cons (P := P) a a_1) → P x ∧ All P xs)
+                        (fun a tail_eq =>
+                          Eq.ndrec (motive := fun {xs_1} =>
+                            ∀ (a_1 : All P xs_1), HEq h (All.cons (P := P) a a_1) → P x ∧ All P xs)
+                            (fun a_1 h_1 =>
+                              of_eq_true (Eq.trans (congr (congrArg And (eq_true a)) (eq_true a_1)) (and_self True)))
+                            tail_eq a_1)
+                        head_eq a :
+                  x :: xs = x :: xs → HEq h h_2 → P x ∧ All P xs))
+              h_1 :
+            x :: xs = x :: xs → HEq h h_1 → P x ∧ All P xs))
+        h (Eq.refl (x :: xs)) (HEq.refl h)
+-/
+#guard_msgs in
 theorem All.split_cons (P : α → Prop) (x : α) (xs : List α) (h : All P (x :: xs))
   : P x ∧ All P xs := by
   set_option trace.aesop.proof true in
