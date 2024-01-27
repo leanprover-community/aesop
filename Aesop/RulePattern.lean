@@ -95,8 +95,10 @@ def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
         initialState.restore
         if ← isDefEq e p then
           let instances ← mvarIds.mapM λ mvarId => do
-            let result ← instantiateMVars (.mvar mvarId)
-            if result == .mvar mvarId then
+            let mvar := .mvar mvarId
+            let result ← instantiateMVars mvar
+            if result == mvar then
+              initialState.restore
               throwError "matchRulePatterns: while matching pattern '{p}' against expression '{e}': expected metavariable ?{(← mvarId.getDecl).userName} ({mvarId.name}) to be assigned"
             pure result
           modify λ m =>
@@ -113,28 +115,28 @@ def matchRulePatterns (pats : Array (RuleName × RulePattern))
 
 namespace RulePattern
 
-def openRuleType (pat : RulePattern) (inst : RulePatternInstantiation) :
-    MetaM (Array MVarId × Expr) := do
-  let (argMVars, _, body) ← forallMetaTelescope pat.ruleType
-  let mut remainingMVars := Array.mkEmpty (argMVars.size - pat.pattern.numMVars)
-  for h : i in [:argMVars.size] do
-    let mvarId := argMVars[i]'h.2 |>.mvarId!
+-- Precondition: the `mvars` are `MVarId`s.
+def instantiateRulePremiseMVars (pat : RulePattern)
+    (inst : RulePatternInstantiation) (mvars : Array Expr) :
+    MetaM (HashSet MVarId) := do
+  let mut assigned := ∅
+  for h : i in [:mvars.size] do
+    let mvarId := mvars[i]'h.2 |>.mvarId!
     let some instIndex? := pat.argMap[i]?
-      | throwError "instantiateRuleType: expected {i} to be a valid argMap index, but argMap has size {pat.argMap.size}"
+      | throwError "instantiateRulePremiseMVars: expected {i} to be a valid argMap index, but argMap has size {pat.argMap.size}"
     if let some instIndex := instIndex? then
       let some inst := inst.toArray[instIndex]?
-        | throwError "instantiateRuleType: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
+        | throwError "instantiateRulePremiseMVars: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
       mvarId.assign inst
-    else
-      remainingMVars := remainingMVars.push mvarId
-  return (remainingMVars, body)
+      assigned := assigned.insert mvarId
+  return assigned
 
 open Lean.Elab Lean.Elab.Term
 
 def «elab» (stx : Term) (ruleType : Expr) : TermElabM RulePattern :=
   withLCtx {} {} $ withoutModifyingState do
     forallTelescope ruleType λ fvars _ => do
-      let pat ← elabPattern stx
+      let pat := (← elabPattern stx).consumeMData
       let (pat, mvarIds) ← fvarsToMVars fvars pat
       let (pat, mvarIdToPatternPos) ← abstractMVars' pat
       let mut argMap := Array.mkEmpty mvarIds.size
@@ -156,11 +158,15 @@ where
       mvarId.setUserName mvarId.name
 
   -- Largely copy-pasta of `abstractMVars`.
-  abstractMVars' (e : Expr) : MetaM (AbstractMVarsResult × HashMap MVarId Nat) := do
+  abstractMVars' (e : Expr) :
+      MetaM (AbstractMVarsResult × HashMap MVarId Nat) := do
     let e ← instantiateMVars e
     setMVarUserNamesToUniqueNames e
     let (e, s) := AbstractMVars.abstractExprMVars e
-      { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen) }
+      { mctx := (← getMCtx)
+        lctx := (← getLCtx)
+        ngen := (← getNGen)
+        abstractLevels := true }
     setNGen s.ngen
     setMCtx s.mctx
     let e := s.lctx.mkLambda s.fvars e

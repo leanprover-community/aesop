@@ -20,9 +20,9 @@ def forwardTac (goal : MVarId) (id : Syntax) (immediate : Option (Array Syntax))
   let userName := id.getId
   let ldecl ← getLocalDeclFromUserName userName
   let immediate ← RuleBuilder.getImmediatePremises userName ldecl.type
-    md (immediate.map (·.map (·.getId)))
+    none md (immediate.map (·.map (·.getId)))
   let (goal, _) ←
-    RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) immediate clear
+    RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) none ∅ immediate clear
       (generateScript := false) md
   return [goal]
 
