@@ -51,9 +51,12 @@ structure Wrap (α) where
 set_option linter.unusedVariables false in
 example (h : α → α) (h' : Wrap α) : α := by
   -- TODO check that Aesop reports the correct error, to eliminate false positives
-  fail_if_success aesop (add safe h) (config := { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0 })
-  fail_if_success aesop (add safe h) (config := { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0 })
-  fail_if_success aesop (add safe h) (config := { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0 })
+  fail_if_success aesop (add safe h)
+    (config := { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0, terminal := true })
+  fail_if_success aesop (add safe h)
+    (config := { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0, terminal := true })
+  fail_if_success aesop (add safe h)
+    (config := { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0, terminal := true })
   exact h'.unwrap
 
 end Loop

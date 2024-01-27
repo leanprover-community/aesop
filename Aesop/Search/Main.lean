@@ -219,7 +219,9 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
   let opts := (← read).options
   if opts.terminal then
     throwTacticEx `aesop (← getRootMVarId) err
-  expandSafePrefix
+  let safeExpansionSuccess ← expandSafePrefix
+  if ! safeExpansionSuccess then
+    logWarning m!"aesop: safe prefix was not fully expanded because the maximum number of rule applications ({(← read).options.maxSafePrefixRuleApplications}) was reached."
   if ! (← treeHasNonPreprocessingRapp) then
     throwTacticEx `aesop (← getRootMVarId) "made no progress"
   if opts.warnOnNonterminal then
