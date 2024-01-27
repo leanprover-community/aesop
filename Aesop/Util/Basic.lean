@@ -379,4 +379,19 @@ def elabPattern (stx : Syntax) : TermElabM Expr :=
       holesAsSyntheticOpaque := false
     }
 
+register_option aesop.smallErrorMessages : Bool := {
+    defValue := false
+    group := "aesop"
+    descr := "(aesop) Print smaller error messages. Used for testing."
+  }
+
+def throwAesopEx (mvarId : MVarId) (msg : MessageData) : MetaM α := do
+  if aesop.smallErrorMessages.get (← getOptions) then
+    if msg.isEmpty then
+      throwError "tactic 'aesop' failed"
+    else
+      throwError "tactic 'aesop' failed, {msg}"
+  else
+    throwTacticEx `aesop mvarId msg
+
 end Aesop
