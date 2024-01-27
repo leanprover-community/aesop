@@ -5,8 +5,14 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+⊢ False
+-/
+#guard_msgs in
 example : False := by
   aesop (config := { terminal := true })

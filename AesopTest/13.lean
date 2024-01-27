@@ -4,8 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Asta H. From, Jannis Limperg
 -/
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 inductive Any (P : α → Prop) : List α → Prop where
   | here (x xs) : P x → Any P (x :: xs)
@@ -18,12 +20,18 @@ theorem Perm.any {xs ys : List α} (perm : Perm xs ys) (P : α → Prop)
   : Any P xs → Any P ys := by
   induction perm <;> aesop (add safe [constructors Any, cases Any])
 
+/--
+error: tactic 'aesop' failed, maximum number of rule applications (100) reached. Set the 'maxRuleApplications' option to increase the limit.
+-/
+#guard_msgs in
 theorem error (P : Nat → Prop) (Δ : List Nat) : Any P Δ := by
   aesop (add 50% [constructors Perm, constructors Any, Perm.any])
     (config := { maxRuleApplications := 100, terminal := true })
-  sorry
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 theorem fine (P : α → Prop) (Δ : List α) : Any P Δ := by
   aesop (add unsafe [50% constructors Perm, 50% constructors Any, apply 50% Perm.any])
     (config := { maxRuleApplications := 10, terminal := true })
-  sorry
