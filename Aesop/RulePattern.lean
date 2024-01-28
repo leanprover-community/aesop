@@ -96,6 +96,10 @@ def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
     forEachExprInGoal mvarId λ e => do
       for (name, mvarIds, p) in openPats do
         initialState.restore
+        -- The many `isDefEq` checks here are quite expensive. Perhaps a better
+        -- strategy would be to reducibly normalise the goal once and for all.
+        -- Then we could use a variant of `isDefEq` that only checks for
+        -- syntactic equality up to mvars.
         if ← isDefEq e p then
           let instances ← mvarIds.mapM λ mvarId => do
             let mvar := .mvar mvarId
