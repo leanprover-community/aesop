@@ -25,12 +25,12 @@ def RuleBuilder.apply : RuleBuilder := λ input =>
   let opts := input.options
   match input.kind with
   | RuleBuilderKind.global decl => do
-    let tac := .applyConst decl opts.applyTransparency
+    let tac := .applyConst decl opts.applyTransparency opts.pattern?
     let type := (← getConstInfo decl).type
     RuleBuilderOutput.global <$> mkResult opts tac type
   | RuleBuilderKind.local fvarUserName goal =>
     goal.withContext do
-      let tac := RuleTacDescr.applyFVar fvarUserName opts.applyTransparency
+      let tac := .applyFVar fvarUserName opts.applyTransparency opts.pattern?
       let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
       let result ← mkResult opts tac type
       return RuleBuilderOutput.local goal result

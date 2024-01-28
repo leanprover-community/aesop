@@ -48,6 +48,20 @@ example : |a + b| ≤ |c + d| := by
   guard_hyp fwd_1 : |a + b| ≤ |a| + |b|
   falso
 
+@[aesop safe apply (pattern := (0 : Nat))]
+axiom falso' : True → False
+
+/--
+error: tactic 'aesop' failed, made no progress
+⊢ False
+-/
+#guard_msgs in
+example : False := by
+  aesop
+
+example (h : n = 0) : False := by
+  aesop (rule_sets [-builtin])
+
 -- When a premise of a forward rule is mentioned in a pattern, it can't also
 -- be an immediate argument.
 

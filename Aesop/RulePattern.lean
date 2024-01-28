@@ -57,6 +57,9 @@ def RulePatternInstantiation := Array Expr
 def RulePatternInstantiation.toArray : RulePatternInstantiation → Array Expr :=
   id
 
+instance : EmptyCollection RulePatternInstantiation :=
+  ⟨.empty⟩
+
 section
 
 variable {ω : Type} {m : Type → Type} [STWorld ω m] [MonadLiftT (ST ω) m]
@@ -115,21 +118,43 @@ def matchRulePatterns (pats : Array (RuleName × RulePattern))
 
 namespace RulePattern
 
+def getInstantiation [Monad m] [MonadError m] (pat : RulePattern)
+    (inst : RulePatternInstantiation) (argIndex : Nat) : m (Option Expr) := do
+  let some instIndex? := pat.argMap[argIndex]?
+    | throwError "instantiateRulePremiseMVars: expected {argIndex} to be a valid argMap index, but argMap has size {pat.argMap.size}"
+  if let some instIndex := instIndex? then
+    let some inst := inst.toArray[instIndex]?
+      | throwError "instantiateRulePremiseMVars: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
+    return some inst
+  else
+    return none
+
 -- Precondition: the `mvars` are `MVarId`s.
 def instantiateRulePremiseMVars (pat : RulePattern)
     (inst : RulePatternInstantiation) (mvars : Array Expr) :
     MetaM (HashSet MVarId) := do
   let mut assigned := ∅
   for h : i in [:mvars.size] do
-    let mvarId := mvars[i]'h.2 |>.mvarId!
-    let some instIndex? := pat.argMap[i]?
-      | throwError "instantiateRulePremiseMVars: expected {i} to be a valid argMap index, but argMap has size {pat.argMap.size}"
-    if let some instIndex := instIndex? then
-      let some inst := inst.toArray[instIndex]?
-        | throwError "instantiateRulePremiseMVars: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
+    if let some inst ← pat.getInstantiation inst i then
+      let mvarId := mvars[i]'h.2 |>.mvarId!
       mvarId.assign inst
       assigned := assigned.insert mvarId
   return assigned
+
+def specializeRule (pat : RulePattern) (inst : RulePatternInstantiation)
+    (e : Expr) : MetaM Expr :=
+  withNewMCtxDepth do
+    forallTelescopeReducing pat.ruleType λ fvarIds _ => do
+      let mut e := e
+      let mut remainingFVarIds := Array.mkEmpty fvarIds.size
+      for h : i in [:fvarIds.size] do
+        if let some inst ← pat.getInstantiation inst i then
+          e := e.app inst
+        else
+          let fvarId := fvarIds[i]'h.2
+          e := e.app fvarId
+          remainingFVarIds := remainingFVarIds.push fvarId
+      mkLambdaFVars remainingFVarIds e
 
 open Lean.Elab Lean.Elab.Term
 
