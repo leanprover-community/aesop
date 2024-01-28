@@ -62,6 +62,15 @@ example : False := by
 example (h : n = 0) : False := by
   aesop (rule_sets [-builtin])
 
+-- Patterns may only contain variables mentioned in the rule.
+
+/--
+error: unknown identifier 'z'
+-/
+#guard_msgs in
+@[aesop safe forward (pattern := z)]
+axiom quuz (x y : Nat) : True
+
 -- When a premise of a forward rule is mentioned in a pattern, it can't also
 -- be an immediate argument.
 
@@ -71,6 +80,6 @@ axiom bar (x y : Nat) : True
 /--
 error: aesop: while registering 'baz' as a forward rule: argument 'x' cannot be immediate since it is already determined by a pattern
 -/
-#guard_msgs (error) in
+#guard_msgs in
 @[aesop safe forward (pattern := (↑x : Int)) (immediate := [y, x])]
 axiom baz (x y : Nat) : True
