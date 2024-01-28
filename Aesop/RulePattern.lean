@@ -32,10 +32,6 @@ structure RulePattern where
   -/
   pattern : AbstractMVarsResult
   /--
-  A type of the form `∀ (x₀ : T₀) ... (xₙ : Tₙ), U` representing the rule type.
-  -/
-  ruleType : Expr
-  /--
   A partial map from the index set `{0, ..., n-1}` into `{0, ..., k-1}`. If
   `argMap[i] = j`, this indicates that when matching against the rule type, the
   instantiation `tⱼ` of `yⱼ` should be substituted for `xᵢ`.
@@ -124,32 +120,32 @@ namespace RulePattern
 
 def getInstantiation [Monad m] [MonadError m] (pat : RulePattern)
     (inst : RulePatternInstantiation) (argIndex : Nat) : m (Option Expr) := do
-  let some instIndex? := pat.argMap[argIndex]?
-    | throwError "instantiateRulePremiseMVars: expected {argIndex} to be a valid argMap index, but argMap has size {pat.argMap.size}"
-  if let some instIndex := instIndex? then
-    let some inst := inst.toArray[instIndex]?
-      | throwError "instantiateRulePremiseMVars: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
-    return some inst
-  else
-    return none
+  -- It's possible that `argMap[argIndex]? = none` if the rule type is
+  -- syntactically `∀ (x₁ : T₁) ... (xₙ : Tₙ) = U` and `U` is a `forall` up to
+  -- the rule's transparency.
+  let some (some instIndex) := pat.argMap[argIndex]?
+    | return none
+  let some inst := inst.toArray[instIndex]?
+    | throwError "getInstantiation: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
+  return some inst
 
--- Precondition: the `mvars` are `MVarId`s.
-def instantiateRulePremiseMVars (pat : RulePattern)
-    (inst : RulePatternInstantiation) (mvars : Array Expr) :
-    MetaM (HashSet MVarId) := do
+def openRuleType (pat : RulePattern) (inst : RulePatternInstantiation)
+    (type : Expr) :
+    MetaM (Array Expr × Array BinderInfo × Expr × HashSet MVarId) := do
+  let (mvars, binfos, body) ← forallMetaTelescopeReducing type
   let mut assigned := ∅
   for h : i in [:mvars.size] do
     if let some inst ← pat.getInstantiation inst i then
       let mvarId := mvars[i]'h.2 |>.mvarId!
       mvarId.assign inst
       assigned := assigned.insert mvarId
-  return assigned
+  return (mvars, binfos, body, assigned)
 
 def specializeRule (pat : RulePattern) (inst : RulePatternInstantiation)
-    (e : Expr) : MetaM Expr :=
+    (rule : Expr) : MetaM Expr :=
   withNewMCtxDepth do
-    forallTelescopeReducing pat.ruleType λ fvarIds _ => do
-      let mut e := e
+    forallTelescopeReducing (← inferType rule) λ fvarIds _ => do
+      let mut e := rule
       let mut remainingFVarIds := Array.mkEmpty fvarIds.size
       for h : i in [:fvarIds.size] do
         if let some inst ← pat.getInstantiation inst i then
@@ -168,12 +164,8 @@ def «elab» (stx : Term) (ruleType : Expr) : TermElabM RulePattern :=
       let pat := (← elabPattern stx).consumeMData
       let (pat, mvarIds) ← fvarsToMVars fvars pat
       let (pat, mvarIdToPatternPos) ← abstractMVars' pat
-      let mut argMap := Array.mkEmpty mvarIds.size
-      for h : i in [:mvarIds.size] do
-        let mvarId := mvarIds[i]'h.2
-        let pos := mvarIdToPatternPos[mvarId]!
-        argMap := argMap.push pos
-      return { pattern := pat, ruleType, argMap }
+      let argMap := mvarIds.map (mvarIdToPatternPos[·])
+      return { pattern := pat, argMap }
 where
   fvarsToMVars (fvars : Array Expr) (e : Expr) :
       MetaM (Expr × Array MVarId) := do

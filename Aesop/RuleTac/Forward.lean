@@ -17,12 +17,15 @@ private partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
     (patInst : RulePatternInstantiation) (immediate : UnorderedArraySet Nat)
     (collectUsedHyps : Bool) : MetaM (Array Expr × Array FVarId) :=
   withNewMCtxDepth (allowLevelAssignments := true) do
-    let (argMVars, binderInfos, _) ← forallMetaTelescopeReducing (← inferType e)
-    let patInstantiatedMVars ←
+    let type ← inferType e
+    let (argMVars, binderInfos, patInstantiatedMVars) ←
       if let some pat := pat? then
-        pat.instantiateRulePremiseMVars patInst argMVars
+        let (argMVars, binderInfos, _, patInstantiatedMVars) ←
+          pat.openRuleType patInst type
+        pure (argMVars, binderInfos, patInstantiatedMVars)
       else
-        pure ∅
+        let (argMVars, binderInfos, _) ← forallMetaTelescopeReducing type
+        pure (argMVars, binderInfos, ∅)
     let app := mkAppN e argMVars
     let mut instMVars := Array.mkEmpty argMVars.size
     let mut immediateMVars := Array.mkEmpty argMVars.size
@@ -175,15 +178,13 @@ def forwardExpr (e : Expr) (pat? : Option RulePattern)
 def forwardConst (decl : Name) (pat? : Option RulePattern)
     (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
     RuleTac := λ input => do
-  forwardExpr (← mkConstWithFreshMVarLevels decl) pat? immediate clear
-    md input
+  forwardExpr (← mkConstWithFreshMVarLevels decl) pat? immediate clear md input
 
 def forwardFVar (userName : Name) (pat? : Option RulePattern)
     (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
     RuleTac := λ input =>
   input.goal.withContext do
     let ldecl ← getLocalDeclFromUserName userName
-    forwardExpr (mkFVar ldecl.fvarId) pat? immediate (clear := clear)
-      md input
+    forwardExpr (mkFVar ldecl.fvarId) pat? immediate (clear := clear) md input
 
 end Aesop.RuleTac
