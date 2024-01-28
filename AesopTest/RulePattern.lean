@@ -83,3 +83,15 @@ error: aesop: while registering 'baz' as a forward rule: argument 'x' cannot be 
 #guard_msgs in
 @[aesop safe forward (pattern := (↑x : Int)) (immediate := [y, x])]
 axiom baz (x y : Nat) : True
+
+-- For types with 'reducibly hidden' forall binders, the pattern can only refer
+-- to the syntactically visible variables.
+
+abbrev T := (tt : True) → False
+
+/--
+error: unknown identifier 'tt'
+-/
+#guard_msgs in
+@[aesop safe forward (pattern := tt)]
+axiom falso₁ : T
