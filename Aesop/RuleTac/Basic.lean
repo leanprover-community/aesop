@@ -127,8 +127,9 @@ inductive CasesTarget
   deriving Inhabited
 
 inductive RuleTacDescr
-  | applyConst (decl     : Name) (md : TransparencyMode)
+  | applyConst (decl : Name) (md : TransparencyMode) (pat? : Option RulePattern)
   | applyFVar  (userName : Name) (md : TransparencyMode)
+      (pat? : Option RulePattern)
   | constructors (constructorNames : Array Name) (md : TransparencyMode)
   | forwardConst (decl     : Name) (pat? : Option RulePattern)
       (immediate : UnorderedArraySet Nat) (isDestruct : Bool)
