@@ -9,6 +9,7 @@ import Aesop.Script
 import Aesop.RuleSet
 
 open Lean Lean.Meta
+open Lean.Elab.Tactic (mkSimpOnly)
 open Simp (UsedSimps)
 
 namespace Aesop
