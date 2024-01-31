@@ -16,7 +16,6 @@ set_option aesop.check.script true
 -- use `sorry` because it generates lots of warnings.
 axiom ADMIT : ∀ {α : Sort _}, α
 
-@[aesop safe cases]
 class IsEmpty (α : Sort _) where
   false : α → False
 
@@ -186,7 +185,6 @@ theorem subset_trans {l₁ l₂ l₃ : List α} : l₁ ⊆ l₂ → l₂ ⊆ l�
 -- END PRELUDE
 
 instance unique_of_is_empty [IsEmpty α] : Unique (List α) := by
-  constructor
   aesop (add 1% cases List)
 
 -- instance : is_left_id (list α) has_append.append [] :=
