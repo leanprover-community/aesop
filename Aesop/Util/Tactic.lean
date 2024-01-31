@@ -88,7 +88,6 @@ where
           { origin := .decl unfoldThm
             proof := mkConst unfoldThm
             rfl := ← isRflTheorem unfoldThm }
-          (fun _ => return none)
       match result? with
       | none   => return .visit { expr := e }
       | some r =>
