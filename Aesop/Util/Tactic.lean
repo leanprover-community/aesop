@@ -83,7 +83,7 @@ where
       else
         return .continue
     | some (some unfoldThm) =>
-      let result? ← withReducible <| Simp.withDischarger (fun _ => return none) <|
+      let result? ← withReducible <|
         Simp.tryTheorem? e
           { origin := .decl unfoldThm
             proof := mkConst unfoldThm
