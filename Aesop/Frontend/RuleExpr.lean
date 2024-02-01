@@ -218,8 +218,6 @@ syntax " (" &"cases_patterns" " := " "[" term,+,? "]" ")" : Aesop.builder_option
 syntax " (" &"transparency" " := " transparency ")" : Aesop.builder_option
 syntax " (" &"transparency!" " := " transparency ")" : Aesop.builder_option
 
-syntax builderOptions := Aesop.builder_option*
-
 end Parser
 
 inductive BuilderOption
