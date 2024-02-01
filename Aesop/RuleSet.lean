@@ -64,43 +64,53 @@ structure RuleSet where
   unsafeRules : Index UnsafeRuleInfo
   safeRules : Index SafeRuleInfo
   normSimpLemmas : SimpTheorems
+  /--
+  A cache of the norm simp rules added to `normSimpLemmas`. Invariant: the simp
+  entries in this map are a subset of those in `normSimpLemmas`. When a rule is
+  erased, its entry is removed from this map. We use this map (a) to figure out
+  which `SimpEntry`s to erase from `normSimpLemmas` when a rule is erased; (b)
+  to serialise the norm simp rules.
+  -/
   normSimpLemmaDescrs : PHashMap RuleName (Array SimpEntry)
-    -- A cache of the norm simp rules added to `normSimpLemmas`. Invariant: the
-    -- simp entries in this map are a subset of those in `normSimpLemmas`. When
-    -- a rule is erased, its entry is removed from this map. We use this map (a)
-    -- to figure out which `SimpEntry`s to erase from `normSimpLemmas` when a
-    -- rule is erased; (b) to serialise the norm simp rules.
+  /--
+  `SimpTheorems` coming from `simp` attributes (identified by the given `Name`).
+  In particular, we usually include the default `simp` set here. Does not need
+  to be persistent since these `simp` rules are already persisted by the
+  corresponding `simp` attribute. Note that these `simp` lemmas are not cached
+  in `normSimpLemmaDescrs`. Invariant: `simpAttrNormSimpLemmas` is sorted by
+  first components (according to `Name.quickCmp`), and the first components are
+  assumed to uniquely identify the elements.
+  -/
   simpAttrNormSimpLemmas : Array (Name × SimpTheorems)
-    -- `SimpTheorems` coming from `simp` attributes (identified by the given
-    -- `Name`). In particular, we usually include the default `simp` set here.
-    -- Does not need to be persistent since these `simp` rules are already
-    -- persisted by the corresponding `simp` attribute. Note that these `simp`
-    -- lemmas are not cached in `normSimpLemmaDescrs`. Invariant:
-    -- `simpAttrNormSimpLemmas` is sorted by first components (according to
-    -- `Name.quickCmp`), and the first components are assumed to uniquely
-    -- identify the elements.
+  /--
+  Local `simp` rules, i.e. those added to a single Aesop call. Does not need to
+  be persistent because the global rule set (which is stored in a persistent env
+  extension) never contains local norm simp lemmas.
+  -/
   localNormSimpLemmas : Array LocalNormSimpRule
-    -- Local `simp` rules, i.e. those added to a single Aesop call. Does not
-    -- need to be persistent because the global rule set (which is stored in a
-    -- persistent env extension) never contains local norm simp lemmas.
+  /--
+  A pair `(decl, unfoldThm?)` in this map represents a declaration `decl` which
+  should be unfolded. `unfoldThm?` should be the output of `getUnfoldEqnFor?
+  decl` and is cached here for efficiency.
+  -/
   unfoldRules : PHashMap Name (Option Name)
-    -- A pair `(decl, unfoldThm?)` in this map represents a declaration `decl`
-    -- which should be unfolded. `unfoldThm?` should be the output of
-    -- `getUnfoldEqnFor? decl` and is cached here for efficiency.
+  /--
+  A cache of (non-erased) rule names. Invariant: `ruleNames` contains exactly
+  the names of the rules in `normRules`, `normSimpLemmaDescrs`, `unsafeRules`,
+  `safeRules`, `localNormSimpLemmas` and `unfoldRules`, minus the rules in
+  `erased`. We use this cache (a) to quickly determine whether a rule is present
+  in the rule set and (b) to find the full rule names corresponding to a
+  `RuleIdent`.
+  -/
   ruleNames : PHashMap RuleIdent (UnorderedArraySet RuleName)
-    -- A cache of (non-erased) rule names. Invariant: `ruleNames` contains
-    -- exactly the names of the rules in `normRules`, `normSimpLemmaDescrs`,
-    -- `unsafeRules`, `safeRules`, `localNormSimpLemmas` and `unfoldRules`,
-    -- minus the rules in `erased`. We use this cache (a) to quickly determine
-    -- whether a rule is present in the rule set and (b) to find the full rule
-    -- names corresponding to a `RuleIdent`.
+  /--
+  The set of rules that were erased from `normRules`, `unsafeRules` and
+  `safeRules`. When we erase a rule which is present in any of these three
+  indices, the rule is not removed from the indices but just added to this set.
+  (When we erase a rule from `normSimpLemmas`, `simpAttrNormSimpLemmas`,
+  `localNormSimpLemmas` or `unfoldRules`, we just erase it.)
+  -/
   erased : HashSet RuleName
-    -- The set of rules that were erased from `normRules`, `unsafeRules` and
-    -- `safeRules`. When we erase a rule which is present in any of these three
-    -- indices, the rule is not removed from the indices but just added to this
-    -- set. (When we erase a rule from other `normSimpLemmas`,
-    -- `simpAttrNormSimpLemmas`, `localNormSimpLemmas` or `unfoldRules`, we just
-    -- erase it.)
   deriving Inhabited
 
 namespace RuleSet
