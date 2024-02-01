@@ -72,25 +72,24 @@ where
   -- is slow but correct.
   pre (e : Expr) : StateRefT (HashSet Name) SimpM Simp.Step := do
     let some decl := e.getAppFn'.constName?
-      | return .visit { expr := e }
+      | return .continue
     match unfold? decl with
     | none =>
-      return .visit { expr := e }
+      return .continue
     | some none =>
       if let some e' ← delta? e (λ n => n == decl) then
         modify (·.insert decl)
         return .done { expr := e' }
       else
-        return .visit { expr := e }
+        return .continue
     | some (some unfoldThm) =>
       let result? ← withReducible <|
         Simp.tryTheorem? e
           { origin := .decl unfoldThm
             proof := mkConst unfoldThm
             rfl := ← isRflTheorem unfoldThm }
-          (fun _ => return none)
       match result? with
-      | none   => return .visit { expr := e }
+      | none   => return .continue
       | some r =>
         modify (·.insert decl)
         match (← reduceMatcher? r.expr) with

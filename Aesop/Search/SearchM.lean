@@ -83,7 +83,6 @@ protected def run (ruleSet : RuleSet) (options : Aesop.Options')
   let t ← mkInitialTree goal
   let normSimpContext := {
     config := simpConfig
-    unfoldGround := simpConfig.ground
     maxDischargeDepth := UInt32.ofNatTruncate simpConfig.maxDischargeDepth
     simpTheorems := ruleSet.globalNormSimpTheorems
     congrTheorems := ← getSimpCongrTheorems

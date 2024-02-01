@@ -9,6 +9,7 @@ import Aesop.Script
 import Aesop.RuleSet
 
 open Lean Lean.Meta
+open Lean.Elab.Tactic (mkSimpOnly)
 open Simp (UsedSimps)
 
 namespace Aesop
@@ -48,7 +49,8 @@ def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
     Elab.Tactic.mkSimpOnly originalStx usedTheorems
   return ⟨stx⟩
 
-def simpGoal (mvarId : MVarId) (ctx : Simp.Context) (simprocs : Simprocs)
+def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
+    (simprocs : Simp.SimprocsArray)
     (discharge? : Option Simp.Discharge := none)
     (simplifyTarget : Bool := true) (fvarIdsToSimp : Array FVarId := #[])
     (usedSimps : UsedSimps := {}) : MetaM SimpResult := do
@@ -66,7 +68,8 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context) (simprocs : Simprocs)
     return .solved usedSimps
 
 def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
-    (simprocs : Simprocs := {}) (discharge? : Option Simp.Discharge := none)
+    (simprocs : Simp.SimprocsArray := {})
+    (discharge? : Option Simp.Discharge := none)
     (simplifyTarget : Bool := true) (usedSimps : UsedSimps := {}) :
     MetaM SimpResult :=
   mvarId.withContext do
@@ -79,7 +82,8 @@ def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
     Aesop.simpGoal mvarId ctx simprocs discharge? simplifyTarget fvarIdsToSimp
       usedSimps
 
-def simpAll (mvarId : MVarId) (ctx : Simp.Context) (simprocs : Simprocs := {})
+def simpAll (mvarId : MVarId) (ctx : Simp.Context)
+    (simprocs : Simp.SimprocsArray := {})
     (usedSimps : UsedSimps := {}) : MetaM SimpResult := do
   let ctx := { ctx with config.failIfUnchanged := false }
   match ← Lean.Meta.simpAll mvarId ctx simprocs usedSimps with

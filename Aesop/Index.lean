@@ -14,8 +14,8 @@ open Lean.Meta
 namespace Aesop
 
 structure Index (α : Type) [BEq α] [Hashable α] where
-  byTarget : DiscrTree α 
-  byHyp : DiscrTree α 
+  byTarget : DiscrTree α
+  byHyp : DiscrTree α
   unindexed : PHashSet α
   deriving Inhabited
 
