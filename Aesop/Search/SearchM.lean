@@ -82,9 +82,10 @@ protected def run (ruleSet : RuleSet) (options : Aesop.Options')
     MetaM (α × State Q × Tree × Profile) := do
   let t ← mkInitialTree goal
   let normSimpContext := {
-    (← Simp.Context.mkDefault) with
     config := simpConfig
+    maxDischargeDepth := UInt32.ofNatTruncate simpConfig.maxDischargeDepth
     simpTheorems := ruleSet.globalNormSimpTheorems
+    congrTheorems := ← getSimpCongrTheorems
     configStx? := simpConfigStx?
     enabled := options.enableSimp
     useHyps := options.useSimpAll

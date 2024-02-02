@@ -16,7 +16,6 @@ set_option aesop.check.script true
 -- use `sorry` because it generates lots of warnings.
 axiom ADMIT : ∀ {α : Sort _}, α
 
-@[aesop safe cases]
 class IsEmpty (α : Sort _) where
   false : α → False
 

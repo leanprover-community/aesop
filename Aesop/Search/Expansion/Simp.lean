@@ -9,6 +9,7 @@ import Aesop.Script
 import Aesop.RuleSet
 
 open Lean Lean.Meta
+open Lean.Elab.Tactic (mkSimpOnly)
 open Simp (UsedSimps)
 
 namespace Aesop
@@ -49,13 +50,15 @@ def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
   return ⟨stx⟩
 
 def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
+    (simprocs : Simp.SimprocsArray)
     (discharge? : Option Simp.Discharge := none)
     (simplifyTarget : Bool := true) (fvarIdsToSimp : Array FVarId := #[])
     (usedSimps : UsedSimps := {}) : MetaM SimpResult := do
   let mvarIdOld := mvarId
   let ctx := { ctx with config.failIfUnchanged := false }
   let (result, usedSimps) ←
-    Meta.simpGoal mvarId ctx discharge? simplifyTarget fvarIdsToSimp usedSimps
+    Meta.simpGoal mvarId ctx simprocs discharge? simplifyTarget fvarIdsToSimp
+      usedSimps
   if let some (_, mvarId) := result then
     if mvarId == mvarIdOld then
       return .unchanged mvarId
@@ -65,6 +68,7 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     return .solved usedSimps
 
 def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
+    (simprocs : Simp.SimprocsArray := {})
     (discharge? : Option Simp.Discharge := none)
     (simplifyTarget : Bool := true) (usedSimps : UsedSimps := {}) :
     MetaM SimpResult :=
@@ -75,12 +79,14 @@ def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
       if ldecl.isImplementationDetail then
         continue
       fvarIdsToSimp := fvarIdsToSimp.push ldecl.fvarId
-    Aesop.simpGoal mvarId ctx discharge? simplifyTarget fvarIdsToSimp usedSimps
+    Aesop.simpGoal mvarId ctx simprocs discharge? simplifyTarget fvarIdsToSimp
+      usedSimps
 
 def simpAll (mvarId : MVarId) (ctx : Simp.Context)
+    (simprocs : Simp.SimprocsArray := {})
     (usedSimps : UsedSimps := {}) : MetaM SimpResult := do
   let ctx := { ctx with config.failIfUnchanged := false }
-  match ← Lean.Meta.simpAll mvarId ctx usedSimps with
+  match ← Lean.Meta.simpAll mvarId ctx simprocs usedSimps with
   | (none, usedSimps) => return .solved usedSimps
   | (some mvarIdNew, usedSimps) =>
     if mvarIdNew == mvarId then

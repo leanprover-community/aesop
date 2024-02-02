@@ -49,7 +49,6 @@ def getImmediatePremises (name : Name) (type : Expr) (md : TransparencyMode) :
       let mut unseen := immediate.sortAndDeduplicate (ord := ⟨Name.quickCmp⟩)
       let mut result := #[]
       for h : i in [:args.size] do
-        have h : i < args.size := by simp_all [Membership.mem]
         let argName := (← args[i].fvarId!.getDecl).userName
         if immediate.contains argName then
           result := result.push i
