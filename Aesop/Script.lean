@@ -11,6 +11,7 @@ import Std.Lean.Meta.Clear
 import Std.Lean.Meta.Inaccessible
 import Std.Lean.HashSet
 import Std.Tactic.Ext
+import Std.Tactic.PermuteGoals
 
 open Lean
 open Lean.Elab.Tactic
@@ -19,21 +20,6 @@ open Lean.Parser.Tactic
 open Lean.PrettyPrinter
 
 namespace Aesop
-
--- FIXME remove
-elab (name := Parser.onGoal) "on_goal " n:num " => " ts:tacticSeq : tactic => do
-  let gs := (← getGoals).toArray
-  let n := n.getNat
-  if n == 0 then
-    throwError "on_goal: goal numbers start at 1, so 0 is not a valid goal number"
-  if h : n - 1 < gs.size then
-    let g := gs[n - 1]
-    setGoals [g]
-    evalTactic ts
-    let gs := gs[:n - 1] ++ (← getUnsolvedGoals).toArray ++ gs[n:]
-    setGoals gs.toList
-  else
-    throwError "on_goal: tried to select goal {n} but there are only {gs.size} goals"
 
 @[inline]
 private def mkOneBasedNumLit (n : Nat) : NumLit :=
