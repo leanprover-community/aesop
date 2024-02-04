@@ -19,6 +19,7 @@ structure NormSimpContext extends Simp.Context where
   enabled : Bool
   useHyps : Bool
   configStx? : Option Term
+  simprocs : Simp.SimprocsArray
   deriving Inhabited
 
 namespace SearchM
@@ -86,6 +87,7 @@ protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     maxDischargeDepth := UInt32.ofNatTruncate simpConfig.maxDischargeDepth
     simpTheorems := ruleSet.simpTheoremsArray.map (·.snd)
     congrTheorems := ← getSimpCongrTheorems
+    simprocs := ruleSet.simprocsArray.map (·.snd)
     configStx? := simpConfigStx?
     enabled := options.enableSimp
     useHyps := options.useSimpAll

@@ -178,6 +178,10 @@ structure GlobalRuleSet extends BaseRuleSet where
   The simp theorems stored in this rule set.
   -/
   simpTheorems : SimpTheorems
+  /--
+  The simprocs stored in this rule set.
+  -/
+  simprocs : Simprocs
   deriving Inhabited
 
 /--
@@ -191,11 +195,20 @@ structure LocalRuleSet extends BaseRuleSet where
   -/
   simpTheoremsArray : Array (Name × SimpTheorems)
   /--
-  The simp theorems array must include at least one `SimpTheorems` structure.
+  The simp theorems array must contain at least one `SimpTheorems` structure.
   When a simp theorem is added to a `LocalRuleSet`, it is stored in this first
   `SimpTheorems` structure.
   -/
   simpTheoremsArrayNonempty : 0 < simpTheoremsArray.size
+  /--
+  The simprocs used by the builtin norm simp rule.
+  -/
+  simprocsArray : Array (Name × Simprocs)
+  /--
+  The simprocs array must contain at least one `Simprocs` structure, for the
+  same reason as above.
+  -/
+  simprocsArrayNonempty : 0 < simprocsArray.size
   /--
   FVars that were explicitly added as simp rules.
   -/
@@ -210,10 +223,7 @@ namespace GlobalRuleSet
 def onBaseM [Monad m] (f : BaseRuleSet → m (BaseRuleSet × α))
     (rs : GlobalRuleSet) : m (GlobalRuleSet × α) := do
   let (toBaseRuleSet, a) ← f rs.toBaseRuleSet
-  let rs := {
-    toBaseRuleSet
-    simpTheorems := rs.simpTheorems
-  }
+  let rs := { rs with toBaseRuleSet }
   return (rs, a)
 
 @[inline, always_inline]
@@ -285,6 +295,7 @@ def GlobalRuleSet.trace (rs : GlobalRuleSet) (traceOpt : TraceOption) :
   rs.toBaseRuleSet.trace traceOpt
   withConstAesopTraceNode traceOpt (return "Normalisation simp theorems:") do
     traceSimpTheorems rs.simpTheorems traceOpt
+  -- TODO trace simprocs
 
 def LocalRuleSet.trace (rs : LocalRuleSet) (traceOpt : TraceOption) :
     CoreM Unit := do
@@ -317,14 +328,17 @@ instance : EmptyCollection BaseRuleSet :=
 def GlobalRuleSet.empty : GlobalRuleSet where
   toBaseRuleSet := ∅
   simpTheorems := {}
+  simprocs := {}
 
 instance : EmptyCollection GlobalRuleSet :=
   ⟨.empty⟩
 
 def LocalRuleSet.empty : LocalRuleSet where
   toBaseRuleSet := .empty
-  simpTheoremsArray := #[(`Aesop.local, {})]
+  simpTheoremsArray := #[(`_, {})]
   simpTheoremsArrayNonempty := by decide
+  simprocsArray := #[(`_, {})]
+  simprocsArrayNonempty := by decide
   localNormSimpRules := ∅
 
 instance : EmptyCollection LocalRuleSet :=
@@ -515,8 +529,8 @@ def unindexPredicate? (options : Options') : Option (RuleName → Bool) :=
   else
     some λ n => n.name == `Aesop.BuiltinRules.destructProducts
 
-def mkLocalRuleSet (rss : Array (GlobalRuleSet × Name)) (options : Options') :
-    CoreM LocalRuleSet := do
+def mkLocalRuleSet (rss : Array (GlobalRuleSet × Name × Name))
+    (options : Options') : CoreM LocalRuleSet := do
   let mut result := ∅
   result := {
     toBaseRuleSet := ∅
@@ -525,15 +539,24 @@ def mkLocalRuleSet (rss : Array (GlobalRuleSet × Name)) (options : Options') :
         Array.mkEmpty (rss.size + 1) |>.push (`_, ← getSimpTheorems)
       else
         Array.mkEmpty (rss.size + 1) |>.push (`_, {})
+    simprocsArray :=
+      if options.useDefaultSimpSet then
+        Array.mkEmpty (rss.size + 1) |>.push (`_, ← Simp.getSimprocs)
+      else
+        Array.mkEmpty (rss.size + 1) |>.push ((`_, {}))
     simpTheoremsArrayNonempty := by split <;> simp
+    simprocsArrayNonempty := by split <;> simp
     localNormSimpRules := ∅
   }
-  for (rs, simpExtName) in rss do
+  for (rs, simpExtName, simprocExtName) in rss do
     result := { result with
       toBaseRuleSet := result.toBaseRuleSet.merge rs.toBaseRuleSet
       simpTheoremsArray :=
         result.simpTheoremsArray.push (simpExtName, rs.simpTheorems)
       simpTheoremsArrayNonempty := by simp [result.simpTheoremsArrayNonempty]
+      simprocsArray :=
+        result.simprocsArray.push (simprocExtName, rs.simprocs)
+      simprocsArrayNonempty := by simp [result.simprocsArrayNonempty]
     }
   if let some p := unindexPredicate? options then
     return result.unindex p

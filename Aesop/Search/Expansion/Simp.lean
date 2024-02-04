@@ -50,8 +50,7 @@ def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
   return ⟨stx⟩
 
 def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
-    (simprocs : Simp.SimprocsArray)
-    (discharge? : Option Simp.Discharge := none)
+    (simprocs : Simp.SimprocsArray) (discharge? : Option Simp.Discharge := none)
     (simplifyTarget : Bool := true) (fvarIdsToSimp : Array FVarId := #[])
     (usedSimps : UsedSimps := {}) : MetaM SimpResult := do
   let mvarIdOld := mvarId
@@ -68,8 +67,7 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     return .solved usedSimps
 
 def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
-    (simprocs : Simp.SimprocsArray := {})
-    (discharge? : Option Simp.Discharge := none)
+    (simprocs : Simp.SimprocsArray) (discharge? : Option Simp.Discharge := none)
     (simplifyTarget : Bool := true) (usedSimps : UsedSimps := {}) :
     MetaM SimpResult :=
   mvarId.withContext do
@@ -83,8 +81,8 @@ def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
       usedSimps
 
 def simpAll (mvarId : MVarId) (ctx : Simp.Context)
-    (simprocs : Simp.SimprocsArray := {})
-    (usedSimps : UsedSimps := {}) : MetaM SimpResult := do
+    (simprocs : Simp.SimprocsArray) (usedSimps : UsedSimps := {}) :
+    MetaM SimpResult := do
   let ctx := { ctx with config.failIfUnchanged := false }
   match ← Lean.Meta.simpAll mvarId ctx simprocs usedSimps with
   | (none, usedSimps) => return .solved usedSimps
