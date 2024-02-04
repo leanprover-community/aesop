@@ -422,19 +422,22 @@ structure RuleConfig where
 
 namespace RuleConfig
 
-def addFeature (c : RuleConfig) : Feature → RuleConfig
-  | .phase phase => { c with phase? := phase }
-  | .priority priority => { c with priority? := priority }
-  | .ident ident => { c with ident? := ident }
-  | .builder builder => { c with builder? := builder }
+def addFeature (c : RuleConfig) : Feature → m RuleConfig
+  | .phase phase => return { c with phase? := phase }
+  | .priority priority => return { c with priority? := priority }
+  | .ident ident => do
+    if let some oldIdent := c.ident? then
+      throwError "duplicate rule name '{ident}'; rule name '{oldIdent}' was already specified"
+    return { c with ident? := ident }
+  | .builder builder => return { c with builder? := builder }
   | .builderOption opt =>
-    { c with builderOptions := c.builderOptions.add opt }
+    return { c with builderOptions := c.builderOptions.add opt }
   | .ruleSets newRuleSets =>
     have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
     let ruleSets :=
       ⟨Array.mergeSortedDeduplicating c.ruleSets.ruleSets
         newRuleSets.ruleSets.qsortOrd⟩
-    { c with ruleSets := ruleSets }
+    return { c with ruleSets := ruleSets }
 
 def getPenalty (phase : PhaseName) (c : RuleConfig) : m Int := do
   let (some priority) := c.priority? | throwError
@@ -636,12 +639,12 @@ end RuleConfig
 namespace RuleExpr
 
 def toRuleConfigs (e : RuleExpr) (init : RuleConfig) :
-    Array RuleConfig :=
-  e.foldBranchesM (m := Id) (init := init) λ c feature => c.addFeature feature
+    m (Array RuleConfig) :=
+  e.foldBranchesM (init := init) λ c feature => c.addFeature feature
 
 def toAdditionalRules (e : RuleExpr) (init : RuleConfig)
     (defaultRuleSet : RuleSetName) : m (Array RuleConfig) := do
-  let cs := e.toRuleConfigs init
+  let cs ← e.toRuleConfigs init
   cs.mapM (·.validateForAdditionalRules defaultRuleSet)
 
 def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
@@ -694,7 +697,7 @@ def toRuleNameFilters (e : RuleExpr) :
       builderOptions := ∅
       ruleSets := ⟨#[]⟩
   }
-  let configs := e.toRuleConfigs initialConfig
+  let configs ← e.toRuleConfigs initialConfig
   configs.mapM (·.toRuleNameFilter)
 
 def toGlobalRuleNameFilters (e : RuleExpr) :
