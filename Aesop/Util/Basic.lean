@@ -16,7 +16,16 @@ import Std.Tactic.TryThis
 open Lean
 open Lean.Meta
 
-namespace Aesop.Subarray
+namespace Aesop.Array
+
+theorem size_modify (a : Array α) (i : Nat) (f : α → α) :
+    (a.modify i f).size = a.size := by
+  simp only [Array.modify, Id.run, Array.modifyM]
+  split <;> simp
+
+end Array
+
+namespace Subarray
 
 def popFront? (as : Subarray α) : Option (α × Subarray α) :=
   if h : as.start < as.stop
@@ -187,6 +196,11 @@ def foldSimpEntries (f : σ → SimpEntry → σ) (init : σ) (thms : SimpTheore
 
 def simpEntries (thms : SimpTheorems) : Array SimpEntry :=
   foldSimpEntries (thms := thms) (init := #[]) λ s thm => s.push thm
+
+def containsDecl (thms : SimpTheorems) (decl : Name) : Bool :=
+  thms.isLemma (.decl decl) ||
+  thms.isDeclToUnfold decl ||
+  thms.toUnfoldThms.contains decl
 
 def merge (s t : SimpTheorems) : SimpTheorems := {
     pre := s.pre.mergePreservingDuplicates t.pre

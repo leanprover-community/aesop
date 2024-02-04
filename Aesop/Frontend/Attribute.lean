@@ -54,10 +54,10 @@ initialize registerBuiltinAttribute {
       config.rules.concatMapM (·.buildAdditionalGlobalRules decl)
     for (rule, rsNames) in rules do
       for rsName in rsNames do
-        addRule rsName rule attrKind
+        addGlobalRule rsName rule attrKind (checkNotExists := true)
   erase := λ decl =>
-    eraseRules RuleSetNameFilter.all (RuleNameFilter.ofIdent $ .const decl)
-      (check := true)
+    eraseGlobalRules RuleSetNameFilter.all
+      (RuleNameFilter.ofIdent $ .const decl) (checkExists := true)
 }
 
 end Aesop.Frontend

@@ -257,18 +257,17 @@ partial def searchLoop : SearchM Q (Array MVarId) :=
       incrementIteration
       searchLoop
 
-def search (goal : MVarId) (ruleSet? : Option RuleSet := none)
+def search (goal : MVarId) (ruleSet? : Option LocalRuleSet := none)
      (options : Aesop.Options := {}) (simpConfig : Simp.Config := {})
-     (simpConfigSyntax? : Option Term := none)
-     (profile : Profile := {}) :
+     (simpConfigSyntax? : Option Term := none) (profile : Profile := {}) :
      MetaM (Array MVarId × Profile) := do
   goal.checkNotAssigned `aesop
   let options ← options.toOptions'
   let ruleSet ←
     match ruleSet? with
     | none =>
-        Frontend.getDefaultRuleSet (includeGlobalSimpTheorems := true)
-          options.toOptions
+        let rss ← Frontend.getDefaultGlobalRuleSets
+        mkLocalRuleSet rss options
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
   let (goals, _, _, profile) ←

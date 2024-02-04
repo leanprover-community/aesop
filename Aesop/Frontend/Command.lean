@@ -32,12 +32,15 @@ elab "erase_aesop_rules " "[" es:Aesop.rule_expr,* "]" : command => do
     e.toGlobalRuleNameFilters
   for fs in filters do
     for (rsFilter, rFilter) in fs do
-      eraseRules rsFilter rFilter (check := true)
+      eraseGlobalRules rsFilter rFilter (checkExists := true)
 
 elab "#aesop_rules" : command => do
   liftTermElabM do
-    let rss ← getAllRuleSets (includeGlobalSimpTheorems := true)
+    let lt := λ (n₁, _) (n₂, _) => n₁.cmp n₂ |>.isLT
+    let rss := (← getDeclaredGlobalRuleSets).qsort lt
     TraceOption.ruleSet.withEnabled do
-      rss.trace .ruleSet
+      for (name, rs, _) in rss do
+        withConstAesopTraceNode .ruleSet (return m!"Rule set '{name}'") do
+          rs.trace .ruleSet
 
 end Aesop.Frontend.Parser

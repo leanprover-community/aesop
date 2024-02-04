@@ -145,6 +145,13 @@ structure Options where
   -/
   useSimpAll := true
   /--
+  Use simp theorems from the default `simp` set, i.e. those tagged with
+  `@[simp]`. If this option is `false`, Aesop uses only Aesop-specific simp
+  theorems, i.e. those tagged with `@[aesop simp]`. Note that the congruence
+  lemmas from the default `simp` set are always used.
+  -/
+  useDefaultSimpSet := true
+  /--
   Enable the builtin `unfold` normalisation rule.
   -/
   enableUnfold := true

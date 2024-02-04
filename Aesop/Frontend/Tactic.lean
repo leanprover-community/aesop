@@ -80,7 +80,7 @@ def elabSimpConfigCtx : Syntax → TermElabM Simp.ConfigCtx :=
 structure TacticConfig where
   additionalRules : Array RuleExpr
   erasedRules : Array RuleExpr
-  enabledRuleSets : NameSet
+  enabledRuleSets : HashSet RuleSetName
   options : Aesop.Options
   simpConfig : Simp.Config
   simpConfigSyntax? : Option Term
@@ -157,32 +157,31 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
           modify λ c => { c with simpConfigSyntax? := some t }
         | _ => throwUnsupportedSyntax
 
-def updateRuleSets (goal : MVarId) (rss : Aesop.RuleSets) (c : TacticConfig) :
-    TermElabM (MVarId × Aesop.RuleSets) := do
-  let mut rss := rss
+def updateRuleSet (goal : MVarId) (rs : LocalRuleSet) (c : TacticConfig) :
+    TermElabM (MVarId × LocalRuleSet) := do
+  let mut rs := rs
 
   -- Add additional rules
   let mut goal := goal
   for ruleExpr in c.additionalRules do
     let (goal', rules) ← ruleExpr.buildAdditionalLocalRules goal
     goal := goal'
-    for (rule, rsNames) in rules do
-      for rsName in rsNames do
-        rss ← rss.addRuleChecked rsName rule
+    for rule in rules do
+      rs := rs.add rule
 
   -- Erase erased rules
   for ruleExpr in c.erasedRules do
     let filters ← ruleExpr.toLocalRuleNameFilters goal
-    for (rsFilter, rFilter) in filters do
-      rss ← rss.eraseRulesChecked rsFilter rFilter
-  return (goal, rss)
+    for rFilter in filters do
+      let (rs', anyErased) := rs.erase rFilter
+      rs := rs'
+      if ! anyErased then
+        throwError "aesop: '{rFilter.ident}' is not registered (with the given features) in any rule set."
+  return (goal, rs)
 
 def getRuleSet (goal : MVarId) (c : TacticConfig) :
-    TermElabM (MVarId × Aesop.RuleSet) := do
-  let rss ← getRuleSets c.enabledRuleSets (includeGlobalSimpTheorems := true)
-  let (goal, rss) ← c.updateRuleSets goal rss
-  return (goal, rss.getMergedRuleSet c.options)
+    TermElabM (MVarId × LocalRuleSet) := do
+  let rss ← getGlobalRuleSets c.enabledRuleSets.toArray
+  c.updateRuleSet goal (← mkLocalRuleSet rss (← c.options.toOptions'))
 
-end TacticConfig
-
-end Aesop.Frontend
+end Aesop.Frontend.TacticConfig

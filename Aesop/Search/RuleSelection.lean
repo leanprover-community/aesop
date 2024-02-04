@@ -12,7 +12,7 @@ namespace Aesop
 
 variable [Aesop.Queue Q]
 
-def selectNormRules (rs : RuleSet) (goal : MVarId) :
+def selectNormRules (rs : LocalRuleSet) (goal : MVarId) :
     ProfileT MetaM (Array (IndexMatchResult NormRule)) :=
   profiling (rs.applicableNormalizationRules goal) λ _ elapsed =>
     recordRuleSelectionProfile elapsed

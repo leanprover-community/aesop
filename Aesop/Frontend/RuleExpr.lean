@@ -474,15 +474,15 @@ def getBuilder (c : RuleConfig) : m DBuilderName := do
     "missing rule builder (apply, forward, simp, ...)"
   return builder
 
-def buildLocalRule (c : RuleConfig) (goal : MVarId) :
-    TermElabM (MVarId × RuleSetMember × Array RuleSetName) := do
+def buildRule (c : RuleConfig) (goal : MVarId) :
+    TermElabM (MVarId × LocalRuleSetMember × Array RuleSetName) := do
   let ident ← c.getIdent
   let builder ← c.getBuilder
   match ← c.getPhase with
   | phase@PhaseName.safe =>
     let penalty ← c.getPenalty phase
     let (goal, res, pattern?) ← runRegularBuilder goal ident phase builder
-    let rule := RuleSetMember.safeRule {
+    let rule := .global $ .base $ .safeRule {
       name := ident.toRuleName phase res.builder
       tac := res.tac
       indexingMode := res.indexingMode
@@ -493,7 +493,7 @@ def buildLocalRule (c : RuleConfig) (goal : MVarId) :
   | phase@PhaseName.«unsafe» =>
     let successProbability ← c.getSuccessProbability
     let (goal, res, pattern?) ← runRegularBuilder goal ident phase builder
-    let rule := RuleSetMember.unsafeRule {
+    let rule := .global $ .base $ .unsafeRule {
       name := ident.toRuleName phase res.builder
       tac := res.tac
       indexingMode := res.indexingMode
@@ -507,7 +507,7 @@ def buildLocalRule (c : RuleConfig) (goal : MVarId) :
       match res with
       | .regular res => do
         let penalty ← c.getPenalty phase
-        pure $ .normRule {
+        pure $ .global $ .base $ .normRule {
           res with
           name := ident.toRuleName phase res.builder
           extra := { penalty }
@@ -516,12 +516,12 @@ def buildLocalRule (c : RuleConfig) (goal : MVarId) :
       | .globalSimp entries => do
         let prio ← c.getSimpPriority
         let entries := entries.map (updateSimpEntryPriority prio)
-        pure $ .normSimpRule {
+        pure $ .global $ .normSimpRule {
           entries
           name := ident.toRuleName phase .simp
         }
       | .localSimp fvarUserName => pure $ .localNormSimpRule { fvarUserName }
-      | .unfold r => pure $ .unfoldRule r
+      | .unfold r => pure $ .global $ .base $ .unfoldRule r
     return (goal, rule, c.ruleSets.ruleSets)
   where
     runBuilder (goal : MVarId) (ident : RuleIdent) (phase : PhaseName)
@@ -555,12 +555,21 @@ def buildLocalRule (c : RuleConfig) (goal : MVarId) :
         | throwError "builder {b} cannot be used for {phase} rules"
       return (goal, r, pattern?)
 
+def buildLocalRule (c : RuleConfig) (goal : MVarId) :
+    TermElabM (MVarId × LocalRuleSetMember) := do
+  let (goal, m, _) ← buildRule c goal
+  return (goal, m)
+
 -- Precondition: `c.ident = RuleIdent.const _`.
 def buildGlobalRule (c : RuleConfig) :
-    TermElabM (RuleSetMember × Array RuleSetName) :=
-  Prod.snd <$> buildLocalRule c ⟨`_dummy⟩
-  -- NOTE: We assume here that global rule builders ignore the dummy
-  -- metavariable.
+    TermElabM (GlobalRuleSetMember × Array RuleSetName) := do
+  let (_, m, rsNames) ← buildRule c ⟨`_dummy⟩
+    -- NOTE: We assume here that global rule builders ignore the dummy
+    -- metavariable.
+  if let some m := m.toGlobalRuleSetMember? then
+    return (m, rsNames)
+  else
+    throwError "internal error: buildGlobalRule: unexpected local rule"
 
 def toRuleNameFilter (c : RuleConfig) :
     m (RuleSetNameFilter × RuleNameFilter) := do
@@ -648,7 +657,7 @@ def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
   toAdditionalRules e init defaultRuleSetName
 
 def buildAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
-    TermElabM (Array (RuleSetMember × Array RuleSetName)) := do
+    TermElabM (Array (GlobalRuleSetMember × Array RuleSetName)) := do
   (← e.toAdditionalGlobalRules decl).mapM (·.buildGlobalRule)
 
 def toAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
@@ -665,7 +674,7 @@ def toAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
     toAdditionalRules e init localRuleSetName
 
 def buildAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
-    TermElabM (MVarId × Array (RuleSetMember × Array RuleSetName)) := do
+    TermElabM (MVarId × Array LocalRuleSetMember) := do
   let configs ← e.toAdditionalLocalRules goal
   let mut goal := goal
   let mut rs := Array.mkEmpty configs.size
@@ -693,7 +702,8 @@ def toGlobalRuleNameFilters (e : RuleExpr) :
   e.toRuleNameFilters
 
 def toLocalRuleNameFilters (goal : MVarId) (e : RuleExpr) :
-    MetaM (Array (RuleSetNameFilter × RuleNameFilter)) :=
-  goal.withContext $ e.toRuleNameFilters
+    MetaM (Array RuleNameFilter) :=
+  goal.withContext do
+    return (← e.toRuleNameFilters).map (·.snd)
 
 end Aesop.Frontend.RuleExpr

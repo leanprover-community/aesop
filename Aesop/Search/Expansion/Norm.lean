@@ -19,7 +19,7 @@ namespace NormM
 
 structure Context where
   options : Options'
-  ruleSet : RuleSet
+  ruleSet : LocalRuleSet
   normSimpContext : NormSimpContext
 
 end NormM
@@ -200,7 +200,7 @@ def normSimpCore (goal : MVarId)
       else
         let lctx ← getLCtx
         let mut simpTheorems := ctx.simpTheorems
-        for localRule in (← read).ruleSet.localNormSimpLemmas do
+        for localRule in (← read).ruleSet.localNormSimpRules do
           let (some ldecl) := lctx.findFromUserName? localRule.fvarUserName
             | continue
           let (some simpTheorems') ← observing? $

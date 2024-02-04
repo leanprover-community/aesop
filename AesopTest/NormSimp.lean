@@ -32,7 +32,7 @@ error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 example {α β : Prop} (ha : α) (h : α → β) : β := by
   aesop (rule_sets [-builtin,-default])
     (simp_config := { maxDischargeDepth := 0 })
-    (config := { terminal := true })
+    (config := { terminal := true, useDefaultSimpSet := false })
 
 example {α β : Prop} (ha : α) (h : α → β) : β := by
   aesop (rule_sets [-builtin,-default])
@@ -44,8 +44,9 @@ error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : true && false = false := by
-  aesop (rule_sets [-default,-builtin]) (config := { terminal := true })
+  aesop (rule_sets [-default,-builtin])
     (simp_config := { decide := false })
+    (config := { terminal := true, useDefaultSimpSet := false })
 
 example : true && false = false := by
   aesop (rule_sets [-default,-builtin]) (simp_config := { decide := true })
