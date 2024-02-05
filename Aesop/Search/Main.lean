@@ -182,7 +182,19 @@ def finishIfProven : SearchM Q Bool := do
   traceTree
   return true
 
-def treeHasNonPreprocessingRapp : TreeM Bool := do
+/--
+This function detects whether the search has made progress, meaning that the
+remaining goals after safe prefix expansion are different from the initial goal.
+We approximate this by checking whether, after safe prefix expansion, either
+of the following statements is true.
+
+- There is a safe rapp.
+- A subgoal of the preprocessing rule has been modified during normalisation.
+
+This is an approximation because a safe rule could, in principle, leave the
+initial goal unchanged.
+-/
+def treeHasProgress : TreeM Bool := do
   let resultRef ← IO.mkRef false
   preTraverseDown
     (λ gref => do
@@ -193,12 +205,14 @@ def treeHasNonPreprocessingRapp : TreeM Bool := do
           return false
       return true)
     (λ rref => do
-      if (← rref.get).appliedRule.name != preprocessRule.name then
-        resultRef.set true
+      let rule := (← rref.get).appliedRule
+      if rule.name == preprocessRule.name then
+        return true
+      else if rule.isUnsafe then
         return false
       else
-        return true
-      )
+        resultRef.set true
+        return false)
     (λ _ => return true)
     (.mvarCluster (← get).root)
   resultRef.get
@@ -222,7 +236,7 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
   let safeExpansionSuccess ← expandSafePrefix
   if ! safeExpansionSuccess then
     logWarning m!"aesop: safe prefix was not fully expanded because the maximum number of rule applications ({(← read).options.maxSafePrefixRuleApplications}) was reached."
-  if ! (← treeHasNonPreprocessingRapp) then
+  if ! (← treeHasProgress) then
     throwAesopEx (← getRootMVarId) "made no progress"
   if opts.warnOnNonterminal then
     logWarning m!"aesop: {err}"

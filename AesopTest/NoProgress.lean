@@ -46,3 +46,17 @@ error: unsolved goals
 #guard_msgs in
 example : F' := by
   aesop
+
+attribute [-aesop] F'_def
+attribute [aesop 100%] F'_def
+
+-- When an unsafe rule is applied, we don't count this as progress because the
+-- remaining goal that the user gets to see is exactly the same as the initial
+-- goal.
+
+/--
+error: tactic 'aesop' failed, made no progress
+-/
+#guard_msgs in
+example : F' := by
+  aesop
