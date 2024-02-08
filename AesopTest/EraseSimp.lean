@@ -9,7 +9,6 @@ import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
 set_option aesop.smallErrorMessages true
-set_option linter.unreachableTactic false
 
 example (n : Nat) : n + m = m + n := by
   aesop (add simp Nat.add_comm)
