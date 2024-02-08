@@ -12,6 +12,7 @@ import Std.Lean.Meta.Inaccessible
 import Std.Lean.HashSet
 import Std.Tactic.Ext
 import Std.Tactic.PermuteGoals
+import Std.Tactic.SeqFocus
 
 open Lean
 open Lean.Elab.Tactic

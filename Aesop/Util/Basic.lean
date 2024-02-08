@@ -8,7 +8,6 @@ import Aesop.Nanos
 import Aesop.Util.UnionFind
 import Aesop.Util.UnorderedArraySet
 import Std.Lean.Expr
-import Std.Lean.Format
 import Std.Lean.Meta.DiscrTree
 import Std.Lean.PersistentHashSet
 import Std.Tactic.TryThis
@@ -314,18 +313,17 @@ def addTryThisTacticSeqSuggestion (ref : Syntax)
     (suggestion : TSyntax ``Lean.Parser.Tactic.tacticSeq)
     (origSpan? : Option Syntax := none) : MetaM Unit := do
   let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq suggestion
-  let msgText := fmt.prettyExtra (indent := 0) (column := 0)
+  let msgText := fmt.pretty (indent := 0) (column := 0)
   if let some range := (origSpan?.getD ref).getRange? then
     let map ← getFileMap
-    let start := findLineStart map.source range.start
-    let indent := (range.start - start).1
-    let text := fmt.prettyExtra (indent := indent - 2) (column := indent)
+    let (indent, column) := Std.Tactic.TryThis.getIndentAndColumn map range
+    let text := fmt.pretty indent column
     let suggestion := {
       suggestion := .string text
       messageData? := some msgText
     }
     Std.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
-      (header := "Try this:\n  ")
+      (header := "Try this:\n")
 
 /--
 Runs a computation for at most the given number of heartbeats times 1000,
