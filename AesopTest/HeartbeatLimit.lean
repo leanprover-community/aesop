@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop
 import Std.Tactic.GuardMsgs
+import Std.Linter.UnreachableTactic
 
 set_option aesop.check.all true
 -- There is incorrectly a `linter.unreachableTactic` warning on
