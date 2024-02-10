@@ -5,8 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 @[aesop 50% constructors]
 inductive I₁
@@ -22,13 +24,16 @@ example : I₁ := by
 example : I₁ := by
   aesop (config := { strategy := .breadthFirst })
 
+/--
+error: tactic 'aesop' failed, maximum number of rule applications (10) reached. Set the 'maxRuleApplications' option to increase the limit.
+-/
+#guard_msgs in
 example : I₁ := by
-  fail_if_success
-    aesop (config :=
-      { strategy := .depthFirst,
-        maxRuleApplicationDepth := 0,
-        maxRuleApplications := 10,
-        terminal := true })
   aesop (config :=
-    { strategy := .depthFirst,
-      maxRuleApplicationDepth := 10 })
+    { strategy := .depthFirst
+      maxRuleApplicationDepth := 0
+      maxRuleApplications := 10,
+      terminal := true })
+
+example : I₁ := by
+  aesop (config := { strategy := .depthFirst, maxRuleApplicationDepth := 10 })

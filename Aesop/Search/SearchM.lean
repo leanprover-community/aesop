@@ -19,15 +19,16 @@ structure NormSimpContext extends Simp.Context where
   enabled : Bool
   useHyps : Bool
   configStx? : Option Term
+  simprocs : Simp.SimprocsArray
   deriving Inhabited
 
 namespace SearchM
 
 structure Context where
-  ruleSet : RuleSet
+  ruleSet : LocalRuleSet
   normSimpContext : NormSimpContext
   options : Aesop.Options'
-  deriving Nonempty
+  deriving Inhabited
 
 structure State (Q) [Aesop.Queue Q] where
   iteration : Iteration
@@ -76,7 +77,7 @@ protected def run' (profile : Profile) (ctx : SearchM.Context)
     x.run profile |>.run ctx |>.run σ |>.run t
   return (a, σ, t, profile)
 
-protected def run (ruleSet : RuleSet) (options : Aesop.Options')
+protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     (simpConfig : Simp.Config) (simpConfigStx? : Option Term)
     (goal : MVarId) (profile : Profile) (x : SearchM Q α) :
     MetaM (α × State Q × Tree × Profile) := do
@@ -84,8 +85,9 @@ protected def run (ruleSet : RuleSet) (options : Aesop.Options')
   let normSimpContext := {
     config := simpConfig
     maxDischargeDepth := UInt32.ofNatTruncate simpConfig.maxDischargeDepth
-    simpTheorems := ruleSet.globalNormSimpTheorems
+    simpTheorems := ruleSet.simpTheoremsArray.map (·.snd)
     congrTheorems := ← getSimpCongrTheorems
+    simprocs := ruleSet.simprocsArray.map (·.snd)
     configStx? := simpConfigStx?
     enabled := options.enableSimp
     useHyps := options.useSimpAll

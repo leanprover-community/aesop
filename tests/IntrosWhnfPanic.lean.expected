@@ -1,8 +1,0 @@
-tests/IntrosWhnfPanic.lean:17:16: error: unexpected token '\'; expected term
-tests/IntrosWhnfPanic.lean:16:26: error: unsolved goals
-ι : Type u
-V : ι → Type v
-G : (i : ι) → SimpleGraph' (V i)
-x✝ y✝ : (i : ι) × V i
-a✝ : (nomatch x✝) y✝
-⊢ (nomatch y✝) x✝

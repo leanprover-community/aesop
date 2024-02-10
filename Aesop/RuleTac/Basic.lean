@@ -26,11 +26,21 @@ Input for a rule tactic. Contains:
 - `mvars`: the set of mvars which occur in `goal`.
 - `indexMatchLocations`: if the rule is indexed, the locations (e.g. hyps or the
   target) matched by the rule's index entries. Otherwise an empty set.
+- `patternInstantiations`: if the rule has a pattern, the pattern instantiations
+  that were found in the goal. Each instantiation is a list of expressions which
+  were found by matching the pattern against expressions in the goal. For
+  example, if `h : max a b = max a c` appears in the goal and the rule has
+  pattern `max x y`, there will be two pattern instantiations `[a, b]`
+  (representing the substitution `{x ↦ a, y ↦ b}`) and `[a, c]`. If the rule
+  does not have a pattern, `patternInstantiations` is empty; otherwise it's
+  guaranteed to be non-empty.
+- `options`: the options given to Aesop.
 -/
 structure RuleTacInput where
   goal : MVarId
   mvars : UnorderedArraySet MVarId
-  indexMatchLocations : UnorderedArraySet IndexMatchLocation
+  indexMatchLocations : HashSet IndexMatchLocation
+  patternInstantiations : HashSet RulePatternInstantiation
   options : Options'
   deriving Inhabited
 
@@ -117,13 +127,16 @@ inductive CasesTarget
   deriving Inhabited
 
 inductive RuleTacDescr
-  | applyConst (decl     : Name) (md : TransparencyMode)
+  | applyConst (decl : Name) (md : TransparencyMode) (pat? : Option RulePattern)
   | applyFVar  (userName : Name) (md : TransparencyMode)
+      (pat? : Option RulePattern)
   | constructors (constructorNames : Array Name) (md : TransparencyMode)
-  | forwardConst (decl     : Name) (immediate : UnorderedArraySet Nat)
-      (isDestruct : Bool) (md : TransparencyMode)
-  | forwardFVar  (userName : Name) (immediate : UnorderedArraySet Nat)
-      (isDestruct : Bool) (md : TransparencyMode)
+  | forwardConst (decl     : Name) (pat? : Option RulePattern)
+      (immediate : UnorderedArraySet Nat) (isDestruct : Bool)
+      (md : TransparencyMode)
+  | forwardFVar  (userName : Name) (pat? : Option RulePattern)
+      (immediate : UnorderedArraySet Nat) (isDestruct : Bool)
+      (md : TransparencyMode)
   | cases (target : CasesTarget) (md : TransparencyMode)
       (isRecursiveType : Bool)
   | tacticM (decl : Name)

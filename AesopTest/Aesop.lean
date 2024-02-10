@@ -5,8 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 open Lean
 open Lean.Meta
@@ -48,13 +50,29 @@ section Loop
 structure Wrap (α) where
   unwrap : α
 
-set_option linter.unusedVariables false in
+/--
+error: tactic 'aesop' failed, maximum number of rule applications (20) reached. Set the 'maxRuleApplications' option to increase the limit.
+-/
+#guard_msgs in
 example (h : α → α) (h' : Wrap α) : α := by
-  -- TODO check that Aesop reports the correct error, to eliminate false positives
-  fail_if_success aesop (add safe h) (config := { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0 })
-  fail_if_success aesop (add safe h) (config := { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0 })
-  fail_if_success aesop (add safe h) (config := { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0 })
-  exact h'.unwrap
+  aesop (add safe h)
+    (config := { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0, terminal := true })
+
+/--
+error: tactic 'aesop' failed, maximum number of goals (20) reached. Set the 'maxGoals' option to increase the limit.
+-/
+#guard_msgs in
+example (h : α → α) (h' : Wrap α) : α := by
+  aesop (add safe h)
+    (config := { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0, terminal := true })
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal. Some goals were not explored because the maximum rule application depth (20) was reached. Set option 'maxRuleApplicationDepth' to increase the limit.
+-/
+#guard_msgs in
+example (h : α → α) (h' : Wrap α) : α := by
+  aesop (add safe h)
+    (config := { maxRuleApplicationDepth := 20, maxGoals := 0, maxRuleApplications := 0, terminal := true })
 
 end Loop
 

@@ -60,6 +60,16 @@ structure Options where
   -/
   maxNormIterations := 100
   /--
+  When Aesop fails to prove a goal, it reports the goals that remain after safe
+  rules have been applied exhaustively to the root goal, the safe
+  descendants of the root goal, and so on (i.e., after the "safe prefix" of the
+  search tree has been unfolded). However, it is possible for the search to fail
+  before the safe prefix has been completely generated. In this case, Aesop
+  expands the safe prefix after the fact. This option limits the number of
+  additional rule applications generated during this process. 0 means no limit.
+  -/
+  maxSafePrefixRuleApplications := 50
+  /--
   Heartbeat limit for individual Aesop rules. If a rule goes over this limit, it
   fails, but Aesop itself continues until it reaches the limit set by the
   `maxHeartbeats` option. If `maxRuleHeartbeats = 0`, there is no per-rule
@@ -134,6 +144,13 @@ structure Options where
   rule.
   -/
   useSimpAll := true
+  /--
+  Use simp theorems from the default `simp` set, i.e. those tagged with
+  `@[simp]`. If this option is `false`, Aesop uses only Aesop-specific simp
+  theorems, i.e. those tagged with `@[aesop simp]`. Note that the congruence
+  lemmas from the default `simp` set are always used.
+  -/
+  useDefaultSimpSet := true
   /--
   Enable the builtin `unfold` normalisation rule.
   -/

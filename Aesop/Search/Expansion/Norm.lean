@@ -19,7 +19,7 @@ namespace NormM
 
 structure Context where
   options : Options'
-  ruleSet : RuleSet
+  ruleSet : LocalRuleSet
   normSimpContext : NormSimpContext
 
 end NormM
@@ -123,6 +123,7 @@ def runNormRuleCore (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (rule : IndexMatchResult NormRule) : NormM NormRuleResult := do
   let ruleInput := {
     indexMatchLocations := rule.locations
+    patternInstantiations := rule.patternInstantiations
     options := (← read).options
     goal, mvars
   }
@@ -191,15 +192,16 @@ def SimpResult.toNormRuleResult (ruleName : DisplayRuleName)
 def normSimpCore (goal : MVarId)
     (goalMVars : HashSet MVarId) : NormM NormRuleResult := do
   let ctx := (← read).normSimpContext
+  let simprocs := ctx.simprocs
   goal.withContext do
     let preState ← saveState
     let result ←
       if ctx.useHyps then
-        Aesop.simpAll goal ctx.toContext
+        Aesop.simpAll goal ctx.toContext simprocs
       else
         let lctx ← getLCtx
         let mut simpTheorems := ctx.simpTheorems
-        for localRule in (← read).ruleSet.localNormSimpLemmas do
+        for localRule in (← read).ruleSet.localNormSimpRules do
           let (some ldecl) := lctx.findFromUserName? localRule.fvarUserName
             | continue
           let (some simpTheorems') ← observing? $
@@ -207,7 +209,7 @@ def normSimpCore (goal : MVarId)
             | continue
           simpTheorems := simpTheorems'
         let ctx := { ctx with simpTheorems }
-        Aesop.simpGoalWithAllHypotheses goal ctx
+        Aesop.simpGoalWithAllHypotheses goal ctx simprocs
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
     -- unassigned. In this case, we treat the goal as unchanged.

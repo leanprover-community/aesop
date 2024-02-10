@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
 
@@ -25,5 +26,30 @@ axiom s_r : ∀ x y, S y → R x
 
 axiom s : S 0
 
+/--
+warning: aesop: failed to prove the goal after exhaustive search.
+---
+error: unsolved goals
+case a.a
+⊢ S ?a.y✝
+
+case a.a
+⊢ S ?a.y✝
+
+case x
+⊢ Nat
+
+case a.a
+⊢ S ?a.y✝
+
+case a.a
+⊢ S ?a.y✝
+
+case x
+⊢ Nat
+---
+error: (kernel) declaration has metavariables '_example'
+-/
+#guard_msgs in
 example : P := by
   aesop

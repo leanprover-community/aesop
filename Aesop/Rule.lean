@@ -171,7 +171,7 @@ end NormSimpRule
 -- since the `FVarId` of the hypothesis is not guaranteed to be stable.
 structure LocalNormSimpRule where
   fvarUserName : Name
-  deriving Inhabited
+  deriving Inhabited, BEq, Hashable
 
 namespace LocalNormSimpRule
 

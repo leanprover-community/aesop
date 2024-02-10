@@ -119,6 +119,8 @@ def unfoldManyStar (goal : MVarId)
       goal ← applySimpResultToTarget goal target r
 
     for ldecl in (← goal.getDecl).lctx do
+      if ldecl.isImplementationDetail then
+        continue
       let r ←
         unfoldManyCore ctx unfold? (← instantiateMVars ldecl.type) usedDeclsRef
       if (← instantiateMVars r.expr) != ldecl.type then

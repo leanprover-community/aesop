@@ -9,9 +9,6 @@ import Std.Tactic.GuardMsgs
 import Std.Linter.UnreachableTactic
 
 set_option aesop.check.all true
--- There is incorrectly a `linter.unreachableTactic` warning on
--- `aesop (config := { maxRuleHeartbeats := 1, terminal := true })`
--- below. This is perhaps because of a bad interaction with `#guard_msgs`?
 set_option linter.unreachableTactic false
 
 @[aesop safe constructors]
@@ -29,7 +26,13 @@ example : Even 10 := by
 example : Even 10 := by
   aesop
 
+/--
+error: aesop: error in norm simp: tactic 'simp' failed, nested error:
+(deterministic) timeout at 'simp', maximum number of heartbeats (1) has been reached (use 'set_option maxHeartbeats <num>' to set the limit)
+-/
+#guard_msgs in
 example (n m k : Nat) : n + m + k = (n + m) + k := by
-  fail_if_success
-    aesop (config := { maxSimpHeartbeats := 1, terminal := true })
+  aesop (config := { maxSimpHeartbeats := 1, terminal := true })
+
+example (n m k : Nat) : n + m + k = (n + m) + k := by
   aesop

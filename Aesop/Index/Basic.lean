@@ -5,9 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Util.Basic
+import Aesop.Rule.Name
+import Aesop.RulePattern
 
-open Lean
-open Lean.Meta
+open Lean Lean.Meta
 
 namespace Aesop
 
@@ -45,8 +46,8 @@ end IndexingMode
 
 
 inductive IndexMatchLocation
-  | target
   | none
+  | target
   | hyp (ldecl : LocalDecl)
   deriving Inhabited
 
@@ -54,14 +55,14 @@ namespace IndexMatchLocation
 
 instance : ToMessageData IndexMatchLocation where
   toMessageData
-    | target => "target"
     | none => "none"
+    | target => "target"
     | hyp ldecl => m!"hyp {ldecl.userName}"
 
 instance : BEq IndexMatchLocation where
   beq
-    | target, target => true
     | none, none => true
+    | target, target => true
     | hyp ldecl₁, hyp ldecl₂ => ldecl₁.fvarId == ldecl₂.fvarId
     | _, _ => false
 
@@ -77,12 +78,19 @@ instance : Ord IndexMatchLocation where
     | hyp .., none => .gt
     | hyp ldecl₁, hyp ldecl₂ => ldecl₁.fvarId.name.quickCmp ldecl₂.fvarId.name
 
+instance : Hashable IndexMatchLocation where
+  hash
+    | none => 7
+    | target => 13
+    | hyp ldecl => mixHash 17 $ hash ldecl.fvarId
+
 end IndexMatchLocation
 
 
 structure IndexMatchResult (α : Type) where
   rule : α
-  locations : UnorderedArraySet IndexMatchLocation
+  locations : HashSet IndexMatchLocation
+  patternInstantiations : HashSet RulePatternInstantiation
   deriving Inhabited
 
 namespace IndexMatchResult

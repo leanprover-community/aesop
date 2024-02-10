@@ -4,39 +4,50 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Builder
-import Aesop.Index
-import Aesop.Rule
+import Aesop.Builder.Basic
+import Aesop.Index.Basic
+import Aesop.Rule.Basic
 
 open Lean
 open Lean.Meta
 
 namespace Aesop
 
-inductive RuleSetMember
+inductive BaseRuleSetMember
   | normRule (r : NormRule)
   | unsafeRule (r : UnsafeRule)
   | safeRule (r : SafeRule)
-  | normSimpRule (r : NormSimpRule)
-  | localNormSimpRule (r : LocalNormSimpRule)
   | unfoldRule (r : UnfoldRule)
   deriving Inhabited
 
-namespace RuleSetMember
-
-def name : RuleSetMember → RuleName
+def BaseRuleSetMember.name : BaseRuleSetMember → RuleName
   | normRule r => r.name
   | unsafeRule r => r.name
   | safeRule r => r.name
-  | normSimpRule r => r.name
-  | localNormSimpRule r => r.name
   | unfoldRule r => r.name
 
-def isGlobal (m : RuleSetMember) : Bool :=
-  m.name.scope == .global
+inductive GlobalRuleSetMember
+  | base (m : BaseRuleSetMember)
+  | normSimpRule (e : NormSimpRule)
+  deriving Inhabited
 
-end RuleSetMember
+def GlobalRuleSetMember.name : GlobalRuleSetMember → RuleName
+  | base m => m.name
+  | normSimpRule r => r.name
 
+inductive LocalRuleSetMember
+  | global (m : GlobalRuleSetMember)
+  | localNormSimpRule (r : LocalNormSimpRule)
+  deriving Inhabited
+
+def LocalRuleSetMember.name : LocalRuleSetMember → RuleName
+  | global m => m.name
+  | localNormSimpRule r => r.name
+
+def LocalRuleSetMember.toGlobalRuleSetMember? :
+    LocalRuleSetMember → Option GlobalRuleSetMember
+  | global m => some m
+  | _ => none
 
 structure RuleNameFilter where
   ident : RuleIdent
@@ -50,284 +61,32 @@ def ofIdent (i : RuleIdent) : RuleNameFilter where
   builders := #[]
   phases := #[]
 
-def «match» (f : RuleNameFilter) (n : RuleName) : Bool :=
+def matchesPhase (f : RuleNameFilter) (p : PhaseName) : Bool :=
+  f.phases.isEmpty || f.phases.contains p
+
+def matchesBuilder (f : RuleNameFilter) (b : BuilderName) : Bool :=
+  f.builders.isEmpty || f.builders.contains b
+
+def «matches» (f : RuleNameFilter) (n : RuleName) : Bool :=
   f.ident.name == n.name &&
   f.ident.scope == n.scope &&
-  (f.builders.isEmpty || f.builders.any (· == n.builder)) &&
-  (f.phases.isEmpty || f.phases.any (· == n.phase))
+  f.matchesPhase n.phase &&
+  f.matchesBuilder n.builder
+
+def matchesSimpTheorem? (f : RuleNameFilter) : Option Name := Id.run do
+  if let .const decl := f.ident then
+    if f.matchesBuilder .simp then
+      return some decl
+  return none
+
+def matchesLocalNormSimpRule? (f : RuleNameFilter) :
+    Option LocalNormSimpRule := Id.run do
+  if let .fvar fvarUserName := f.ident then
+    if f.matchesBuilder .simp then
+      return some { fvarUserName }
+  return none
 
 end RuleNameFilter
-
-
-structure RuleSet where
-  normRules : Index NormRule
-  unsafeRules : Index UnsafeRule
-  safeRules : Index SafeRule
-  normSimpLemmas : SimpTheorems
-  normSimpLemmaDescrs : PHashMap RuleName (Array SimpEntry)
-    -- A cache of the norm simp rules added to `normSimpLemmas`. Invariant: the
-    -- simp entries in this map are a subset of those in `normSimpLemmas`. When
-    -- a rule is erased, its entry is removed from this map. We use this map (a)
-    -- to figure out which `SimpEntry`s to erase from `normSimpLemmas` when a
-    -- rule is erased; (b) to serialise the norm simp rules.
-  simpAttrNormSimpLemmas : Array (Name × SimpTheorems)
-    -- `SimpTheorems` coming from `simp` attributes (identified by the given
-    -- `Name`). In particular, we usually include the default `simp` set here.
-    -- Does not need to be persistent since these `simp` rules are already
-    -- persisted by the corresponding `simp` attribute. Note that these `simp`
-    -- lemmas are not cached in `normSimpLemmaDescrs`. Invariant:
-    -- `simpAttrNormSimpLemmas` is sorted by first components (according to
-    -- `Name.quickCmp`), and the first components are assumed to uniquely
-    -- identify the elements.
-  localNormSimpLemmas : Array LocalNormSimpRule
-    -- Local `simp` rules, i.e. those added to a single Aesop call. Does not
-    -- need to be persistent because the global rule set (which is stored in a
-    -- persistent env extension) never contains local norm simp lemmas.
-  unfoldRules : PHashMap Name (Option Name)
-    -- A pair `(decl, unfoldThm?)` in this map represents a declaration `decl`
-    -- which should be unfolded. `unfoldThm?` should be the output of
-    -- `getUnfoldEqnFor? decl` and is cached here for efficiency.
-  ruleNames : PHashMap RuleIdent (UnorderedArraySet RuleName)
-    -- A cache of (non-erased) rule names. Invariant: `ruleNames` contains
-    -- exactly the names of the rules in `normRules`, `normSimpLemmaDescrs`,
-    -- `unsafeRules`, `safeRules`, `localNormSimpLemmas` and `unfoldRules`,
-    -- minus the rules in `erased`. We use this cache (a) to quickly determine
-    -- whether a rule is present in the rule set and (b) to find the full rule
-    -- names corresponding to a `RuleIdent`.
-  erased : HashSet RuleName
-    -- The set of rules that were erased from `normRules`, `unsafeRules` and
-    -- `safeRules`. When we erase a rule which is present in any of these three
-    -- indices, the rule is not removed from the indices but just added to this
-    -- set. (When we erase a rule from other `normSimpLemmas`,
-    -- `simpAttrNormSimpLemmas`, `localNormSimpLemmas` or `unfoldRules`, we just
-    -- erase it.)
-  deriving Inhabited
-
-namespace RuleSet
-
-def trace (rs : RuleSet) (traceOpt : TraceOption) : CoreM Unit := do
-  if ! (← traceOpt.isEnabled) then
-    return
-  withConstAesopTraceNode traceOpt (return "Erased rules") do
-    aesop_trace![traceOpt] "(Note: even if these rules appear in the sections below, they will not be applied by Aesop.)"
-    for r in rs.erased.toArray.qsortOrd do
-      aesop_trace![traceOpt] r
-  withConstAesopTraceNode traceOpt (return "Unsafe rules") do
-    rs.unsafeRules.trace traceOpt
-  withConstAesopTraceNode traceOpt (return "Safe rules") do
-    rs.safeRules.trace traceOpt
-  withConstAesopTraceNode traceOpt (return "Normalisation rules") do
-    rs.normRules.trace traceOpt
-  withConstAesopTraceNode traceOpt (return "Normalisation simp theorems specific to this rule set") do
-    traceSimpTheorems rs.normSimpLemmas traceOpt
-  withConstAesopTraceNode traceOpt (return "Normalisation simp theorems inherited from simp attributes") do
-    rs.simpAttrNormSimpLemmas.forM λ (name, simpTheorems) =>
-      withConstAesopTraceNode traceOpt (return m!"Simp set {printSimpSetName name}:") do
-        traceSimpTheorems simpTheorems traceOpt
-  withConstAesopTraceNode traceOpt (return "Local normalisation simp theorems") do
-    for r in rs.localNormSimpLemmas.map (·.fvarUserName.toString) |>.qsortOrd do
-      aesop_trace![traceOpt] r
-  withConstAesopTraceNode traceOpt (return "Constants to unfold") do
-    for r in rs.unfoldRules.toArray.map (·.fst.toString) |>.qsortOrd do
-      aesop_trace![traceOpt] r
-where
-  printSimpSetName : Name → String
-    | `_ => "<default>"
-    | n => toString n
-
-def empty : RuleSet where
-  normRules := {}
-  unsafeRules := {}
-  safeRules := {}
-  normSimpLemmas := {}
-  normSimpLemmaDescrs := {}
-  simpAttrNormSimpLemmas := {}
-  localNormSimpLemmas := {}
-  unfoldRules := {}
-  ruleNames := {}
-  erased := {}
-
-instance : EmptyCollection RuleSet :=
-  ⟨empty⟩
-
-def merge (rs₁ rs₂ : RuleSet) : RuleSet where
-  normRules := rs₁.normRules.merge rs₂.normRules
-  unsafeRules := rs₁.unsafeRules.merge rs₂.unsafeRules
-  safeRules := rs₁.safeRules.merge rs₂.safeRules
-  normSimpLemmas := SimpTheorems.merge rs₁.normSimpLemmas rs₂.normSimpLemmas
-  normSimpLemmaDescrs :=
-    rs₁.normSimpLemmaDescrs.mergeWith rs₂.normSimpLemmaDescrs λ _ nsd₁ _ => nsd₁
-    -- We can merge left-biased here because `nsd₁` and `nsd₂` should be equal
-    -- anyway.
-  simpAttrNormSimpLemmas :=
-    -- We assume that if the names of two `simp` databases are equal, then so
-    -- are the databases themselves.
-    have : Ord (Name × SimpTheorems) := .on ⟨Name.quickCmp⟩ (·.fst)
-    rs₁.simpAttrNormSimpLemmas.mergeSortedDeduplicating
-      rs₂.simpAttrNormSimpLemmas
-  localNormSimpLemmas := rs₁.localNormSimpLemmas ++ rs₂.localNormSimpLemmas
-  unfoldRules := rs₁.unfoldRules.mergeWith rs₂.unfoldRules
-    λ _ unfoldThm?₁ _ => unfoldThm?₁
-  ruleNames :=
-    rs₁.ruleNames.mergeWith rs₂.ruleNames λ _ ns₁ ns₂ =>
-      ns₁ ++ ns₂
-  erased :=
-    -- Add the erased rules from `rs₁` to `init`, except those rules which are
-    -- present (and not erased) in `rs₂`.
-    let go (rs₁ rs₂ : RuleSet) (init : HashSet RuleName) : HashSet RuleName :=
-      rs₁.erased.fold (init := init) λ x n =>
-        match rs₂.ruleNames.find? n.toRuleIdent with
-        | none => x.insert n
-        | some ns =>
-          if ns.contains n then x else x.insert n
-    go rs₂ rs₁ $ go rs₁ rs₂ {}
-
-def add (rs : RuleSet) (r : RuleSetMember) : RuleSet :=
-  let n := r.name
-  let erased := rs.erased.erase n
-  let ruleNames :=
-    let ident := n.toRuleIdent
-    match rs.ruleNames.find? ident with
-    | none => rs.ruleNames.insert ident $ .singleton n
-    | some ns => rs.ruleNames.insert ident $ ns.insert n
-  let rs := { rs with erased := erased, ruleNames := ruleNames }
-  match r with
-  | .normRule r =>
-    { rs with normRules := rs.normRules.add r r.indexingMode }
-  | .unsafeRule r =>
-    { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
-  | .safeRule r =>
-    { rs with safeRules := rs.safeRules.add r r.indexingMode }
-  | .normSimpRule r => {
-      rs with
-      normSimpLemmas :=
-        r.entries.foldl (init := rs.normSimpLemmas) λ simpLemmas e =>
-          SimpTheorems.addSimpEntry simpLemmas e
-      normSimpLemmaDescrs := rs.normSimpLemmaDescrs.insert r.name r.entries
-    }
-  | .localNormSimpRule r =>
-    { rs with localNormSimpLemmas := rs.localNormSimpLemmas.push r }
-  | .unfoldRule r =>
-    { rs with unfoldRules := rs.unfoldRules.insert r.decl r.unfoldThm? }
-
-def addArray (rs : RuleSet) (ra : Array RuleSetMember) : RuleSet :=
-  ra.foldl add rs
-
-private def simpTheoremsContains (st : SimpTheorems) (decl : Name) : Bool :=
-  st.isLemma (.decl decl) ||
-  st.isDeclToUnfold decl ||
-  st.toUnfoldThms.contains decl
-
-def eraseSimpAttrNormSimpLemmas (rs : RuleSet) (f : RuleNameFilter) :
-    RuleSet × Bool := Id.run do
-  let mut simpAttrNormSimpLemmas := rs.simpAttrNormSimpLemmas
-  let mut anyErased := false
-  if let .const theoremName := f.ident then
-    if f.builders.isEmpty || f.builders.contains .simp then
-      let origin := .decl theoremName
-      for i in [:simpAttrNormSimpLemmas.size] do
-        let (name, simpTheorems) := simpAttrNormSimpLemmas[i]!
-        if simpTheoremsContains simpTheorems theoremName then
-          simpAttrNormSimpLemmas :=
-            simpAttrNormSimpLemmas.set! i (name, simpTheorems.eraseCore origin)
-          anyErased := true
-  return ({ rs with simpAttrNormSimpLemmas }, anyErased)
-
--- Returns the updated rule set and `true` if at least one rule was erased.
-def erase (rs : RuleSet) (f : RuleNameFilter) : RuleSet × Bool := Id.run do
-  let (rs, anyErased) := rs.eraseSimpAttrNormSimpLemmas f
-  let some ns := rs.ruleNames.find? f.ident
-    | (rs, anyErased)
-  let (toErase, toKeep) := ns.partition f.match
-  if toErase.isEmpty then
-    (rs, anyErased)
-  else do
-    let ruleNames :=
-      if toKeep.isEmpty then
-        rs.ruleNames.erase f.ident
-      else
-        rs.ruleNames.insert f.ident toKeep
-
-    let mut erased := rs.erased
-    let mut normSimpLemmaDescrs := rs.normSimpLemmaDescrs
-    let mut normSimpLemmas := rs.normSimpLemmas
-    let mut localNormSimpLemmas := rs.localNormSimpLemmas
-    let mut unfoldRules := rs.unfoldRules
-    for r in toErase do
-      if r.builder == .simp then
-        if r.scope == .global then
-          if let some simpEntries := normSimpLemmaDescrs.find? r then
-            normSimpLemmaDescrs := normSimpLemmaDescrs.erase r
-            for e in simpEntries do
-              normSimpLemmas := SimpTheorems.eraseSimpEntry normSimpLemmas e
-        else
-          localNormSimpLemmas := localNormSimpLemmas.filter λ l => l.name != r
-      else if r.builder == .unfold then
-        unfoldRules := unfoldRules.erase r.name
-      else
-        erased := erased.insert r
-
-    let res := {
-      rs with
-      ruleNames, erased, normSimpLemmas, normSimpLemmaDescrs
-      localNormSimpLemmas, unfoldRules
-    }
-    return (res, true)
-
-def eraseAllRulesWithIdent (rs : RuleSet) (i : RuleIdent) : RuleSet × Bool :=
-  rs.erase (.ofIdent i)
-
-def unindex (rs : RuleSet) (p : RuleName → Bool) : RuleSet := {
-  rs with
-  normRules := rs.normRules.unindex (λ r => p r.name)
-  unsafeRules := rs.unsafeRules.unindex (λ r => p r.name)
-  safeRules := rs.safeRules.unindex (λ r => p r.name)
-}
-
-@[inline]
-private def isErased (rs : RuleSet) (n : RuleName) : Bool :=
-  rs.erased.contains n
-
-def containsSimpAttrNormSimpLemma (rs : RuleSet) (decl : Name) : Bool :=
-  rs.simpAttrNormSimpLemmas.any λ (_, simpTheorems) =>
-    simpTheoremsContains simpTheorems decl
-
-def contains (rs : RuleSet) (n : RuleName) : Bool :=
-  ! rs.isErased n &&
-  ((n.builder == .simp && n.scope == .global &&
-    rs.containsSimpAttrNormSimpLemma n.name) ||
-  match rs.ruleNames.find? n.toRuleIdent with
-  | none => false
-  | some ns => ns.contains n)
-
--- NOTE: Does not include simp theorems in `simpAttrNormSimpLemmas`.
-def rulesMatching (rs : RuleSet) (f : RuleNameFilter) :
-    UnorderedArraySet RuleName :=
-  match rs.ruleNames.find? f.ident with
-  | none => ∅
-  | some ns => ns.filter f.match
-
-def applicableNormalizationRules (rs : RuleSet) (goal : MVarId) :
-    MetaM (Array (IndexMatchResult NormRule)) :=
-  rs.normRules.applicableRules (ord := ⟨Rule.compareByPriorityThenName⟩) goal
-    (!rs.isErased ·.name)
-
-def applicableUnsafeRules (rs : RuleSet) (goal : MVarId) :
-    MetaM (Array (IndexMatchResult UnsafeRule)) := do
-  rs.unsafeRules.applicableRules (ord := ⟨Rule.compareByPriorityThenName⟩) goal
-    (!rs.isErased ·.name)
-
-def applicableSafeRules (rs : RuleSet) (goal : MVarId) :
-    MetaM (Array (IndexMatchResult SafeRule)) := do
-  rs.safeRules.applicableRules (ord := ⟨Rule.compareByPriorityThenName⟩) goal
-    (!rs.isErased ·.name)
-
-def globalNormSimpTheorems (rs : RuleSet) : SimpTheoremsArray :=
-  Array.mkEmpty (rs.simpAttrNormSimpLemmas.size + 1)
-    |>.append (rs.simpAttrNormSimpLemmas.map (·.snd))
-    |>.push rs.normSimpLemmas
-
-end RuleSet
 
 
 abbrev RuleSetName := Name -- Not really an abbreviation is it?
@@ -339,10 +98,10 @@ def builtinRuleSetName : RuleSetName := `builtin
 def localRuleSetName : RuleSetName := `local
 
 def builtinRuleSetNames : Array RuleSetName :=
-  #[defaultRuleSetName, builtinRuleSetName, localRuleSetName]
+  #[defaultRuleSetName, builtinRuleSetName]
 
 def RuleSetName.isReserved (n : RuleSetName) : Bool :=
-  builtinRuleSetNames.contains n
+  n == localRuleSetName || builtinRuleSetNames.contains n
 
 structure RuleSetNameFilter where
   ns : Array RuleSetName -- #[] means 'match any rule set'
@@ -355,137 +114,453 @@ protected def all : RuleSetNameFilter :=
 def matchesAll (f : RuleSetNameFilter) : Bool :=
   f.ns.isEmpty
 
-def «match» (f : RuleSetNameFilter) (n : RuleSetName) : Bool :=
+def «matches» (f : RuleSetNameFilter) (n : RuleSetName) : Bool :=
   f.matchesAll || f.ns.contains n
 
 def matchedRuleSetNames (f : RuleSetNameFilter) : Option (Array RuleSetName) :=
-  if f.matchesAll then
-    none
-  else
-    some f.ns
+  if f.matchesAll then none else some f.ns
 
 end RuleSetNameFilter
 
+section Types
 
-structure RuleSets where
-  rs : HashMap RuleSetName RuleSet
+set_option linter.missingDocs true
+
+/--
+The Aesop-specific parts of an Aesop rule set. A `BaseRuleSet` stores global
+Aesop rules, e.g. safe and unsafe rules. It does not store simp theorems for
+the builtin norm simp rule; these are instead stored in a simp extension.
+-/
+structure BaseRuleSet where
+  /--
+  Normalisation rules registered in this rule set.
+  -/
+  normRules : Index NormRuleInfo
+  /--
+  Unsafe rules registered in this rule set.
+  -/
+  unsafeRules : Index UnsafeRuleInfo
+  /--
+  Safe rules registered in this rule set.
+  -/
+  safeRules : Index SafeRuleInfo
+  /--
+  Rules for the builtin unfold rule. A pair `(decl, unfoldThm?)` in this map
+  represents a declaration `decl` which should be unfolded. `unfoldThm?` should
+  be the output of `getUnfoldEqnFor? decl` and is cached here for efficiency.
+  -/
+  unfoldRules : PHashMap Name (Option Name)
+  /--
+  The set of rules that were erased from `normRules`, `unsafeRules` and
+  `safeRules`. When we erase a rule which is present in any of these three
+  indices, the rule is not removed from the indices but just added to this set.
+  By contrast, when we erase a rule from `unfoldRules`, we actually delete it.
+  -/
+  erased : PHashSet RuleName
+  /--
+  A cache of the names of all rules registered in this rule set. Invariant:
+  `ruleNames` contains exactly the names of the rules present in `normRules`,
+  `unsafeRules`, `safeRules` and `unfoldRules` and not present in `erased`. We
+  use this cache (a) to quickly determine whether a rule is present in the rule
+  set and (b) to find the full rule names corresponding to a `RuleIdent`.
+  -/
+  ruleNames : PHashMap RuleIdent (UnorderedArraySet RuleName)
   deriving Inhabited
 
-namespace RuleSets
+/--
+A global Aesop rule set. When we tag a declaration with `@[aesop]`, it is stored
+in one or more of these rule sets. Internally, a `GlobalRuleSet` is composed of
+a `BaseRuleSet` (stored in an Aesop rule set extension) plus a set of simp
+theorems (stored in a `SimpExtension`).
+-/
+structure GlobalRuleSet extends BaseRuleSet where
+  /--
+  The simp theorems stored in this rule set.
+  -/
+  simpTheorems : SimpTheorems
+  /--
+  The simprocs stored in this rule set.
+  -/
+  simprocs : Simprocs
+  deriving Inhabited
 
-protected def empty : RuleSets where
-  rs := ∅
+/--
+The rule set used by an Aesop tactic call. A local rule set is produced by
+combining several global rule sets and possibly adding or erasing some
+individual rules.
+-/
+structure LocalRuleSet extends BaseRuleSet where
+  /--
+  The simp theorems used by the builtin norm simp rule.
+  -/
+  simpTheoremsArray : Array (Name × SimpTheorems)
+  /--
+  The simp theorems array must contain at least one `SimpTheorems` structure.
+  When a simp theorem is added to a `LocalRuleSet`, it is stored in this first
+  `SimpTheorems` structure.
+  -/
+  simpTheoremsArrayNonempty : 0 < simpTheoremsArray.size
+  /--
+  The simprocs used by the builtin norm simp rule.
+  -/
+  simprocsArray : Array (Name × Simprocs)
+  /--
+  The simprocs array must contain at least one `Simprocs` structure, for the
+  same reason as above.
+  -/
+  simprocsArrayNonempty : 0 < simprocsArray.size
+  /--
+  FVars that were explicitly added as simp rules.
+  -/
+  localNormSimpRules : Array LocalNormSimpRule
 
-instance : EmptyCollection RuleSets :=
-  ⟨RuleSets.empty⟩
+end Types
 
-def trace (rss : RuleSets) (opt : TraceOption) : CoreM Unit := do
-  for (rsName, rs) in rss.rs.toArray.qsort compareRuleSets do
-    withConstAesopTraceNode opt (return m!"Rule set {rsName}") do
-      rs.trace opt
-  where
-    compareRuleSets (x y : RuleSetName × RuleSet) : Bool :=
-      x.fst.cmp y.fst |>.isLT
 
--- If a rule set with name `rsName` already exists, it is overwritten.
-def addEmptyRuleSet (rss : RuleSets) (rsName : RuleSetName) : RuleSets :=
-  ⟨rss.rs.insert rsName {}⟩
-
--- If a rule set with name `rsName` already exists, it is overwritten.
-def addRuleSet (rss : RuleSets) (rsName : RuleSetName) (rs : RuleSet) :
-    RuleSets :=
-  ⟨rss.rs.insert rsName rs⟩
-
-def containsRuleSet (rss : RuleSets) (name : RuleSetName) : Bool :=
-  rss.rs.contains name
-
--- Adds the rule set `name` if it is not already present in `rss`.
-def ensureRuleSet (rss : RuleSets) (name : RuleSetName) : RuleSets :=
-  if rss.containsRuleSet name then
-    rss
-  else
-    rss.addEmptyRuleSet name
-
--- If `rss` does not contain a rule set with name `rsName`, `rss` is
--- returned unchanged.
-def eraseRuleSet (rss : RuleSets) (rsName : RuleSetName) : RuleSets :=
-  ⟨rss.rs.erase rsName⟩
-
-def getRuleSet? (rss : RuleSets) (rsName : RuleSetName) : Option RuleSet :=
-  rss.rs.find? rsName
-
--- If `rss` does not contain a rule set with name `rsName`, `rss` is returned
--- unchanged.
-@[inline]
-def modifyRuleSetM [Monad m] (rss : RuleSets) (rsName : RuleSetName)
-    (f : RuleSet → m RuleSet) : m RuleSets := do
-  let (some rs) := rss.getRuleSet? rsName
-    | return rss
-  return ⟨rss.rs.insert rsName (← f rs)⟩
-
--- If `rss` does not contain a rule set with name `rsName`, `rss` is returned
--- unchanged.
-@[inline]
-def modifyRuleSet (rss : RuleSets) (rsName : RuleSetName)
-    (f : RuleSet → RuleSet) : RuleSets :=
-  Id.run $ rss.modifyRuleSetM rsName (λ rs => pure $ f rs)
-
-def containsRule (rss : RuleSets) (rsName : RuleSetName) (rName : RuleName) :
-    Bool :=
-  match rss.getRuleSet? rsName with
-  | none => false
-  | some rs => rs.contains rName
-
--- Precondition: a rule set with name `rsName` exists in `rss`.
-def addRuleUnchecked (rss : RuleSets) (rsName : RuleSetName) (r : RuleSetMember) :
-    RuleSets :=
-  rss.modifyRuleSet rsName (·.add r)
-
-def addRuleChecked [Monad m] [MonadError m] (rss : RuleSets)
-    (rsName : RuleSetName) (rule : RuleSetMember) : m RuleSets := do
-  if ! rss.containsRuleSet rsName then throwError
-    "aesop: no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.\n   Declared rule sets are not visible in the current file; they only become visible once you import the declaring file.)"
-  if rss.containsRule rsName rule.name then throwError
-    "aesop: rule '{rule.name.name}' is already registered in rule set '{rsName}'"
-  return rss.addRuleUnchecked rsName rule
-
--- Returns the updated rule sets and `true` if at least one rule was erased
--- (from at least one rule set).
-def eraseRules (rss : RuleSets) (rsf : RuleSetNameFilter)
-    (rf : RuleNameFilter) : RuleSets × Bool :=
-  rss.rs.fold (init := (rss, false)) λ (rss, anyErased) rsName rs =>
-    if rsf.match rsName then
-      let (rs, rsErased) := rs.erase rf
-      if rsErased then
-        (⟨rss.rs.insert rsName rs⟩, true)
-      else
-        (rss, anyErased)
-    else
-      (rss, anyErased)
-
-def eraseRulesChecked [Monad m] [MonadError m] (rss : RuleSets)
-    (rsf : RuleSetNameFilter) (rf : RuleNameFilter) : m RuleSets := do
-  let (rss, anyErased) := rss.eraseRules rsf rf
-  unless anyErased do
-    let rsNames? := rsf.matchedRuleSetNames
-    match rsNames? with
-    | none => throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any rule set."
-    | some rsNames => throwError "aesop: '{rf.ident.name}' is not registered (with the given features) in any of the rule sets {rsNames.map toString}."
-  return rss
+namespace GlobalRuleSet
 
 @[inline, always_inline]
-def unindexPredicate? (options : Options) : Option (RuleName → Bool) :=
+def onBaseM [Monad m] (f : BaseRuleSet → m (BaseRuleSet × α))
+    (rs : GlobalRuleSet) : m (GlobalRuleSet × α) := do
+  let (toBaseRuleSet, a) ← f rs.toBaseRuleSet
+  let rs := { rs with toBaseRuleSet }
+  return (rs, a)
+
+@[inline, always_inline]
+def onBase (f : BaseRuleSet → BaseRuleSet × α) (rs : GlobalRuleSet) :
+    GlobalRuleSet × α :=
+  rs.onBaseM (m := Id) f
+
+@[inline, always_inline]
+def modifyBaseM [Monad m] (f : BaseRuleSet → m BaseRuleSet)
+    (rs : GlobalRuleSet) : m GlobalRuleSet :=
+  (·.fst) <$> rs.onBaseM (λ rs => return (← f rs, ()))
+
+@[inline, always_inline]
+def modifyBase (f : BaseRuleSet → BaseRuleSet) (rs : GlobalRuleSet) :
+    GlobalRuleSet :=
+  rs.modifyBaseM (m := Id) f
+
+end GlobalRuleSet
+
+
+namespace LocalRuleSet
+
+@[inline, always_inline]
+def onBaseM [Monad m] (f : BaseRuleSet → m (BaseRuleSet × α))
+    (rs : LocalRuleSet) : m (LocalRuleSet × α) := do
+  let (toBaseRuleSet, a) ← f rs.toBaseRuleSet
+  return ({ rs with toBaseRuleSet }, a)
+
+@[inline, always_inline]
+def onBase (f : BaseRuleSet → (BaseRuleSet × α)) (rs : LocalRuleSet) :
+    LocalRuleSet × α :=
+  rs.onBaseM (m := Id) f
+
+def modifyBaseM [Monad m] (f : BaseRuleSet → m BaseRuleSet) (rs : LocalRuleSet) :
+    m LocalRuleSet :=
+  (·.fst) <$> rs.onBaseM (λ rs => return (← f rs, ()))
+
+def modifyBase (f : BaseRuleSet → BaseRuleSet) (rs : LocalRuleSet) :
+    LocalRuleSet :=
+  rs.modifyBaseM (m := Id) f
+
+end LocalRuleSet
+
+
+def BaseRuleSet.trace (rs : BaseRuleSet) (traceOpt : TraceOption) :
+    CoreM Unit := do
+  if ! (← traceOpt.isEnabled) then
+    return
+  withConstAesopTraceNode traceOpt (return "Erased rules") do
+    aesop_trace![traceOpt] "(Note: even if these rules appear in the sections below, they will not be applied by Aesop.)"
+    let erased := rs.erased.fold (init := Array.mkEmpty rs.erased.size)
+      λ ary r => ary.push r
+    for r in erased.qsortOrd do
+      aesop_trace![traceOpt] r
+  withConstAesopTraceNode traceOpt (return "Unsafe rules") do
+    rs.unsafeRules.trace traceOpt
+  withConstAesopTraceNode traceOpt (return "Safe rules") do
+    rs.safeRules.trace traceOpt
+  withConstAesopTraceNode traceOpt (return "Normalisation rules") do
+    rs.normRules.trace traceOpt
+  withConstAesopTraceNode traceOpt (return "Constants to unfold") do
+    for r in rs.unfoldRules.toArray.map (·.fst.toString) |>.qsortOrd do
+      aesop_trace![traceOpt] r
+
+def GlobalRuleSet.trace (rs : GlobalRuleSet) (traceOpt : TraceOption) :
+    CoreM Unit := do
+  if ! (← traceOpt.isEnabled) then
+    return
+  rs.toBaseRuleSet.trace traceOpt
+  withConstAesopTraceNode traceOpt (return "Normalisation simp theorems:") do
+    traceSimpTheorems rs.simpTheorems traceOpt
+  -- TODO trace simprocs
+
+def LocalRuleSet.trace (rs : LocalRuleSet) (traceOpt : TraceOption) :
+    CoreM Unit := do
+  if ! (← traceOpt.isEnabled) then
+    return
+  rs.toBaseRuleSet.trace traceOpt
+  withConstAesopTraceNode traceOpt (return "Simp sets used by normalisation simp:") do
+    rs.simpTheoremsArray.map (printSimpSetName ·.fst) |>.qsortOrd.forM λ s => do
+      aesop_trace![traceOpt] s
+  withConstAesopTraceNode traceOpt (return "Local normalisation simp theorems") do
+    for r in rs.localNormSimpRules.map (·.fvarUserName.toString) |>.qsortOrd do
+      aesop_trace![traceOpt] r
+where
+  printSimpSetName : Name → String
+    | `_ => "<default>"
+    | n => toString n
+
+
+def BaseRuleSet.empty : BaseRuleSet where
+  normRules := ∅
+  unsafeRules := ∅
+  safeRules := ∅
+  unfoldRules := {}
+  ruleNames := {}
+  erased := ∅
+
+instance : EmptyCollection BaseRuleSet :=
+  ⟨.empty⟩
+
+def GlobalRuleSet.empty : GlobalRuleSet where
+  toBaseRuleSet := ∅
+  simpTheorems := {}
+  simprocs := {}
+
+instance : EmptyCollection GlobalRuleSet :=
+  ⟨.empty⟩
+
+def LocalRuleSet.empty : LocalRuleSet where
+  toBaseRuleSet := .empty
+  simpTheoremsArray := #[(`_, {})]
+  simpTheoremsArrayNonempty := by decide
+  simprocsArray := #[(`_, {})]
+  simprocsArrayNonempty := by decide
+  localNormSimpRules := ∅
+
+instance : EmptyCollection LocalRuleSet :=
+  ⟨.empty⟩
+
+instance : Inhabited LocalRuleSet :=
+  ⟨∅⟩
+
+
+private def BaseRuleSet.isErased (rs : BaseRuleSet) (n : RuleName) : Bool :=
+  rs.erased.contains n
+
+def BaseRuleSet.contains (rs : BaseRuleSet) (n : RuleName) : Bool :=
+  ! rs.isErased n &&
+  if let some ns := rs.ruleNames.find? n.toRuleIdent then
+    ns.contains n
+  else
+    false
+
+def GlobalRuleSet.contains (rs : GlobalRuleSet) (n : RuleName) : Bool :=
+  rs.toBaseRuleSet.contains n ||
+  (n.builder == .simp && n.scope == .global &&
+    SimpTheorems.containsDecl rs.simpTheorems n.name)
+
+def LocalRuleSet.containsGlobalSimpTheorem (rs : LocalRuleSet) (decl : Name) :
+    Bool :=
+  rs.simpTheoremsArray.any λ (_, simpTheorems) =>
+    SimpTheorems.containsDecl simpTheorems decl
+
+def LocalRuleSet.contains (rs : LocalRuleSet) (n : RuleName) : Bool :=
+  rs.toBaseRuleSet.contains n ||
+  (n.builder == .simp &&
+    match n.scope with
+    | .global => rs.containsGlobalSimpTheorem n.name
+    | .local  => rs.localNormSimpRules.contains ⟨n.name⟩)
+
+
+def BaseRuleSet.merge (rs₁ rs₂ : BaseRuleSet) : BaseRuleSet where
+  normRules := rs₁.normRules.merge rs₂.normRules
+  unsafeRules := rs₁.unsafeRules.merge rs₂.unsafeRules
+  safeRules := rs₁.safeRules.merge rs₂.safeRules
+  unfoldRules := rs₁.unfoldRules.mergeWith rs₂.unfoldRules
+    λ _ unfoldThm?₁ _ => unfoldThm?₁
+  ruleNames :=
+    rs₁.ruleNames.mergeWith rs₂.ruleNames λ _ ns₁ ns₂ =>
+      ns₁ ++ ns₂
+  erased :=
+    -- Add the erased rules from `rs₁` to `init`, except those rules which are
+    -- present (and not erased) in `rs₂`.
+    let go (rs₁ rs₂ : BaseRuleSet) (init : PHashSet RuleName) :
+        PHashSet RuleName :=
+      rs₁.erased.fold (init := init) λ x n =>
+        match rs₂.ruleNames.find? n.toRuleIdent with
+        | none => x.insert n
+        | some ns =>
+          if ns.contains n then x else x.insert n
+    go rs₂ rs₁ $ go rs₁ rs₂ {}
+
+
+def BaseRuleSet.add (rs : BaseRuleSet) (r : BaseRuleSetMember) :
+    BaseRuleSet :=
+  let erased := rs.erased.erase r.name
+  let ident := r.name.toRuleIdent
+  let ruleNames :=
+    match rs.ruleNames.find? ident with
+    | none => rs.ruleNames.insert ident $ .singleton r.name
+    | some ns => rs.ruleNames.insert ident $ ns.insert r.name
+  let rs := { rs with erased, ruleNames }
+  match r with
+  | .normRule r =>
+    { rs with normRules := rs.normRules.add r r.indexingMode }
+  | .unsafeRule r =>
+    { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
+  | .safeRule r =>
+    { rs with safeRules := rs.safeRules.add r r.indexingMode }
+  | .unfoldRule r =>
+    { rs with unfoldRules := rs.unfoldRules.insert r.decl r.unfoldThm? }
+
+def LocalRuleSet.add (rs : LocalRuleSet) :
+    LocalRuleSetMember → LocalRuleSet
+  | .global (.base m) => rs.modifyBase (·.add m)
+  | .global (.normSimpRule r) =>
+    let simpTheoremsArray :=
+      rs.simpTheoremsArray.modify 0 λ (name, simpTheorems) =>
+        let simpTheorems :=
+          r.entries.foldl (init := simpTheorems) SimpTheorems.addSimpEntry
+        (name, simpTheorems)
+    let simpTheoremsArrayNonempty : 0 < simpTheoremsArray.size := by
+      simp [Array.size_modify, rs.simpTheoremsArrayNonempty]
+    { rs with simpTheoremsArray, simpTheoremsArrayNonempty }
+  | .localNormSimpRule r =>
+    { rs with localNormSimpRules := rs.localNormSimpRules.push r }
+
+
+def BaseRuleSet.erase (rs : BaseRuleSet) (f : RuleNameFilter) :
+    BaseRuleSet × Bool := Id.run do
+  let some ns := rs.ruleNames.find? f.ident
+    | return (rs, false)
+  let (toErase, toKeep) := ns.partition f.matches
+  if toErase.isEmpty then
+    return (rs, false)
+
+  let ruleNames :=
+    if toKeep.isEmpty then
+      rs.ruleNames.erase f.ident
+    else
+      rs.ruleNames.insert f.ident toKeep
+
+  let mut erased := rs.erased
+  let mut unfoldRules := rs.unfoldRules
+  for r in toErase do
+    match r.builder with
+    | .unfold => unfoldRules := unfoldRules.erase r.name
+    | .tactic | .forward | .destruct | .constructors | .cases | .apply =>
+      erased := erased.insert r
+    | .simp => continue
+
+  let res := { rs with ruleNames, erased, unfoldRules }
+  return (res, true)
+
+def GlobalRuleSet.erase (rs : GlobalRuleSet) (f : RuleNameFilter) :
+    GlobalRuleSet × Bool := Id.run do
+  let (rs, anyErased) := rs.onBase (·.erase f)
+  if let some decl := f.matchesSimpTheorem? then
+    if SimpTheorems.containsDecl rs.simpTheorems decl then
+      let simpTheorems := rs.simpTheorems.eraseCore (.decl decl (inv := false))
+      return ({ rs with simpTheorems := simpTheorems }, true)
+  return (rs, anyErased)
+
+def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleNameFilter) :
+    LocalRuleSet × Bool := Id.run do
+  let (rs, anyErased) := rs.onBase (·.erase f)
+  let mut anyErased := anyErased
+  let mut localNormSimpRules := rs.localNormSimpRules
+  let mut simpTheoremsArray' : Σ' a, a.size = rs.simpTheoremsArray.size :=
+    ⟨rs.simpTheoremsArray, rfl⟩
+  if let some rule := f.matchesLocalNormSimpRule? then
+    localNormSimpRules := localNormSimpRules.erase rule
+  if let some decl := f.matchesSimpTheorem? then
+    for h : i in [:rs.simpTheoremsArray.size] do
+      have i_valid : i < simpTheoremsArray'.fst.size := by
+        simp_all [Membership.mem, simpTheoremsArray'.snd]
+      let (name, simpTheorems) := simpTheoremsArray'.fst[i]
+      if SimpTheorems.containsDecl simpTheorems decl then
+        let origin := .decl decl (inv := false)
+        simpTheoremsArray' :=
+          ⟨simpTheoremsArray'.fst.set ⟨i, i_valid⟩
+            (name, simpTheorems.eraseCore origin),
+           by simp [simpTheoremsArray'.snd, Array.size_set]⟩
+        anyErased := true
+  let simpTheoremsArray := simpTheoremsArray'.fst
+  let simpTheoremsArrayNonempty : 0 < simpTheoremsArray.size := by
+    simp [simpTheoremsArray'.snd, rs.simpTheoremsArrayNonempty]
+  let rs := { rs with
+    localNormSimpRules, simpTheoremsArray, simpTheoremsArrayNonempty
+  }
+  return (rs, anyErased)
+
+
+namespace LocalRuleSet
+
+def applicableNormalizationRules (rs : LocalRuleSet) (goal : MVarId) :
+    MetaM (Array (IndexMatchResult NormRule)) :=
+  rs.normRules.applicableRules goal (!rs.isErased ·.name)
+
+def applicableUnsafeRules (rs : LocalRuleSet) (goal : MVarId) :
+    MetaM (Array (IndexMatchResult UnsafeRule)) := do
+  rs.unsafeRules.applicableRules goal (!rs.isErased ·.name)
+
+def applicableSafeRules (rs : LocalRuleSet) (goal : MVarId) :
+    MetaM (Array (IndexMatchResult SafeRule)) := do
+  rs.safeRules.applicableRules goal (!rs.isErased ·.name)
+
+def unindex (rs : LocalRuleSet) (p : RuleName → Bool) : LocalRuleSet := {
+  rs with
+  normRules := rs.normRules.unindex (p ·.name)
+  unsafeRules := rs.unsafeRules.unindex (p ·.name)
+  safeRules := rs.safeRules.unindex (p ·.name)
+}
+
+end LocalRuleSet
+
+
+@[inline, always_inline]
+def unindexPredicate? (options : Options') : Option (RuleName → Bool) :=
   if options.destructProductsTransparency == .reducible then
     none
   else
     some λ n => n.name == `Aesop.BuiltinRules.destructProducts
 
-def getMergedRuleSet (rss : RuleSets) (options : Options) :
-    RuleSet :=
-  let update : RuleSet → RuleSet :=
-    match unindexPredicate? options with
-    | none => id
-    | some p => λ rs => rs.unindex p
-  rss.rs.fold (init := ∅) λ result _ rs => result.merge (update rs)
+def mkLocalRuleSet (rss : Array (GlobalRuleSet × Name × Name))
+    (options : Options') : CoreM LocalRuleSet := do
+  let mut result := ∅
+  result := {
+    toBaseRuleSet := ∅
+    simpTheoremsArray :=
+      if options.useDefaultSimpSet then
+        Array.mkEmpty (rss.size + 1) |>.push (`_, ← getSimpTheorems)
+      else
+        Array.mkEmpty (rss.size + 1) |>.push (`_, {})
+    simprocsArray :=
+      if options.useDefaultSimpSet then
+        Array.mkEmpty (rss.size + 1) |>.push (`_, ← Simp.getSimprocs)
+      else
+        Array.mkEmpty (rss.size + 1) |>.push ((`_, {}))
+    simpTheoremsArrayNonempty := by split <;> simp
+    simprocsArrayNonempty := by split <;> simp
+    localNormSimpRules := ∅
+  }
+  for (rs, simpExtName, simprocExtName) in rss do
+    result := { result with
+      toBaseRuleSet := result.toBaseRuleSet.merge rs.toBaseRuleSet
+      simpTheoremsArray :=
+        result.simpTheoremsArray.push (simpExtName, rs.simpTheorems)
+      simpTheoremsArrayNonempty := by simp [result.simpTheoremsArrayNonempty]
+      simprocsArray :=
+        result.simprocsArray.push (simprocExtName, rs.simprocs)
+      simprocsArrayNonempty := by simp [result.simprocsArrayNonempty]
+    }
+  if let some p := unindexPredicate? options then
+    return result.unindex p
+  else
+    return result
 
-end Aesop.RuleSets
+end Aesop

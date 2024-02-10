@@ -5,28 +5,68 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 def T := Unit → Empty
 
+variable {α : Type}
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example (h : T) (u : Unit) : α := by
-  fail_if_success aesop (config := { terminal := true })
-  fail_if_success aesop (add forward (transparency := reducible) safe h)
+  aesop (config := { terminal := true })
+
+/--
+error: aesop: while registering 'h' as a forward rule: not a function
+-/
+#guard_msgs in
+example (h : T) (u : Unit) : α := by
+  aesop (add forward (transparency := reducible) safe h)
     (config := { terminal := true })
+
+example (h : T) (u : Unit) : α := by
   aesop (add forward safe h)
 
 def U := Unit
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example (h : T) (u : U) : α := by
-  fail_if_success aesop (config := { terminal := true })
-  fail_if_success aesop (add forward (transparency := reducible) safe h)
+  aesop (config := { terminal := true })
+
+/--
+error: aesop: while registering 'h' as a forward rule: not a function
+-/
+#guard_msgs in
+example (h : T) (u : U) : α := by
+  aesop (add forward (transparency := reducible) safe h)
     (config := { terminal := true })
-  fail_if_success aesop (add forward safe h) (config := { terminal := true })
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
+example (h : T) (u : U) : α := by
+  aesop (add forward safe h) (config := { terminal := true })
+
+example (h : T) (u : U) : α := by
   aesop (add forward (transparency! := default) safe h)
 
 abbrev V := Unit
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example (h : Unit → Empty) (u : V) : α := by
-  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
+
+example (h : Unit → Empty) (u : V) : α := by
   aesop (add forward (transparency := reducible) safe h)

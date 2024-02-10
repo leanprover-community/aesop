@@ -12,7 +12,7 @@ namespace Aesop
 
 variable [Aesop.Queue Q]
 
-def selectNormRules (rs : RuleSet) (goal : MVarId) :
+def selectNormRules (rs : LocalRuleSet) (goal : MVarId) :
     ProfileT MetaM (Array (IndexMatchResult NormRule)) :=
   profiling (rs.applicableNormalizationRules goal) λ _ elapsed =>
     recordRuleSelectionProfile elapsed
@@ -25,13 +25,18 @@ def preprocessRule : SafeRule where
     scope := .global
   }
   indexingMode := .unindexed
+  pattern? := none
   extra := { penalty := 0, safety := .safe }
   tac := .preprocess
 
 def selectSafeRulesCore (g : Goal) :
     SearchM Q (Array (IndexMatchResult SafeRule)) := do
   if ← g.isRoot then
-    return #[{ rule := preprocessRule, locations := ∅ }]
+    return #[{
+      rule := preprocessRule
+      locations := ∅
+      patternInstantiations := ∅
+    }]
   let ruleSet := (← read).ruleSet
   g.runMetaMInPostNormState' λ postNormGoal =>
     ruleSet.applicableSafeRules postNormGoal

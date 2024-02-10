@@ -15,7 +15,16 @@ import Std.Tactic.TryThis
 open Lean
 open Lean.Meta
 
-namespace Aesop.Subarray
+namespace Aesop.Array
+
+theorem size_modify (a : Array α) (i : Nat) (f : α → α) :
+    (a.modify i f).size = a.size := by
+  simp only [Array.modify, Id.run, Array.modifyM]
+  split <;> simp
+
+end Array
+
+namespace Subarray
 
 def popFront? (as : Subarray α) : Option (α × Subarray α) :=
   if h : as.start < as.stop
@@ -156,15 +165,6 @@ def addSimpEntry (s : SimpTheorems) : SimpEntry → SimpTheorems
     { s with toUnfold := s.toUnfold.insert d }
   | SimpEntry.toUnfoldThms n thms => s.registerDeclToUnfoldThms n thms
 
-def eraseSimpEntry (s : SimpTheorems) : SimpEntry → SimpTheorems
-  | SimpEntry.thm l =>
-    let o := l.origin
-    { s with erased := s.erased.insert o, lemmaNames := s.lemmaNames.erase o }
-  | SimpEntry.toUnfold d =>
-    { s with toUnfold := s.toUnfold.erase d }
-  | SimpEntry.toUnfoldThms n _ =>
-    { s with toUnfoldThms := s.toUnfoldThms.erase n }
-
 def foldSimpEntriesM [Monad m] (f : σ → SimpEntry → m σ) (init : σ)
     (thms : SimpTheorems) : m σ := do
   let s ← thms.pre.foldValuesM  (init := init) processTheorem
@@ -187,29 +187,10 @@ def foldSimpEntries (f : σ → SimpEntry → σ) (init : σ) (thms : SimpTheore
 def simpEntries (thms : SimpTheorems) : Array SimpEntry :=
   foldSimpEntries (thms := thms) (init := #[]) λ s thm => s.push thm
 
-def merge (s t : SimpTheorems) : SimpTheorems := {
-    pre := s.pre.mergePreservingDuplicates t.pre
-    post := s.post.mergePreservingDuplicates t.post
-    lemmaNames := s.lemmaNames.merge t.lemmaNames
-    toUnfold := s.toUnfold.merge t.toUnfold
-    toUnfoldThms := s.toUnfoldThms.mergeWith t.toUnfoldThms
-      (λ _ thms₁ _ => thms₁)
-      -- We can ignore collisions here because the theorems should always be the
-      -- same.
-    erased := mkErased t s $ mkErased s t {}
-  }
-  where
-    -- Adds the erased lemmas from `s` to `init`, excluding those lemmas which
-    -- occur in `t`.
-    mkErased (s t : SimpTheorems) (init : PHashSet Origin) : PHashSet Origin :=
-      s.erased.fold (init := init) λ x origin =>
-        -- I think the following check suffices to ensure that `decl` does not
-        -- occur in `t`. If `decl` is an unfold theorem (in the sense of
-        -- `toUnfoldThms`), then it occurs also in `t.lemmaNames`.
-        if t.lemmaNames.contains origin || t.toUnfold.contains origin.key then
-          x
-        else
-          x.insert origin
+def containsDecl (thms : SimpTheorems) (decl : Name) : Bool :=
+  thms.isLemma (.decl decl) ||
+  thms.isDeclToUnfold decl ||
+  thms.toUnfoldThms.contains decl
 
 end SimpTheorems
 
@@ -240,6 +221,19 @@ def isAppOfUpToDefeq (f : Expr) (e : Expr) : MetaM Bool :=
       return true
     else
       return false
+
+/--
+If the input expression `e` reduces to `f x₁ ... xₙ` via repeated `whnf`, this
+function returns `f` and `[x₁, ⋯, xₙ]`. Otherwise it returns `e` (unchanged, not
+in WHNF!) and `[]`.
+-/
+partial def getAppUpToDefeq (e : Expr) : MetaM (Expr × Array Expr) :=
+  go #[] e
+where
+  go (args : Array Expr) (e : Expr) : MetaM (Expr × Array Expr) := do
+    match ← whnf e with
+    | .app f e => go (args.push e) f
+    | _ => return (e, args.reverse)
 
 /--
 Partition an array of `MVarId`s into 'goals' and 'proper mvars'. An `MVarId`
@@ -298,19 +292,6 @@ def withAllTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
 
 end TransparencySyntax
 
-/--
-If the input expression `e` reduces to `f x₁ ... xₙ` via repeated `whnf`, this
-function returns `f` and `[x₁, ⋯, xₙ]`. Otherwise it returns `e` (unchanged, not
-in WHNF!) and `[]`.
--/
-partial def getAppUpToDefeq (e : Expr) : MetaM (Expr × Array Expr) :=
-  go #[] e
-where
-  go (args : Array Expr) (e : Expr) : MetaM (Expr × Array Expr) := do
-    match ← whnf e with
-    | .app f e => go (args.push e) f
-    | _ => return (e, args.reverse)
-
 -- Largely copy-pasta from Std.Tactic.TryThis.addSuggestion
 -- I don't really know what's going on here; this is all cargo-culted. It seems
 -- to work when `aesop?` appears on its own line, as in
@@ -358,5 +339,38 @@ def withMaxHeartbeats [Monad m] [MonadLiftT BaseIO m]
     maxHeartbeats := n * 1000
   }
   withReader f x
+
+open Lean.Elab Lean.Elab.Term in
+def elabPattern (stx : Syntax) : TermElabM Expr :=
+  withRef stx $ withReader adjustCtx $ withSynthesize $ elabTerm stx none
+  where
+    adjustCtx (old : Term.Context) : Term.Context := {
+      old with
+      mayPostpone := false
+      errToSorry := false
+      autoBoundImplicit := false
+      sectionVars := {}
+      sectionFVars := {}
+      isNoncomputableSection := false
+      ignoreTCFailures := true
+      inPattern := true
+      saveRecAppSyntax := false
+      holesAsSyntheticOpaque := false
+    }
+
+register_option aesop.smallErrorMessages : Bool := {
+    defValue := false
+    group := "aesop"
+    descr := "(aesop) Print smaller error messages. Used for testing."
+  }
+
+def throwAesopEx (mvarId : MVarId) (msg : MessageData) : MetaM α := do
+  if aesop.smallErrorMessages.get (← getOptions) then
+    if msg.isEmpty then
+      throwError "tactic 'aesop' failed"
+    else
+      throwError "tactic 'aesop' failed, {msg}"
+  else
+    throwTacticEx `aesop mvarId msg
 
 end Aesop

@@ -5,14 +5,23 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
+
+variable {α : Type}
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
+example (h : α) : α := by
+  aesop (rule_sets [-builtin,-default])
+        (add safe h apply (index := [target False]))
+        (config := { terminal := true })
 
 example (h : α) : α := by
-  fail_if_success
-    aesop (rule_sets [-builtin,-default])
-          (add safe h apply (index := [target False]))
-          (config := { terminal := true })
   aesop (rule_sets [-builtin,-default]) (add safe h apply)
 
 -- See Com test for a more realistic scenario.

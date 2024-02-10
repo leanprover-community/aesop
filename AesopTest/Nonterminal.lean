@@ -5,8 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 
 structure MyTrue₁
 structure MyTrue₂
@@ -15,6 +17,10 @@ structure MyTrue₂
 structure MyTrue₃ where
   tt : MyTrue₁
 
+/--
+warning: aesop: failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : MyTrue₃ := by
   aesop
   apply MyTrue₁.mk
@@ -23,12 +29,28 @@ example : MyTrue₃ := by
 structure MyFalse where
   falso : False
 
+/--
+warning: aesop: failed to prove the goal after exhaustive search.
+---
+error: unsolved goals
+⊢ False
+-/
+#guard_msgs in
 example : MyFalse := by
   aesop
 
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
 example : MyFalse := by
-  fail_if_success aesop (config := { terminal := true })
+  aesop (config := { terminal := true })
 
+/--
+error: unsolved goals
+⊢ False
+-/
+#guard_msgs in
 example : MyFalse := by
   aesop (config := { warnOnNonterminal := false })
 
@@ -37,5 +59,16 @@ structure MyFalse₂ where
   falso : False
   tt : MyTrue₃
 
+/--
+warning: aesop: failed to prove the goal after exhaustive search.
+---
+error: unsolved goals
+case falso
+⊢ False
+
+case tt
+⊢ MyTrue₁
+-/
+#guard_msgs in
 example : MyFalse₂ := by
   aesop

@@ -6,12 +6,12 @@ Authors: Jannis Limperg
 
 import Aesop.Frontend.Extension.Init
 
-open Lean
+open Lean Lean.Meta
 
 namespace Aesop.Frontend
 
 def extensionDescr (rsName : RuleSetName) :
-    SimpleScopedEnvExtension.Descr RuleSetMember RuleSet where
+    SimpleScopedEnvExtension.Descr BaseRuleSetMember BaseRuleSet where
   name := rsName
   addEntry rs r := rs.add r
   initial := ∅
@@ -19,8 +19,14 @@ def extensionDescr (rsName : RuleSetName) :
 def declareRuleSetUnchecked (rsName : RuleSetName) (isDefault : Bool) :
     IO Unit := do
   let ext ← registerSimpleScopedEnvExtension $ extensionDescr rsName
+  let simpExtName := .mkStr1 s!"aesop_{rsName}"
+  discard $ registerSimpAttr simpExtName (ref := simpExtName)
+    s!"simp theorems in the Aesop rule set '{rsName}'"
+  let simprocExtName := .mkStr1 s!"aesop_{rsName}_proc"
+  discard $ Simp.registerSimprocAttr simprocExtName (name := simprocExtName)
+    (ref? := none) s!"simprocs in the Aesop rule set '{rsName}'"
   declaredRuleSetsRef.modify λ rs =>
-    let ruleSets := rs.ruleSets.insert rsName ext
+    let ruleSets := rs.ruleSets.insert rsName (ext, simpExtName, simprocExtName)
     let defaultRuleSets :=
       if isDefault then
         rs.defaultRuleSets.insert rsName
@@ -45,74 +51,98 @@ def declareRuleSet (rsName : RuleSetName) (isDefault : Bool) : m Unit := do
 initialize
   builtinRuleSetNames.forM (declareRuleSetUnchecked (isDefault := true))
 
-def getRuleSetExtension (rsName : RuleSetName) : m RuleSetExtension := do
-  let (some ext) := (← getDeclaredRuleSets).find? rsName
+def getGlobalRuleSetData (rsName : RuleSetName) :
+    m (RuleSetExtension × Name × SimpExtension × Name × Simp.SimprocExtension) := do
+  let (some (ext, simpExtName, simprocExtName)) :=
+    (← getDeclaredRuleSets).find? rsName
     | throwError "no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.\n   Declared rule sets are not visible in the current file; they only become visible once you import the declaring file.)"
-  return ext
+  let some simpExt ← getSimpExtension? simpExtName
+    | throwError "internal error: expected '{simpExtName}' to be a declared simp extension"
+  let some simprocExt ← Simp.getSimprocExtension? simpExtName
+    | throwError "internal error: expected '{simpExtName}' to be a declared simp extension"
+  return (ext, simpExtName, simpExt, simprocExtName, simprocExt)
 
-def getRuleSet (rsName : RuleSetName) (includeGlobalSimpTheorems : Bool) :
-    CoreM RuleSet := do
-  let mut rs := (← getRuleSetExtension rsName).getState (← getEnv)
-  if includeGlobalSimpTheorems && rsName == defaultRuleSetName then
-    rs := { rs with
-      simpAttrNormSimpLemmas :=
-        rs.simpAttrNormSimpLemmas.push (`_, ← Meta.getSimpTheorems)
-        |>.qsort (λ (x, _) (y, _) => x.quickLt y)
-    }
-  return rs
+def getGlobalRuleSetFromData (ext : RuleSetExtension) (simpExt : SimpExtension)
+    (simprocExt : Simp.SimprocExtension) : m GlobalRuleSet := do
+  let env ← getEnv
+  let base := ext.getState env
+  let simpTheorems := simpExt.getState env
+  let simprocs := simprocExt.getState env
+  return { base with simpTheorems, simprocs }
 
-def getRuleSets (rsNames : NameSet)
-    (includeGlobalSimpTheorems : Bool) : CoreM RuleSets :=
-  rsNames.foldM (init := ∅) λ rss rsName => do
-    let rs ← getRuleSet rsName includeGlobalSimpTheorems
-    return rss.addRuleSet rsName rs
+def getGlobalRuleSet (rsName : RuleSetName) :
+    CoreM (GlobalRuleSet × Name × Name) := do
+  let (ext, simpExtName, simpExt, simprocExtName, simprocExt) ←
+    getGlobalRuleSetData rsName
+  let rs ← getGlobalRuleSetFromData ext simpExt simprocExt
+  return (rs , simpExtName, simprocExtName)
 
-def getDefaultRuleSets (includeGlobalSimpTheorems : Bool) : CoreM RuleSets := do
-  getRuleSets (← getDefaultRuleSetNames) includeGlobalSimpTheorems
+def getGlobalRuleSets (rsNames : Array RuleSetName) :
+    CoreM (Array (GlobalRuleSet × Name × Name)) :=
+  rsNames.mapM getGlobalRuleSet
 
-def getDefaultRuleSet (includeGlobalSimpTheorems : Bool) (options : Options) :
-    CoreM RuleSet :=
-  return (← getDefaultRuleSets includeGlobalSimpTheorems).getMergedRuleSet
-    options
+def getDefaultGlobalRuleSets : CoreM (Array (GlobalRuleSet × Name × Name)) := do
+  getGlobalRuleSets (← getDefaultRuleSetNames).toArray
 
-def getAllRuleSets (includeGlobalSimpTheorems : Bool) : CoreM RuleSets := do
-  (← getDeclaredRuleSets).foldM (init := ∅) λ rss rsName _ =>
-    return rss.addRuleSet rsName (← getRuleSet rsName includeGlobalSimpTheorems)
+def getDeclaredGlobalRuleSets :
+    CoreM (Array (RuleSetName × GlobalRuleSet × Name × Name)) := do
+  (← getDeclaredRuleSets).toArray.mapM λ (rsName, _) =>
+    return (rsName, ← getGlobalRuleSet rsName)
 
-def addRuleUnchecked (rsName : RuleSetName) (r : RuleSetMember)
-    (kind : AttributeKind) : m Unit := do
-  let ext ← getRuleSetExtension rsName
-  ext.add r kind
+def modifyGetGlobalRuleSet (rsName : RuleSetName)
+    (f : GlobalRuleSet → α × GlobalRuleSet) : m α := do
+  let (ext, _, simpExt, _, simprocExt) ← getGlobalRuleSetData rsName
+  let env ← getEnv
+  let base := ext.getState env
+  let simpTheorems := simpExt.getState env
+  let simprocs := simprocExt.getState env
+  let env := ext.modifyState env λ _ => default     -- an attempt to preserve linearity
+  let env := simpExt.modifyState env λ _ => default -- ditto
+  let env := simprocExt.modifyState env λ _ => default -- ditto
+  let rs := { base with simpTheorems, simprocs }
+  let (a, rs) := f rs
+  let env := ext.modifyState env λ _ => rs.toBaseRuleSet
+  let env := simpExt.modifyState env λ _ => rs.simpTheorems
+  setEnv env
+  return a
 
-def addRule (rsName : RuleSetName) (r : RuleSetMember) (kind : AttributeKind) :
-    m Unit := do
-  let ext ← getRuleSetExtension rsName
-  let rs := ext.getState (← getEnv)
-  if rs.contains r.name then
-    throwError "Rule '{r.name.name}' is already registered in rule set '{rsName}'."
-  ext.add r kind
+def modifyGlobalRuleSet (rsName : RuleSetName)
+    (f : GlobalRuleSet → GlobalRuleSet) : CoreM Unit := do
+  modifyGetGlobalRuleSet rsName λ rs => ((), f rs)
 
-def eraseRules (rsf : RuleSetNameFilter) (rf : RuleNameFilter) (check : Bool) :
-    m Unit := do
+def addGlobalRule (rsName : RuleSetName) (r : GlobalRuleSetMember)
+    (kind : AttributeKind) (checkNotExists : Bool) : m Unit := do
+  let (ext, _, simpExt, _, simprocExt) ← getGlobalRuleSetData rsName
+  if checkNotExists then
+    let rs ← getGlobalRuleSetFromData ext simpExt simprocExt
+    if rs.contains r.name then
+      throwError "aesop: rule '{r.name.name}' is already registered in rule set '{rsName}'"
+  match r with
+  | .base m => ext.add m kind
+  | .normSimpRule r => do
+    for e in r.entries do
+      simpExt.add e kind
+      -- Workaround for a Lean bug.
+      if let .thm l := e then
+        setEnv $ simpExt.modifyState (← getEnv) λ simpTheorems =>
+          { simpTheorems with erased := simpTheorems.erased.erase l.origin }
+
+def eraseGlobalRules (rsf : RuleSetNameFilter) (rf : RuleNameFilter)
+    (checkExists : Bool) : m Unit := do
   match rsf.matchedRuleSetNames with
   | none =>
     let anyErased ←
-      (← getDeclaredRuleSets).foldM (init := false) λ b _ ext => go b ext
-    if check && ! anyErased then
+      (← getDeclaredRuleSets).foldM (init := false) λ b rsName _ => go b rsName
+    if checkExists && ! anyErased then
       throwError "'{rf.ident.name}' is not registered (with the given features) in any rule set."
   | some rsNames =>
-    let anyErased ←
-      rsNames.foldlM (init := false) λ b rsName => do
-        go b (← getRuleSetExtension rsName)
-    if check && ! anyErased then
+    let anyErased ← rsNames.foldlM (init := false) go
+    if checkExists && ! anyErased then
       throwError "'{rf.ident.name}' is not registered (with the given features) in any of the rule sets {rsNames.map toString}."
   where
-    go (anyErased : Bool) (ext : RuleSetExtension) : m Bool := do
-      let env ← getEnv
-      let rs := ext.getState env
-      setEnv $ ext.modifyState env λ _ => ∅ -- This ensures that `rs` is used linearly.
-      let (rs, rsErased) := rs.erase rf
-      setEnv $ ext.modifyState env λ _ => rs
-      return anyErased || rsErased
+    go (anyErased : Bool) (rsName : RuleSetName) : m Bool :=
+      modifyGetGlobalRuleSet rsName λ rs =>
+        let (rs, anyErasedFromRs) := rs.erase rf
+        (anyErased || anyErasedFromRs, rs)
 
 end Aesop.Frontend
