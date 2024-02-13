@@ -8,6 +8,7 @@ import Aesop.Check
 import Aesop.Tree.State
 import Aesop.Tree.Traversal
 import Aesop.Tree.TreeM
+import Std.Lean.HashSet
 
 open Lean
 open Lean.Meta

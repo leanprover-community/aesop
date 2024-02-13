@@ -8,6 +8,7 @@ import Aesop.RuleTac.Basic
 import Aesop.RuleTac.ElabRuleTerm
 import Batteries.Lean.Meta.UnusedNames
 import Batteries.Lean.Meta.AssertHypotheses
+import Aesop.Script.SpecificTactics
 
 open Lean
 open Lean.Meta
