@@ -28,6 +28,15 @@ variable [Monad m] [MonadError m] [MonadQuotation m]
 private def mkOneBasedNumLit (n : Nat) : NumLit :=
   Syntax.mkNumLit $ toString $ n + 1
 
+def renderOnGoal (acc : Array Syntax.Tactic) (goalPos : Nat)
+    (tacticSeq : Array Syntax.Tactic) : m (Array Syntax.Tactic) := do
+  if goalPos == 0 then
+    return acc ++ tacticSeq
+  else
+    let posLit := mkOneBasedNumLit goalPos
+    let t ← `(tactic| on_goal $posLit:num => $tacticSeq:tactic*)
+    return acc.push t
+
 structure TacticInvocation where
   preState : Meta.SavedState
   preGoal : MVarId
@@ -49,15 +58,6 @@ def noop (preGoal : MVarId) (postGoal : GoalWithMVars)
   preGoal, preState, postState
 }
 
-def renderOnGoal (acc : Array Syntax.Tactic) (goalPos : Nat)
-    (ti : TacticInvocation) : m (Array Syntax.Tactic) := do
-  if goalPos == 0 then
-    return acc ++ ti.tacticSeq
-  else
-    let posLit := mkOneBasedNumLit goalPos
-    let t ← `(tactic| on_goal $posLit:num => $(ti.tacticSeq):tactic*)
-    return acc.push t
-
 def render (acc : Array Syntax.Tactic) (ti : TacticInvocation)
     (tacticState : TacticState) : m (Array Syntax.Tactic × TacticState) := do
   if ti.tacticSeq.size == 0 then
@@ -66,7 +66,7 @@ def render (acc : Array Syntax.Tactic) (ti : TacticInvocation)
   else
     let pos ← tacticState.getVisibleGoalIndex ti.preGoal
     let tacticState ← tacticState.applyTacticInvocation ti
-    let acc ← renderOnGoal acc pos ti
+    let acc ← renderOnGoal acc pos ti.tacticSeq
     return (acc, tacticState)
 
 def validate (ti : TacticInvocation) : MetaM Unit := do
@@ -123,7 +123,7 @@ def StructuredScript.render (script : StructuredScript) :
         StructuredScript → m (Array Syntax.Tactic)
       | empty => return acc
       | onGoal goalPos ti tail => do
-        let script ← ti.renderOnGoal acc goalPos
+        let script ← renderOnGoal acc goalPos ti.tacticSeq
         go script tail
       | focusAndSolve goalPos here tail => do
         let nestedScript ← go #[] here
