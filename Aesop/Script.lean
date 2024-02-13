@@ -37,6 +37,24 @@ def renderOnGoal (acc : Array Syntax.Tactic) (goalPos : Nat)
     let t ← `(tactic| on_goal $posLit:num => $tacticSeq:tactic*)
     return acc.push t
 
+-- Without {α β : Type} universe inference goes haywire.
+@[specialize]
+def findFirstStep? {α β : Type} (goals : Array α) (step? : α → Option β)
+     (stepOrder : β → Nat) : Option (Nat × α × β) := Id.run do
+  let mut firstStep? := none
+  for h : pos in [:goals.size] do
+    let g := goals[pos]'h.2
+    if let some step := step? g then
+      if let some (_, _, currentFirstStep) := firstStep? then
+        if stepOrder step < stepOrder currentFirstStep then
+          firstStep? := some (pos, g, step)
+      else
+        firstStep? := some (pos, g, step)
+    else
+      continue
+  return firstStep?
+
+
 structure TacticInvocation where
   preState : Meta.SavedState
   preGoal : MVarId
@@ -153,20 +171,9 @@ where
       -- "Unstructured mode"
       -- TODO If the original order happens to solve the main goal, we can
       -- structure opportunistically.
-      let mut firstStep? := none
-      for h : pos in [:tacticState.visibleGoals.size] do
-        let g := tacticState.visibleGoals[pos]'h.2
-        if let (some (i, step)) := steps[g.goal] then
-          if let some (pos', j, firstStep) := firstStep? then
-            firstStep? := some $ if i < j then (pos, i, step) else (pos', j, firstStep)
-          else
-            firstStep? := some (pos, i, step)
-        else
-          -- It's possible that a visible goal is solved as a side effect of
-          -- some unrelated step. So we can't expect every visible goal to have
-          -- an associated step.
-          continue
-      let some (goalPos, _, firstStep) := firstStep?
+      let firstStep? :=
+        findFirstStep? tacticState.visibleGoals (steps.find? ·.goal) (·.fst)
+      let some (goalPos, _, _, firstStep) := firstStep?
         | throwError "internal error: found no step to solve any visible goal"
       let tacticState ← tacticState.applyTacticInvocation firstStep
       let (tailScript, tacticState) ← go steps tacticState
@@ -262,14 +269,6 @@ def withUpdatedMVarIds [MonadWithReader DynStructureM.Context m]
   | none => onFailure
 
 -- TODO upstream
-local instance : Nonempty Core.State :=
-  ⟨{ env := Classical.ofNonempty }⟩
-
--- TODO upstream
-local instance : Nonempty Meta.SavedState :=
-  ⟨{ core := Classical.ofNonempty, meta := {}}⟩
-
--- TODO upstream
 local instance [Nonempty α] [Nonempty β] : Nonempty (α × β) :=
   ⟨Classical.ofNonempty, Classical.ofNonempty⟩
 
@@ -326,26 +325,13 @@ where
     else
       return (.empty, preState, preGoals)
 
-  -- TODO deduplicate firstStep? search
   goUnstructured (preState : Meta.SavedState) (preGoals : Array MVarId) :
       OptionT DynStructureM (StructuredScript × Meta.SavedState × Array MVarId) := do
     -- Unstructured mode: execute the first step according to the original
     -- order.
     trace[debug] "entering goUnstructured with goals:{indentD $ ← preState.runMetaM' do addMessageContext $ MessageData.joinSep (preGoals.map λ g => m!"?{g.name}:{indentD $ toMessageData g}").toList "\n"}"
-    let mut firstStep? := none
-    for h : pos in [:preGoals.size] do
-      let g := preGoals[pos]'h.2
-      if let (some (i, step)) := (← read).steps[g] then
-        if let some (pos', g', j, firstStep) := firstStep? then
-          firstStep? := some $
-            if i < j then (pos, g, i, step) else (pos', g', j, firstStep)
-        else
-          firstStep? := some (pos, g, i, step)
-      else
-        -- It's possible that a goal is solved as a side effect of some
-        -- unrelated step. So we can't expect every goal to have an associated
-        -- step.
-        continue
+    let steps := (← read).steps
+    let firstStep? := findFirstStep? preGoals (steps[·]) (·.fst)
     let some (goalPos, goal, _, ti) := firstStep?
       | throwError "found no step for any of the visible goals{indentD $ ← preState.runMetaM' do addMessageContext $ toMessageData preGoals}"
     trace[debug] "running tactics on goal {goalPos}:{indentD $ toMessageData ti.tacticSeq}"
