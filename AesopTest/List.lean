@@ -664,14 +664,12 @@ theorem eq_replicate' {a : α} {l : List α} : l = replicate l.length a ↔ ∀ 
 
 -- attribute [-simp] eq_replicate
 theorem X.eq_replicate {a : α} {n} {l : List α} : l = replicate n a ↔ length l = n ∧ ∀ b, b ∈ l → b = a := by
-  set_option aesop.check.script false in -- TODO
   aesop (add norm simp eq_replicate')
 
 theorem replicate_add (a : α) (m n) : replicate (m + n) a = replicate m a ++ replicate n a :=
   ADMIT -- Need to apply associativity of addition to let `replicate` reduce.
 
 theorem replicate_subset_singleton (a : α) (n) : replicate n a ⊆ [a] := by
-  set_option aesop.check.script false in -- TODO
   aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 theorem subset_singleton_iff {a : α} {L : List α} : L ⊆ [a] ↔ ∃ n, L = replicate n a :=
@@ -715,7 +713,6 @@ theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) :
 @[simp]
 theorem mem_pure {α} (x y : α) :
     x ∈ (pure y : List α) ↔ x = y := by
-  set_option aesop.check.script false in -- TODO
   aesop (add norm simp pure)
 
 /-! ### bind -/
