@@ -7,7 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Index.Basic
 import Aesop.Options
 import Aesop.Percent
-import Aesop.Script
+import Aesop.Script.ScriptBuilder
 import Batteries.Lean.Meta.SavedState
 
 open Lean
