@@ -510,7 +510,7 @@ an Aesop rule. Currently available builders are:
   match, so `unfold` rules for recursive functions generally lead to looping.
 - **`tactic`**: takes a tactic and directly turns it into a rule. The given
   declaration (the builder does not work for hypotheses) must have type `TacticM
-  Unit`, `Aesop.SimpleRuleTac` or `Aesop.RuleTac`. The latter are Aesop data
+  Unit`, `Aesop.SingleRuleTac` or `Aesop.RuleTac`. The latter are Aesop data
   types which associate a tactic with additional metadata; using them may allow
   the rule to operate somewhat more efficiently.
 
