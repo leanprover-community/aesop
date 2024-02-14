@@ -7,7 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Search.Main
 import Aesop.BuiltinRules -- ensures that the builtin rules are registered
 import Aesop.Frontend.Tactic
-import Aesop.Profiling
+import Aesop.Stats
 
 open Lean
 open Lean.Elab.Tactic
@@ -18,24 +18,24 @@ namespace Aesop
 def evalAesop : Tactic := λ stx => do
   profileitM Exception "aesop" (← getOptions) do
   withMainContext do
-    let (profile, totalTime) ← time do
+    let (stats, totalTime) ← time do
       let (config, configParseTime) ← time $ Frontend.TacticConfig.parse stx
-      let profile := { Profile.empty with configParsing := configParseTime }
+      let stats := { Stats.empty with configParsing := configParseTime }
       let goal ← getMainGoal
       let ((goal, ruleSet), ruleSetConstructionTime) ← time $
         config.getRuleSet goal
-      let profile :=
-        { profile with ruleSetConstruction := ruleSetConstructionTime }
+      let stats :=
+        { stats with ruleSetConstruction := ruleSetConstructionTime }
       withConstAesopTraceNode .ruleSet (return "Rule set") do
         ruleSet.trace .ruleSet
-      let (profile, searchTime) ← time do
-        let (goals, profile) ←
+      let (stats, searchTime) ← time do
+        let (goals, stats) ←
           search goal ruleSet config.options config.simpConfig
-            config.simpConfigSyntax? profile
+            config.simpConfigSyntax? stats
         replaceMainGoal goals.toList
-        pure profile
-      pure { profile with search := searchTime }
-    let profile := { profile with total := totalTime }
-    profile.trace .profile
+        pure stats
+      pure { stats with search := searchTime }
+    let stats := { stats with total := totalTime }
+    stats.trace .stats
 
 end Aesop

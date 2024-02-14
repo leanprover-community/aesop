@@ -7,7 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Options
 import Aesop.Search.Expansion.Simp
 import Aesop.Search.Queue.Class
-import Aesop.Profiling
+import Aesop.Stats
 import Aesop.RuleSet
 
 open Lean
@@ -28,7 +28,7 @@ structure Context where
   ruleSet : LocalRuleSet
   normSimpContext : NormSimpContext
   options : Aesop.Options'
-  profileRef : IO.Ref Profile
+  statsRef : StatsRef
   deriving Nonempty
 
 structure State (Q) [Aesop.Queue Q] where
@@ -63,8 +63,8 @@ instance : MonadState (State Q) (SearchM Q) :=
 instance : MonadReader Context (SearchM Q) :=
   { inferInstanceAs (MonadReaderOf Context (SearchM Q)) with }
 
-instance : MonadProfile (SearchM Q) where
-  readProfileRef := return (← read).profileRef
+instance : MonadStats (SearchM Q) where
+  readStatsRef := return (← read).statsRef
 
 instance : MonadLift TreeM (SearchM Q) where
   monadLift x := do
@@ -72,15 +72,15 @@ instance : MonadLift TreeM (SearchM Q) where
     liftM $ ReaderT.run x ctx
 
 protected def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
-    (x : SearchM Q α) : MetaM (α × SearchM.State Q × Tree × Profile) := do
+    (x : SearchM Q α) : MetaM (α × SearchM.State Q × Tree × Stats) := do
   let ((a, σ), t) ←
     x.run ctx |>.run σ |>.run t
-  return (a, σ, t, ← ctx.profileRef.get)
+  return (a, σ, t, ← ctx.statsRef.get)
 
 protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     (simpConfig : Simp.Config) (simpConfigStx? : Option Term)
-    (goal : MVarId) (profile : Profile) (x : SearchM Q α) :
-    MetaM (α × State Q × Tree × Profile) := do
+    (goal : MVarId) (stats : Stats) (x : SearchM Q α) :
+    MetaM (α × State Q × Tree × Stats) := do
   let t ← mkInitialTree goal
   let normSimpContext := {
     config := simpConfig
@@ -92,8 +92,8 @@ protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     enabled := options.enableSimp
     useHyps := options.useSimpAll
   }
-  let profileRef ← IO.mkRef profile
-  let ctx := { ruleSet, options, normSimpContext, profileRef }
+  let statsRef ← IO.mkRef stats
+  let ctx := { ruleSet, options, normSimpContext, statsRef }
   let #[rootGoal] := (← t.root.get).goals
     | throwError "aesop: internal error: root mvar cluster does not contain exactly one goal."
   let state := {

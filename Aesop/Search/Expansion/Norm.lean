@@ -21,7 +21,7 @@ structure Context where
   options : Options'
   ruleSet : LocalRuleSet
   normSimpContext : NormSimpContext
-  profileRef : ProfileRef
+  statsRef : StatsRef
 
 end NormM
 
@@ -31,8 +31,8 @@ instance : MonadBacktrack Meta.SavedState NormM where
   saveState := Meta.saveState
   restoreState s := s.restore
 
-instance : MonadProfile NormM where
-  readProfileRef := return (← read).profileRef
+instance : MonadStats NormM where
+  readStatsRef := return (← read).statsRef
 
 instance [Queue Q] : MonadLift NormM (SearchM Q) where
   monadLift x := do x.run { (← read) with }

@@ -12,7 +12,7 @@ namespace Aesop
 
 variable [Aesop.Queue Q]
 
-def selectNormRules [Monad m] [MonadProfile m] [MonadLiftT MetaM m]
+def selectNormRules [Monad m] [MonadStats m] [MonadLiftT MetaM m]
     (rs : LocalRuleSet) (goal : MVarId) :
     m (Array (IndexMatchResult NormRule)) :=
   profilingRuleSelection do rs.applicableNormalizationRules goal

@@ -876,16 +876,17 @@ The main options are:
 To get an idea of where Aesop spends its time, use
 
 ``` lean
-set_option trace.aesop.profile true
+set_option trace.aesop.stats true
 ```
 
-Aesop then prints a summary of how much time its various tasks took.
+Aesop then prints a summary of how much time it spent in various subroutines.
 
-To get a more fine-grained picture, enable the `trace.aesop` and `profiler`
-options. The trace is then augmented with information about how much time each
-step took. Note that only the timing information pertaining to goal expansions
-and rule applications is relevant. Other timings, such as those attached to new
-rapps and goals, are just artefacts of the Lean tracing API.
+To collect per-rule timings, activate the `profiler` option. With this option
+active, the trace produced by `trace.aesop` is also augmented with information
+about how much time each step took. Note that only the timing information
+pertaining to goal expansions and rule applications is relevant. Other timings,
+such as those attached to new rapps and goals, are just artefacts of the Lean
+tracing API.
 
 ### Checking Internal Invariants
 

@@ -14,51 +14,51 @@ namespace Aesop
 
 
 -- All times are in nanoseconds.
-structure RuleProfile where
+structure RuleStats where
   rule : DisplayRuleName
   elapsed : Nanos
   successful : Bool
   deriving Inhabited
 
-namespace RuleProfile
+namespace RuleStats
 
-instance : ToString RuleProfile where
+instance : ToString RuleStats where
   toString rp :=
     let success := if rp.successful then "successful" else "failed"
     s!"[{rp.elapsed.printAsMillis}] apply rule {rp.rule} ({success})"
 
-end RuleProfile
+end RuleStats
 
 
 -- All times are in nanoseconds.
-structure Profile where
+structure Stats where
   total : Nanos
   configParsing : Nanos
   ruleSetConstruction : Nanos
   search : Nanos
   ruleSelection : Nanos
-  ruleApplications : Array RuleProfile
+  ruleStats : Array RuleStats
   deriving Inhabited
 
-namespace Profile
+namespace Stats
 
-protected def empty : Profile where
+protected def empty : Stats where
   total := 0
   configParsing := 0
   ruleSetConstruction := 0
   search := 0
   ruleSelection := 0
-  ruleApplications := #[]
+  ruleStats := #[]
 
-instance : EmptyCollection Profile :=
-  ⟨Profile.empty⟩
+instance : EmptyCollection Stats :=
+  ⟨Stats.empty⟩
 
 -- The returned map associates to each rule the total time spent on successful
 -- and failed applications of that rule.
-def ruleApplicationTotals (p : Profile) :
+def ruleStatsTotals (p : Stats) :
     HashMap DisplayRuleName (Nanos × Nanos) := Id.run do
   let mut m := {}
-  for rp in p.ruleApplications do
+  for rp in p.ruleStats do
     if rp.successful then
       m :=
         match m.find? rp.rule with
@@ -73,11 +73,11 @@ def ruleApplicationTotals (p : Profile) :
           m.insert rp.rule (successful, failed + rp.elapsed)
   return m
 
-def trace (p : Profile) (opt : TraceOption) : CoreM Unit := do
+def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
   if ! (← opt.isEnabled) then
     return
   let totalRuleApplications :=
-    p.ruleApplications.foldl (init := 0) λ total rp =>
+    p.ruleStats.foldl (init := 0) λ total rp =>
       total + rp.elapsed
   aesop_trace![opt] "Total: {p.total.printAsMillis}"
   aesop_trace![opt] "Configuration parsing: {p.configParsing.printAsMillis}"
@@ -88,8 +88,8 @@ def trace (p : Profile) (opt : TraceOption) : CoreM Unit := do
     withConstAesopTraceNode opt (collapsed := false)
         (return m!"Rule applications: {totalRuleApplications.printAsMillis}") do
       let timings :=
-        p.ruleApplicationTotals.fold
-          (init := Array.mkEmpty p.ruleApplicationTotals.size)
+        p.ruleStatsTotals.fold
+          (init := Array.mkEmpty p.ruleStatsTotals.size)
           λ timings n (successful, failed) =>
             timings.push (n, successful, failed)
       let timings := timings.qsortOrd (ord := ⟨compareTimings⟩)
@@ -103,53 +103,52 @@ def trace (p : Profile) (opt : TraceOption) : CoreM Unit := do
         x y
       |>.swap
 
-end Profile
+end Stats
 
 
-abbrev ProfileRef := IO.Ref Profile
+abbrev StatsRef := IO.Ref Stats
 
-class MonadProfile (m) extends
+class MonadStats (m) extends
     MonadLiftT (ST IO.RealWorld) m,
     MonadLiftT BaseIO m,
     MonadOptions m where
-  readProfileRef : m ProfileRef
+  readStatsRef : m StatsRef
 
-export MonadProfile (readProfileRef)
+export MonadStats (readStatsRef)
 
-variable [Monad m] [MonadProfile m]
+variable [Monad m] [MonadStats m]
 
 @[inline, always_inline]
 def isProfilingEnabled : m Bool :=
   return (← getOptions).getBool `profiler
 
 @[inline, always_inline]
-def recordRuleSelectionProfile (elapsed : Nanos) : m Unit := do
-  (← readProfileRef).modify λ p =>
+def recordRuleSelectionStats (elapsed : Nanos) : m Unit := do
+  (← readStatsRef).modify λ p =>
     { p with ruleSelection := p.ruleSelection + elapsed }
 
 @[inline, always_inline]
-def recordRuleProfile (rp : RuleProfile) : m Unit := do
-  (← readProfileRef).modify λ p =>
-    { p with ruleApplications := p.ruleApplications.push rp }
+def recordRuleStats (rp : RuleStats) : m Unit := do
+  (← readStatsRef).modify λ p =>
+    { p with ruleStats := p.ruleStats.push rp }
 
 @[inline, always_inline]
-def profiling (x : m α) (recordProfile : α → Nanos → m Unit) : m α := do
+def profiling (x : m α) (recordStats : α → Nanos → m Unit) : m α := do
   if ← isProfilingEnabled then
     let (result, elapsed) ← time x
-    recordProfile result elapsed
+    recordStats result elapsed
     return result
   else
     x
 
 @[inline, always_inline]
 def profilingRuleSelection (x : m α) : m α :=
-  profiling x λ _ elapsed => do recordRuleSelectionProfile elapsed
+  profiling x λ _ elapsed => do recordRuleSelectionStats elapsed
 
 @[inline, always_inline]
 def profilingRule (rule : DisplayRuleName) (wasSuccessful : α → Bool)
     (x : m α) : m α :=
   profiling x λ a elapsed => do
-    let profile := { rule, elapsed, successful := wasSuccessful a }
-    recordRuleProfile profile
+    recordRuleStats { rule, elapsed, successful := wasSuccessful a }
 
 end Aesop
