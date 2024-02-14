@@ -10,7 +10,7 @@ import Aesop.Util.UnorderedArraySet
 import Std.Lean.Expr
 import Std.Lean.Meta.DiscrTree
 import Std.Lean.PersistentHashSet
-import Std.Tactic.TryThis
+import Lean.Meta.Tactic.TryThis
 
 open Lean
 open Lean.Meta
@@ -316,13 +316,13 @@ def addTryThisTacticSeqSuggestion (ref : Syntax)
   let msgText := fmt.pretty (indent := 0) (column := 0)
   if let some range := (origSpan?.getD ref).getRange? then
     let map ← getFileMap
-    let (indent, column) := Std.Tactic.TryThis.getIndentAndColumn map range
+    let (indent, column) := Lean.Meta.Tactic.TryThis.getIndentAndColumn map range
     let text := fmt.pretty indent column
     let suggestion := {
       suggestion := .string text
       messageData? := some msgText
     }
-    Std.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
+    Lean.Meta.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
       (header := "Try this:\n")
 
 /--
