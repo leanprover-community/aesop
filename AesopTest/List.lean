@@ -746,33 +746,40 @@ theorem bind_assoc {α β γ : Type u} (l : List α) (f : α → List β) (g : �
 
 /-! ### concat -/
 
-@[simp] theorem concat_nil (a : α) : concat [] a = [a] := rfl
+-- attribute [-simp] concat_nil
+@[simp] theorem X.concat_nil (a : α) : concat [] a = [a] := rfl
 
-@[simp] theorem concat_cons (a b : α) (l : List α) : concat (a :: l) b = a :: concat l b := rfl
+-- attribute [-simp] concat_cons
+@[simp] theorem X.concat_cons (a b : α) (l : List α) : concat (a :: l) b = a :: concat l b := rfl
 
 attribute [-simp] concat_eq_append
 @[simp] theorem X.concat_eq_append (a : α) (l : List α) : concat l a = l ++ [a] := by
   induction l <;> aesop
 
-theorem init_eq_of_concat_eq {a : α} {l₁ l₂ : List α} : concat l₁ a = concat l₂ a → l₁ = l₂ := by
+-- attribute [-simp] init_eq_of_concat_eq
+theorem X.init_eq_of_concat_eq {a : α} {l₁ l₂ : List α} : concat l₁ a = concat l₂ a → l₁ = l₂ := by
   aesop
 
-theorem last_eq_of_concat_eq {a b : α} {l : List α} : concat l a = concat l b → a = b := by
+-- attribute [-simp] last_eq_of_concat_eq
+theorem X.last_eq_of_concat_eq {a b : α} {l : List α} : concat l a = concat l b → a = b := by
   aesop
 
-theorem concat_ne_nil (a : α) (l : List α) : concat l a ≠ [] := by
+-- attribute [-simp] concat_ne_nil
+theorem X.concat_ne_nil (a : α) (l : List α) : concat l a ≠ [] := by
   aesop
 
 attribute [simp] append_assoc
 
-theorem concat_append (a : α) (l₁ l₂ : List α) : concat l₁ a ++ l₂ = l₁ ++ a :: l₂ := by
+-- attribute [-simp] concat_append
+theorem X.concat_append (a : α) (l₁ l₂ : List α) : concat l₁ a ++ l₂ = l₁ ++ a :: l₂ := by
   aesop
 
 attribute [-simp] length_concat
 theorem X.length_concat (a : α) (l : List α) : length (concat l a) = .succ (length l) := by
   aesop
 
-theorem append_concat (a : α) (l₁ l₂ : List α) : l₁ ++ concat l₂ a = concat (l₁ ++ l₂) a := by
+-- attribute [-simp] append_concat
+theorem X.append_concat (a : α) (l₁ l₂ : List α) : l₁ ++ concat l₂ a = concat (l₁ ++ l₂) a := by
   aesop
 
 /-! ### reverse -/
