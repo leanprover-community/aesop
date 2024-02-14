@@ -320,11 +320,7 @@ def addTryThisTacticSeqSuggestion (ref : Syntax)
   let msgText := fmt.pretty (indent := 0) (column := 0)
   if let some range := (origSpan?.getD ref).getRange? then
     let map ← getFileMap
-<<<<<<< HEAD
-    let (indent, column) := Std.Tactic.TryThis.getIndentAndColumn map range
-=======
     let (indent, column) := Lean.Meta.Tactic.TryThis.getIndentAndColumn map range
->>>>>>> nightly-testing
     let text := fmt.pretty indent column
     let suggestion := {
       -- HACK: The `tacticSeq` syntax category is pretty-printed with each line
@@ -335,18 +331,13 @@ def addTryThisTacticSeqSuggestion (ref : Syntax)
       messageData? := some msgText
       preInfo? := "  "
     }
-<<<<<<< HEAD
-    Std.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
+    Lean.Meta.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
       (header := "Try this:\n")
 where
   dedent (s : String) : String :=
     s.splitOn "\n"
     |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
     |> String.intercalate "\n"
-=======
-    Lean.Meta.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
-      (header := "Try this:\n")
->>>>>>> nightly-testing
 
 /--
 Runs a computation for at most the given number of heartbeats times 1000,
