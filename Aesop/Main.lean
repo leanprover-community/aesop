@@ -7,7 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Search.Main
 import Aesop.BuiltinRules -- ensures that the builtin rules are registered
 import Aesop.Frontend.Tactic
-import Aesop.Stats
+import Aesop.Stats.Extension
 
 open Lean
 open Lean.Elab.Tactic
@@ -36,6 +36,7 @@ def evalAesop : Tactic := λ stx => do
         pure stats
       pure { stats with search := searchTime }
     let stats := { stats with total := totalTime }
+    recordStats { aesopStx := stx, stats }
     stats.trace .stats
 
 end Aesop

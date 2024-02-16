@@ -1,11 +1,11 @@
 /-
-Copyright (c) 2022 Jannis Limperg. All rights reserved.
+Copyright (c) 2022-2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
 import Aesop.Nanos
-import Aesop.Tree.Data
+import Aesop.Rule.Name
 import Aesop.Tracing
 
 open Lean
@@ -30,7 +30,6 @@ instance : ToString RuleStats where
 end RuleStats
 
 
--- All times are in nanoseconds.
 structure Stats where
   total : Nanos
   configParsing : Nanos
@@ -53,25 +52,71 @@ protected def empty : Stats where
 instance : EmptyCollection Stats :=
   ⟨Stats.empty⟩
 
--- The returned map associates to each rule the total time spent on successful
--- and failed applications of that rule.
-def ruleStatsTotals (p : Stats) :
-    HashMap DisplayRuleName (Nanos × Nanos) := Id.run do
-  let mut m := {}
-  for rp in p.ruleStats do
+end Stats
+
+
+structure RuleStatsTotals where
+  /--
+  Number of successful applications of a rule.
+  -/
+  numSuccessful : Nat
+  /--
+  Number of failed applications of a rule.
+  -/
+  numFailed : Nat
+  /--
+  Total elapsed time of successful applications of a rule.
+  -/
+  elapsedSuccessful : Nanos
+  /--
+  Total elapsed time of failed applications of a rule.
+  -/
+  elapsedFailed : Nanos
+
+namespace RuleStatsTotals
+
+protected def empty : RuleStatsTotals where
+  numSuccessful := 0
+  numFailed := 0
+  elapsedSuccessful := 0
+  elapsedFailed := 0
+
+instance : EmptyCollection RuleStatsTotals :=
+  ⟨.empty⟩
+
+def compareByTotalElapsed : (x y : RuleStatsTotals) → Ordering :=
+  compareOn λ totals => totals.elapsedSuccessful + totals.elapsedFailed
+
+end RuleStatsTotals
+
+
+namespace Stats
+
+def ruleStatsTotals (p : Stats)
+    (init : HashMap DisplayRuleName RuleStatsTotals := ∅) :
+    HashMap DisplayRuleName RuleStatsTotals :=
+  p.ruleStats.foldl (init := init) λ m rp => Id.run do
+    let mut stats := m.findD rp.rule ∅
     if rp.successful then
-      m :=
-        match m.find? rp.rule with
-        | none => m.insert rp.rule (rp.elapsed, 0)
-        | some (successful, failed) =>
-          m.insert rp.rule (successful + rp.elapsed, failed)
+      stats := { stats with
+        numSuccessful := stats.numSuccessful + 1
+        elapsedSuccessful := stats.elapsedSuccessful + rp.elapsed
+      }
     else
-      m :=
-        match m.find? rp.rule with
-        | none => m.insert rp.rule (0, rp.elapsed)
-        | some (successful, failed) =>
-          m.insert rp.rule (successful, failed + rp.elapsed)
-  return m
+      stats := { stats with
+        numFailed := stats.numFailed + 1
+        elapsedFailed := stats.elapsedFailed + rp.elapsed
+      }
+    m.insert rp.rule stats
+
+def _root_.Aesop.sortRuleStatsTotals
+    (ts : Array (DisplayRuleName × RuleStatsTotals)) :
+    Array (DisplayRuleName × RuleStatsTotals) :=
+  let lt := λ (n₁, t₁) (n₂, t₂) =>
+    RuleStatsTotals.compareByTotalElapsed t₁ t₂ |>.swap.then
+    (compare n₁ n₂)
+    |>.isLT
+  ts.qsort lt
 
 def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
   if ! (← opt.isEnabled) then
@@ -87,21 +132,9 @@ def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
     aesop_trace![opt] "Rule selection: {p.ruleSelection.printAsMillis}"
     withConstAesopTraceNode opt (collapsed := false)
         (return m!"Rule applications: {totalRuleApplications.printAsMillis}") do
-      let timings :=
-        p.ruleStatsTotals.fold
-          (init := Array.mkEmpty p.ruleStatsTotals.size)
-          λ timings n (successful, failed) =>
-            timings.push (n, successful, failed)
-      let timings := timings.qsortOrd (ord := ⟨compareTimings⟩)
-      for (n, s, f) in timings do
-        aesop_trace![opt] "[{(s + f).printAsMillis} / {s.printAsMillis} / {f.printAsMillis}] {n}"
-  where
-    compareTimings (x y : DisplayRuleName × Nanos × Nanos) : Ordering :=
-      compareLex
-        (compareOn (λ (_, s, f) => s + f))
-        (compareOn (λ (n, _, _) => n))
-        x y
-      |>.swap
+      let timings := sortRuleStatsTotals p.ruleStatsTotals.toArray
+      for (n, t) in timings do
+        aesop_trace![opt] "[{(t.elapsedSuccessful + t.elapsedFailed).printAsMillis} / {t.elapsedSuccessful.printAsMillis} / {t.elapsedFailed.printAsMillis}] {n}"
 
 end Stats
 
@@ -133,8 +166,9 @@ def recordRuleStats (rp : RuleStats) : m Unit := do
     { p with ruleStats := p.ruleStats.push rp }
 
 @[inline, always_inline]
-def profiling (x : m α) (recordStats : α → Nanos → m Unit) : m α := do
-  if ← isProfilingEnabled then
+def profiling (x : m α) (onlyWhenProfiling : Bool)
+    (recordStats : α → Nanos → m Unit) : m α := do
+  if ← pure (! onlyWhenProfiling) <||> isProfilingEnabled then
     let (result, elapsed) ← time x
     recordStats result elapsed
     return result
@@ -143,12 +177,13 @@ def profiling (x : m α) (recordStats : α → Nanos → m Unit) : m α := do
 
 @[inline, always_inline]
 def profilingRuleSelection (x : m α) : m α :=
-  profiling x λ _ elapsed => do recordRuleSelectionStats elapsed
+  profiling x (onlyWhenProfiling := false) λ _ elapsed => do
+    recordRuleSelectionStats elapsed
 
 @[inline, always_inline]
 def profilingRule (rule : DisplayRuleName) (wasSuccessful : α → Bool)
     (x : m α) : m α :=
-  profiling x λ a elapsed => do
+  profiling x (onlyWhenProfiling := true) λ a elapsed => do
     recordRuleStats { rule, elapsed, successful := wasSuccessful a }
 
 end Aesop

@@ -18,6 +18,9 @@ instance : OfNat Nanos n where
 instance : Add Nanos where
   add n m := ⟨n.nanos + m.nanos⟩
 
+instance : HDiv Nanos Nat Nanos where
+  hDiv n m := ⟨n.nanos / m⟩
+
 def printAsMillis (n : Nanos) : String :=
   let str := toString (n.nanos.toFloat / 1000000)
   match str.split λ c => c == '.' with
