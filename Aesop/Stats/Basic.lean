@@ -156,34 +156,24 @@ def isProfilingEnabled : m Bool :=
   return (← getOptions).getBool `profiler
 
 @[inline, always_inline]
-def recordRuleSelectionStats (elapsed : Nanos) : m Unit := do
-  (← readStatsRef).modify λ p =>
-    { p with ruleSelection := p.ruleSelection + elapsed }
-
-@[inline, always_inline]
-def recordRuleStats (rp : RuleStats) : m Unit := do
-  (← readStatsRef).modify λ p =>
-    { p with ruleStats := p.ruleStats.push rp }
-
-@[inline, always_inline]
-def profiling (x : m α) (onlyWhenProfiling : Bool)
-    (recordStats : α → Nanos → m Unit) : m α := do
-  if ← pure (! onlyWhenProfiling) <||> isProfilingEnabled then
+def profiling (recordStats : Stats → α → Nanos → Stats) (x : m α) : m α := do
+  if ← isProfilingEnabled then
     let (result, elapsed) ← time x
-    recordStats result elapsed
+    (← readStatsRef).modify λ stats => recordStats stats result elapsed
     return result
   else
     x
 
 @[inline, always_inline]
-def profilingRuleSelection (x : m α) : m α :=
-  profiling x (onlyWhenProfiling := false) λ _ elapsed => do
-    recordRuleSelectionStats elapsed
+def profilingRuleSelection : m α → m α :=
+  profiling λ stats _ elapsed =>
+    { stats with ruleSelection := stats.ruleSelection + elapsed }
 
 @[inline, always_inline]
-def profilingRule (rule : DisplayRuleName) (wasSuccessful : α → Bool)
-    (x : m α) : m α :=
-  profiling x (onlyWhenProfiling := true) λ a elapsed => do
-    recordRuleStats { rule, elapsed, successful := wasSuccessful a }
+def profilingRule (rule : DisplayRuleName) (wasSuccessful : α → Bool) :
+    m α → m α :=
+  profiling λ stats a elapsed =>
+    let rp := { successful := wasSuccessful a, rule, elapsed }
+    { stats with ruleStats := stats.ruleStats.push rp }
 
 end Aesop
