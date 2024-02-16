@@ -14,7 +14,7 @@ namespace Aesop
 
 initialize collectStatsOption : Lean.Option Bool ←
   Lean.Option.register `aesop.collectStats {
-    defValue := false
+    defValue := true
     group := "aesop"
     descr := "(aesop) collect statistics about Aesop invocations. Use #aesop_stats to display the collected statistics."
   }
