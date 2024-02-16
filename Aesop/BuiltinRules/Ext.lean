@@ -13,7 +13,7 @@ open Lean Lean.Meta
 def unhygienicExt (goal : MVarId) : MetaM (Array MVarId) :=
   unhygienic do
     let (_, subgoals) ←
-      Std.Tactic.Ext.extCore goal [] (failIfUnchanged := true) |>.run' {}
+      Lean.Elab.Tactic.Ext.extCore goal [] (failIfUnchanged := true) |>.run' {}
     return subgoals.map (·.fst)
 
 def unhygienicExtWithScript (goal : MVarId) (generateScript : Bool) :
