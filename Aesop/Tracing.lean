@@ -57,7 +57,7 @@ initialize extraction : TraceOption ←
 
 initialize stats : TraceOption ←
   registerTraceOption `stats
-    "(aesop) If the search is successful, print some statistics. Activate the `profiler` option to collect finer-grained information."
+    "(aesop) If the search is successful, print some statistics."
 
 initialize debug : TraceOption ←
   registerTraceOption `debug

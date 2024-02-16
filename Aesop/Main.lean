@@ -18,25 +18,25 @@ namespace Aesop
 def evalAesop : Tactic := λ stx => do
   profileitM Exception "aesop" (← getOptions) do
   withMainContext do
-    let (stats, totalTime) ← time do
-      let (config, configParseTime) ← time $ Frontend.TacticConfig.parse stx
-      let stats := { Stats.empty with configParsing := configParseTime }
+    let statsRef ← IO.mkRef ∅
+    have : MonadStats TacticM := { readStatsRef := return statsRef }
+    profiling (λ s _ t => { s with total := t }) do
+      let config ← profiling (λ s _ t => { s with configParsing := t }) do
+        Frontend.TacticConfig.parse stx
       let goal ← getMainGoal
-      let ((goal, ruleSet), ruleSetConstructionTime) ← time $
-        config.getRuleSet goal
-      let stats :=
-        { stats with ruleSetConstruction := ruleSetConstructionTime }
+      let (goal, ruleSet) ←
+        profiling (λ s _ t => { s with ruleSetConstruction := t }) do
+          config.getRuleSet goal
       withConstAesopTraceNode .ruleSet (return "Rule set") do
         ruleSet.trace .ruleSet
-      let (stats, searchTime) ← time do
+      profiling (λ s _ t => { s with search := t }) do
         let (goals, stats) ←
           search goal ruleSet config.options config.simpConfig
-            config.simpConfigSyntax? stats
+            config.simpConfigSyntax? (← statsRef.get)
         replaceMainGoal goals.toList
-        pure stats
-      pure { stats with search := searchTime }
-    let stats := { stats with total := totalTime }
-    recordStats { aesopStx := stx, stats }
+        statsRef.set stats
+    let stats ← statsRef.get
+    recordStatsIfEnabled { aesopStx := stx, stats }
     stats.trace .stats
 
 end Aesop

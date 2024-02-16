@@ -12,6 +12,12 @@ open Lean
 
 namespace Aesop
 
+initialize collectStatsOption : Lean.Option Bool ←
+  Lean.Option.register `aesop.collectStats {
+    defValue := false
+    group := "aesop"
+    descr := "(aesop) collect statistics about Aesop invocations. Use #aesop_stats to display the collected statistics."
+  }
 
 -- All times are in nanoseconds.
 structure RuleStats where
@@ -149,15 +155,25 @@ class MonadStats (m) extends
 
 export MonadStats (readStatsRef)
 
-variable [Monad m] [MonadStats m]
+variable [Monad m]
 
 @[inline, always_inline]
-def isProfilingEnabled : m Bool :=
-  return (← getOptions).getBool `profiler
+def isStatsCollectionEnabled [MonadOptions m] : m Bool :=
+  collectStatsOption.get <$> getOptions
+
+@[inline, always_inline]
+def isStatsTracingEnabled [MonadOptions m] : m Bool :=
+  TraceOption.stats.isEnabled
+
+@[inline, always_inline]
+def isStatsCollectionOrTracingEnabled [MonadOptions m] : m Bool :=
+  isStatsCollectionEnabled <||> isStatsTracingEnabled
+
+variable [MonadStats m]
 
 @[inline, always_inline]
 def profiling (recordStats : Stats → α → Nanos → Stats) (x : m α) : m α := do
-  if ← isProfilingEnabled then
+  if ← isStatsCollectionOrTracingEnabled then
     let (result, elapsed) ← time x
     (← readStatsRef).modify λ stats => recordStats stats result elapsed
     return result

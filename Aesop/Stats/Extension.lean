@@ -78,8 +78,10 @@ initialize statsExtension : StatsExtension ←
         λ entries e => entries.push e
   }
 
-def recordStats [MonadEnv m] (s : StatsExtensionEntry) : m Unit :=
-  modifyEnv λ env => statsExtension.addEntry env s
+def recordStatsIfEnabled [Monad m] [MonadEnv m] [MonadOptions m]
+    (s : StatsExtensionEntry) : m Unit := do
+  if ← isStatsCollectionEnabled then
+    modifyEnv λ env => statsExtension.addEntry env s
 
 def getStatsArray [Monad m] [MonadEnv m] : m StatsArray:= do
   return statsExtension.getState (← getEnv) |>.toStatsArray
