@@ -1,126 +1,14 @@
 /-
-Copyright (c) 2021 Jannis Limperg. All rights reserved.
+Copyright (c) 2021-2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Builder.Basic
-import Aesop.Index.Basic
-import Aesop.Rule.Basic
+import Aesop.RuleSet.Filter
 
-open Lean
-open Lean.Meta
+open Lean Lean.Meta
 
 namespace Aesop
-
-inductive BaseRuleSetMember
-  | normRule (r : NormRule)
-  | unsafeRule (r : UnsafeRule)
-  | safeRule (r : SafeRule)
-  | unfoldRule (r : UnfoldRule)
-  deriving Inhabited
-
-def BaseRuleSetMember.name : BaseRuleSetMember → RuleName
-  | normRule r => r.name
-  | unsafeRule r => r.name
-  | safeRule r => r.name
-  | unfoldRule r => r.name
-
-inductive GlobalRuleSetMember
-  | base (m : BaseRuleSetMember)
-  | normSimpRule (e : NormSimpRule)
-  deriving Inhabited
-
-def GlobalRuleSetMember.name : GlobalRuleSetMember → RuleName
-  | base m => m.name
-  | normSimpRule r => r.name
-
-inductive LocalRuleSetMember
-  | global (m : GlobalRuleSetMember)
-  | localNormSimpRule (r : LocalNormSimpRule)
-  deriving Inhabited
-
-def LocalRuleSetMember.name : LocalRuleSetMember → RuleName
-  | global m => m.name
-  | localNormSimpRule r => r.name
-
-def LocalRuleSetMember.toGlobalRuleSetMember? :
-    LocalRuleSetMember → Option GlobalRuleSetMember
-  | global m => some m
-  | _ => none
-
-structure RuleNameFilter where
-  ident : RuleIdent
-  builders : Array BuilderName -- `#[]` means 'match any builder'
-  phases : Array PhaseName     -- `#[]` means 'match any phase'
-
-namespace RuleNameFilter
-
-def ofIdent (i : RuleIdent) : RuleNameFilter where
-  ident := i
-  builders := #[]
-  phases := #[]
-
-def matchesPhase (f : RuleNameFilter) (p : PhaseName) : Bool :=
-  f.phases.isEmpty || f.phases.contains p
-
-def matchesBuilder (f : RuleNameFilter) (b : BuilderName) : Bool :=
-  f.builders.isEmpty || f.builders.contains b
-
-def «matches» (f : RuleNameFilter) (n : RuleName) : Bool :=
-  f.ident.name == n.name &&
-  f.ident.scope == n.scope &&
-  f.matchesPhase n.phase &&
-  f.matchesBuilder n.builder
-
-def matchesSimpTheorem? (f : RuleNameFilter) : Option Name := Id.run do
-  if let .const decl := f.ident then
-    if f.matchesBuilder .simp then
-      return some decl
-  return none
-
-def matchesLocalNormSimpRule? (f : RuleNameFilter) :
-    Option LocalNormSimpRule := Id.run do
-  if let .fvar fvarUserName := f.ident then
-    if f.matchesBuilder .simp then
-      return some { fvarUserName }
-  return none
-
-end RuleNameFilter
-
-
-abbrev RuleSetName := Name -- Not really an abbreviation is it?
-
-def defaultRuleSetName : RuleSetName := `default
-
-def builtinRuleSetName : RuleSetName := `builtin
-
-def localRuleSetName : RuleSetName := `local
-
-def builtinRuleSetNames : Array RuleSetName :=
-  #[defaultRuleSetName, builtinRuleSetName]
-
-def RuleSetName.isReserved (n : RuleSetName) : Bool :=
-  n == localRuleSetName || builtinRuleSetNames.contains n
-
-structure RuleSetNameFilter where
-  ns : Array RuleSetName -- #[] means 'match any rule set'
-
-namespace RuleSetNameFilter
-
-protected def all : RuleSetNameFilter :=
-  ⟨#[]⟩
-
-def matchesAll (f : RuleSetNameFilter) : Bool :=
-  f.ns.isEmpty
-
-def «matches» (f : RuleSetNameFilter) (n : RuleSetName) : Bool :=
-  f.matchesAll || f.ns.contains n
-
-def matchedRuleSetNames (f : RuleSetNameFilter) : Option (Array RuleSetName) :=
-  if f.matchesAll then none else some f.ns
-
-end RuleSetNameFilter
 
 section Types
 
