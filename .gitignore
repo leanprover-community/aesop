@@ -1,5 +1,3 @@
-/tests/*.produced
-
 # macOS leaves these files everywhere:
 .DS_Store
 # Prior to v4.3.0-rc2 lake stored files in these locations.
