@@ -9,7 +9,7 @@ import Aesop.Builder.Basic
 open Lean
 open Lean.Meta
 
-namespace Aesop.RuleBuilder
+namespace Aesop
 
 private def getSimpEntriesFromPropConst (decl : Name) :
     MetaM (Array SimpEntry) := do
@@ -25,20 +25,31 @@ private def getSimpEntriesForConst (decl : Name) : MetaM (Array SimpEntry) := do
     thms ← thms.addDeclToUnfold decl
   return SimpTheorems.simpEntries thms
 
-def simp : RuleBuilder := λ input => do
-  match input.kind with
-  | .global decl =>
+def RuleBuilderInput.getSimpPrio [Monad m] [MonadError m]
+    (input : RuleBuilderInput) : m Nat :=
+  match input.extra with
+  | .norm penalty =>
+    if penalty ≥ 0 then
+      return penalty.toNat
+    else
+      throwError "aesop: simp rules must be given a non-negative integer priority"
+  | _ => throwError "aesop: simp builder can only construct 'norm' rules"
+
+def RuleBuilder.simp : RuleBuilder := λ input => do
+  match input.ident with
+  | .const decl =>
     try {
       let entries ← getSimpEntriesForConst decl
-      return .global $ .globalSimp entries
+      let prio ← input.getSimpPrio
+      let entries := entries.map (updateSimpEntryPriority prio)
+      return .global $ .normSimpRule { name := input.toRuleName .simp, entries }
     } catch e => {
       throwError "aesop: simp builder: exception while trying to add {decl} as a simp theorem:{indentD e.toMessageData}"
     }
-  | .«local» fvarUserName goal =>
-    goal.withContext do
-      let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
-      unless ← isProp type do
-        throwError "aesop: simp builder: simp rules must be propositions but {fvarUserName} has type{indentExpr type}"
-      return .«local» goal (.localSimp fvarUserName)
+  | .fvar fvarUserName =>
+    let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
+    unless ← isProp type do
+      throwError "aesop: simp builder: simp rules must be propositions but {fvarUserName} has type{indentExpr type}"
+    return .localNormSimpRule { fvarUserName }
 
-end Aesop.RuleBuilder
+end Aesop

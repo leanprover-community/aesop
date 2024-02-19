@@ -21,9 +21,6 @@ namespace Aesop
 -- next builder is more confusing than anything because the user probably
 -- intended to add a simp lemma.
 
-private def err (ruleType : String) : RuleBuilder := λ input =>
-  throwError m!"aesop: Unable to interpret {input.kind.toRuleIdent} as {ruleType} rule. Try specifying a builder."
-
 def RuleBuilder.default : RuleBuilder := λ input =>
   match input.phase with
   | PhaseName.safe =>
@@ -42,5 +39,8 @@ def RuleBuilder.default : RuleBuilder := λ input =>
     simp input <|>
     apply input <|>
     err "a norm" input
+where
+  err (ruleType : String) : RuleBuilder := λ input =>
+    throwError m!"aesop: Unable to interpret {input.ident} as {ruleType} rule. Try specifying a builder."
 
 end Aesop

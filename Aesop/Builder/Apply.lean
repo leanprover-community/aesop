@@ -19,32 +19,29 @@ def applyTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
 def applyIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
   opts.indexTransparency?.getD .reducible
 
+def applyIndexingMode (opts : RuleBuilderOptions) (type : Expr) :
+    MetaM IndexingMode :=
+  opts.getIndexingModeM do
+    if opts.applyIndexTransparency != .reducible then
+      return .unindexed
+    else
+      IndexingMode.targetMatchingConclusion type
+
 end RuleBuilderOptions
 
-def RuleBuilder.apply : RuleBuilder := λ input =>
+
+def RuleBuilder.apply : RuleBuilder := λ input => do
   let opts := input.options
-  match input.kind with
-  | RuleBuilderKind.global decl => do
+  match input.ident with
+  | .const decl =>
     let tac := .applyConst decl opts.applyTransparency opts.pattern?
     let type := (← getConstInfo decl).type
-    RuleBuilderOutput.global <$> mkResult opts tac type
-  | RuleBuilderKind.local fvarUserName goal =>
-    goal.withContext do
-      let tac := .applyFVar fvarUserName opts.applyTransparency opts.pattern?
-      let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
-      let result ← mkResult opts tac type
-      return RuleBuilderOutput.local goal result
-  where
-    mkResult (opts : RuleBuilderOptions) (tac : RuleTacDescr) (type : Expr) :
-        MetaM RuleBuilderResult :=
-      return RuleBuilderResult.regular {
-        builder := BuilderName.apply
-        tac := tac
-        indexingMode := ← opts.getIndexingModeM do
-          if opts.applyIndexTransparency != .reducible then
-            return .unindexed
-          else
-            IndexingMode.targetMatchingConclusion type
-      }
+    let imode ← opts.applyIndexingMode type
+    return .global $ .base $ input.toRule .apply imode tac
+  | .fvar fvarUserName =>
+    let tac := .applyFVar fvarUserName opts.applyTransparency opts.pattern?
+    let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
+    let imode ← opts.applyIndexingMode type
+    return .global $ .base $ input.toRule .apply imode tac
 
 end Aesop

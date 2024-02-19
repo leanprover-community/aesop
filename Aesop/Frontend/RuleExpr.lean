@@ -477,98 +477,35 @@ def getBuilder (c : RuleConfig) : m DBuilderName := do
     "missing rule builder (apply, forward, simp, ...)"
   return builder
 
-def buildRule (c : RuleConfig) (goal : MVarId) :
-    TermElabM (MVarId × LocalRuleSetMember × Array RuleSetName) := do
-  let ident ← c.getIdent
-  let builder ← c.getBuilder
+def getExtraRuleBuilderInput (c : RuleConfig) : m ExtraRuleBuilderInput := do
   match ← c.getPhase with
-  | phase@PhaseName.safe =>
-    let penalty ← c.getPenalty phase
-    let (goal, res, pattern?) ← runRegularBuilder goal ident phase builder
-    let rule := .global $ .base $ .safeRule {
-      name := ident.toRuleName phase res.builder
-      tac := res.tac
-      indexingMode := res.indexingMode
-      extra := { penalty, safety := Safety.safe }
-      pattern?
-    }
-    return (goal, rule, c.ruleSets.ruleSets)
-  | phase@PhaseName.«unsafe» =>
-    let successProbability ← c.getSuccessProbability
-    let (goal, res, pattern?) ← runRegularBuilder goal ident phase builder
-    let rule := .global $ .base $ .unsafeRule {
-      name := ident.toRuleName phase res.builder
-      tac := res.tac
-      indexingMode := res.indexingMode
-      extra := { successProbability }
-      pattern?
-    }
-    return (goal, rule, c.ruleSets.ruleSets)
-  | phase@PhaseName.norm =>
-    let (goal, res, pattern?) ← runBuilder goal ident phase builder
-    let rule ←
-      match res with
-      | .regular res => do
-        let penalty ← c.getPenalty phase
-        pure $ .global $ .base $ .normRule {
-          res with
-          name := ident.toRuleName phase res.builder
-          extra := { penalty }
-          pattern?
-        }
-      | .globalSimp entries => do
-        let prio ← c.getSimpPriority
-        let entries := entries.map (updateSimpEntryPriority prio)
-        pure $ .global $ .normSimpRule {
-          entries
-          name := ident.toRuleName phase .simp
-        }
-      | .localSimp fvarUserName => pure $ .localNormSimpRule { fvarUserName }
-      | .unfold r => pure $ .global $ .base $ .unfoldRule r
-    return (goal, rule, c.ruleSets.ruleSets)
-  where
-    runBuilder (goal : MVarId) (ident : RuleIdent) (phase : PhaseName)
-        (b : DBuilderName) :
-        TermElabM (MVarId × RuleBuilderResult × Option RulePattern) := do
-      let builderInput : RuleBuilderInput ←
-        match ident with
-        | RuleIdent.const decl =>
-          let type := (← getConstInfo decl).type
-          pure {
-            phase := phase
-            kind := RuleBuilderKind.global decl
-            options := ← c.builderOptions.finish type
-          }
-        | RuleIdent.fvar fvarUserName =>
-          let type ← inferType (← getFVarFromUserName fvarUserName)
-          pure {
-            phase := phase
-            kind := RuleBuilderKind.local fvarUserName goal
-            options := ← c.builderOptions.finish type
-          }
-      match ← b.toRuleBuilder builderInput with
-      | .global r => return (goal, r, builderInput.options.pattern?)
-      | .«local» goal r => return (goal, r, builderInput.options.pattern?)
+  | .safe =>
+    return .safe (← c.getPenalty .safe) .safe
+  | .unsafe =>
+    return .unsafe (← c.getSuccessProbability)
+  | .norm =>
+    return .norm (← c.getPenalty .norm)
 
-    runRegularBuilder (goal : MVarId) (ident : RuleIdent) (phase : PhaseName)
-        (b : DBuilderName) :
-        TermElabM (MVarId × RegularRuleBuilderResult × Option RulePattern) := do
-      let (goal, RuleBuilderResult.regular r, pattern?) ←
-        runBuilder goal ident phase b
-        | throwError "builder {b} cannot be used for {phase} rules"
-      return (goal, r, pattern?)
+def getRuleBuilderInput (c : RuleConfig) : TermElabM RuleBuilderInput := do
+  let ident ← c.getIdent
+  let extra ← c.getExtraRuleBuilderInput
+  let type ← do
+    match ident with
+    | .const decl => pure (← getConstInfo decl).type
+    | .fvar fvarUserName => inferType (← getFVarFromUserName fvarUserName)
+  let options ← c.builderOptions.finish type
+  return { ident, options, extra }
 
-def buildLocalRule (c : RuleConfig) (goal : MVarId) :
-    TermElabM (MVarId × LocalRuleSetMember) := do
-  let (goal, m, _) ← buildRule c goal
-  return (goal, m)
+def buildRule (c : RuleConfig) :
+    TermElabM (LocalRuleSetMember × Array RuleSetName) := do
+  let builder ← c.getBuilder
+  let builderInput ← c.getRuleBuilderInput
+  let ruleSetMember ← builder.toRuleBuilder builderInput
+  return (ruleSetMember, c.ruleSets.ruleSets)
 
--- Precondition: `c.ident = RuleIdent.const _`.
 def buildGlobalRule (c : RuleConfig) :
     TermElabM (GlobalRuleSetMember × Array RuleSetName) := do
-  let (_, m, rsNames) ← buildRule c ⟨`_dummy⟩
-    -- NOTE: We assume here that global rule builders ignore the dummy
-    -- metavariable.
+  let (m, rsNames) ← buildRule c
   if let some m := m.toGlobalRuleSetMember? then
     return (m, rsNames)
   else
@@ -663,29 +600,20 @@ def buildAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
     TermElabM (Array (GlobalRuleSetMember × Array RuleSetName)) := do
   (← e.toAdditionalGlobalRules decl).mapM (·.buildGlobalRule)
 
-def toAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
-    MetaM (Array RuleConfig) :=
-  goal.withContext do
-    let init := {
-      ident? := none
-      phase? := none
-      priority? := none
-      builder? := none
-      builderOptions := ∅
-      ruleSets := ⟨#[]⟩
-    }
-    toAdditionalRules e init localRuleSetName
+def toAdditionalLocalRules (e : RuleExpr) : MetaM (Array RuleConfig) :=
+  let init := {
+    ident? := none
+    phase? := none
+    priority? := none
+    builder? := none
+    builderOptions := ∅
+    ruleSets := ⟨#[]⟩
+  }
+  toAdditionalRules e init localRuleSetName
 
-def buildAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
-    TermElabM (MVarId × Array LocalRuleSetMember) := do
-  let configs ← e.toAdditionalLocalRules goal
-  let mut goal := goal
-  let mut rs := Array.mkEmpty configs.size
-  for config in configs do
-    let (goal', rule) ← config.buildLocalRule goal
-    goal := goal'
-    rs := rs.push rule
-  return (goal, rs)
+def buildAdditionalLocalRules (e : RuleExpr) :
+    TermElabM (Array LocalRuleSetMember) := do
+  (← e.toAdditionalLocalRules).mapM λ config => return (← config.buildRule).fst
 
 def toRuleNameFilters (e : RuleExpr) :
     m (Array (RuleSetNameFilter × RuleNameFilter)) := do
@@ -704,9 +632,7 @@ def toGlobalRuleNameFilters (e : RuleExpr) :
     m (Array (RuleSetNameFilter × RuleNameFilter)) :=
   e.toRuleNameFilters
 
-def toLocalRuleNameFilters (goal : MVarId) (e : RuleExpr) :
-    MetaM (Array RuleNameFilter) :=
-  goal.withContext do
-    return (← e.toRuleNameFilters).map (·.snd)
+def toLocalRuleNameFilters (e : RuleExpr) : MetaM (Array RuleNameFilter) :=
+  return (← e.toRuleNameFilters).map (·.snd)
 
 end Aesop.Frontend.RuleExpr

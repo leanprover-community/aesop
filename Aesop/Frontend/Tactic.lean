@@ -157,31 +157,28 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
           modify λ c => { c with simpConfigSyntax? := some t }
         | _ => throwUnsupportedSyntax
 
-def updateRuleSet (goal : MVarId) (rs : LocalRuleSet) (c : TacticConfig) :
-    TermElabM (MVarId × LocalRuleSet) := do
+def updateRuleSet (rs : LocalRuleSet) (c : TacticConfig) :
+    TermElabM LocalRuleSet := do
   let mut rs := rs
-
-  -- Add additional rules
-  let mut goal := goal
   for ruleExpr in c.additionalRules do
-    let (goal', rules) ← ruleExpr.buildAdditionalLocalRules goal
-    goal := goal'
+    let rules ← ruleExpr.buildAdditionalLocalRules
     for rule in rules do
       rs := rs.add rule
 
   -- Erase erased rules
   for ruleExpr in c.erasedRules do
-    let filters ← ruleExpr.toLocalRuleNameFilters goal
+    let filters ← ruleExpr.toLocalRuleNameFilters
     for rFilter in filters do
       let (rs', anyErased) := rs.erase rFilter
       rs := rs'
       if ! anyErased then
         throwError "aesop: '{rFilter.ident}' is not registered (with the given features) in any rule set."
-  return (goal, rs)
+  return rs
 
 def getRuleSet (goal : MVarId) (c : TacticConfig) :
-    TermElabM (MVarId × LocalRuleSet) := do
-  let rss ← getGlobalRuleSets c.enabledRuleSets.toArray
-  c.updateRuleSet goal (← mkLocalRuleSet rss (← c.options.toOptions'))
+    TermElabM LocalRuleSet :=
+  goal.withContext do
+    let rss ← getGlobalRuleSets c.enabledRuleSets.toArray
+    c.updateRuleSet (← mkLocalRuleSet rss (← c.options.toOptions'))
 
 end Aesop.Frontend.TacticConfig

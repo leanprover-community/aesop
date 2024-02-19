@@ -17,30 +17,26 @@ def constructorsTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
 def constructorsIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
   opts.indexTransparency?.getD .reducible
 
+def constructorsIndexingMode (opts : RuleBuilderOptions) (info : InductiveVal) :
+    MetaM IndexingMode :=
+  opts.getIndexingModeM do
+    if opts.constructorsIndexTransparency != .reducible then
+      return .unindexed
+    else
+      let mut imodes := Array.mkEmpty info.numCtors
+      for ctor in info.ctors do
+        let ctorInfo ← getConstInfo ctor
+        let imode ← IndexingMode.targetMatchingConclusion ctorInfo.type
+        imodes := imodes.push imode
+      return .or imodes
+
 end RuleBuilderOptions
 
-def RuleBuilder.constructors : RuleBuilder :=
-  ofGlobalRuleBuilder name λ _ decl opts => do
-    let info ← RuleBuilder.checkConstIsInductive name decl
-    return RuleBuilderResult.regular {
-      builder := name
-      tac := .constructors info.ctors.toArray opts.constructorsTransparency
-      indexingMode := ← getIndexingMode opts info
-    }
-  where
-    name := BuilderName.constructors
-
-    getIndexingMode (opts : RuleBuilderOptions) (info : InductiveVal) :
-        MetaM IndexingMode :=
-      opts.getIndexingModeM do
-        if opts.constructorsIndexTransparency != .reducible then
-          return .unindexed
-        else
-          let mut imodes := Array.mkEmpty info.numCtors
-          for ctor in info.ctors do
-            let ctorInfo ← getConstInfo ctor
-            let imode ← IndexingMode.targetMatchingConclusion ctorInfo.type
-            imodes := imodes.push imode
-          return .or imodes
+def RuleBuilder.constructors : RuleBuilder := λ input => do
+  let info ← input.getInductiveRuleIdent .constructors
+  let opts := input.options
+  let tac := .constructors info.ctors.toArray opts.constructorsTransparency
+  let imode ← opts.constructorsIndexingMode info
+  return .global $ .base $ input.toRule .constructors imode tac
 
 end Aesop

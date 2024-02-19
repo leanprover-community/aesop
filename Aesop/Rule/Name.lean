@@ -178,6 +178,10 @@ def toRuleName (phase : PhaseName) (builder : BuilderName)
   scope := i.scope
   name := i.name
 
+def const? : RuleIdent → Option Name
+  | const decl => some decl
+  | fvar .. => none
+
 end RuleIdent
 
 

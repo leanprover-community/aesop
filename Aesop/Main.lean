@@ -24,7 +24,7 @@ def evalAesop : Tactic := λ stx => do
       let config ← profiling (λ s _ t => { s with configParsing := t }) do
         Frontend.TacticConfig.parse stx
       let goal ← getMainGoal
-      let (goal, ruleSet) ←
+      let ruleSet ←
         profiling (λ s _ t => { s with ruleSetConstruction := t }) do
           config.getRuleSet goal
       withConstAesopTraceNode .ruleSet (return "Rule set") do

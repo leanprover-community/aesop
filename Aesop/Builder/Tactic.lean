@@ -12,29 +12,22 @@ open Lean.Elab.Tactic (TacticM)
 
 namespace Aesop
 
-def RuleBuilder.tactic : RuleBuilder :=
-  ofGlobalRuleBuilder builderName λ _ decl opts => do
-    let type := (← getConstInfo decl).type
+def RuleBuilder.tactic : RuleBuilder := λ input => do
+  let opts := input.options
+  let decl ← input.getGlobalRuleIdent .tactic
+  let imode ← opts.getIndexingModeM $ pure IndexingMode.unindexed
+  let type := (← getConstInfo decl).type
+  let tac ←
     if ← isDefEq (mkApp (mkConst ``TacticM) (mkConst ``Unit)) type then
-      mkResult opts $ .tacticM decl
+      pure $ .tacticM decl
     else if ← isDefEq (mkConst ``SingleRuleTac) type then
-      mkResult opts $ .singleRuleTac decl
+      pure $ .singleRuleTac decl
     else if ← isDefEq (mkConst ``RuleTac) type then
-      mkResult opts $ .ruleTac decl
+      pure $ .ruleTac decl
     else if ← isDefEq (mkConst ``TacGen) type then
-      mkResult opts $ .tacGen decl
+      pure $ .tacGen decl
     else
       throwError "aesop: {decl} was expected to be a tactic, i.e. to have one of these types:\n  TacticM Unit\n  SimpleRuleTac\n  RuleTac\n  TacGen\nHowever, it has type{indentExpr type}"
-  where
-    builderName : BuilderName :=
-      .tactic
-
-    mkResult (opts : RuleBuilderOptions) (tac : RuleTacDescr) :
-        MetaM RuleBuilderResult :=
-      return .regular {
-        builder := builderName
-        indexingMode := ← opts.getIndexingModeM $ pure IndexingMode.unindexed
-        tac
-      }
+  return .global $ .base $ input.toRule .tactic imode tac
 
 end Aesop

@@ -4,10 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Rule
+import Aesop.RuleSet.Member
 
-open Lean
-open Lean.Meta
+open Lean Lean.Meta Lean.Elab.Term
 
 namespace Aesop
 
@@ -43,60 +42,69 @@ def getIndexingModeM [Monad m] (dflt : m IndexingMode)
 end RuleBuilderOptions
 
 
-inductive RuleBuilderKind
-  | global (decl : Name)
-  | «local» (fvarUserName : Name) (goal : MVarId)
+inductive ExtraRuleBuilderInput
+  | safe (penalty : Int) (safety : Safety)
+  | norm (penalty : Int)
+  | «unsafe» (successProbability : Percent)
+  deriving Inhabited
 
-def RuleBuilderKind.toRuleIdent : RuleBuilderKind → RuleIdent
-  | global decl => RuleIdent.const decl
-  | «local» fvarUserName .. => RuleIdent.fvar fvarUserName
+def ExtraRuleBuilderInput.phase : ExtraRuleBuilderInput → PhaseName
+  | safe .. => .safe
+  | «unsafe» .. => .unsafe
+  | norm .. => .norm
+
 
 structure RuleBuilderInput where
-  phase : PhaseName
-  kind : RuleBuilderKind
+  ident : RuleIdent
   options : RuleBuilderOptions
-
-structure RegularRuleBuilderResult where
-  builder : BuilderName
-  tac : RuleTacDescr
-  indexingMode : IndexingMode
+  extra : ExtraRuleBuilderInput
   deriving Inhabited
 
-inductive RuleBuilderResult
-  | regular (r : RegularRuleBuilderResult)
-  | globalSimp (entries : Array SimpEntry)
-  | localSimp (userName : Name)
-  | unfold (r : UnfoldRule)
-  deriving Inhabited
+namespace RuleBuilderInput
 
-inductive RuleBuilderOutput
-  | global (r : RuleBuilderResult)
-  | «local» (goal : MVarId) (r : RuleBuilderResult)
+def phase (input : RuleBuilderInput) : PhaseName :=
+  input.extra.phase
 
-/--
-Invariant: if the `RuleBuilderInput` contains a `RuleBuilderKind.local`,
-then the builder returns a `RuleBuilderOutput.local`, and similar for
-`RuleBuilderKind.global`.
--/
-abbrev RuleBuilder := RuleBuilderInput → MetaM RuleBuilderOutput
+def toRuleName (builder : BuilderName)
+    (input : RuleBuilderInput) : RuleName :=
+  input.ident.toRuleName input.phase builder
 
-namespace RuleBuilder
+def getGlobalRuleIdent [Monad m] [MonadError m] (builderName : BuilderName)
+    (input : RuleBuilderInput) : m Name :=
+  if let some decl := input.ident.const? then
+    return decl
+  else
+    throwError "aesop: {builderName} builder does not support local rules"
 
-def checkConstIsInductive (builderName : BuilderName) (decl : Name) :
-    MetaM InductiveVal := do
+def getInductiveRuleIdent [Monad m] [MonadError m] [MonadEnv m]
+    (builderName : BuilderName) (input : RuleBuilderInput) :
+    m InductiveVal := do
+  let decl ← input.getGlobalRuleIdent builderName
   let info ← getConstInfo decl
     <|> throwError "aesop: {builderName} builder: unknown constant '{decl}'"
   let (ConstantInfo.inductInfo info) ← pure info
     | throwError "aesop: {builderName} builder: expected '{decl}' to be an inductive type"
   return info
 
-def ofGlobalRuleBuilder (name : BuilderName)
-    (globalBuilder : PhaseName → Name → RuleBuilderOptions → MetaM RuleBuilderResult) :
-    RuleBuilder := λ input =>
-  match input.kind with
-  | RuleBuilderKind.local .. =>
-    throwError "aesop: {name} builder does not support local hypotheses"
-  | RuleBuilderKind.global decl =>
-    RuleBuilderOutput.global <$> globalBuilder input.phase decl input.options
+def toRule (builder : BuilderName) (indexingMode : IndexingMode)
+    (tac : RuleTacDescr) (input : RuleBuilderInput) : BaseRuleSetMember :=
+  let name := input.toRuleName builder
+  let pattern? := input.options.pattern?
+  match input.extra with
+  | .safe penalty safety => .safeRule {
+      extra := { penalty, safety }
+      name, indexingMode, tac, pattern?
+    }
+  | .unsafe successProbability => .unsafeRule {
+      extra := { successProbability }
+      name, indexingMode, tac, pattern?
+    }
+  | .norm penalty => .normRule {
+      extra := { penalty }
+      name, indexingMode, tac, pattern?
+    }
 
-end RuleBuilder
+end RuleBuilderInput
+
+
+abbrev RuleBuilder := RuleBuilderInput → TermElabM LocalRuleSetMember
