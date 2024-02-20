@@ -138,6 +138,7 @@ private def applicableUnindexedRules (ri : Index α) (include? : Rule α → Boo
 def applicableRules (ri : Index α) (goal : MVarId)
     (include? : Rule α → Bool) :
     MetaM (Array (IndexMatchResult (Rule α))) := do
+  withConstAesopTraceNode .debug (return "rule selection") do
   goal.instantiateMVars
   let mut result :=
     mkRBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName
@@ -147,13 +148,16 @@ def applicableRules (ri : Index α) (goal : MVarId)
     (← applicableByHypRules ri goal include?)
   result := insertIndexMatchResults result
     (applicableUnindexedRules ri include?)
+  aesop_trace[debug] "selected rules before pattern check:{indentD $ flip MessageData.joinSep "\n" $ result.toList.map (toMessageData ·.fst.name)}"
   let patterns :=
     result.fold (init := Array.mkEmpty result.size) λ pats rule _ =>
       if let some pattern := rule.pattern? then
         pats.push (rule.name, pattern)
       else
         pats
+  aesop_trace[debug] "patterns:{indentD $ flip MessageData.joinSep "\n" $ patterns.map (λ (name, pat) => m!"{name}: {pat.pattern.expr}") |>.toList}"
   let patternInstsMap ← matchRulePatterns patterns goal
+  aesop_trace[debug] "found pattern instantiations:{indentD $ flip MessageData.joinSep "\n" $ patternInstsMap.toList.map λ (name, insts) => m!"{name}: {insts.toArray.map (·.toArray)}"}"
   return result.fold (init := Array.mkEmpty result.size) λ rs rule locs =>
     let_fun locations := (∅ : HashSet _).insertMany locs
     if rule.pattern?.isSome then
