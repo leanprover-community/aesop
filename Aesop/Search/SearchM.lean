@@ -7,7 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Options
 import Aesop.Search.Expansion.Simp
 import Aesop.Search.Queue.Class
-import Aesop.Profiling
+import Aesop.Stats.Basic
 import Aesop.RuleSet
 
 open Lean
@@ -28,7 +28,8 @@ structure Context where
   ruleSet : LocalRuleSet
   normSimpContext : NormSimpContext
   options : Aesop.Options'
-  deriving Inhabited
+  statsRef : StatsRef
+  deriving Nonempty
 
 structure State (Q) [Aesop.Queue Q] where
   iteration : Iteration
@@ -38,11 +39,8 @@ structure State (Q) [Aesop.Queue Q] where
 
 end SearchM
 
-abbrev SearchBaseM Q [Aesop.Queue Q] :=
-  ReaderT SearchM.Context $ StateRefT (SearchM.State Q) $ StateRefT Tree MetaM
-
 abbrev SearchM Q [Aesop.Queue Q] :=
-  ProfileT $ SearchBaseM Q
+  ReaderT SearchM.Context $ StateRefT (SearchM.State Q) $ StateRefT Tree MetaM
 
 variable [Aesop.Queue Q]
 
@@ -65,22 +63,24 @@ instance : MonadState (State Q) (SearchM Q) :=
 instance : MonadReader Context (SearchM Q) :=
   { inferInstanceAs (MonadReaderOf Context (SearchM Q)) with }
 
+instance : MonadStats (SearchM Q) where
+  readStatsRef := return (← read).statsRef
+
 instance : MonadLift TreeM (SearchM Q) where
   monadLift x := do
     let ctx := { currentIteration := (← get).iteration }
     liftM $ ReaderT.run x ctx
 
-protected def run' (profile : Profile) (ctx : SearchM.Context)
-    (σ : SearchM.State Q) (t : Tree) (x : SearchM Q α) :
-    MetaM (α × SearchM.State Q × Tree × Profile) := do
-  let (((a, profile), σ), t) ←
-    x.run profile |>.run ctx |>.run σ |>.run t
-  return (a, σ, t, profile)
+protected def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
+    (x : SearchM Q α) : MetaM (α × SearchM.State Q × Tree × Stats) := do
+  let ((a, σ), t) ←
+    x.run ctx |>.run σ |>.run t
+  return (a, σ, t, ← ctx.statsRef.get)
 
 protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     (simpConfig : Simp.Config) (simpConfigStx? : Option Term)
-    (goal : MVarId) (profile : Profile) (x : SearchM Q α) :
-    MetaM (α × State Q × Tree × Profile) := do
+    (goal : MVarId) (stats : Stats) (x : SearchM Q α) :
+    MetaM (α × State Q × Tree × Stats) := do
   let t ← mkInitialTree goal
   let normSimpContext := {
     config := simpConfig
@@ -92,7 +92,8 @@ protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     enabled := options.enableSimp
     useHyps := options.useSimpAll
   }
-  let ctx := { ruleSet, options, normSimpContext }
+  let statsRef ← IO.mkRef stats
+  let ctx := { ruleSet, options, normSimpContext, statsRef }
   let #[rootGoal] := (← t.root.get).goals
     | throwError "aesop: internal error: root mvar cluster does not contain exactly one goal."
   let state := {
@@ -100,7 +101,7 @@ protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     iteration := Iteration.one
     maxRuleApplicationDepthReached := false
   }
-  x.run' profile ctx state t
+  x.run' ctx state t
 
 end SearchM
 

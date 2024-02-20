@@ -7,7 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Search.Main
 import Aesop.BuiltinRules -- ensures that the builtin rules are registered
 import Aesop.Frontend.Tactic
-import Aesop.Profiling
+import Aesop.Stats.Extension
 
 open Lean
 open Lean.Elab.Tactic
@@ -18,24 +18,25 @@ namespace Aesop
 def evalAesop : Tactic := λ stx => do
   profileitM Exception "aesop" (← getOptions) do
   withMainContext do
-    let (profile, totalTime) ← time do
-      let (config, configParseTime) ← time $ Frontend.TacticConfig.parse stx
-      let profile := { Profile.empty with configParsing := configParseTime }
+    let statsRef ← IO.mkRef ∅
+    have : MonadStats TacticM := { readStatsRef := return statsRef }
+    profiling (λ s _ t => { s with total := t }) do
+      let config ← profiling (λ s _ t => { s with configParsing := t }) do
+        Frontend.TacticConfig.parse stx
       let goal ← getMainGoal
-      let ((goal, ruleSet), ruleSetConstructionTime) ← time $
-        config.getRuleSet goal
-      let profile :=
-        { profile with ruleSetConstruction := ruleSetConstructionTime }
+      let (goal, ruleSet) ←
+        profiling (λ s _ t => { s with ruleSetConstruction := t }) do
+          config.getRuleSet goal
       withConstAesopTraceNode .ruleSet (return "Rule set") do
         ruleSet.trace .ruleSet
-      let (profile, searchTime) ← time do
-        let (goals, profile) ←
+      profiling (λ s _ t => { s with search := t }) do
+        let (goals, stats) ←
           search goal ruleSet config.options config.simpConfig
-            config.simpConfigSyntax? profile
+            config.simpConfigSyntax? (← statsRef.get)
         replaceMainGoal goals.toList
-        pure profile
-      pure { profile with search := searchTime }
-    let profile := { profile with total := totalTime }
-    profile.trace .profile
+        statsRef.set stats
+    let stats ← statsRef.get
+    recordStatsIfEnabled { aesopStx := stx, stats }
+    stats.trace .stats
 
 end Aesop

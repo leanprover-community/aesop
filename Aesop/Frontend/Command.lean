@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Frontend.Attribute
 import Aesop.Frontend.Basic
+import Aesop.Stats.Report
 
 open Lean Lean.Elab Lean.Elab.Command
 
@@ -42,5 +43,14 @@ elab "#aesop_rules" : command => do
       for (name, rs, _) in rss do
         withConstAesopTraceNode .ruleSet (return m!"Rule set '{name}'") do
           rs.trace .ruleSet
+
+elab "#aesop_stats" report?:(ident)? : command => do
+  let report ←
+    if let some report := report? then
+      liftTermElabM do
+        unsafe evalConstCheck StatsReport ``StatsReport report.getId
+    else
+      pure StatsReport.default
+  logInfo $ report $ ← getStatsArray
 
 end Aesop.Frontend.Parser

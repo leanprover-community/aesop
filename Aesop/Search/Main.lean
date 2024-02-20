@@ -273,8 +273,8 @@ partial def searchLoop : SearchM Q (Array MVarId) :=
 
 def search (goal : MVarId) (ruleSet? : Option LocalRuleSet := none)
      (options : Aesop.Options := {}) (simpConfig : Simp.Config := {})
-     (simpConfigSyntax? : Option Term := none) (profile : Profile := {}) :
-     MetaM (Array MVarId × Profile) := do
+     (simpConfigSyntax? : Option Term := none) (stats : Stats := {}) :
+     MetaM (Array MVarId × Stats) := do
   goal.checkNotAssigned `aesop
   let options ← options.toOptions'
   let ruleSet ←
@@ -284,12 +284,12 @@ def search (goal : MVarId) (ruleSet? : Option LocalRuleSet := none)
         mkLocalRuleSet rss options
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
-  let (goals, _, _, profile) ←
-    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal profile do
+  let (goals, _, _, stats) ←
+    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal stats do
       show SearchM Q _ from
       try searchLoop
       catch e => handleFatalError e
       finally freeTree
-  return (goals, profile)
+  return (goals, stats)
 
 end Aesop
