@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.ElabM
 import Aesop.Frontend.Basic
-import Aesop.Frontend.ElabM
 import Aesop.Percent
 import Aesop.Rule.Name
 import Aesop.Builder
@@ -460,19 +460,22 @@ def getRuleBuilderInput (c : RuleConfig) : TermElabM RuleBuilderInput := do
   return { ident, options, extra }
 
 def buildRule (c : RuleConfig) :
-    TermElabM (LocalRuleSetMember × Array RuleSetName) := do
+    ElabM (LocalRuleSetMember × Array RuleSetName) := do
   let builder ← c.getBuilder
   let builderInput ← c.getRuleBuilderInput
   let ruleSetMember ← builder.toRuleBuilder builderInput
   return (ruleSetMember, c.ruleSets.ruleSets)
 
 def buildGlobalRule (c : RuleConfig) :
-    TermElabM (GlobalRuleSetMember × Array RuleSetName) := do
+    ElabM (GlobalRuleSetMember × Array RuleSetName) := do
   let (m, rsNames) ← buildRule c
   if let some m := m.toGlobalRuleSetMember? then
     return (m, rsNames)
   else
     throwError "internal error: buildGlobalRule: unexpected local rule"
+
+def buildLocalRule (c : RuleConfig) : ElabM LocalRuleSetMember :=
+  (·.fst) <$> c.buildRule
 
 def toRuleFilter (c : RuleConfig) : MetaM (RuleSetNameFilter × RuleFilter) := do
   let ident ← c.getIdent
@@ -563,8 +566,10 @@ def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
   toAdditionalRules e init defaultRuleSetName
 
 def buildAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
-    TermElabM (Array (GlobalRuleSetMember × Array RuleSetName)) := do
-  (← e.toAdditionalGlobalRules decl).mapM (·.buildGlobalRule)
+    TermElabM (Array (GlobalRuleSetMember × Array RuleSetName)) :=
+  let go : ElabM _ := do
+    (← e.toAdditionalGlobalRules decl).mapM (·.buildGlobalRule)
+  go.run .forAdditionalRules
 
 def toAdditionalLocalRules (e : RuleExpr) : MetaM (Array RuleConfig) :=
   let init := {
@@ -578,8 +583,9 @@ def toAdditionalLocalRules (e : RuleExpr) : MetaM (Array RuleConfig) :=
   toAdditionalRules e init localRuleSetName
 
 def buildAdditionalLocalRules (e : RuleExpr) :
-    TermElabM (Array LocalRuleSetMember) := do
-  (← e.toAdditionalLocalRules).mapM λ config => return (← config.buildRule).fst
+    TermElabM (Array LocalRuleSetMember) :=
+  let go : ElabM _ := do (← e.toAdditionalLocalRules).mapM (·.buildLocalRule)
+  go.run .forAdditionalRules
 
 def toRuleFilters (e : RuleExpr) :
     MetaM (Array (RuleSetNameFilter × RuleFilter)) := do

@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleSet.Member
+import Aesop.ElabM
 
 open Lean Lean.Meta Lean.Elab.Term
 
@@ -87,7 +88,7 @@ def toRule (builder : BuilderName) (name : Name) (scope : ScopeName)
 end RuleBuilderInput
 
 
-abbrev RuleBuilder := RuleBuilderInput → TermElabM LocalRuleSetMember
+abbrev RuleBuilder := RuleBuilderInput → ElabM LocalRuleSetMember
 
 
 def resolveRuleName (stx : Ident) : MetaM (Sum Name LocalDecl) := do
