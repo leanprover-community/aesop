@@ -377,7 +377,8 @@ partial def normalizeGoalMVar (goal : MVarId)
     NormStep.simp mvarsHashSet,
     NormStep.runPostSimpRules mvars
   ]
-  runNormSteps goal normSteps (by simp (config := { decide := true }))
+  runNormSteps goal normSteps
+    (by simp (config := { decide := true }) [normSteps])
 
 -- Returns true if the goal was solved by normalisation.
 def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
