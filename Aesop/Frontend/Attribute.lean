@@ -56,8 +56,9 @@ initialize registerBuiltinAttribute {
       for rsName in rsNames do
         addGlobalRule rsName rule attrKind (checkNotExists := true)
   erase := λ decl =>
-    eraseGlobalRules RuleSetNameFilter.all
-      (RuleNameFilter.ofIdent $ .const decl) (checkExists := true)
+    let ruleFilter :=
+      { name := decl, scope := .global, builders := #[], phases := #[] }
+    eraseGlobalRules RuleSetNameFilter.all ruleFilter (checkExists := true)
 }
 
 end Aesop.Frontend

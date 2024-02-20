@@ -41,6 +41,6 @@ def RuleBuilder.default : RuleBuilder := λ input =>
     err "a norm" input
 where
   err (ruleType : String) : RuleBuilder := λ input =>
-    throwError m!"aesop: Unable to interpret {input.ident} as {ruleType} rule. Try specifying a builder."
+    throwError m!"aesop: Unable to interpret '{input.ident}' as {ruleType} rule. Try specifying a builder."
 
 end Aesop

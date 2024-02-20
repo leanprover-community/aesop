@@ -17,7 +17,7 @@ structure RuleBuilderOptions where
   immediatePremises? : Option (Array Name)
   indexingMode? : Option IndexingMode
   casesPatterns? : Option (Array CasesPattern)
-  pattern? : Option RulePattern
+  pattern? : Option Term
   /-- The transparency used by the rule tactic. -/
   transparency? : Option TransparencyMode
   /-- The transparency used for indexing the rule. Currently, the rule is not
@@ -55,7 +55,7 @@ def ExtraRuleBuilderInput.phase : ExtraRuleBuilderInput → PhaseName
 
 
 structure RuleBuilderInput where
-  ident : RuleIdent
+  ident : Ident
   options : RuleBuilderOptions
   extra : ExtraRuleBuilderInput
   deriving Inhabited
@@ -65,31 +65,11 @@ namespace RuleBuilderInput
 def phase (input : RuleBuilderInput) : PhaseName :=
   input.extra.phase
 
-def toRuleName (builder : BuilderName)
-    (input : RuleBuilderInput) : RuleName :=
-  input.ident.toRuleName input.phase builder
-
-def getGlobalRuleIdent [Monad m] [MonadError m] (builderName : BuilderName)
-    (input : RuleBuilderInput) : m Name :=
-  if let some decl := input.ident.const? then
-    return decl
-  else
-    throwError "aesop: {builderName} builder does not support local rules"
-
-def getInductiveRuleIdent [Monad m] [MonadError m] [MonadEnv m]
-    (builderName : BuilderName) (input : RuleBuilderInput) :
-    m InductiveVal := do
-  let decl ← input.getGlobalRuleIdent builderName
-  let info ← getConstInfo decl
-    <|> throwError "aesop: {builderName} builder: unknown constant '{decl}'"
-  let (ConstantInfo.inductInfo info) ← pure info
-    | throwError "aesop: {builderName} builder: expected '{decl}' to be an inductive type"
-  return info
-
-def toRule (builder : BuilderName) (indexingMode : IndexingMode)
-    (tac : RuleTacDescr) (input : RuleBuilderInput) : BaseRuleSetMember :=
-  let name := input.toRuleName builder
-  let pattern? := input.options.pattern?
+def toRule (builder : BuilderName) (name : Name) (scope : ScopeName)
+    (tac : RuleTacDescr) (indexingMode : IndexingMode)
+    (pattern? : Option RulePattern) (input : RuleBuilderInput) :
+    BaseRuleSetMember :=
+  let name := { phase := input.phase, name, scope, builder }
   match input.extra with
   | .safe penalty safety => .safeRule {
       extra := { penalty, safety }
@@ -108,3 +88,33 @@ end RuleBuilderInput
 
 
 abbrev RuleBuilder := RuleBuilderInput → TermElabM LocalRuleSetMember
+
+
+def resolveRuleName (stx : Ident) : MetaM (Sum Name LocalDecl) := do
+  let name := stx.getId
+  for ldecl in ← getLCtx do
+    if ldecl.userName == name && ! ldecl.isImplementationDetail then
+      return .inr ldecl
+  try
+    let name ← resolveGlobalConstNoOverload stx
+    return .inl name
+  catch _ =>
+    throwError "aesop: unknown rule name '{stx}'"
+
+def resolveConstRuleName (stx : Ident) (builderName : BuilderName) :
+    MetaM Name := do
+  if let .inl decl ← resolveRuleName stx then
+    return decl
+  else
+    throwError "aesop: {builderName} builder does not support local hypothesis '{stx}'"
+
+def resolveInductiveRuleName (stx : Ident) (builderName : BuilderName) :
+    MetaM InductiveVal := do
+  let decl ← resolveConstRuleName stx builderName
+  let info ← getConstInfo decl
+    <|> throwError "aesop: {builderName} builder: unknown constant '{decl}'"
+  let (ConstantInfo.inductInfo info) ← pure info
+    | throwError "aesop: {builderName} builder: expected '{decl}' to be an inductive type"
+  return info
+
+end Aesop

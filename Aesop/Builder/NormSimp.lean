@@ -36,20 +36,23 @@ def RuleBuilderInput.getSimpPrio [Monad m] [MonadError m]
   | _ => throwError "aesop: simp builder can only construct 'norm' rules"
 
 def RuleBuilder.simp : RuleBuilder := λ input => do
-  match input.ident with
-  | .const decl =>
+  match ← resolveRuleName input.ident with
+  | .inl decl =>
     try {
       let entries ← getSimpEntriesForConst decl
       let prio ← input.getSimpPrio
       let entries := entries.map (updateSimpEntryPriority prio)
-      return .global $ .normSimpRule { name := input.toRuleName .simp, entries }
+      let name :=
+        { name := decl, scope := .global, builder := .simp, phase := .norm }
+      return .global $ .normSimpRule { name, entries }
     } catch e => {
       throwError "aesop: simp builder: exception while trying to add {decl} as a simp theorem:{indentD e.toMessageData}"
     }
-  | .fvar fvarUserName =>
-    let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
+  | .inr ldecl =>
+    let userName := ldecl.userName
+    let type := (← getLocalDeclFromUserName userName).type
     unless ← isProp type do
-      throwError "aesop: simp builder: simp rules must be propositions but {fvarUserName} has type{indentExpr type}"
-    return .localNormSimpRule { fvarUserName }
+      throwError "aesop: simp builder: simp rules must be propositions but {userName} has type{indentExpr type}"
+    return .localNormSimpRule { fvarUserName := userName }
 
 end Aesop

@@ -27,10 +27,10 @@ def elabDeclareAesopRuleSets : CommandElab
   | _ => throwUnsupportedSyntax
 
 elab "erase_aesop_rules " "[" es:Aesop.rule_expr,* "]" : command => do
-  let filters ← (es : Array _).mapM λ e => do
-    let e ← Elab.Command.liftTermElabM $
-      RuleExpr.elab e |>.run ElabOptions.forErasing
-    e.toGlobalRuleNameFilters
+  let filters ← Elab.Command.liftTermElabM do
+    (es : Array _).mapM λ e => do
+      let e ← RuleExpr.elab e |>.run ElabOptions.forErasing
+      e.toGlobalRuleFilters
   for fs in filters do
     for (rsFilter, rFilter) in fs do
       eraseGlobalRules rsFilter rFilter (checkExists := true)

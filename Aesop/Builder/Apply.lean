@@ -32,16 +32,19 @@ end RuleBuilderOptions
 
 def RuleBuilder.apply : RuleBuilder := λ input => do
   let opts := input.options
-  match input.ident with
-  | .const decl =>
-    let tac := .applyConst decl opts.applyTransparency opts.pattern?
+  match ← resolveRuleName input.ident with
+  | .inl decl =>
+    let type := (← getConstInfo decl).type
+    let pat? ← opts.pattern?.mapM (RulePattern.elab · type)
+    let tac := .applyConst decl opts.applyTransparency pat?
     let type := (← getConstInfo decl).type
     let imode ← opts.applyIndexingMode type
-    return .global $ .base $ input.toRule .apply imode tac
-  | .fvar fvarUserName =>
-    let tac := .applyFVar fvarUserName opts.applyTransparency opts.pattern?
-    let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
-    let imode ← opts.applyIndexingMode type
-    return .global $ .base $ input.toRule .apply imode tac
+    return .global $ .base $ input.toRule .apply decl .global tac imode pat?
+  | .inr ldecl =>
+    let pat? ← opts.pattern?.mapM (RulePattern.elab · ldecl.type)
+    let tac := .applyFVar ldecl.userName opts.applyTransparency pat?
+    let imode ← opts.applyIndexingMode ldecl.type
+    return .global $
+      .base $ input.toRule .apply ldecl.userName .local tac imode pat?
 
 end Aesop

@@ -167,12 +167,12 @@ def updateRuleSet (rs : LocalRuleSet) (c : TacticConfig) :
 
   -- Erase erased rules
   for ruleExpr in c.erasedRules do
-    let filters ← ruleExpr.toLocalRuleNameFilters
+    let filters ← ruleExpr.toLocalRuleFilters
     for rFilter in filters do
       let (rs', anyErased) := rs.erase rFilter
       rs := rs'
       if ! anyErased then
-        throwError "aesop: '{rFilter.ident}' is not registered (with the given features) in any rule set."
+        throwError "aesop: '{rFilter.name}' is not registered (with the given features) in any rule set."
   return rs
 
 def getRuleSet (goal : MVarId) (c : TacticConfig) :

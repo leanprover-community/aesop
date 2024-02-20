@@ -238,35 +238,19 @@ def «elab» (stx : TSyntax `Aesop.builder_option) : ElabM BuilderOption :=
 end BuilderOption
 
 
-structure RuleBuilderOptions' where
-  opts : RuleBuilderOptions
-  pattern? : Option Term
 
-instance : EmptyCollection RuleBuilderOptions' :=
-  ⟨∅, none⟩
-
-namespace RuleBuilderOptions'
-
-def add (bos : RuleBuilderOptions') : BuilderOption → RuleBuilderOptions'
-  | .immediate ns => { bos with opts.immediatePremises? := ns }
-  | .index imode => { bos with opts.indexingMode? := imode }
+def addBuilderOption (bos : RuleBuilderOptions) :
+    BuilderOption → RuleBuilderOptions
+  | .immediate ns => { bos with immediatePremises? := ns }
+  | .index imode => { bos with indexingMode? := imode }
   | .pattern pat => { bos with pattern? := pat }
-  | .casesPatterns ps => { bos with opts.casesPatterns? := ps }
+  | .casesPatterns ps => { bos with casesPatterns? := ps }
   | .transparency md alsoForIndex =>
-    let bos := { bos with opts.transparency? := md }
+    let bos := { bos with transparency? := md }
     if alsoForIndex then
-      { bos with opts.indexTransparency? := md }
+      { bos with indexTransparency? := md }
     else
       bos
-
-def finish (ruleType : Expr) (bos : RuleBuilderOptions') :
-    TermElabM RuleBuilderOptions := do
-  let some patStx := bos.pattern?
-    | return bos.opts
-  let pat ← RulePattern.elab patStx ruleType
-  return { bos.opts with pattern? := pat }
-
-end RuleBuilderOptions'
 
 
 namespace Parser
@@ -322,28 +306,11 @@ inductive Feature
   | priority (p : Priority)
   | builder (b : DBuilderName)
   | builderOption (o : BuilderOption)
-  | ident (i : RuleIdent)
+  | ident (i : Ident)
   | ruleSets (rs : RuleSets)
   deriving Inhabited
 
 namespace Feature
-
-private def elabRuleIdent (stx : Syntax) : ElabM RuleIdent :=
-  resolveLocal <|> resolveGlobal <|> throwError
-    "unknown rule name: {stx.getId}"
-  where
-    resolveLocal : ElabM RuleIdent := do
-      let n := stx.getId.eraseMacroScopes
-      match (← getLCtx).findFromUserName? n with
-      | some ldecl =>
-        if ldecl.isImplementationDetail then
-          throwError ""
-        else
-          return .fvar n
-      | none => throwError ""
-
-    resolveGlobal : ElabM RuleIdent := do
-      .const <$> resolveGlobalConstNoOverload stx
 
 partial def «elab» (stx : Syntax) : ElabM Feature :=
   withRef stx do
@@ -353,7 +320,7 @@ partial def «elab» (stx : Syntax) : ElabM Feature :=
     | `(feature| $b:Aesop.builder_name) => builder <$> DBuilderName.elab b
     | `(feature| $o:Aesop.builder_option) => builderOption <$> BuilderOption.elab o
     | `(feature| $rs:ruleSetsFeature) => ruleSets <$> RuleSets.elab rs
-    | `(feature| $i:ident) => ident <$> elabRuleIdent i
+    | `(feature| $i:ident) => return ident i
     | stx =>
       if stx.isOfKind choiceKind then
         let nonIdentAlts :=
@@ -413,11 +380,11 @@ partial def foldBranchesM {m} [Monad m] (f : σ → Feature → m σ) (init : σ
 end RuleExpr
 
 structure RuleConfig where
-  ident? : Option RuleIdent
+  ident? : Option Ident
   phase? : Option PhaseName
   priority? : Option Priority
   builder? : Option DBuilderName
-  builderOptions : RuleBuilderOptions'
+  builderOptions : RuleBuilderOptions
   ruleSets : RuleSets
 
 namespace RuleConfig
@@ -431,7 +398,7 @@ def addFeature (c : RuleConfig) : Feature → m RuleConfig
     return { c with ident? := ident }
   | .builder builder => return { c with builder? := builder }
   | .builderOption opt =>
-    return { c with builderOptions := c.builderOptions.add opt }
+    return { c with builderOptions := addBuilderOption c.builderOptions opt }
   | .ruleSets newRuleSets =>
     have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
     let ruleSets :=
@@ -462,7 +429,7 @@ def getSimpPriority (c : RuleConfig) : m Nat := do
     "simp rules must specify a non-negative integer priority"
   return prio
 
-def getIdent (c : RuleConfig) : m RuleIdent := do
+def getIdent (c : RuleConfig) : m Ident := do
   let some ident := c.ident? | throwError
     "missing rule name"
   return ident
@@ -489,11 +456,7 @@ def getExtraRuleBuilderInput (c : RuleConfig) : m ExtraRuleBuilderInput := do
 def getRuleBuilderInput (c : RuleConfig) : TermElabM RuleBuilderInput := do
   let ident ← c.getIdent
   let extra ← c.getExtraRuleBuilderInput
-  let type ← do
-    match ident with
-    | .const decl => pure (← getConstInfo decl).type
-    | .fvar fvarUserName => inferType (← getFVarFromUserName fvarUserName)
-  let options ← c.builderOptions.finish type
+  let options := c.builderOptions
   return { ident, options, extra }
 
 def buildRule (c : RuleConfig) :
@@ -511,9 +474,12 @@ def buildGlobalRule (c : RuleConfig) :
   else
     throwError "internal error: buildGlobalRule: unexpected local rule"
 
-def toRuleNameFilter (c : RuleConfig) :
-    m (RuleSetNameFilter × RuleNameFilter) := do
+def toRuleFilter (c : RuleConfig) : MetaM (RuleSetNameFilter × RuleFilter) := do
   let ident ← c.getIdent
+  let (name, scope) :=
+    match ← resolveRuleName ident with
+    | .inl decl => (decl, .global)
+    | .inr ldecl => (ldecl.userName, .local)
   let builders ←
     match c.builder? with
     | none => pure #[]
@@ -528,7 +494,7 @@ def toRuleNameFilter (c : RuleConfig) :
     | none => #[]
     | some p => #[p]
   let ruleSetNames := c.ruleSets.ruleSets
-  return ({ ns := ruleSetNames }, { ident, builders, phases })
+  return ({ ns := ruleSetNames }, { name, scope, builders, phases })
 
 def validateForAdditionalRules (c : RuleConfig) (defaultRuleSet : RuleSetName) :
     m RuleConfig := do
@@ -587,7 +553,7 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig)
 def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
     m (Array RuleConfig) :=
   let init := {
-    ident? := RuleIdent.const decl
+    ident? := mkIdent decl
     phase? := none
     priority? := none
     builder? := none
@@ -615,8 +581,8 @@ def buildAdditionalLocalRules (e : RuleExpr) :
     TermElabM (Array LocalRuleSetMember) := do
   (← e.toAdditionalLocalRules).mapM λ config => return (← config.buildRule).fst
 
-def toRuleNameFilters (e : RuleExpr) :
-    m (Array (RuleSetNameFilter × RuleNameFilter)) := do
+def toRuleFilters (e : RuleExpr) :
+    MetaM (Array (RuleSetNameFilter × RuleFilter)) := do
   let initialConfig := {
       ident? := none
       phase? := none
@@ -626,13 +592,13 @@ def toRuleNameFilters (e : RuleExpr) :
       ruleSets := ⟨#[]⟩
   }
   let configs ← e.toRuleConfigs initialConfig
-  configs.mapM (·.toRuleNameFilter)
+  configs.mapM (·.toRuleFilter)
 
-def toGlobalRuleNameFilters (e : RuleExpr) :
-    m (Array (RuleSetNameFilter × RuleNameFilter)) :=
-  e.toRuleNameFilters
+def toGlobalRuleFilters (e : RuleExpr) :
+    MetaM (Array (RuleSetNameFilter × RuleFilter)) :=
+  e.toRuleFilters
 
-def toLocalRuleNameFilters (e : RuleExpr) : MetaM (Array RuleNameFilter) :=
-  return (← e.toRuleNameFilters).map (·.snd)
+def toLocalRuleFilters (e : RuleExpr) : MetaM (Array RuleFilter) :=
+  return (← e.toRuleFilters).map (·.snd)
 
 end Aesop.Frontend.RuleExpr

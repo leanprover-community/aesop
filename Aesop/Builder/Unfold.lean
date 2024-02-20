@@ -33,7 +33,7 @@ def checkUnfoldableConst (decl : Name) : MetaM (Option Name) :=
     return unfoldThm?
 
 def unfold : RuleBuilder := λ input => do
-  let decl ← input.getGlobalRuleIdent .unfold
+  let decl ← resolveConstRuleName input.ident .unfold
   let unfoldThm? ← checkUnfoldableConst decl
   return .global $ .base $ .unfoldRule { decl, unfoldThm? }
 

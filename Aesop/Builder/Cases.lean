@@ -65,13 +65,13 @@ def RuleBuilder.cases : RuleBuilder := λ input => do
       -- TODO `Meta.cases` may assign and introduce metavariables.
       -- (Specifically, it can *replace* existing metavariables, which Aesop
       -- counts as an assignment and an introduction.)
-    let inductiveInfo ← input.getInductiveRuleIdent .cases
+    let inductiveInfo ← resolveInductiveRuleName input.ident .cases
     let decl := inductiveInfo.name
     let opts := input.options
     opts.casesPatterns.forM (·.check decl)
-    let indexingMode ← opts.casesIndexingMode decl
+    let imode ← opts.casesIndexingMode decl
     let target := opts.casesTarget decl
     let tac := .cases target opts.casesTransparency inductiveInfo.isRec
-    return .global $ .base $ input.toRule .cases indexingMode tac
+    return .global $ .base $ input.toRule .cases decl .global tac imode none
 
 end Aesop

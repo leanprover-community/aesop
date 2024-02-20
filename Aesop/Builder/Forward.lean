@@ -101,11 +101,12 @@ def forwardCore (isDestruct : Bool) : RuleBuilder := λ input => do
     let opts := input.options
     if let .all := opts.forwardTransparency then
       throwError "aesop: forward builder currently does not support transparency 'all'"
-    let pat? := input.options.pattern?
-    match input.ident with
-    | .const decl => do
+    let pat? := opts.pattern?
+    match ← resolveRuleName input.ident with
+    | .inl decl => do
       let type := (← getConstInfo decl).type
       aesop_trace[debug] "decl type: {type}"
+      let pat? ← pat?.mapM (RulePattern.elab · type)
       let immediate ←
         getImmediatePremises decl type pat? opts.forwardTransparency
           opts.immediatePremises?
@@ -113,19 +114,21 @@ def forwardCore (isDestruct : Bool) : RuleBuilder := λ input => do
       let tac :=
         .forwardConst decl pat? immediate isDestruct opts.forwardTransparency
       let imode ← opts.forwardIndexingMode type immediate
-      return .global $ .base $ input.toRule builderName imode tac
-    | .fvar fvarUserName => do
-      let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
-      aesop_trace[debug] "fvar type: {type}"
+      return .global $ .base $
+        input.toRule builderName decl .global tac imode pat?
+    | .inr ldecl => do
+      let type := ldecl.type
+      let userName := ldecl.userName
+      let pat? ← pat?.mapM (RulePattern.elab · type)
       let immediate ←
-        getImmediatePremises fvarUserName type pat? opts.forwardTransparency
+        getImmediatePremises userName type pat? opts.forwardTransparency
           opts.immediatePremises?
       aesop_trace[debug] "immediate premises: {immediate}"
       let tac :=
-        .forwardFVar fvarUserName pat? immediate isDestruct
-          opts.forwardTransparency
+        .forwardFVar userName pat? immediate isDestruct opts.forwardTransparency
       let imode ← opts.forwardIndexingMode type immediate
-      return .global $ .base $ input.toRule builderName imode tac
+      return .global $ .base $
+        input.toRule builderName userName .local tac imode pat?
 
 def forward : RuleBuilder :=
   forwardCore (isDestruct := false)

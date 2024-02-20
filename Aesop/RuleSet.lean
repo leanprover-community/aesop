@@ -50,9 +50,10 @@ structure BaseRuleSet where
   `ruleNames` contains exactly the names of the rules present in `normRules`,
   `unsafeRules`, `safeRules` and `unfoldRules` and not present in `erased`. We
   use this cache (a) to quickly determine whether a rule is present in the rule
-  set and (b) to find the full rule names corresponding to a `RuleIdent`.
+  set and (b) to find the full rule names associated with the fvar or const
+  identified by a name.
   -/
-  ruleNames : PHashMap RuleIdent (UnorderedArraySet RuleName)
+  ruleNames : PHashMap Name (UnorderedArraySet RuleName)
   deriving Inhabited
 
 /--
@@ -241,7 +242,7 @@ private def BaseRuleSet.isErased (rs : BaseRuleSet) (n : RuleName) : Bool :=
 
 def BaseRuleSet.contains (rs : BaseRuleSet) (n : RuleName) : Bool :=
   ! rs.isErased n &&
-  if let some ns := rs.ruleNames.find? n.toRuleIdent then
+  if let some ns := rs.ruleNames.find? n.name then
     ns.contains n
   else
     false
@@ -279,7 +280,7 @@ def BaseRuleSet.merge (rs₁ rs₂ : BaseRuleSet) : BaseRuleSet where
     let go (rs₁ rs₂ : BaseRuleSet) (init : PHashSet RuleName) :
         PHashSet RuleName :=
       rs₁.erased.fold (init := init) λ x n =>
-        match rs₂.ruleNames.find? n.toRuleIdent with
+        match rs₂.ruleNames.find? n.name with
         | none => x.insert n
         | some ns =>
           if ns.contains n then x else x.insert n
@@ -289,11 +290,11 @@ def BaseRuleSet.merge (rs₁ rs₂ : BaseRuleSet) : BaseRuleSet where
 def BaseRuleSet.add (rs : BaseRuleSet) (r : BaseRuleSetMember) :
     BaseRuleSet :=
   let erased := rs.erased.erase r.name
-  let ident := r.name.toRuleIdent
+  let name := r.name.name
   let ruleNames :=
-    match rs.ruleNames.find? ident with
-    | none => rs.ruleNames.insert ident $ .singleton r.name
-    | some ns => rs.ruleNames.insert ident $ ns.insert r.name
+    match rs.ruleNames.find? name with
+    | none => rs.ruleNames.insert name $ .singleton r.name
+    | some ns => rs.ruleNames.insert name $ ns.insert r.name
   let rs := { rs with erased, ruleNames }
   match r with
   | .normRule r =>
@@ -321,9 +322,9 @@ def LocalRuleSet.add (rs : LocalRuleSet) :
     { rs with localNormSimpRules := rs.localNormSimpRules.push r }
 
 
-def BaseRuleSet.erase (rs : BaseRuleSet) (f : RuleNameFilter) :
+def BaseRuleSet.erase (rs : BaseRuleSet) (f : RuleFilter) :
     BaseRuleSet × Bool := Id.run do
-  let some ns := rs.ruleNames.find? f.ident
+  let some ns := rs.ruleNames.find? f.name
     | return (rs, false)
   let (toErase, toKeep) := ns.partition f.matches
   if toErase.isEmpty then
@@ -331,9 +332,9 @@ def BaseRuleSet.erase (rs : BaseRuleSet) (f : RuleNameFilter) :
 
   let ruleNames :=
     if toKeep.isEmpty then
-      rs.ruleNames.erase f.ident
+      rs.ruleNames.erase f.name
     else
-      rs.ruleNames.insert f.ident toKeep
+      rs.ruleNames.insert f.name toKeep
 
   let mut erased := rs.erased
   let mut unfoldRules := rs.unfoldRules
@@ -347,7 +348,7 @@ def BaseRuleSet.erase (rs : BaseRuleSet) (f : RuleNameFilter) :
   let res := { rs with ruleNames, erased, unfoldRules }
   return (res, true)
 
-def GlobalRuleSet.erase (rs : GlobalRuleSet) (f : RuleNameFilter) :
+def GlobalRuleSet.erase (rs : GlobalRuleSet) (f : RuleFilter) :
     GlobalRuleSet × Bool := Id.run do
   let (rs, anyErased) := rs.onBase (·.erase f)
   if let some decl := f.matchesSimpTheorem? then
@@ -356,7 +357,7 @@ def GlobalRuleSet.erase (rs : GlobalRuleSet) (f : RuleNameFilter) :
       return ({ rs with simpTheorems := simpTheorems }, true)
   return (rs, anyErased)
 
-def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleNameFilter) :
+def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleFilter) :
     LocalRuleSet × Bool := Id.run do
   let (rs, anyErased) := rs.onBase (·.erase f)
   let mut anyErased := anyErased

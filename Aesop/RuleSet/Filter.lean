@@ -11,8 +11,9 @@ open Lean
 
 namespace Aesop
 
-structure RuleNameFilter where
-  ident : RuleIdent
+structure RuleFilter where
+  name : Name
+  scope : ScopeName
   /--
   `#[]` means 'match any builder'
   -/
@@ -22,39 +23,33 @@ structure RuleNameFilter where
   -/
   phases : Array PhaseName
 
-namespace RuleNameFilter
+namespace RuleFilter
 
-def ofIdent (i : RuleIdent) : RuleNameFilter where
-  ident := i
-  builders := #[]
-  phases := #[]
-
-def matchesPhase (f : RuleNameFilter) (p : PhaseName) : Bool :=
+def matchesPhase (f : RuleFilter) (p : PhaseName) : Bool :=
   f.phases.isEmpty || f.phases.contains p
 
-def matchesBuilder (f : RuleNameFilter) (b : BuilderName) : Bool :=
+def matchesBuilder (f : RuleFilter) (b : BuilderName) : Bool :=
   f.builders.isEmpty || f.builders.contains b
 
-def «matches» (f : RuleNameFilter) (n : RuleName) : Bool :=
-  f.ident.name == n.name &&
-  f.ident.scope == n.scope &&
+def «matches» (f : RuleFilter) (n : RuleName) : Bool :=
+  f.name == n.name &&
+  f.scope == n.scope &&
   f.matchesPhase n.phase &&
   f.matchesBuilder n.builder
 
-def matchesSimpTheorem? (f : RuleNameFilter) : Option Name := Id.run do
-  if let .const decl := f.ident then
-    if f.matchesBuilder .simp then
-      return some decl
-  return none
+def matchesSimpTheorem? (f : RuleFilter) : Option Name :=
+  if f.scope == .global && f.matchesBuilder .simp then
+    some f.name
+  else
+    none
 
-def matchesLocalNormSimpRule? (f : RuleNameFilter) :
-    Option LocalNormSimpRule := Id.run do
-  if let .fvar fvarUserName := f.ident then
-    if f.matchesBuilder .simp then
-      return some { fvarUserName }
-  return none
+def matchesLocalNormSimpRule? (f : RuleFilter) : Option LocalNormSimpRule :=
+  if f.scope == .local && f.matchesBuilder .simp then
+    some { fvarUserName := f.name }
+  else
+    none
 
-end RuleNameFilter
+end RuleFilter
 
 
 structure RuleSetNameFilter where
