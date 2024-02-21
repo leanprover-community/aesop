@@ -398,8 +398,10 @@ proved its goal already or which can never prove its goal. More formally:
 A **rule builder** is a metaprogram that turns an expression into an Aesop rule.
 When you tag a declaration with the `@[aesop]` attribute, the builder is applied
 to the declared constant. When you use the `add` clause, as in `(add <phase>
-<builder> <term>)`, the builder is applied to the given term, which may involve
-hypotheses from the goal. However, some builders only support global constants.
+<builder> (<term>))`, the builder is applied to the given term, which may
+involve hypotheses from the goal. However, some builders only support global
+constants. If the `term` is a single identifier, e.g. the name of a hypothesis,
+the parentheses around it are optional.
 
 Currently available builders are:
 
