@@ -512,22 +512,29 @@ Currently available builders are:
   `unfold` rules perform non-smart unfolding (like the `unfold` tactic).
   Non-smart unfolding unfolds functions even when none of their equations
   match, so `unfold` rules would lead to looping and are forbidden.
-- **`tactic`**: takes a tactic and directly turns it into a rule. The given
-  declaration (the builder does not work for hypotheses) must have type `TacticM
-  Unit`, `Aesop.SingleRuleTac` or `Aesop.RuleTac`. The latter are Aesop data
-  types which associate a tactic with additional metadata; using them may allow
-  the rule to operate somewhat more efficiently.
+- **`tactic`**: takes a tactic and directly turns it into a rule. When this
+  builder is used in an `add` clause, you can use e.g. `(add safe (by
+  norm_num))` to register `norm_num` as a safe rule. The `by` block can also
+  contain multiple tactics as well as references to the hypotheses. When you
+  use `(by ...)` in an `add` clause, Aesop automatically uses the tactic
+  builder, unless you specify a different builder.
+
+  When this builder is used in the `@[aesop]` attribute, the declaration tagged
+  with the attribute must have type `TacticM Unit`, `Aesop.SingleRuleTac` or
+  `Aesop.RuleTac`. The latter are Aesop data types which associate a tactic with
+  additional metadata; using them may allow the rule to operate somewhat more
+  efficiently.
 
   Rule tactics should not be 'no-ops': if a rule tactic is not applicable to a
   goal, it should fail rather than return the goal unchanged. All no-op rules
-  waste time and no-op `norm` rules will send normalisation into an infinite
-  loop.
+  waste time; no-op `norm` rules will send normalisation into an infinite loop;
+  and no-op `safe` rules will prevent unsafe rules from being applied.
 
   Normalisation rules may not assign metavariables (other than the goal
   metavariable) or introduce new metavariables (other than the new goal
   metavariable). This can be a problem because some Lean tactics, e.g. `cases`,
-  do so even in cases where you probably would not expect them to. I'm afraid
-  there is currently no good solution for this.
+  do so even in situations where you probably would not expect them to. I'm
+  afraid there is currently no good solution for this.
 - **`default`**: The default builder. This is the builder used when you
   register a rule without specifying a builder, but you can also use it
   explicitly. Depending on the rule's phase, the default builder tries
