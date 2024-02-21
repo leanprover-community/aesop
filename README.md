@@ -395,15 +395,19 @@ proved its goal already or which can never prove its goal. More formally:
 
 ### Rule Builders
 
-A **rule builder** is a metaprogram that turns a declaration or hypothesis into
-an Aesop rule. Currently available builders are:
+A **rule builder** is a metaprogram that turns an expression into an Aesop rule.
+When you tag a declaration with the `@[aesop]` attribute, the builder is applied
+to the declared constant. When you use the `add` clause, as in `(add <phase>
+<builder> <term>)`, the builder is applied to the given term, which may involve
+hypotheses from the goal. However, some builders only support global constants.
 
-- **`apply`**: generates a rule which tries to apply the given declaration or
-  hypothesis `x` to the target. The rule acts like the tactic `apply x`.
-- **`forward`**: when applied to a declaration or hypothesis of type `A₁ → ...
-  Aₙ → B`, generates a rule which looks for hypotheses `h₁ : A₁`, ..., `hₙ : Aₙ`
-  in the goal and, if they are found, adds a new hypothesis `h : B`. As an
-  example, consider the lemma `even_or_odd`:
+Currently available builders are:
+
+- **`apply`**: generates a rule which acts like the `apply` tactic.
+- **`forward`**: when applied to a term of type `A₁ → ... Aₙ → B`, generates a
+  rule which looks for hypotheses `h₁ : A₁`, ..., `hₙ : Aₙ` in the goal and, if
+  they are found, adds a new hypothesis `h : B`. As an example, consider the
+  lemma `even_or_odd`:
 
   ```lean
   even_or_odd : ∀ (n : Nat), Even n ∨ Odd n
@@ -475,7 +479,7 @@ an Aesop rule. Currently available builders are:
 
   However, if the hypothesis or hypotheses to which the `destruct` rule is
   applied have dependencies, they are not cleared. In this case, you'll probably
-  get an infinite cycle. (TODO fix this.)
+  get an infinite cycle.
 - **`constructors`**: when applied to an inductive type or structure `T`,
   generates a rule which tries to apply each constructor of `T` to the target.
   This is a multi-rule, so if multiple constructors apply, they are considered
@@ -507,7 +511,7 @@ an Aesop rule. Currently available builders are:
   that `simp` rules perform smart unfolding (like the `simp` tactic) and
   `unfold` rules perform non-smart unfolding (like the `unfold` tactic).
   Non-smart unfolding unfolds functions even when none of their equations
-  match, so `unfold` rules for recursive functions generally lead to looping.
+  match, so `unfold` rules would lead to looping and are forbidden.
 - **`tactic`**: takes a tactic and directly turns it into a rule. The given
   declaration (the builder does not work for hypotheses) must have type `TacticM
   Unit`, `Aesop.SingleRuleTac` or `Aesop.RuleTac`. The latter are Aesop data
