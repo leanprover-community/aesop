@@ -42,6 +42,24 @@ unsafe def singleRuleTacImpl (decl : Name) : RuleTac :=
 @[implemented_by singleRuleTacImpl]
 opaque singleRuleTac (decl : Name) : RuleTac
 
+/--
+Elaborates and runs the given tactic syntax `stx`. The syntax `stx` can be
+in any syntax category supported by `evalTactic`, particularly `tactic` and
+`tacticSeq`.
+-/
+def tacticStx (stx : Syntax) : RuleTac :=
+  SingleRuleTac.toRuleTac λ input => do
+    let goals := (← run input.goal (evalTactic stx) |>.run').toArray
+    let scriptBuilder? : Option RuleTacScriptBuilder :=
+      if stx.isOfKind `tactic then
+        some $ .ofTactic goals.size (pure ⟨stx⟩)
+      else if let `(Parser.Tactic.tacticSeq| $ts:tactic*) := stx then
+        some $ ScriptBuilder.ofUnstructuredScriptBuilder (m := MetaM)
+          goals.size (pure ts)
+      else
+        none
+    return (goals, scriptBuilder?, none)
+
 -- Precondition: `decl` has type `TacGen`.
 unsafe def tacGenImpl (decl : Name) : RuleTac := λ input => do
   let tacGen ← evalConst TacGen decl

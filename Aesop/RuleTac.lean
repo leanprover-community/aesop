@@ -27,6 +27,7 @@ protected def run : RuleTacDescr → RuleTacInput → MetaM RuleTacOutput
   | tacticM decl => RuleTac.tacticM decl
   | singleRuleTac decl => RuleTac.singleRuleTac decl
   | ruleTac decl => RuleTac.ruleTac decl
+  | tacticStx stx => RuleTac.tacticStx stx
   | tacGen decl => RuleTac.tacGen decl
   | preprocess => RuleTac.preprocess
 

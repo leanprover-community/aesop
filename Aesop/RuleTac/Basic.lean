@@ -142,6 +142,7 @@ inductive RuleTacDescr
   | ruleTac (decl : Name)
   | tacGen (decl : Name)
   | singleRuleTac (decl : Name)
+  | tacticStx (stx : Syntax)
   | preprocess
   deriving Inhabited
 
