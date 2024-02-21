@@ -268,10 +268,10 @@ induction explicitly. This is a deliberate design choice: techniques for
 automating induction exist, but they are complex, somewhat slow and not entirely
 reliable, so we prefer to do it manually.
 
-Many more examples can be found in the `tests` folder of this repository. In
-particular, the file `tests/run/List.lean` contains an Aesop-ified port of 200
-basic list lemmas from the Lean 3 version of mathlib. The file
-`tests/run/SeqCalcProver.lean` shows how Aesop can help with the formalisation
+Many more examples can be found in the `AesopTest` folder of this repository. In
+particular, the file `AesopTest/List.lean` contains an Aesop-ified port of 200
+basic list lemmas from the Lean 3 version of mathlib, and the file
+`AesopTest/SeqCalcProver.lean` shows how Aesop can help with the formalisation
 of a simple sequent calculus prover.
 
 ## Reference
