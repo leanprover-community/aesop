@@ -572,11 +572,10 @@ Rules can appear in multiple rule sets, but in this case you should make sure
 that they have the same priority and use the same builder options. Otherwise,
 Aesop will consider these rules the same and arbitrarily pick one.
 
-Out of the box, Aesop uses the default rule sets `builtin`, `default` and
-`local`. The `builtin` set contains built-in rules for handling various
-constructions (see below). The `default` set contains rules which were added by
-Aesop users without specifying a rule set. The `local` set contains rules from
-`(add ...)` clauses.
+Out of the box, Aesop uses the default rule sets `builtin` and `default`. The
+`builtin` set contains built-in rules for handling various constructions (see
+below). The `default` set contains rules which were added by Aesop users without
+specifying a rule set.
 
 ### The `@[aesop]` Attribute
 
