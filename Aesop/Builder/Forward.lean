@@ -57,8 +57,6 @@ def getImmediatePremises (stx : Term) (type : Expr) (pat? : Option RulePattern)
     -- except instance args, dependent args and args determined by a rule
     -- pattern.
     withTransparency md $ forallTelescopeReducing type λ args _ => do
-      if args.isEmpty then
-        throwError "{errPrefix}: not a function"
       let mut result := #[]
       for h : i in [:args.size] do
         if isPatternInstantiated i then
