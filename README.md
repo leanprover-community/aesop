@@ -620,12 +620,12 @@ where
 - `<rule_sets>` is a clause of the form
 
   ```text
-  (rule_sets [r₁, ..., rₙ])
+  (rule_sets := [r₁, ..., rₙ])
   ```
 
   where the `rᵢ` are declared rule sets. (Parentheses are mandatory.) The rule
   is added exactly to the specified rule sets. If this clause is omitted, it
-  defaults to `(rule_sets [default])`.
+  defaults to `(rule_sets := [default])`.
 
 #### Multiple Rules
 
@@ -637,7 +637,7 @@ you can write for example
 @[aesop unsafe [constructors 75%, cases 90%]]
 inductive T ...
 
-@[aesop apply [safe (rule_sets [A]), 70% (rule_sets [B])]]
+@[aesop apply [safe (rule_sets := [A]), 70% (rule_sets := [B])]]
 def foo ...
 
 @[aesop [80% apply, safe 5 forward (immediate := x)]]
@@ -699,7 +699,7 @@ If you want to remove only certain rules, you can use the `erase_aesop_rules`
 command:
 
 ``` lean
-erase_aesop_rules [safe apply foo, bar (rule_sets [A])]
+erase_aesop_rules [safe apply foo, bar (rule_sets := [A])]
 ```
 
 This will remove:
@@ -747,7 +747,7 @@ involved Aesop call might look like this:
 aesop
   (add safe foo, 10% cases Or, safe cases Empty)
   (erase A, baz)
-  (rule_sets [A, B])
+  (rule_sets := [A, B])
   (config := { maxRuleApplicationDepth := 10 })
 ```
 
@@ -802,12 +802,12 @@ sets which are declared as default rule sets. A `rule_sets` clause can be given
 to include additional rule sets, e.g.
 
 ``` text
-(rule_sets [A, B])
+(rule_sets := [A, B])
 ```
 
 This will use rule sets `A`, `B`, `default` and `builtin` (and any rule sets
 declared as default rule sets). Rule sets can also be disabled with
-`rule_sets [-default, -builtin]`.
+`rule_sets := [-default, -builtin]`.
 
 #### Setting Options
 

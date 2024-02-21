@@ -18,7 +18,7 @@ error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : Unit := by
-  aesop (rule_sets [-default, -builtin]) (config := { terminal := true })
+  aesop (rule_sets := [-default, -builtin]) (config := { terminal := true })
 
 example : Unit := by
-  aesop (add safe PUnit.unit) (rule_sets [-default, -builtin])
+  aesop (add safe PUnit.unit) (rule_sets := [-default, -builtin])

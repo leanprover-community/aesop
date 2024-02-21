@@ -4,8 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.RuleSet.Member
 import Aesop.ElabM
+import Aesop.RuleSet.Member
+import Aesop.RuleTac.ElabRuleTerm
 
 open Lean Lean.Meta Lean.Elab.Term
 
@@ -56,7 +57,7 @@ def ExtraRuleBuilderInput.phase : ExtraRuleBuilderInput → PhaseName
 
 
 structure RuleBuilderInput where
-  ident : Ident
+  term : Term
   options : RuleBuilderOptions
   extra : ExtraRuleBuilderInput
   deriving Inhabited
@@ -70,7 +71,7 @@ def toRule (builder : BuilderName) (name : Name) (scope : ScopeName)
     (tac : RuleTacDescr) (indexingMode : IndexingMode)
     (pattern? : Option RulePattern) (input : RuleBuilderInput) :
     BaseRuleSetMember :=
-  let name := { phase := input.phase, name, scope, builder }
+  let name := { name, builder, scope, phase := input.phase }
   match input.extra with
   | .safe penalty safety => .safeRule {
       extra := { penalty, safety }
@@ -91,31 +92,18 @@ end RuleBuilderInput
 abbrev RuleBuilder := RuleBuilderInput → ElabM LocalRuleSetMember
 
 
-def resolveRuleName (stx : Ident) : MetaM (Sum Name LocalDecl) := do
-  let name := stx.getId
-  for ldecl in ← getLCtx do
-    if ldecl.userName == name && ! ldecl.isImplementationDetail then
-      return .inr ldecl
-  try
-    let name ← resolveGlobalConstNoOverload stx
-    return .inl name
-  catch _ =>
-    throwError "aesop: unknown rule name '{stx}'"
-
-def resolveConstRuleName (stx : Ident) (builderName : BuilderName) :
-    MetaM Name := do
-  if let .inl decl ← resolveRuleName stx then
+def elabGlobalRuleIdent (builderName : BuilderName) (term : Term) :
+    TermElabM Name := do
+  if let some decl ← elabGlobalRuleIdent? term then
     return decl
   else
-    throwError "aesop: {builderName} builder does not support local hypothesis '{stx}'"
+    throwError "aesop: {builderName} builder: expected '{term}' to be an unambiguous global constant"
 
-def resolveInductiveRuleName (stx : Ident) (builderName : BuilderName) :
-    MetaM InductiveVal := do
-  let decl ← resolveConstRuleName stx builderName
-  let info ← getConstInfo decl
-    <|> throwError "aesop: {builderName} builder: unknown constant '{decl}'"
-  let (ConstantInfo.inductInfo info) ← pure info
-    | throwError "aesop: {builderName} builder: expected '{decl}' to be an inductive type"
-  return info
+def elabInductiveRuleIdent (builderName : BuilderName) (term : Term) :
+    TermElabM InductiveVal := do
+  if let some info ← elabInductiveRuleIdent? term then
+    return info
+  else
+    throwError "aesop: {builderName} builder: expected '{term}' to be an inductive type or structure"
 
 end Aesop

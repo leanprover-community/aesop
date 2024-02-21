@@ -6,33 +6,74 @@ Authors: Jannis Limperg
 
 import Lean
 
-open Lean
-open Lean.Elab
+open Lean Lean.Meta Lean.Elab
 
-namespace Aesop
+namespace Aesop.ElabM
 
-structure ElabOptions where
+structure Context where
   parsePriorities : Bool
-  parseBuilderOptions : Bool
+  goal : MVarId
 
-namespace ElabOptions
+namespace Context
 
-def forAdditionalRules : ElabOptions where
+def forAdditionalRules (goal : MVarId) : Context where
   parsePriorities := true
-  parseBuilderOptions := true
+  goal := goal
 
-def forErasing : ElabOptions where
+-- HACK: Some of the elaboration functions require that we pass in the current
+-- goal. The goal is used exclusively to look up fvars in the lctx, so when
+-- we operate outside a goal, we pass in a dummy mvar with empty lctx.
+def forAdditionalGlobalRules : MetaM Context := do
+  let mvarId := (← mkFreshExprMVarAt {} {} (.const ``True [])).mvarId!
+  return .forAdditionalRules mvarId
+
+def forErasing (goal : MVarId) : Context where
   parsePriorities := false
-  parseBuilderOptions := false
+  goal := goal
 
-end ElabOptions
+-- HACK: See `forAdditionalGlobalRules`
+def forGlobalErasing : MetaM Context := do
+  let mvarId := (← mkFreshExprMVarAt {} {} (.const ``True [])).mvarId!
+  return .forErasing mvarId
+
+end Context
+
+structure State where
+  localRuleNGen : NameGenerator
+
+def State.initial : State where
+  localRuleNGen := { namePrefix := `_local }
+
+instance : EmptyCollection State :=
+  ⟨.initial⟩
+
+end ElabM
 
 
-abbrev ElabM := ReaderT ElabOptions TermElabM
+abbrev ElabM := ReaderT ElabM.Context $ StateRefT ElabM.State TermElabM
 
 -- Generate specialized pure/bind implementations so we don't need to optimise
 -- them on the fly at each use site.
 instance : Monad ElabM :=
   { inferInstanceAs (Monad ElabM) with }
+
+protected def ElabM.run (ctx : Context) (x : ElabM α) : TermElabM α := do
+  ReaderT.run x ctx |>.run' .initial
+
+def shouldParsePriorities : ElabM Bool :=
+  return (← read).parsePriorities
+
+def getGoal : ElabM MVarId :=
+  return (← read).goal
+
+def mkFreshLocalRuleName : ElabM Name := do
+  let name := (← get).localRuleNGen.curr
+  modify λ s => { s with localRuleNGen := s.localRuleNGen.next }
+  return name
+
+def getRuleName : Expr → ElabM Name
+  | .const decl _ => return decl
+  | .fvar fvarId => return (← fvarId.getDecl).userName
+  | _ => mkFreshLocalRuleName
 
 end Aesop

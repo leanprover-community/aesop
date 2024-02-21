@@ -28,8 +28,9 @@ def elabDeclareAesopRuleSets : CommandElab
 
 elab "erase_aesop_rules " "[" es:Aesop.rule_expr,* "]" : command => do
   let filters ← Elab.Command.liftTermElabM do
+    let ctx ← ElabM.Context.forGlobalErasing
     (es : Array _).mapM λ e => do
-      let e ← RuleExpr.elab e |>.run ElabOptions.forErasing
+      let e ← RuleExpr.elab e |>.run ctx
       e.toGlobalRuleFilters
   for fs in filters do
     for (rsFilter, rFilter) in fs do

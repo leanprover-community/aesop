@@ -33,11 +33,11 @@ def «elab» (stx : Syntax) : TermElabM AttrConfig :=
   withRef stx do
     match stx with
     | `(attr| aesop $e:Aesop.rule_expr) => do
-      let r ← RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
+      let r ← RuleExpr.elab e |>.run $ ← ElabM.Context.forAdditionalGlobalRules
       return { rules := #[r] }
     | `(attr| aesop [ $es:Aesop.rule_expr,* ]) => do
-      let rs ← (es : Array Syntax).mapM λ e =>
-        RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
+      let ctx ← ElabM.Context.forAdditionalGlobalRules
+      let rs ← (es : Array Syntax).mapM λ e => RuleExpr.elab e |>.run ctx
       return { rules := rs }
     | _ => throwUnsupportedSyntax
 

@@ -33,7 +33,7 @@ def constructorsIndexingMode (opts : RuleBuilderOptions) (info : InductiveVal) :
 end RuleBuilderOptions
 
 def RuleBuilder.constructors : RuleBuilder := λ input => do
-  let info ← resolveInductiveRuleName input.ident .constructors
+  let info ← elabInductiveRuleIdent .constructors input.term
   let opts := input.options
   let tac := .constructors info.ctors.toArray opts.constructorsTransparency
   let imode ← opts.constructorsIndexingMode info

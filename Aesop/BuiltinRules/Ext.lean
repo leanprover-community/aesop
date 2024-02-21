@@ -23,7 +23,7 @@ def unhygienicExtWithScript (goal : MVarId) (generateScript : Bool) :
     mkScriptBuilder? generateScript (.unhygienicExt subgoals.size)
   return (subgoals, scriptBuilder?)
 
-@[aesop 80% tactic (index := [target _ = _]) (rule_sets [builtin])]
+@[aesop 80% tactic (index := [target _ = _]) (rule_sets := [builtin])]
 def ext : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let (goals, scriptBuilder?) ←
     unhygienicExtWithScript input.goal input.options.generateScript

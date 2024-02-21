@@ -17,12 +17,12 @@ namespace Aesop.RuleTacDescr
 
 protected def run : RuleTacDescr → RuleTacInput → MetaM RuleTacOutput
   | applyConst decl md pat? => RuleTac.applyConst decl pat? md
-  | applyFVar userName md pat? => RuleTac.applyFVar userName pat? md
+  | applyTerm stx md pat? => RuleTac.applyTerm stx pat? md
   | constructors cs md => RuleTac.applyConsts cs md
   | forwardConst decl pat? immediate clear md =>
     RuleTac.forwardConst decl pat? immediate clear md
-  | forwardFVar userName pat? immediate clear md =>
-    RuleTac.forwardFVar userName pat? immediate clear md
+  | forwardTerm stx pat? immediate clear md =>
+    RuleTac.forwardTerm stx pat? immediate clear md
   | cases decl md isRecursiveType => RuleTac.cases decl md isRecursiveType
   | tacticM decl => RuleTac.tacticM decl
   | singleRuleTac decl => RuleTac.singleRuleTac decl

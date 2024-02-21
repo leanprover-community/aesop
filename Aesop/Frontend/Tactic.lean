@@ -21,7 +21,7 @@ syntax ruleSetSpec := "-"? ident
 
 syntax " (" &"add " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
 syntax " (" &"erase " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
-syntax " (" &"rule_sets " "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
+syntax " (" &"rule_sets" " := " "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
 syntax " (" &"config" " := " term ")" : Aesop.tactic_clause
 syntax " (" &"simp_config" " := " term ")" : Aesop.tactic_clause
 
@@ -87,7 +87,7 @@ structure TacticConfig where
 
 namespace TacticConfig
 
-def parse (stx : Syntax) : TermElabM TacticConfig :=
+def parse (stx : Syntax) (goal : MVarId) : TermElabM TacticConfig :=
   withRef stx do
     match stx with
     | `(tactic| aesop $clauses:Aesop.tactic_clause*) =>
@@ -126,13 +126,13 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
         match stx with
         | `(tactic_clause| (add $es:Aesop.rule_expr,*)) => do
           let rs ← (es : Array Syntax).mapM λ e =>
-            RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
+            RuleExpr.elab e |>.run $ .forAdditionalRules goal
           modify λ c => { c with additionalRules := c.additionalRules ++ rs }
         | `(tactic_clause| (erase $es:Aesop.rule_expr,*)) => do
           let rs ← (es : Array Syntax).mapM λ e =>
-            RuleExpr.elab e |>.run ElabOptions.forErasing
+            RuleExpr.elab e |>.run $ .forErasing goal
           modify λ c => { c with erasedRules := c.erasedRules ++ rs }
-        | `(tactic_clause| (rule_sets [ $specs:ruleSetSpec,* ])) => do
+        | `(tactic_clause| (rule_sets := [ $specs:ruleSetSpec,* ])) => do
           let mut enabledRuleSets := (← get).enabledRuleSets
           for spec in (specs : Array Syntax) do
             match spec with
@@ -157,17 +157,17 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
           modify λ c => { c with simpConfigSyntax? := some t }
         | _ => throwUnsupportedSyntax
 
-def updateRuleSet (rs : LocalRuleSet) (c : TacticConfig) :
+def updateRuleSet (rs : LocalRuleSet) (c : TacticConfig) (goal : MVarId):
     TermElabM LocalRuleSet := do
   let mut rs := rs
   for ruleExpr in c.additionalRules do
-    let rules ← ruleExpr.buildAdditionalLocalRules
+    let rules ← ruleExpr.buildAdditionalLocalRules goal
     for rule in rules do
       rs := rs.add rule
 
   -- Erase erased rules
   for ruleExpr in c.erasedRules do
-    let filters ← ruleExpr.toLocalRuleFilters
+    let filters ← ruleExpr.toLocalRuleFilters |>.run $ .forErasing goal
     for rFilter in filters do
       let (rs', anyErased) := rs.erase rFilter
       rs := rs'
@@ -179,6 +179,6 @@ def getRuleSet (goal : MVarId) (c : TacticConfig) :
     TermElabM LocalRuleSet :=
   goal.withContext do
     let rss ← getGlobalRuleSets c.enabledRuleSets.toArray
-    c.updateRuleSet (← mkLocalRuleSet rss (← c.options.toOptions'))
+    c.updateRuleSet (← mkLocalRuleSet rss (← c.options.toOptions')) goal
 
 end Aesop.Frontend.TacticConfig

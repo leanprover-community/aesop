@@ -65,7 +65,7 @@ def RuleBuilder.cases : RuleBuilder := λ input => do
       -- TODO `Meta.cases` may assign and introduce metavariables.
       -- (Specifically, it can *replace* existing metavariables, which Aesop
       -- counts as an assignment and an introduction.)
-    let inductiveInfo ← resolveInductiveRuleName input.ident .cases
+    let inductiveInfo ← elabInductiveRuleIdent .cases input.term
     let decl := inductiveInfo.name
     let opts := input.options
     opts.casesPatterns.forM (·.check decl)

@@ -23,17 +23,17 @@ namespace Aesop
 
 def RuleBuilder.default : RuleBuilder := λ input =>
   match input.phase with
-  | PhaseName.safe =>
+  | .safe =>
     constructors input <|>
     tactic input <|>
     apply input <|>
     err "a safe" input
-  | PhaseName.unsafe =>
+  | .unsafe =>
     constructors input <|>
     tactic input <|>
     apply input <|>
     err "an unsafe" input
-  | PhaseName.norm =>
+  | .norm =>
     constructors input <|>
     tactic input <|>
     simp input <|>
@@ -41,6 +41,6 @@ def RuleBuilder.default : RuleBuilder := λ input =>
     err "a norm" input
 where
   err (ruleType : String) : RuleBuilder := λ input =>
-    throwError m!"aesop: Unable to interpret '{input.ident}' as {ruleType} rule. Try specifying a builder."
+    throwError m!"aesop: Unable to interpret '{input.term}' as {ruleType} rule. Try specifying a builder."
 
 end Aesop

@@ -14,7 +14,7 @@ namespace Aesop
 
 def RuleBuilder.tactic : RuleBuilder := λ input => do
   let opts := input.options
-  let decl ← resolveConstRuleName input.ident .tactic
+  let decl ← elabGlobalRuleIdent .tactic input.term
   let imode ← opts.getIndexingModeM $ pure IndexingMode.unindexed
   let type := (← getConstInfo decl).type
   let tac ←

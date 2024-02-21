@@ -195,7 +195,7 @@ def LocalRuleSet.trace (rs : LocalRuleSet) (traceOpt : TraceOption) :
     rs.simpTheoremsArray.map (printSimpSetName ·.fst) |>.qsortOrd.forM λ s => do
       aesop_trace![traceOpt] s
   withConstAesopTraceNode traceOpt (return "Local normalisation simp theorems") do
-    for r in rs.localNormSimpRules.map (·.fvarUserName.toString) |>.qsortOrd do
+    for r in rs.localNormSimpRules.map (·.simpTheorem) do
       aesop_trace![traceOpt] r
 where
   printSimpSetName : Name → String
@@ -262,7 +262,7 @@ def LocalRuleSet.contains (rs : LocalRuleSet) (n : RuleName) : Bool :=
   (n.builder == .simp &&
     match n.scope with
     | .global => rs.containsGlobalSimpTheorem n.name
-    | .local  => rs.localNormSimpRules.contains ⟨n.name⟩)
+    | .local  => rs.localNormSimpRules.any (·.id == n.name))
 
 
 def BaseRuleSet.merge (rs₁ rs₂ : BaseRuleSet) : BaseRuleSet where
@@ -364,8 +364,9 @@ def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleFilter) :
   let mut localNormSimpRules := rs.localNormSimpRules
   let mut simpTheoremsArray' : Σ' a, a.size = rs.simpTheoremsArray.size :=
     ⟨rs.simpTheoremsArray, rfl⟩
-  if let some rule := f.matchesLocalNormSimpRule? then
-    localNormSimpRules := localNormSimpRules.erase rule
+  if let some id := f.matchesLocalNormSimpRule? then
+    if let some idx := localNormSimpRules.findIdx? (·.id == id) then
+      localNormSimpRules := localNormSimpRules.eraseIdx idx
   if let some decl := f.matchesSimpTheorem? then
     for h : i in [:rs.simpTheoremsArray.size] do
       have i_valid : i < simpTheoremsArray'.fst.size := by

@@ -17,13 +17,13 @@ namespace Aesop
 @[tactic Frontend.Parser.aesopTactic, tactic Frontend.Parser.aesopTactic?]
 def evalAesop : Tactic := λ stx => do
   profileitM Exception "aesop" (← getOptions) do
-  withMainContext do
+  let goal ← getMainGoal
+  goal.withContext do
     let statsRef ← IO.mkRef ∅
     have : MonadStats TacticM := { readStatsRef := return statsRef }
     profiling (λ s _ t => { s with total := t }) do
       let config ← profiling (λ s _ t => { s with configParsing := t }) do
-        Frontend.TacticConfig.parse stx
-      let goal ← getMainGoal
+        Frontend.TacticConfig.parse stx goal
       let ruleSet ←
         profiling (λ s _ t => { s with ruleSetConstruction := t }) do
           config.getRuleSet goal

@@ -43,11 +43,13 @@ def matchesSimpTheorem? (f : RuleFilter) : Option Name :=
   else
     none
 
-def matchesLocalNormSimpRule? (f : RuleFilter) : Option LocalNormSimpRule :=
+/--
+Returns the identifier of the local norm simp rule matched by `f`, if any.
+-/
+def matchesLocalNormSimpRule? (f : RuleFilter) : Option Name := Id.run do
   if f.scope == .local && f.matchesBuilder .simp then
-    some { fvarUserName := f.name }
-  else
-    none
+    return some f.name
+  return none
 
 end RuleFilter
 

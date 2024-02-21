@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 import Std.Data.Option.Basic
 import Aesop.RuleTac
+import Aesop.RuleTac.ElabRuleTerm
 import Aesop.Search.Expansion.Basic
 import Aesop.Search.Expansion.Simp
 import Aesop.Search.RuleSelection
@@ -185,23 +186,19 @@ def SimpResult.toNormRuleResult (ruleName : DisplayRuleName)
 def normSimpCore (goal : MVarId)
     (goalMVars : HashSet MVarId) : NormM NormRuleResult := do
   let ctx := (← read).normSimpContext
-  let simprocs := ctx.simprocs
   goal.withContext do
     let preState ← saveState
+    let localRules := (← read).ruleSet.localNormSimpRules
     let result ←
       if ctx.useHyps then
-        Aesop.simpAll goal ctx.toContext simprocs
+        let (ctx, simprocs) ←
+          addLocalRules localRules ctx.toContext ctx.simprocs
+            (isSimpAll := true)
+        Aesop.simpAll goal ctx simprocs
       else
-        let lctx ← getLCtx
-        let mut simpTheorems := ctx.simpTheorems
-        for localRule in (← read).ruleSet.localNormSimpRules do
-          let (some ldecl) := lctx.findFromUserName? localRule.fvarUserName
-            | continue
-          let (some simpTheorems') ← observing? $
-            simpTheorems.addTheorem (.fvar ldecl.fvarId) ldecl.toExpr
-            | continue
-          simpTheorems := simpTheorems'
-        let ctx := { ctx with simpTheorems }
+        let (ctx, simprocs) ←
+          addLocalRules localRules ctx.toContext ctx.simprocs
+            (isSimpAll := false)
         Aesop.simpGoalWithAllHypotheses goal ctx simprocs
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
@@ -216,14 +213,23 @@ def normSimpCore (goal : MVarId)
           pure $ .unchanged goal
         else
           pure result
-      | .simplified .. =>
-        pure result
       | .unchanged .. =>
         aesop_trace[steps] "norm simp left the goal unchanged"
+        pure result
+      | .simplified .. =>
         pure result
 
     let postState ← saveState
     result.toNormRuleResult .normSimp ⟨goal, goalMVars⟩ preState postState
+where
+  addLocalRules (localRules : Array LocalNormSimpRule) (ctx : Simp.Context)
+      (simprocs : Simp.SimprocsArray) (isSimpAll : Bool) :
+      NormM (Simp.Context × Simp.SimprocsArray) :=
+    localRules.foldlM (init := (ctx, simprocs)) λ (ctx, simprocs) r =>
+      try
+        elabRuleTermForSimpMetaM goal r.simpTheorem ctx simprocs isSimpAll
+      catch _ =>
+        return (ctx, simprocs)
 
 @[inline, always_inline]
 def checkSimp (name : String) (mayCloseGoal : Bool) (goal : MVarId)
