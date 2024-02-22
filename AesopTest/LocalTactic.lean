@@ -29,3 +29,6 @@ error: tactic 'aesop' failed, made no progress
 #guard_msgs in
 example (m n : Nat) : m * n = n * m := by
   aesop (add safe (by rw [Nat.mul_comm m m]))
+
+example (m n : Nat) : m * n = n * m := by
+  aesop (add safe (by apply Nat.mul_comm; done))
