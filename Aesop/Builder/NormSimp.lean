@@ -50,7 +50,7 @@ def RuleBuilder.simp : RuleBuilder := λ input => do
   else
     checkElabRuleTermForSimp input.term (isSimpAll := true) -- TODO (isSimpAll := true) correct?
     return .localNormSimpRule {
-      id := ← mkFreshLocalRuleName
+      id := ← mkFreshId
       simpTheorem := input.term
     }
 

@@ -36,21 +36,10 @@ def forGlobalErasing : MetaM Context := do
   let mvarId := (← mkFreshExprMVarAt {} {} (.const ``True [])).mvarId!
   return .forErasing mvarId
 
-end Context
-
-structure State where
-  localRuleNGen : NameGenerator
-
-def State.initial : State where
-  localRuleNGen := { namePrefix := `_local }
-
-instance : EmptyCollection State :=
-  ⟨.initial⟩
-
-end ElabM
+end ElabM.Context
 
 
-abbrev ElabM := ReaderT ElabM.Context $ StateRefT ElabM.State TermElabM
+abbrev ElabM := ReaderT ElabM.Context $ TermElabM
 
 -- Generate specialized pure/bind implementations so we don't need to optimise
 -- them on the fly at each use site.
@@ -58,7 +47,7 @@ instance : Monad ElabM :=
   { inferInstanceAs (Monad ElabM) with }
 
 protected def ElabM.run (ctx : Context) (x : ElabM α) : TermElabM α := do
-  ReaderT.run x ctx |>.run' .initial
+  ReaderT.run x ctx
 
 def shouldParsePriorities : ElabM Bool :=
   return (← read).parsePriorities
@@ -66,14 +55,9 @@ def shouldParsePriorities : ElabM Bool :=
 def getGoal : ElabM MVarId :=
   return (← read).goal
 
-def mkFreshLocalRuleName : ElabM Name := do
-  let name := (← get).localRuleNGen.curr
-  modify λ s => { s with localRuleNGen := s.localRuleNGen.next }
-  return name
-
-def getRuleName : Expr → ElabM Name
+def getRuleName : Expr → MetaM Name
   | .const decl _ => return decl
   | .fvar fvarId => return (← fvarId.getDecl).userName
-  | _ => mkFreshLocalRuleName
+  | _ => mkFreshId
 
 end Aesop

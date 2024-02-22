@@ -35,7 +35,7 @@ def RuleBuilder.tactic : RuleBuilder := λ input => do
         throwError "aesop: tactic builder: expected {decl} to be a tactic, i.e. to have one of these types:\n  TacticM Unit\n  SimpleRuleTac\n  RuleTac\n  TacGen\nHowever, it has type{indentExpr type}"
     return .global $ .base $ input.toRule .tactic decl .global tac imode none
   else if let some stx := matchByTactic input.term then
-    let name ← mkFreshLocalRuleName
+    let name ← mkFreshId
     let tac := .tacticStx stx
     return .global $ .base $ input.toRule .tactic name .global tac imode none
   else
