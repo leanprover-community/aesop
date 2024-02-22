@@ -43,8 +43,8 @@ clauses are:
   an Aesop rule. Example: `(add unsafe 50% apply Or.inl)`.
 - `(erase <rule>)` disables a globally registered Aesop rule. Example: `(erase
   Aesop.BuiltinRules.assumption)`.
-- `(rule_sets [<ruleset>,*])` enables or disables named sets of rules for this
-  Aesop call. Example: `(rule_sets [-builtin, MyRuleSet])`.
+- `(rule_sets := [<ruleset>,*])` enables or disables named sets of rules for
+  this Aesop call. Example: `(rule_sets := [-builtin, MyRuleSet])`.
 - `(config { <opt> := <value> })` adjusts Aesop's search options. See
   `Aesop.Options`.
 - `(simp_config { <opt> := <value> })` adjusts options for Aesop's built-in
