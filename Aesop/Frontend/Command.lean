@@ -26,6 +26,19 @@ def elabDeclareAesopRuleSets : CommandElab
     elabCommand $ ← `(initialize ($(quote rsNames).forM $ declareRuleSetUnchecked (isDefault := $(quote dflt))))
   | _ => throwUnsupportedSyntax
 
+elab attrKind:attrKind "add_aesop_rules " e:Aesop.rule_expr : command => do
+  let attrKind :=
+    match attrKind with
+    | `(Lean.Parser.Term.attrKind| local) => .local
+    | `(Lean.Parser.Term.attrKind| scoped) => .scoped
+    | _ => .global
+  let rules ← liftTermElabM do
+    let e ← RuleExpr.elab e |>.run (← ElabM.Context.forAdditionalGlobalRules)
+    e.buildAdditionalGlobalRules none
+  for (rule, rsNames) in rules do
+    for rsName in rsNames do
+      addGlobalRule rsName rule attrKind (checkNotExists := true)
+
 elab "erase_aesop_rules " "[" es:Aesop.rule_expr,* "]" : command => do
   let filters ← Elab.Command.liftTermElabM do
     let ctx ← ElabM.Context.forGlobalErasing

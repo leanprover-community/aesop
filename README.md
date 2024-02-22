@@ -593,7 +593,9 @@ specifying a rule set.
 ### The `@[aesop]` Attribute
 
 Declarations can be added to rule sets by annotating them with the `@[aesop]`
-attribute.
+attribute. As with other attributes, you can use `@[local aesop]` to add a rule
+only within the current section or namespace and `@[scoped aesop]` to add a rule
+only when the current namespace is open.
 
 #### Single Rule
 
@@ -688,9 +690,19 @@ specifies one rule. (A branch is a list of features.)
 You can use the `attribute` command to add rules for constants which were
 declared previously, either in your own development or in a package you import:
 
-```
+```lean
 attribute [aesop norm unfold] List.all -- List.all is from Init
 ```
+
+You can also use the `add_aesop_rules` command:
+
+``` lean
+add_aesop_rules safe [(by linarith), Nat.add_comm 0]
+```
+
+As you can see, this command can be used to add tactics and composite terms as
+well. Use `local add_aesop_rules` and `scoped add_aesop_rules` to obtain the
+equivalent of `@[local aesop]` and `@[scoped aesop]`.
 
 ### Erasing Rules
 

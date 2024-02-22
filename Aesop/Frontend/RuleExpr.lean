@@ -557,10 +557,10 @@ def toAdditionalRules (e : RuleExpr) (init : RuleConfig)
   let cs ← e.toRuleConfigs init
   cs.mapM (·.validateForAdditionalRules defaultRuleSet)
 
-def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
+def toAdditionalGlobalRules (decl? : Option Name) (e : RuleExpr) :
     m (Array RuleConfig) :=
   let init := {
-    term? := mkIdent decl
+    term? := decl?.map (mkIdent ·)
     phase? := none
     priority? := none
     builder? := none
@@ -569,10 +569,10 @@ def toAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
   }
   toAdditionalRules e init defaultRuleSetName
 
-def buildAdditionalGlobalRules (decl : Name) (e : RuleExpr) :
+def buildAdditionalGlobalRules (decl? : Option Name) (e : RuleExpr) :
     TermElabM (Array (GlobalRuleSetMember × Array RuleSetName)) := do
   let go : ElabM _ := do
-    (← e.toAdditionalGlobalRules decl).mapM (·.buildGlobalRule)
+    (← e.toAdditionalGlobalRules decl?).mapM (·.buildGlobalRule)
   go.run $ ← ElabM.Context.forAdditionalGlobalRules
 
 def toAdditionalLocalRules (e : RuleExpr) : MetaM (Array RuleConfig) :=
