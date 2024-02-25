@@ -16,15 +16,14 @@ axiom falso : ∀ {α : Sort _}, α
 
 macro "falso" : tactic => `(tactic| exact falso)
 
-@[aesop safe forward (pattern := (↑n : Int))]
+@[aesop norm -100 forward (pattern := (↑n : Int))]
 axiom nat_pos (n : Nat) : 0 ≤ (↑n : Int)
 
 example (m n : Nat) : (↑m : Int) < 0 ∧ (↑n : Int) > 0 := by
   aesop!
   all_goals
-    guard_hyp fwd : 0 ≤ Int.ofNat n
-    guard_hyp fwd_1 : 0 ≤ Int.ofNat m
-    guard_hyp fwd_3 : 0 ≤ Int.ofNat 0
+    guard_hyp fwd : 0 ≤ (n : Int)
+    guard_hyp fwd_1 : 0 ≤ (m : Int)
     falso
 
 @[aesop safe forward (pattern := min x y)]
@@ -44,8 +43,8 @@ axiom triangle (a b : Int) : |a + b| ≤ |a| + |b|
 
 example : |a + b| ≤ |c + d| := by
   aesop!
-  guard_hyp fwd   : |c + d| ≤ |c| + |d|
-  guard_hyp fwd_1 : |a + b| ≤ |a| + |b|
+  guard_hyp fwd   : |a + b| ≤ |a| + |b|
+  guard_hyp fwd_1 : |c + d| ≤ |c| + |d|
   falso
 
 @[aesop safe apply (pattern := (0 : Nat))]
