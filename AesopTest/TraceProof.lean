@@ -28,7 +28,7 @@ warning: aesop: failed to prove the goal after exhaustive search.
 error: unsolved goals
 ⊢ False
 ---
-info: [aesop.proof] id ?m.16
+info: [aesop.proof] id ?m.18
 -/
 #guard_msgs in
 example : F := by

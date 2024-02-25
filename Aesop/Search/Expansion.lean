@@ -125,56 +125,40 @@ def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
   | Sum.inr output =>
     return some output
 
-def runSafeRuleCore (parentRef : GoalRef)
-    (matchResult : IndexMatchResult SafeRule) : SearchM Q SafeRuleResult := do
-  let rule := matchResult.rule
-  withRuleTraceNode rule.name (·.toEmoji) "" do
-    let some output ←
-        runRegularRuleCore parentRef (.safe matchResult.rule)
-          matchResult.locations matchResult.patternInstantiations
-      | do addRuleFailure (.safe rule) parentRef; return .regular .failed
-    let parentMVars := (← parentRef.get).mvars
-    let rapps := output.applications
-    if rapps.size != 1 then
-      aesop_trace[steps] "Safe rule did not produce exactly one rule application"
-      addRuleFailure (.safe rule) parentRef
-      return .regular .failed
-    let anyParentMVarAssigned ← rapps.anyM λ rapp => do
-      rapp.postState.runMetaM' do
-        parentMVars.anyM (·.isAssignedOrDelayedAssigned)
-    if anyParentMVarAssigned then
-      aesop_trace[steps] "Safe rule assigned metavariables, so we postpone it"
-      return .postponed ⟨rule, output⟩
-    else
-      return .regular (← addRapps parentRef (.safe rule) rapps)
-
 def runSafeRule (parentRef : GoalRef) (matchResult : IndexMatchResult SafeRule) :
-    SearchM Q SafeRuleResult :=
-  profiling (runSafeRuleCore parentRef matchResult)
-    λ result elapsed => recordRuleProfile {
-        rule := .ruleName matchResult.rule.name
-        successful := result.isSuccessfulOrPostponed
-        elapsed
-      }
-
-def runUnsafeRuleCore (parentRef : GoalRef)
-    (matchResult : IndexMatchResult UnsafeRule) : SearchM Q RuleResult := do
-  let rule := matchResult.rule
-  withRuleTraceNode rule.name (·.toEmoji) "" do
-    let some output ←
-        runRegularRuleCore parentRef (.unsafe rule) matchResult.locations
-          matchResult.patternInstantiations
-      | do addRuleFailure (.unsafe rule) parentRef; return .failed
-    addRapps parentRef (.unsafe rule) output.applications
+    SearchM Q SafeRuleResult := do
+  profilingRule (.ruleName matchResult.rule.name) (·.isSuccessfulOrPostponed) do
+    let rule := matchResult.rule
+    withRuleTraceNode rule.name (·.toEmoji) "" do
+      let some output ←
+          runRegularRuleCore parentRef (.safe matchResult.rule)
+            matchResult.locations matchResult.patternInstantiations
+        | do addRuleFailure (.safe rule) parentRef; return .regular .failed
+      let parentMVars := (← parentRef.get).mvars
+      let rapps := output.applications
+      if rapps.size != 1 then
+        aesop_trace[steps] "Safe rule did not produce exactly one rule application"
+        addRuleFailure (.safe rule) parentRef
+        return .regular .failed
+      let anyParentMVarAssigned ← rapps.anyM λ rapp => do
+        rapp.postState.runMetaM' do
+          parentMVars.anyM (·.isAssignedOrDelayedAssigned)
+      if anyParentMVarAssigned then
+        aesop_trace[steps] "Safe rule assigned metavariables, so we postpone it"
+        return .postponed ⟨rule, output⟩
+      else
+        return .regular (← addRapps parentRef (.safe rule) rapps)
 
 def runUnsafeRule (parentRef : GoalRef)
-    (matchResult : IndexMatchResult UnsafeRule) : SearchM Q RuleResult :=
-  profiling (runUnsafeRuleCore parentRef matchResult)
-    λ result elapsed => recordRuleProfile {
-        rule := .ruleName matchResult.rule.name
-        successful := result.isSuccessful
-        elapsed
-      }
+    (matchResult : IndexMatchResult UnsafeRule) : SearchM Q RuleResult := do
+  let rule := matchResult.rule
+  profilingRule (.ruleName rule.name) (·.isSuccessful) do
+    withRuleTraceNode rule.name (·.toEmoji) "" do
+      let some output ←
+          runRegularRuleCore parentRef (.unsafe rule) matchResult.locations
+            matchResult.patternInstantiations
+        | do addRuleFailure (.unsafe rule) parentRef; return .failed
+      addRapps parentRef (.unsafe rule) output.applications
 
 inductive SafeRulesResult
   | proved (newRapps : Array RappRef)

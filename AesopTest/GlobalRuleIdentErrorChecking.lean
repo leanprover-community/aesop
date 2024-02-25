@@ -8,7 +8,8 @@ import Aesop
 import Std.Tactic.GuardMsgs
 
 /--
-error: duplicate rule name 'Nat.add_assoc'; rule name 'bar' was already specified
+error: duplicate rule 'Nat.add_assoc'; rule 'bar' was already given.
+Use [<term>,...] to give multiple rules.
 -/
 #guard_msgs in
 @[aesop norm simp Nat.add_assoc]

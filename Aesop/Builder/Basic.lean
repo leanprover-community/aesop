@@ -4,10 +4,11 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Rule
+import Aesop.ElabM
+import Aesop.RuleSet.Member
+import Aesop.RuleTac.ElabRuleTerm
 
-open Lean
-open Lean.Meta
+open Lean Lean.Meta Lean.Elab.Term
 
 namespace Aesop
 
@@ -18,7 +19,7 @@ structure RuleBuilderOptions where
   immediatePremises? : Option (Array Name)
   indexingMode? : Option IndexingMode
   casesPatterns? : Option (Array CasesPattern)
-  pattern? : Option RulePattern
+  pattern? : Option Term
   /-- The transparency used by the rule tactic. -/
   transparency? : Option TransparencyMode
   /-- The transparency used for indexing the rule. Currently, the rule is not
@@ -43,60 +44,66 @@ def getIndexingModeM [Monad m] (dflt : m IndexingMode)
 end RuleBuilderOptions
 
 
-inductive RuleBuilderKind
-  | global (decl : Name)
-  | «local» (fvarUserName : Name) (goal : MVarId)
+inductive ExtraRuleBuilderInput
+  | safe (penalty : Int) (safety : Safety)
+  | norm (penalty : Int)
+  | «unsafe» (successProbability : Percent)
+  deriving Inhabited
 
-def RuleBuilderKind.toRuleIdent : RuleBuilderKind → RuleIdent
-  | global decl => RuleIdent.const decl
-  | «local» fvarUserName .. => RuleIdent.fvar fvarUserName
+def ExtraRuleBuilderInput.phase : ExtraRuleBuilderInput → PhaseName
+  | safe .. => .safe
+  | «unsafe» .. => .unsafe
+  | norm .. => .norm
+
 
 structure RuleBuilderInput where
-  phase : PhaseName
-  kind : RuleBuilderKind
+  term : Term
   options : RuleBuilderOptions
-
-structure RegularRuleBuilderResult where
-  builder : BuilderName
-  tac : RuleTacDescr
-  indexingMode : IndexingMode
+  extra : ExtraRuleBuilderInput
   deriving Inhabited
 
-inductive RuleBuilderResult
-  | regular (r : RegularRuleBuilderResult)
-  | globalSimp (entries : Array SimpEntry)
-  | localSimp (userName : Name)
-  | unfold (r : UnfoldRule)
-  deriving Inhabited
+namespace RuleBuilderInput
 
-inductive RuleBuilderOutput
-  | global (r : RuleBuilderResult)
-  | «local» (goal : MVarId) (r : RuleBuilderResult)
+def phase (input : RuleBuilderInput) : PhaseName :=
+  input.extra.phase
 
-/--
-Invariant: if the `RuleBuilderInput` contains a `RuleBuilderKind.local`,
-then the builder returns a `RuleBuilderOutput.local`, and similar for
-`RuleBuilderKind.global`.
--/
-abbrev RuleBuilder := RuleBuilderInput → MetaM RuleBuilderOutput
+def toRule (builder : BuilderName) (name : Name) (scope : ScopeName)
+    (tac : RuleTacDescr) (indexingMode : IndexingMode)
+    (pattern? : Option RulePattern) (input : RuleBuilderInput) :
+    BaseRuleSetMember :=
+  let name := { name, builder, scope, phase := input.phase }
+  match input.extra with
+  | .safe penalty safety => .safeRule {
+      extra := { penalty, safety }
+      name, indexingMode, tac, pattern?
+    }
+  | .unsafe successProbability => .unsafeRule {
+      extra := { successProbability }
+      name, indexingMode, tac, pattern?
+    }
+  | .norm penalty => .normRule {
+      extra := { penalty }
+      name, indexingMode, tac, pattern?
+    }
 
-namespace RuleBuilder
+end RuleBuilderInput
 
-def checkConstIsInductive (builderName : BuilderName) (decl : Name) :
-    MetaM InductiveVal := do
-  let info ← getConstInfo decl
-    <|> throwError "aesop: {builderName} builder: unknown constant '{decl}'"
-  let (ConstantInfo.inductInfo info) ← pure info
-    | throwError "aesop: {builderName} builder: expected '{decl}' to be an inductive type"
-  return info
 
-def ofGlobalRuleBuilder (name : BuilderName)
-    (globalBuilder : PhaseName → Name → RuleBuilderOptions → MetaM RuleBuilderResult) :
-    RuleBuilder := λ input =>
-  match input.kind with
-  | RuleBuilderKind.local .. =>
-    throwError "aesop: {name} builder does not support local hypotheses"
-  | RuleBuilderKind.global decl =>
-    RuleBuilderOutput.global <$> globalBuilder input.phase decl input.options
+abbrev RuleBuilder := RuleBuilderInput → ElabM LocalRuleSetMember
 
-end RuleBuilder
+
+def elabGlobalRuleIdent (builderName : BuilderName) (term : Term) :
+    TermElabM Name := do
+  if let some decl ← elabGlobalRuleIdent? term then
+    return decl
+  else
+    throwError "aesop: {builderName} builder: expected '{term}' to be an unambiguous global constant"
+
+def elabInductiveRuleIdent (builderName : BuilderName) (term : Term) :
+    TermElabM InductiveVal := do
+  if let some info ← elabInductiveRuleIdent? term then
+    return info
+  else
+    throwError "aesop: {builderName} builder: expected '{term}' to be an inductive type or structure"
+
+end Aesop

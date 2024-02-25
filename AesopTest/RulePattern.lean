@@ -23,7 +23,7 @@ example (m n : Nat) : (↑m : Int) < 0 ∧ (↑n : Int) > 0 := by
   aesop!
   all_goals
     guard_hyp fwd : 0 ≤ Int.ofNat n
-    guard_hyp fwd_2 : 0 ≤ Int.ofNat m
+    guard_hyp fwd_1 : 0 ≤ Int.ofNat m
     guard_hyp fwd_3 : 0 ≤ Int.ofNat 0
     falso
 
@@ -44,8 +44,8 @@ axiom triangle (a b : Int) : |a + b| ≤ |a| + |b|
 
 example : |a + b| ≤ |c + d| := by
   aesop!
-  guard_hyp fwd   : |a + b| ≤ |a| + |b|
-  guard_hyp fwd_1 : |c + d| ≤ |c| + |d|
+  guard_hyp fwd   : |c + d| ≤ |c| + |d|
+  guard_hyp fwd_1 : |a + b| ≤ |a| + |b|
   falso
 
 @[aesop safe apply (pattern := (0 : Nat))]
@@ -60,7 +60,7 @@ example : False := by
   aesop
 
 example (h : n = 0) : False := by
-  aesop (rule_sets [-builtin])
+  aesop (rule_sets := [-builtin])
 
 -- Patterns may only contain variables mentioned in the rule.
 

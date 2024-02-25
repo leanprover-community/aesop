@@ -127,18 +127,18 @@ def addGlobalRule (rsName : RuleSetName) (r : GlobalRuleSetMember)
         setEnv $ simpExt.modifyState (← getEnv) λ simpTheorems =>
           { simpTheorems with erased := simpTheorems.erased.erase l.origin }
 
-def eraseGlobalRules (rsf : RuleSetNameFilter) (rf : RuleNameFilter)
+def eraseGlobalRules (rsf : RuleSetNameFilter) (rf : RuleFilter)
     (checkExists : Bool) : m Unit := do
   match rsf.matchedRuleSetNames with
   | none =>
     let anyErased ←
       (← getDeclaredRuleSets).foldM (init := false) λ b rsName _ => go b rsName
     if checkExists && ! anyErased then
-      throwError "'{rf.ident.name}' is not registered (with the given features) in any rule set."
+      throwError "'{rf.name}' is not registered (with the given features) in any rule set."
   | some rsNames =>
     let anyErased ← rsNames.foldlM (init := false) go
     if checkExists && ! anyErased then
-      throwError "'{rf.ident.name}' is not registered (with the given features) in any of the rule sets {rsNames.map toString}."
+      throwError "'{rf.name}' is not registered (with the given features) in any of the rule sets {rsNames.map toString}."
   where
     go (anyErased : Bool) (rsName : RuleSetName) : m Bool :=
       modifyGetGlobalRuleSet rsName λ rs =>

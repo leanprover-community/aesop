@@ -29,7 +29,7 @@ where
       else
         return (fvars, mvarId)
 
-@[aesop norm -100 (rule_sets [builtin])]
+@[aesop norm -100 (rule_sets := [builtin])]
 def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
     let md? := input.options.introsTransparency?
     let (newFVars, goal) ← unhygienic $

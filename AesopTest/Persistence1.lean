@@ -10,12 +10,12 @@ set_option aesop.check.all true
 
 namespace Aesop
 
-@[aesop 50% constructors (rule_sets [test_persistence1])]
+@[aesop 50% constructors (rule_sets := [test_persistence1])]
 inductive NatOrBool where
   | ofNat (n : Nat)
   | ofBool (b : Bool)
 
 example (b : Bool) : NatOrBool := by
-  aesop (rule_sets [test_persistence1])
+  aesop (rule_sets := [test_persistence1])
 
 end Aesop

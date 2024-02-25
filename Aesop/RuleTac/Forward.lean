@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleTac.Basic
+import Aesop.RuleTac.ElabRuleTerm
 import Std.Lean.Meta.UnusedNames
 import Std.Lean.Meta.AssertHypotheses
 
@@ -130,17 +131,19 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     if newHypProofs.isEmpty then
       err
     let forwardHypTypes ← getForwardHypTypes
-    let mut newHyps := Array.mkEmpty newHypProofs.size
+    let mut newHyps' := Array.mkEmpty newHypProofs.size
     let mut newHypTypes : HashSet Expr := {}
-    let newHypUserNames ← getUnusedUserNames newHypProofs.size forwardHypPrefix
-    for proof in newHypProofs, userName in newHypUserNames do
+    for proof in newHypProofs do
       let type ← inferType proof
       if forwardHypTypes.contains type || newHypTypes.contains type then
         continue
       newHypTypes := newHypTypes.insert type
-      newHyps := newHyps.push { value := proof, type, userName }
-    if newHyps.isEmpty then
+      newHyps' := newHyps'.push (proof, type)
+    if newHyps'.isEmpty then
       err
+    let newHypUserNames ← getUnusedUserNames newHyps'.size forwardHypPrefix
+    let newHyps := newHyps'.zipWith newHypUserNames λ (proof, type) userName =>
+      { value := proof, type, userName }
     let (_, goal, assertScriptBuilder?) ←
       assertHypothesesWithScript goal newHyps generateScript
     let assertScriptBuilder? :=
@@ -180,11 +183,11 @@ def forwardConst (decl : Name) (pat? : Option RulePattern)
     RuleTac := λ input => do
   forwardExpr (← mkConstWithFreshMVarLevels decl) pat? immediate clear md input
 
-def forwardFVar (userName : Name) (pat? : Option RulePattern)
+def forwardTerm (stx : Term) (pat? : Option RulePattern)
     (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
     RuleTac := λ input =>
   input.goal.withContext do
-    let ldecl ← getLocalDeclFromUserName userName
-    forwardExpr (mkFVar ldecl.fvarId) pat? immediate (clear := clear) md input
+    let e ← elabRuleTermForApplyLikeMetaM input.goal stx
+    forwardExpr e pat? immediate (clear := clear) md input
 
 end Aesop.RuleTac

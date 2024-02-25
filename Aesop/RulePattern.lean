@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Rule.Name
+import Aesop.Tracing
 
 open Lean Lean.Meta
 
@@ -165,6 +166,7 @@ def «elab» (stx : Term) (ruleType : Expr) : TermElabM RulePattern :=
       let (pat, mvarIds) ← fvarsToMVars fvars pat
       let (pat, mvarIdToPatternPos) ← abstractMVars' pat
       let argMap := mvarIds.map (mvarIdToPatternPos[·])
+      aesop_trace[debug] "pattern '{stx}' elaborated into '{pat.expr}'"
       return { pattern := pat, argMap }
 where
   fvarsToMVars (fvars : Array Expr) (e : Expr) :
