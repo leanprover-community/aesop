@@ -19,32 +19,29 @@ def applyTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
 def applyIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
   opts.indexTransparency?.getD .reducible
 
+def applyIndexingMode (opts : RuleBuilderOptions) (type : Expr) :
+    MetaM IndexingMode :=
+  opts.getIndexingModeM do
+    if opts.applyIndexTransparency != .reducible then
+      return .unindexed
+    else
+      IndexingMode.targetMatchingConclusion type
+
 end RuleBuilderOptions
 
-def RuleBuilder.apply : RuleBuilder := λ input =>
+
+def RuleBuilder.apply : RuleBuilder := λ input => do
   let opts := input.options
-  match input.kind with
-  | RuleBuilderKind.global decl => do
-    let tac := .applyConst decl opts.applyTransparency opts.pattern?
-    let type := (← getConstInfo decl).type
-    RuleBuilderOutput.global <$> mkResult opts tac type
-  | RuleBuilderKind.local fvarUserName goal =>
-    goal.withContext do
-      let tac := .applyFVar fvarUserName opts.applyTransparency opts.pattern?
-      let type ← instantiateMVars (← getLocalDeclFromUserName fvarUserName).type
-      let result ← mkResult opts tac type
-      return RuleBuilderOutput.local goal result
-  where
-    mkResult (opts : RuleBuilderOptions) (tac : RuleTacDescr) (type : Expr) :
-        MetaM RuleBuilderResult :=
-      return RuleBuilderResult.regular {
-        builder := BuilderName.apply
-        tac := tac
-        indexingMode := ← opts.getIndexingModeM do
-          if opts.applyIndexTransparency != .reducible then
-            return .unindexed
-          else
-            IndexingMode.targetMatchingConclusion type
-      }
+  let e ← elabRuleTermForApplyLike input.term
+  let type ← inferType e
+  let pat? ← opts.pattern?.mapM (RulePattern.elab · type)
+  let imode ← opts.applyIndexingMode type
+  if let some decl := e.constName? then
+    let tac := .applyConst decl opts.applyTransparency pat?
+    return .global $ .base $ input.toRule .apply decl .global tac imode pat?
+  else
+    let name ← getRuleName e
+    let tac := .applyTerm input.term opts.applyTransparency pat?
+    return .global $ .base $ input.toRule .apply name .local tac imode pat?
 
 end Aesop

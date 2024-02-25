@@ -268,10 +268,10 @@ induction explicitly. This is a deliberate design choice: techniques for
 automating induction exist, but they are complex, somewhat slow and not entirely
 reliable, so we prefer to do it manually.
 
-Many more examples can be found in the `tests` folder of this repository. In
-particular, the file `tests/run/List.lean` contains an Aesop-ified port of 200
-basic list lemmas from the Lean 3 version of mathlib. The file
-`tests/run/SeqCalcProver.lean` shows how Aesop can help with the formalisation
+Many more examples can be found in the `AesopTest` folder of this repository. In
+particular, the file `AesopTest/List.lean` contains an Aesop-ified port of 200
+basic list lemmas from the Lean 3 version of mathlib, and the file
+`AesopTest/SeqCalcProver.lean` shows how Aesop can help with the formalisation
 of a simple sequent calculus prover.
 
 ## Reference
@@ -395,15 +395,21 @@ proved its goal already or which can never prove its goal. More formally:
 
 ### Rule Builders
 
-A **rule builder** is a metaprogram that turns a declaration or hypothesis into
-an Aesop rule. Currently available builders are:
+A **rule builder** is a metaprogram that turns an expression into an Aesop rule.
+When you tag a declaration with the `@[aesop]` attribute, the builder is applied
+to the declared constant. When you use the `add` clause, as in `(add <phase>
+<builder> (<term>))`, the builder is applied to the given term, which may
+involve hypotheses from the goal. However, some builders only support global
+constants. If the `term` is a single identifier, e.g. the name of a hypothesis,
+the parentheses around it are optional.
 
-- **`apply`**: generates a rule which tries to apply the given declaration or
-  hypothesis `x` to the target. The rule acts like the tactic `apply x`.
-- **`forward`**: when applied to a declaration or hypothesis of type `A₁ → ...
-  Aₙ → B`, generates a rule which looks for hypotheses `h₁ : A₁`, ..., `hₙ : Aₙ`
-  in the goal and, if they are found, adds a new hypothesis `h : B`. As an
-  example, consider the lemma `even_or_odd`:
+Currently available builders are:
+
+- **`apply`**: generates a rule which acts like the `apply` tactic.
+- **`forward`**: when applied to a term of type `A₁ → ... Aₙ → B`, generates a
+  rule which looks for hypotheses `h₁ : A₁`, ..., `hₙ : Aₙ` in the goal and, if
+  they are found, adds a new hypothesis `h : B`. As an example, consider the
+  lemma `even_or_odd`:
 
   ```lean
   even_or_odd : ∀ (n : Nat), Even n ∨ Odd n
@@ -475,7 +481,7 @@ an Aesop rule. Currently available builders are:
 
   However, if the hypothesis or hypotheses to which the `destruct` rule is
   applied have dependencies, they are not cleared. In this case, you'll probably
-  get an infinite cycle. (TODO fix this.)
+  get an infinite cycle.
 - **`constructors`**: when applied to an inductive type or structure `T`,
   generates a rule which tries to apply each constructor of `T` to the target.
   This is a multi-rule, so if multiple constructors apply, they are considered
@@ -507,23 +513,30 @@ an Aesop rule. Currently available builders are:
   that `simp` rules perform smart unfolding (like the `simp` tactic) and
   `unfold` rules perform non-smart unfolding (like the `unfold` tactic).
   Non-smart unfolding unfolds functions even when none of their equations
-  match, so `unfold` rules for recursive functions generally lead to looping.
-- **`tactic`**: takes a tactic and directly turns it into a rule. The given
-  declaration (the builder does not work for hypotheses) must have type `TacticM
-  Unit`, `Aesop.SingleRuleTac` or `Aesop.RuleTac`. The latter are Aesop data
-  types which associate a tactic with additional metadata; using them may allow
-  the rule to operate somewhat more efficiently.
+  match, so `unfold` rules would lead to looping and are forbidden.
+- **`tactic`**: takes a tactic and directly turns it into a rule. When this
+  builder is used in an `add` clause, you can use e.g. `(add safe (by
+  norm_num))` to register `norm_num` as a safe rule. The `by` block can also
+  contain multiple tactics as well as references to the hypotheses. When you
+  use `(by ...)` in an `add` clause, Aesop automatically uses the tactic
+  builder, unless you specify a different builder.
+
+  When this builder is used in the `@[aesop]` attribute, the declaration tagged
+  with the attribute must have type `TacticM Unit`, `Aesop.SingleRuleTac` or
+  `Aesop.RuleTac`. The latter are Aesop data types which associate a tactic with
+  additional metadata; using them may allow the rule to operate somewhat more
+  efficiently.
 
   Rule tactics should not be 'no-ops': if a rule tactic is not applicable to a
   goal, it should fail rather than return the goal unchanged. All no-op rules
-  waste time and no-op `norm` rules will send normalisation into an infinite
-  loop.
+  waste time; no-op `norm` rules will send normalisation into an infinite loop;
+  and no-op `safe` rules will prevent unsafe rules from being applied.
 
   Normalisation rules may not assign metavariables (other than the goal
   metavariable) or introduce new metavariables (other than the new goal
   metavariable). This can be a problem because some Lean tactics, e.g. `cases`,
-  do so even in cases where you probably would not expect them to. I'm afraid
-  there is currently no good solution for this.
+  do so even in situations where you probably would not expect them to. I'm
+  afraid there is currently no good solution for this.
 - **`default`**: The default builder. This is the builder used when you
   register a rule without specifying a builder, but you can also use it
   explicitly. Depending on the rule's phase, the default builder tries
@@ -572,16 +585,17 @@ Rules can appear in multiple rule sets, but in this case you should make sure
 that they have the same priority and use the same builder options. Otherwise,
 Aesop will consider these rules the same and arbitrarily pick one.
 
-Out of the box, Aesop uses the default rule sets `builtin`, `default` and
-`local`. The `builtin` set contains built-in rules for handling various
-constructions (see below). The `default` set contains rules which were added by
-Aesop users without specifying a rule set. The `local` set contains rules from
-`(add ...)` clauses.
+Out of the box, Aesop uses the default rule sets `builtin` and `default`. The
+`builtin` set contains built-in rules for handling various constructions (see
+below). The `default` set contains rules which were added by Aesop users without
+specifying a rule set.
 
 ### The `@[aesop]` Attribute
 
 Declarations can be added to rule sets by annotating them with the `@[aesop]`
-attribute.
+attribute. As with other attributes, you can use `@[local aesop]` to add a rule
+only within the current section or namespace and `@[scoped aesop]` to add a rule
+only when the current namespace is open.
 
 #### Single Rule
 
@@ -620,12 +634,12 @@ where
 - `<rule_sets>` is a clause of the form
 
   ```text
-  (rule_sets [r₁, ..., rₙ])
+  (rule_sets := [r₁, ..., rₙ])
   ```
 
   where the `rᵢ` are declared rule sets. (Parentheses are mandatory.) The rule
   is added exactly to the specified rule sets. If this clause is omitted, it
-  defaults to `(rule_sets [default])`.
+  defaults to `(rule_sets := [default])`.
 
 #### Multiple Rules
 
@@ -637,7 +651,7 @@ you can write for example
 @[aesop unsafe [constructors 75%, cases 90%]]
 inductive T ...
 
-@[aesop apply [safe (rule_sets [A]), 70% (rule_sets [B])]]
+@[aesop apply [safe (rule_sets := [A]), 70% (rule_sets := [B])]]
 def foo ...
 
 @[aesop [80% apply, safe 5 forward (immediate := x)]]
@@ -676,9 +690,19 @@ specifies one rule. (A branch is a list of features.)
 You can use the `attribute` command to add rules for constants which were
 declared previously, either in your own development or in a package you import:
 
-```
+```lean
 attribute [aesop norm unfold] List.all -- List.all is from Init
 ```
+
+You can also use the `add_aesop_rules` command:
+
+``` lean
+add_aesop_rules safe [(by linarith), Nat.add_comm 0]
+```
+
+As you can see, this command can be used to add tactics and composite terms as
+well. Use `local add_aesop_rules` and `scoped add_aesop_rules` to obtain the
+equivalent of `@[local aesop]` and `@[scoped aesop]`.
 
 ### Erasing Rules
 
@@ -699,7 +723,7 @@ If you want to remove only certain rules, you can use the `erase_aesop_rules`
 command:
 
 ``` lean
-erase_aesop_rules [safe apply foo, bar (rule_sets [A])]
+erase_aesop_rules [safe apply foo, bar (rule_sets := [A])]
 ```
 
 This will remove:
@@ -747,7 +771,7 @@ involved Aesop call might look like this:
 aesop
   (add safe foo, 10% cases Or, safe cases Empty)
   (erase A, baz)
-  (rule_sets [A, B])
+  (rule_sets := [A, B])
   (config := { maxRuleApplicationDepth := 10 })
 ```
 
@@ -802,12 +826,12 @@ sets which are declared as default rule sets. A `rule_sets` clause can be given
 to include additional rule sets, e.g.
 
 ``` text
-(rule_sets [A, B])
+(rule_sets := [A, B])
 ```
 
 This will use rule sets `A`, `B`, `default` and `builtin` (and any rule sets
 declared as default rule sets). Rule sets can also be disabled with
-`rule_sets [-default, -builtin]`.
+`rule_sets := [-default, -builtin]`.
 
 #### Setting Options
 

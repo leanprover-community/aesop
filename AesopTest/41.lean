@@ -10,4 +10,4 @@ error: no such rule set: 'Nonexistent'
 -/
 #guard_msgs in
 example : True := by
-  aesop (rule_sets [Nonexistent])
+  aesop (rule_sets := [Nonexistent])

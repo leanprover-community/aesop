@@ -55,7 +55,7 @@ error: tactic 'aesop' failed, made no progress
 -/
 #guard_msgs in
 example : T₂ := by
-  aesop (rule_sets [-builtin])
+  aesop (rule_sets := [-builtin])
 
 example : T₂ := by
   aesop

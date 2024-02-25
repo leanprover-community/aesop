@@ -128,13 +128,12 @@ inductive CasesTarget
 
 inductive RuleTacDescr
   | applyConst (decl : Name) (md : TransparencyMode) (pat? : Option RulePattern)
-  | applyFVar  (userName : Name) (md : TransparencyMode)
-      (pat? : Option RulePattern)
+  | applyTerm (term : Term) (md : TransparencyMode) (pat? : Option RulePattern)
   | constructors (constructorNames : Array Name) (md : TransparencyMode)
-  | forwardConst (decl     : Name) (pat? : Option RulePattern)
+  | forwardConst (decl : Name) (pat? : Option RulePattern)
       (immediate : UnorderedArraySet Nat) (isDestruct : Bool)
       (md : TransparencyMode)
-  | forwardFVar  (userName : Name) (pat? : Option RulePattern)
+  | forwardTerm (term : Term) (pat? : Option RulePattern)
       (immediate : UnorderedArraySet Nat) (isDestruct : Bool)
       (md : TransparencyMode)
   | cases (target : CasesTarget) (md : TransparencyMode)
@@ -143,24 +142,8 @@ inductive RuleTacDescr
   | ruleTac (decl : Name)
   | tacGen (decl : Name)
   | singleRuleTac (decl : Name)
+  | tacticStx (stx : Syntax)
   | preprocess
   deriving Inhabited
-
-namespace RuleTacDescr
-
-def isGlobal : RuleTacDescr → Bool
-  | applyConst .. => true
-  | applyFVar .. => false
-  | constructors .. => true
-  | forwardConst .. => true
-  | forwardFVar .. => false
-  | cases .. => true
-  | tacticM .. => true
-  | ruleTac .. => true
-  | tacGen .. => true
-  | singleRuleTac .. => true
-  | preprocess => true
-
-end RuleTacDescr
 
 end Aesop

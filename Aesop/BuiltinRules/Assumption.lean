@@ -11,7 +11,7 @@ open Lean.Meta
 
 namespace Aesop.BuiltinRules
 
-@[aesop safe -50 (rule_sets [builtin])]
+@[aesop safe -50 (rule_sets := [builtin])]
 def assumption : RuleTac := λ input => do
   let goal := input.goal
   let generateScript := input.options.generateScript

@@ -12,29 +12,33 @@ open Lean.Elab.Tactic (TacticM)
 
 namespace Aesop
 
-def RuleBuilder.tactic : RuleBuilder :=
-  ofGlobalRuleBuilder builderName λ _ decl opts => do
-    let type := (← getConstInfo decl).type
-    if ← isDefEq (mkApp (mkConst ``TacticM) (mkConst ``Unit)) type then
-      mkResult opts $ .tacticM decl
-    else if ← isDefEq (mkConst ``SingleRuleTac) type then
-      mkResult opts $ .singleRuleTac decl
-    else if ← isDefEq (mkConst ``RuleTac) type then
-      mkResult opts $ .ruleTac decl
-    else if ← isDefEq (mkConst ``TacGen) type then
-      mkResult opts $ .tacGen decl
-    else
-      throwError "aesop: {decl} was expected to be a tactic, i.e. to have one of these types:\n  TacticM Unit\n  SimpleRuleTac\n  RuleTac\n  TacGen\nHowever, it has type{indentExpr type}"
-  where
-    builderName : BuilderName :=
-      .tactic
+def matchByTactic : Term → Option (TSyntax ``Parser.Tactic.tacticSeq)
+  | `(by $ts:tacticSeq) => some ts
+  | _ => none
 
-    mkResult (opts : RuleBuilderOptions) (tac : RuleTacDescr) :
-        MetaM RuleBuilderResult :=
-      return .regular {
-        builder := builderName
-        indexingMode := ← opts.getIndexingModeM $ pure IndexingMode.unindexed
-        tac
-      }
+def RuleBuilder.tactic : RuleBuilder := λ input => do
+  let opts := input.options
+  let imode ← opts.getIndexingModeM $ pure IndexingMode.unindexed
+  if input.term.raw.isIdent then
+    let decl ← elabGlobalRuleIdent .tactic input.term
+    let type := (← getConstInfo decl).type
+    let tac ←
+      if ← isDefEq (mkApp (mkConst ``TacticM) (mkConst ``Unit)) type then
+        pure $ .tacticM decl
+      else if ← isDefEq (mkConst ``SingleRuleTac) type then
+        pure $ .singleRuleTac decl
+      else if ← isDefEq (mkConst ``RuleTac) type then
+        pure $ .ruleTac decl
+      else if ← isDefEq (mkConst ``TacGen) type then
+        pure $ .tacGen decl
+      else
+        throwError "aesop: tactic builder: expected {decl} to be a tactic, i.e. to have one of these types:\n  TacticM Unit\n  SimpleRuleTac\n  RuleTac\n  TacGen\nHowever, it has type{indentExpr type}"
+    return .global $ .base $ input.toRule .tactic decl .global tac imode none
+  else if let some stx := matchByTactic input.term then
+    let name ← mkFreshId
+    let tac := .tacticStx stx
+    return .global $ .base $ input.toRule .tactic name .global tac imode none
+  else
+    throwError "aesop: tactic builder: expected '{input.term}' to be a tactic"
 
 end Aesop

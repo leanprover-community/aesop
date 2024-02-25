@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleTac.Basic
+import Aesop.RuleTac.ElabRuleTerm
 import Std.Lean.Meta.UnusedNames
 import Std.Lean.Meta.AssertHypotheses
 
@@ -182,11 +183,11 @@ def forwardConst (decl : Name) (pat? : Option RulePattern)
     RuleTac := λ input => do
   forwardExpr (← mkConstWithFreshMVarLevels decl) pat? immediate clear md input
 
-def forwardFVar (userName : Name) (pat? : Option RulePattern)
+def forwardTerm (stx : Term) (pat? : Option RulePattern)
     (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
     RuleTac := λ input =>
   input.goal.withContext do
-    let ldecl ← getLocalDeclFromUserName userName
-    forwardExpr (mkFVar ldecl.fvarId) pat? immediate (clear := clear) md input
+    let e ← elabRuleTermForApplyLikeMetaM input.goal stx
+    forwardExpr e pat? immediate (clear := clear) md input
 
 end Aesop.RuleTac

@@ -59,23 +59,19 @@ def casesTarget (decl : Name) (opts : RuleBuilderOptions) : CasesTarget :=
 end RuleBuilderOptions
 
 
-def RuleBuilder.cases : RuleBuilder :=
-  RuleBuilder.ofGlobalRuleBuilder BuilderName.cases λ phase decl opts => do
-    if let .norm := phase then throwError
+def RuleBuilder.cases : RuleBuilder := λ input => do
+    if input.phase == .norm then throwError
       "cases builder cannot currently be used for norm rules."
       -- TODO `Meta.cases` may assign and introduce metavariables.
       -- (Specifically, it can *replace* existing metavariables, which Aesop
       -- counts as an assignment and an introduction.)
-    let inductInfo ← RuleBuilder.checkConstIsInductive name decl
+    let inductiveInfo ← elabInductiveRuleIdent .cases input.term
+    let decl := inductiveInfo.name
+    let opts := input.options
     opts.casesPatterns.forM (·.check decl)
-    let indexingMode ← opts.casesIndexingMode decl
+    let imode ← opts.casesIndexingMode decl
     let target := opts.casesTarget decl
-    return RuleBuilderResult.regular {
-      builder := name
-      tac := .cases target opts.casesTransparency inductInfo.isRec
-      indexingMode
-    }
-  where
-    name := BuilderName.cases
+    let tac := .cases target opts.casesTransparency inductiveInfo.isRec
+    return .global $ .base $ input.toRule .cases decl .global tac imode none
 
 end Aesop

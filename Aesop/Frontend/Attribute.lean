@@ -33,11 +33,11 @@ def «elab» (stx : Syntax) : TermElabM AttrConfig :=
   withRef stx do
     match stx with
     | `(attr| aesop $e:Aesop.rule_expr) => do
-      let r ← RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
+      let r ← RuleExpr.elab e |>.run $ ← ElabM.Context.forAdditionalGlobalRules
       return { rules := #[r] }
     | `(attr| aesop [ $es:Aesop.rule_expr,* ]) => do
-      let rs ← (es : Array Syntax).mapM λ e =>
-        RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
+      let ctx ← ElabM.Context.forAdditionalGlobalRules
+      let rs ← (es : Array Syntax).mapM λ e => RuleExpr.elab e |>.run ctx
       return { rules := rs }
     | _ => throwUnsupportedSyntax
 
@@ -49,15 +49,16 @@ initialize registerBuiltinAttribute {
   descr := "Register a declaration as an Aesop rule."
   applicationTime := .afterCompilation
   add := λ decl stx attrKind => withRef stx do
-    let config ← runTermElabMAsCoreM $ AttrConfig.elab stx
-    let rules ← runTermElabMAsCoreM $
+    let rules ← runTermElabMAsCoreM do
+      let config ← AttrConfig.elab stx
       config.rules.concatMapM (·.buildAdditionalGlobalRules decl)
     for (rule, rsNames) in rules do
       for rsName in rsNames do
         addGlobalRule rsName rule attrKind (checkNotExists := true)
   erase := λ decl =>
-    eraseGlobalRules RuleSetNameFilter.all
-      (RuleNameFilter.ofIdent $ .const decl) (checkExists := true)
+    let ruleFilter :=
+      { name := decl, scope := .global, builders := #[], phases := #[] }
+    eraseGlobalRules RuleSetNameFilter.all ruleFilter (checkExists := true)
 }
 
 end Aesop.Frontend

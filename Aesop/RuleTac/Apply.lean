@@ -5,16 +5,17 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleTac.Basic
+import Aesop.RuleTac.ElabRuleTerm
 
 open Lean
 open Lean.Meta
+open Lean.PrettyPrinter (delab)
 
 namespace Aesop.RuleTac
 
-def applyExpr' (goal : MVarId) (e : Expr) (n : Name)
+def applyExpr' (goal : MVarId) (e : Expr) (eStx : Term)
     (pat? : Option RulePattern) (patInst : RulePatternInstantiation)
-    (md : TransparencyMode) (generateScript : Bool) :
-    MetaM RuleApplication :=
+    (md : TransparencyMode) (generateScript : Bool) : MetaM RuleApplication :=
   withTransparency md do
     let e ←
       if let some pat := pat? then
@@ -26,18 +27,18 @@ def applyExpr' (goal : MVarId) (e : Expr) (n : Name)
     let scriptBuilder? :=
       mkScriptBuilder? generateScript $
         .ofTactic goals.size do
-          withAllTransparencySyntax md (← `(tactic| apply $(mkIdent n)))
+          withAllTransparencySyntax md (← `(tactic| apply $eStx))
     return { goals, scriptBuilder?, successProbability? := none, postState }
 
-def applyExpr (goal : MVarId) (e : Expr) (n : Name) (pat? : Option RulePattern)
-    (patInsts : HashSet RulePatternInstantiation) (md : TransparencyMode)
-    (generateScript : Bool) : MetaM RuleTacOutput := do
+def applyExpr (goal : MVarId) (e : Expr) (eStx : Term)
+    (pat? : Option RulePattern) (patInsts : HashSet RulePatternInstantiation)
+    (md : TransparencyMode) (generateScript : Bool) : MetaM RuleTacOutput := do
   if pat?.isSome then
     let mut rapps := Array.mkEmpty patInsts.size
     let initialState ← saveState
     for patInst in patInsts do
       try
-        let rapp ← applyExpr' goal e n pat? patInst md generateScript
+        let rapp ← applyExpr' goal e eStx pat? patInst md generateScript
         rapps := rapps.push rapp
       catch _ =>
         continue
@@ -47,19 +48,19 @@ def applyExpr (goal : MVarId) (e : Expr) (n : Name) (pat? : Option RulePattern)
       throwError "failed to apply '{e}' with any of the matched instances of the rule pattern"
     return { applications := rapps }
   else
-    let rapp ← applyExpr' goal e n none ∅ md generateScript
+    let rapp ← applyExpr' goal e eStx none ∅ md generateScript
     return { applications := #[rapp] }
 
 def applyConst (decl : Name) (pat? : Option RulePattern)
     (md : TransparencyMode) : RuleTac := λ input => do
-  applyExpr input.goal (← mkConstWithFreshMVarLevels decl) decl pat?
+  applyExpr input.goal (← mkConstWithFreshMVarLevels decl) (mkIdent decl) pat?
     input.patternInstantiations md input.options.generateScript
 
-def applyFVar (userName : Name) (pat? : Option RulePattern)
-    (md : TransparencyMode) : RuleTac :=
+def applyTerm (stx : Term) (pat? : Option RulePattern) (md : TransparencyMode) :
+    RuleTac :=
   λ input => input.goal.withContext do
-    applyExpr input.goal (← getLocalDeclFromUserName userName).toExpr
-      userName pat? input.patternInstantiations md input.options.generateScript
+    applyExpr input.goal (← elabRuleTermForApplyLikeMetaM input.goal stx) stx
+      pat? input.patternInstantiations md input.options.generateScript
 
 -- Tries to apply each constant in `decls`. For each one that applies, a rule
 -- application is returned. If none applies, the tactic fails.
@@ -70,7 +71,7 @@ def applyConsts (decls : Array Name) (md : TransparencyMode) :
   let apps ← decls.filterMapM λ decl => do
     try
       let e ← mkConstWithFreshMVarLevels decl
-      some <$> applyExpr' input.goal e decl none ∅ md generateScript
+      some <$> applyExpr' input.goal e (mkIdent decl) none ∅ md generateScript
     catch _ =>
       return none
     finally

@@ -43,8 +43,8 @@ axiom triangle (a b : Int) : |a + b| ≤ |a| + |b|
 
 example : |a + b| ≤ |c + d| := by
   aesop!
-  guard_hyp fwd_1 : |c + d| ≤ |c| + |d|
   guard_hyp fwd   : |a + b| ≤ |a| + |b|
+  guard_hyp fwd_1 : |c + d| ≤ |c| + |d|
   falso
 
 @[aesop safe apply (pattern := (0 : Nat))]
@@ -59,7 +59,7 @@ example : False := by
   aesop
 
 example (h : n = 0) : False := by
-  aesop (rule_sets [-builtin])
+  aesop (rule_sets := [-builtin])
 
 -- Patterns may only contain variables mentioned in the rule.
 
