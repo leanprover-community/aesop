@@ -10,7 +10,6 @@ import Aesop.Util.EqualUpToIds
 import Std.Lean.Meta.Clear
 import Std.Lean.Meta.Inaccessible
 import Std.Lean.HashSet
-import Std.Tactic.Ext
 import Std.Tactic.PermuteGoals
 import Std.Tactic.SeqFocus
 

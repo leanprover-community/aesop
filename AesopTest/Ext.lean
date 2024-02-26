@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
-import Std.Tactic.Ext
 
 example (f g : α → β) (h : ∀ a, f a = g a) : f = g := by
   aesop

@@ -3,7 +3,6 @@ Copyright (c) 2023 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-import Std.Data.Option.Basic
 import Aesop.RuleTac
 import Aesop.RuleTac.ElabRuleTerm
 import Aesop.Search.Expansion.Basic
@@ -384,7 +383,8 @@ partial def normalizeGoalMVar (goal : MVarId)
     NormStep.simp mvarsHashSet,
     NormStep.runPostSimpRules mvars
   ]
-  runNormSteps goal normSteps (by simp (config := { decide := true }))
+  runNormSteps goal normSteps
+    (by simp (config := { decide := true }) [normSteps])
 
 -- Returns true if the goal was solved by normalisation.
 def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
