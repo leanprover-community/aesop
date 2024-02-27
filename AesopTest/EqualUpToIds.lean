@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Util.EqualUpToIds
-import Std.Tactic.GuardMsgs
 
 -- Some simple test cases for the EqualUpToIds module. The module is mostly
 -- tested by using it in script validation, which is run on almost all Aesop
