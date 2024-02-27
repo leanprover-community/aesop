@@ -27,7 +27,7 @@ example : Even 10 := by
 
 /--
 error: aesop: error in norm simp: tactic 'simp' failed, nested error:
-(deterministic) timeout at 'whnf', maximum number of heartbeats (1) has been reached (use 'set_option maxHeartbeats <num>' to set the limit)
+(deterministic) timeout at 'simp', maximum number of heartbeats (1) has been reached (use 'set_option maxHeartbeats <num>' to set the limit)
 -/
 #guard_msgs in
 example (n m k : Nat) : n + m + k = (n + m) + k := by
