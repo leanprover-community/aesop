@@ -11,8 +11,8 @@ set_option aesop.check.all true
 
 namespace Aesop
 
-@[aesop 50% (rule_sets [test_persistence2])]
+@[aesop 50% (rule_sets := [test_persistence2])]
 def test (b : Bool) : NatOrBool := by
-  aesop (rule_sets [test_persistence1])
+  aesop (rule_sets := [test_persistence1])
 
 end Aesop

@@ -55,9 +55,9 @@ initialize extraction : TraceOption ←
   registerTraceOption `extraction
     "(aesop) Print a trace of the proof extraction procedure."
 
-initialize profile : TraceOption ←
-  registerTraceOption `profile
-    "(aesop) If the search is successful, print a summary of where Aesop spent its time. Enable the `profiler` and `trace.aesop` options for finer-grained information."
+initialize stats : TraceOption ←
+  registerTraceOption `stats
+    "(aesop) If the search is successful, print some statistics."
 
 initialize debug : TraceOption ←
   registerTraceOption `debug

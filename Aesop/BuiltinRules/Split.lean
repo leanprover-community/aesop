@@ -11,7 +11,7 @@ open Lean.Meta
 
 namespace Aesop.BuiltinRules
 
-@[aesop (rule_sets [builtin]) safe 100]
+@[aesop (rule_sets := [builtin]) safe 100]
 def splitTarget : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let (some goals) ← splitTarget? input.goal | throwError
     "nothing to split in target"
@@ -37,7 +37,7 @@ elab "aesop_split_hyps" : tactic =>
     | none => throwError "no splittable hypothesis found"
     | some goals => return goals.toList
 
-@[aesop (rule_sets [builtin]) safe 1000]
+@[aesop (rule_sets := [builtin]) safe 1000]
 def splitHypotheses : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let (some goals) ← splitHypothesesCore input.goal | throwError
     "no splittable hypothesis found"

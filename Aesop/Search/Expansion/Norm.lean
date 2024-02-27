@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 import Std.Data.Option.Basic
 import Aesop.RuleTac
+import Aesop.RuleTac.ElabRuleTerm
 import Aesop.Search.Expansion.Basic
 import Aesop.Search.Expansion.Simp
 import Aesop.Search.RuleSelection
@@ -21,6 +22,7 @@ structure Context where
   options : Options'
   ruleSet : LocalRuleSet
   normSimpContext : NormSimpContext
+  statsRef : StatsRef
 
 end NormM
 
@@ -30,11 +32,11 @@ instance : MonadBacktrack Meta.SavedState NormM where
   saveState := Meta.saveState
   restoreState s := s.restore
 
-instance [Queue Q] : MonadLift NormM (SearchBaseM Q) where
-  monadLift x := do x.run { (← read) with }
+instance : MonadStats NormM where
+  readStatsRef := return (← read).statsRef
 
-instance [Queue Q] : MonadLift (ProfileT NormM) (SearchM Q) where
-  monadLift := ProfileT.liftBase
+instance [Queue Q] : MonadLift NormM (SearchM Q) where
+  monadLift x := do x.run { (← read) with }
 
 inductive NormRuleResult
   | succeeded (goal : MVarId)
@@ -119,29 +121,21 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) :
     err {α} (msg : MessageData) : MetaM α := throwError
       "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal input.goal}"
 
-def runNormRuleCore (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-    (rule : IndexMatchResult NormRule) : NormM NormRuleResult := do
-  let ruleInput := {
-    indexMatchLocations := rule.locations
-    patternInstantiations := rule.patternInstantiations
-    options := (← read).options
-    goal, mvars
-  }
-  withNormTraceNode (.ruleName rule.rule.name) do
-    runNormRuleTac rule.rule ruleInput
-
 def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-    (rule : IndexMatchResult NormRule) : ProfileT NormM NormRuleResult :=
-  profiling (runNormRuleCore goal mvars rule) λ result elapsed =>
-    recordRuleProfile {
-      elapsed,
-      successful := result.isSuccessful
-      rule := .ruleName rule.rule.name
+    (rule : IndexMatchResult NormRule) : NormM NormRuleResult := do
+  profilingRule (.ruleName rule.rule.name) (λ result => result.isSuccessful) do
+    let ruleInput := {
+      indexMatchLocations := rule.locations
+      patternInstantiations := rule.patternInstantiations
+      options := (← read).options
+      goal, mvars
     }
+    withNormTraceNode (.ruleName rule.rule.name) do
+      runNormRuleTac rule.rule ruleInput
 
 def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (rules : Array (IndexMatchResult NormRule)) :
-    ProfileT NormM NormRuleResult := do
+    NormM NormRuleResult := do
   for rule in rules do
     let result ← runNormRule goal mvars rule
     if result.isSuccessful then
@@ -192,23 +186,19 @@ def SimpResult.toNormRuleResult (ruleName : DisplayRuleName)
 def normSimpCore (goal : MVarId)
     (goalMVars : HashSet MVarId) : NormM NormRuleResult := do
   let ctx := (← read).normSimpContext
-  let simprocs := ctx.simprocs
   goal.withContext do
     let preState ← saveState
+    let localRules := (← read).ruleSet.localNormSimpRules
     let result ←
       if ctx.useHyps then
-        Aesop.simpAll goal ctx.toContext simprocs
+        let (ctx, simprocs) ←
+          addLocalRules localRules ctx.toContext ctx.simprocs
+            (isSimpAll := true)
+        Aesop.simpAll goal ctx simprocs
       else
-        let lctx ← getLCtx
-        let mut simpTheorems := ctx.simpTheorems
-        for localRule in (← read).ruleSet.localNormSimpRules do
-          let (some ldecl) := lctx.findFromUserName? localRule.fvarUserName
-            | continue
-          let (some simpTheorems') ← observing? $
-            simpTheorems.addTheorem (.fvar ldecl.fvarId) ldecl.toExpr
-            | continue
-          simpTheorems := simpTheorems'
-        let ctx := { ctx with simpTheorems }
+        let (ctx, simprocs) ←
+          addLocalRules localRules ctx.toContext ctx.simprocs
+            (isSimpAll := false)
         Aesop.simpGoalWithAllHypotheses goal ctx simprocs
 
     -- It can happen that simp 'solves' the goal but leaves some mvars
@@ -223,14 +213,23 @@ def normSimpCore (goal : MVarId)
           pure $ .unchanged goal
         else
           pure result
-      | .simplified .. =>
-        pure result
       | .unchanged .. =>
         aesop_trace[steps] "norm simp left the goal unchanged"
+        pure result
+      | .simplified .. =>
         pure result
 
     let postState ← saveState
     result.toNormRuleResult .normSimp ⟨goal, goalMVars⟩ preState postState
+where
+  addLocalRules (localRules : Array LocalNormSimpRule) (ctx : Simp.Context)
+      (simprocs : Simp.SimprocsArray) (isSimpAll : Bool) :
+      NormM (Simp.Context × Simp.SimprocsArray) :=
+    localRules.foldlM (init := (ctx, simprocs)) λ (ctx, simprocs) r =>
+      try
+        elabRuleTermForSimpMetaM goal r.simpTheorem ctx simprocs isSimpAll
+      catch _ =>
+        return (ctx, simprocs)
 
 @[inline, always_inline]
 def checkSimp (name : String) (mayCloseGoal : Bool) (goal : MVarId)
@@ -255,21 +254,16 @@ def checkSimp (name : String) (mayCloseGoal : Bool) (goal : MVarId)
         throwError "{Check.rules.name}: {name} solved the goal"
     return result
 
-def checkedNormSimpCore (goal : MVarId) (goalMVars : HashSet MVarId) :
-    NormM NormRuleResult :=
-  checkSimp "norm simp" (mayCloseGoal := true) goal do
-    try
-      withNormTraceNode .normSimp do
-        withMaxHeartbeats (← read).options.maxSimpHeartbeats do
-          normSimpCore goal goalMVars
-    catch e =>
-      throwError "aesop: error in norm simp: {e.toMessageData}"
-
 def normSimp (goal : MVarId) (goalMVars : HashSet MVarId) :
-    ProfileT NormM NormRuleResult :=
-  profiling (checkedNormSimpCore goal goalMVars)
-    λ _ elapsed => recordRuleProfile
-      { rule := .normSimp, elapsed, successful := true }
+    NormM NormRuleResult := do
+  profilingRule .normSimp (wasSuccessful := λ _ => true) do
+    checkSimp "norm simp" (mayCloseGoal := true) goal do
+      try
+        withNormTraceNode .normSimp do
+          withMaxHeartbeats (← read).options.maxSimpHeartbeats do
+            normSimpCore goal goalMVars
+      catch e =>
+        throwError "aesop: error in norm simp: {e.toMessageData}"
 
 def normUnfoldCore (goal : MVarId) (goalMVars : HashSet MVarId) :
     NormM NormRuleResult := do
@@ -296,21 +290,16 @@ def normUnfoldCore (goal : MVarId) (goalMVars : HashSet MVarId) :
       | none => pure $ .error .normUnfold
     return .succeeded newGoal scriptStep?
 
-def checkedNormUnfoldCore (goal : MVarId) (goalMVars : HashSet MVarId) :
-    NormM NormRuleResult := do
-  checkSimp "unfold simp" (mayCloseGoal := false) goal do
-    try
-      withNormTraceNode .normUnfold do
-        withMaxHeartbeats (← read).options.maxUnfoldHeartbeats do
-          normUnfoldCore goal goalMVars
-    catch e =>
-      throwError "aesop: error in norm unfold: {e.toMessageData}"
-
 def normUnfold (goal : MVarId) (goalMVars : HashSet MVarId) :
-    ProfileT NormM NormRuleResult :=
-  profiling (checkedNormUnfoldCore goal goalMVars)
-    λ _ elapsed => recordRuleProfile
-      { rule := .normUnfold, elapsed, successful := true }
+    NormM NormRuleResult := do
+  profilingRule .normUnfold (wasSuccessful := λ _ => true) do
+    checkSimp "unfold simp" (mayCloseGoal := false) goal do
+      try
+        withNormTraceNode .normUnfold do
+          withMaxHeartbeats (← read).options.maxUnfoldHeartbeats do
+            normUnfoldCore goal goalMVars
+      catch e =>
+        throwError "aesop: error in norm unfold: {e.toMessageData}"
 
 inductive NormSeqResult where
   | proved (script? : Except DisplayRuleName UnstructuredScript)
@@ -320,10 +309,10 @@ inductive NormSeqResult where
 
 abbrev NormStep :=
   MVarId → Array (IndexMatchResult NormRule) →
-  Array (IndexMatchResult NormRule) → ProfileT NormM NormRuleResult
+  Array (IndexMatchResult NormRule) → NormM NormRuleResult
 
 def runNormSteps (goal : MVarId) (steps : Array NormStep)
-    (stepsNe : 0 < steps.size) : ProfileT NormM NormSeqResult := do
+    (stepsNe : 0 < steps.size) : NormM NormSeqResult := do
   let ctx ← readThe NormM.Context
   let maxIterations := ctx.options.maxNormIterations
   let mut iteration := 0
@@ -335,7 +324,7 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
   let mut anySuccess := false
   while iteration < maxIterations do
     if step.val == 0 then
-      let rules ← ProfileT.liftBase (selectNormRules ctx.ruleSet goal)
+      let rules ← selectNormRules ctx.ruleSet goal
       let (preSimpRules', postSimpRules') :=
         rules.partition λ r => r.rule.extra.penalty < (0 : Int)
       preSimpRules := preSimpRules'
@@ -387,7 +376,7 @@ def NormStep.simp (mvars : HashSet MVarId) : NormStep
     normSimp goal mvars
 
 partial def normalizeGoalMVar (goal : MVarId)
-    (mvars : UnorderedArraySet MVarId) : ProfileT NormM NormSeqResult := do
+    (mvars : UnorderedArraySet MVarId) : NormM NormSeqResult := do
   let mvarsHashSet := .ofArray mvars.toArray
   let mut normSteps := #[
     NormStep.runPreSimpRules mvars,

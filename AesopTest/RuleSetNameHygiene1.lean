@@ -10,10 +10,10 @@ import Std.Tactic.GuardMsgs
 set_option aesop.check.all true
 set_option aesop.smallErrorMessages true
 
-macro "aesop_test" : tactic => `(tactic| aesop (rule_sets [test]))
+macro "aesop_test" : tactic => `(tactic| aesop (rule_sets := [test]))
 
-@[aesop safe (rule_sets [test])]
-structure TT
+@[aesop safe (rule_sets := [test])]
+structure TT where
 
 /--
 error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.

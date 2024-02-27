@@ -21,7 +21,7 @@ syntax ruleSetSpec := "-"? ident
 
 syntax " (" &"add " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
 syntax " (" &"erase " Aesop.rule_expr,+,? ")" : Aesop.tactic_clause
-syntax " (" &"rule_sets " "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
+syntax " (" &"rule_sets" " := " "[" ruleSetSpec,+,? "]" ")" : Aesop.tactic_clause
 syntax " (" &"config" " := " term ")" : Aesop.tactic_clause
 syntax " (" &"simp_config" " := " term ")" : Aesop.tactic_clause
 
@@ -43,8 +43,8 @@ clauses are:
   an Aesop rule. Example: `(add unsafe 50% apply Or.inl)`.
 - `(erase <rule>)` disables a globally registered Aesop rule. Example: `(erase
   Aesop.BuiltinRules.assumption)`.
-- `(rule_sets [<ruleset>,*])` enables or disables named sets of rules for this
-  Aesop call. Example: `(rule_sets [-builtin, MyRuleSet])`.
+- `(rule_sets := [<ruleset>,*])` enables or disables named sets of rules for
+  this Aesop call. Example: `(rule_sets := [-builtin, MyRuleSet])`.
 - `(config { <opt> := <value> })` adjusts Aesop's search options. See
   `Aesop.Options`.
 - `(simp_config { <opt> := <value> })` adjusts options for Aesop's built-in
@@ -87,7 +87,7 @@ structure TacticConfig where
 
 namespace TacticConfig
 
-def parse (stx : Syntax) : TermElabM TacticConfig :=
+def parse (stx : Syntax) (goal : MVarId) : TermElabM TacticConfig :=
   withRef stx do
     match stx with
     | `(tactic| aesop $clauses:Aesop.tactic_clause*) =>
@@ -126,13 +126,13 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
         match stx with
         | `(tactic_clause| (add $es:Aesop.rule_expr,*)) => do
           let rs ← (es : Array Syntax).mapM λ e =>
-            RuleExpr.elab e |>.run ElabOptions.forAdditionalRules
+            RuleExpr.elab e |>.run $ .forAdditionalRules goal
           modify λ c => { c with additionalRules := c.additionalRules ++ rs }
         | `(tactic_clause| (erase $es:Aesop.rule_expr,*)) => do
           let rs ← (es : Array Syntax).mapM λ e =>
-            RuleExpr.elab e |>.run ElabOptions.forErasing
+            RuleExpr.elab e |>.run $ .forErasing goal
           modify λ c => { c with erasedRules := c.erasedRules ++ rs }
-        | `(tactic_clause| (rule_sets [ $specs:ruleSetSpec,* ])) => do
+        | `(tactic_clause| (rule_sets := [ $specs:ruleSetSpec,* ])) => do
           let mut enabledRuleSets := (← get).enabledRuleSets
           for spec in (specs : Array Syntax) do
             match spec with
@@ -157,31 +157,28 @@ def parse (stx : Syntax) : TermElabM TacticConfig :=
           modify λ c => { c with simpConfigSyntax? := some t }
         | _ => throwUnsupportedSyntax
 
-def updateRuleSet (goal : MVarId) (rs : LocalRuleSet) (c : TacticConfig) :
-    TermElabM (MVarId × LocalRuleSet) := do
+def updateRuleSet (rs : LocalRuleSet) (c : TacticConfig) (goal : MVarId):
+    TermElabM LocalRuleSet := do
   let mut rs := rs
-
-  -- Add additional rules
-  let mut goal := goal
   for ruleExpr in c.additionalRules do
-    let (goal', rules) ← ruleExpr.buildAdditionalLocalRules goal
-    goal := goal'
+    let rules ← ruleExpr.buildAdditionalLocalRules goal
     for rule in rules do
       rs := rs.add rule
 
   -- Erase erased rules
   for ruleExpr in c.erasedRules do
-    let filters ← ruleExpr.toLocalRuleNameFilters goal
+    let filters ← ruleExpr.toLocalRuleFilters |>.run $ .forErasing goal
     for rFilter in filters do
       let (rs', anyErased) := rs.erase rFilter
       rs := rs'
       if ! anyErased then
-        throwError "aesop: '{rFilter.ident}' is not registered (with the given features) in any rule set."
-  return (goal, rs)
+        throwError "aesop: '{rFilter.name}' is not registered (with the given features) in any rule set."
+  return rs
 
 def getRuleSet (goal : MVarId) (c : TacticConfig) :
-    TermElabM (MVarId × LocalRuleSet) := do
-  let rss ← getGlobalRuleSets c.enabledRuleSets.toArray
-  c.updateRuleSet goal (← mkLocalRuleSet rss (← c.options.toOptions'))
+    TermElabM LocalRuleSet :=
+  goal.withContext do
+    let rss ← getGlobalRuleSets c.enabledRuleSets.toArray
+    c.updateRuleSet (← mkLocalRuleSet rss (← c.options.toOptions')) goal
 
 end Aesop.Frontend.TacticConfig

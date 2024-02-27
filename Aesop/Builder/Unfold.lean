@@ -15,7 +15,7 @@ namespace Aesop.RuleBuilder
 def hasConst (c : Name) (e : Expr) : Bool :=
   e.foldConsts (init := false) λ c' acc => acc || c' == c
 
-def checkUnfoldableConst (decl : Name) : MetaM Unit :=
+def checkUnfoldableConst (decl : Name) : MetaM (Option Name) :=
   withoutModifyingState do
     let e ← mkConstWithFreshMVarLevels decl
     let t := (← getConstInfo decl).type
@@ -30,10 +30,12 @@ def checkUnfoldableConst (decl : Name) : MetaM Unit :=
       | .changed e' _ =>
         if hasConst decl e' then
           throwError "Recursive definition '{decl}' cannot be used as an unfold rule (it would be unfolded infinitely often). Try adding a simp rule for it."
+    return unfoldThm?
 
-def unfold : RuleBuilder :=
-  ofGlobalRuleBuilder .unfold λ _ decl _ => do
-    checkUnfoldableConst decl
-    return .unfold { decl, unfoldThm? := ← getUnfoldEqnFor? decl }
+-- TODO support local unfold rules
+def unfold : RuleBuilder := λ input => do
+  let decl ← elabGlobalRuleIdent .unfold input.term
+  let unfoldThm? ← checkUnfoldableConst decl
+  return .global $ .base $ .unfoldRule { decl, unfoldThm? }
 
 end Aesop.RuleBuilder

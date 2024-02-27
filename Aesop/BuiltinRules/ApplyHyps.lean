@@ -24,7 +24,7 @@ def applyHyp (hyp : FVarId) (goal : MVarId) (md : TransparencyMode)
       postState, goals, scriptBuilder?
     }
 
-@[aesop unsafe 75% tactic (rule_sets [builtin])]
+@[aesop unsafe 75% tactic (rule_sets := [builtin])]
 def applyHyps : RuleTac := λ input =>
   input.goal.withContext do
     let lctx ← getLCtx

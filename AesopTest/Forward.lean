@@ -17,11 +17,11 @@ open Aesop Lean Lean.Meta Lean.Elab.Tactic
 syntax (name := forward) "forward " ident (" [" ident* "]")? : tactic
 syntax (name := elim)    "elim "    ident (" [" ident* "]")? : tactic
 
-def forwardTac (goal : MVarId) (id : Syntax) (immediate : Option (Array Syntax))
+def forwardTac (goal : MVarId) (id : Ident) (immediate : Option (Array Syntax))
     (clear : Bool) (md : TransparencyMode) : MetaM (List MVarId) := do
   let userName := id.getId
   let ldecl ← getLocalDeclFromUserName userName
-  let immediate ← RuleBuilder.getImmediatePremises userName ldecl.type
+  let immediate ← RuleBuilder.getImmediatePremises id ldecl.type
     none md (immediate.map (·.map (·.getId)))
   let (goal, _) ←
     RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) none ∅ immediate clear
