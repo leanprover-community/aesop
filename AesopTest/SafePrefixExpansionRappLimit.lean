@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
-import Std.Tactic.GuardMsgs
 
 @[aesop safe]
 axiom loopy {α : Prop} : α ∨ α → α

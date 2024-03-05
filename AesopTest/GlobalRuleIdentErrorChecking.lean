@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
-import Std.Tactic.GuardMsgs
 
 /--
 error: duplicate rule 'Nat.add_assoc'; rule 'bar' was already given.
