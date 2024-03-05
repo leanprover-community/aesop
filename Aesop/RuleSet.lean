@@ -316,7 +316,7 @@ def LocalRuleSet.add (rs : LocalRuleSet) :
           r.entries.foldl (init := simpTheorems) SimpTheorems.addSimpEntry
         (name, simpTheorems)
     let simpTheoremsArrayNonempty : 0 < simpTheoremsArray.size := by
-      simp [Array.size_modify, rs.simpTheoremsArrayNonempty]
+      simp [simpTheoremsArray, Array.size_modify, rs.simpTheoremsArrayNonempty]
     { rs with simpTheoremsArray, simpTheoremsArrayNonempty }
   | .localNormSimpRule r =>
     { rs with localNormSimpRules := rs.localNormSimpRules.push r }

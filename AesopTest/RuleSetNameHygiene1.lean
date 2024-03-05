@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import AesopTest.RuleSetNameHygiene0
-import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
 set_option aesop.smallErrorMessages true

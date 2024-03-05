@@ -5,14 +5,13 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
-import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
 
 /--
 info: Try this:
-  simp_all only
+simp_all (config := { }) only
 -/
 #guard_msgs in
 example : True := by
-  aesop? (config := {})
+  aesop? (config := {}) (simp_config := {})

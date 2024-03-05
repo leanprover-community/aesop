@@ -1,5 +1,4 @@
 import Aesop
-import Std.Tactic.GuardMsgs
 
 set_option aesop.check.all true
 

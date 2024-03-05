@@ -5,12 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
-import Std.Tactic.GuardMsgs
 import Std.Linter.UnreachableTactic
 
 set_option aesop.check.all true
 set_option aesop.smallErrorMessages true
-set_option linter.unreachableTactic false
 
 example (n : Nat) : n + m = m + n := by
   aesop (add simp Nat.add_comm)
@@ -26,7 +24,6 @@ error: tactic 'aesop' failed, made no progress
 #guard_msgs in
 example (n : Nat) : n + m = m + n := by
   aesop (erase Nat.add_comm) (config := { warnOnNonterminal := false })
-  aesop
 
 /--
 error: tactic 'aesop' failed, made no progress
@@ -34,7 +31,6 @@ error: tactic 'aesop' failed, made no progress
 #guard_msgs in
 example (n : Nat) : n + m = m + n := by
   aesop (erase norm simp Nat.add_comm) (config := { warnOnNonterminal := false })
-  aesop
 
 /--
 error: aesop: 'Nat.add_comm' is not registered (with the given features) in any rule set.
@@ -42,4 +38,3 @@ error: aesop: 'Nat.add_comm' is not registered (with the given features) in any 
 #guard_msgs in
 example (n : Nat) : n + m = m + n := by
   aesop (erase apply Nat.add_comm)
-  aesop

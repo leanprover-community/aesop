@@ -7,11 +7,11 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Aesop.Nanos
 import Aesop.Util.UnionFind
 import Aesop.Util.UnorderedArraySet
+import Std.Data.String
 import Std.Lean.Expr
-import Std.Lean.Format
 import Std.Lean.Meta.DiscrTree
 import Std.Lean.PersistentHashSet
-import Std.Tactic.TryThis
+import Lean.Meta.Tactic.TryThis
 
 open Lean
 open Lean.Meta
@@ -293,39 +293,51 @@ def withAllTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
 
 end TransparencySyntax
 
--- Largely copy-pasta from Std.Tactic.TryThis.addSuggestion
--- I don't really know what's going on here; this is all cargo-culted. It seems
--- to work when `aesop?` appears on its own line, as in
---
--- ```lean
--- by
---   aesop?
--- ```
---
--- It doesn't work when `aesop?` is preceded by other text on the same line, as
--- in
---
--- ```lean
--- have x := by aesop?
--- ```
---
--- Also, the `Try this:` suggestion in the infoview is not properly formatted.
+/--
+Register a "Try this" suggestion for a tactic sequence.
+
+It works when the tactic to replace appears on its own line:
+
+```lean
+by
+  aesop?
+```
+
+It doesn't work (i.e., the suggestion will appear but in the wrong place) when
+the tactic to replace is preceded by other text on the same line:
+
+```lean
+have x := by aesop?
+```
+
+The `Try this:` suggestion in the infoview is not correctly formatted, but
+there's nothing we can do about this at the moment.
+-/
 def addTryThisTacticSeqSuggestion (ref : Syntax)
     (suggestion : TSyntax ``Lean.Parser.Tactic.tacticSeq)
     (origSpan? : Option Syntax := none) : MetaM Unit := do
   let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq suggestion
-  let msgText := fmt.prettyExtra (indent := 0) (column := 0)
+  let msgText := fmt.pretty (indent := 0) (column := 0)
   if let some range := (origSpan?.getD ref).getRange? then
     let map ← getFileMap
-    let start := findLineStart map.source range.start
-    let indent := (range.start - start).1
-    let text := fmt.prettyExtra (indent := indent - 2) (column := indent)
+    let (indent, column) := Lean.Meta.Tactic.TryThis.getIndentAndColumn map range
+    let text := fmt.pretty indent column
     let suggestion := {
-      suggestion := .string text
+      -- HACK: The `tacticSeq` syntax category is pretty-printed with each line
+      -- indented by two spaces (for some reason), so we remove this
+      -- indentation.
+      suggestion := .string $ dedent text
+      toCodeActionTitle? := some λ _ => "Replace aesop with the proof it found"
       messageData? := some msgText
+      preInfo? := "  "
     }
-    Std.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
-      (header := "Try this:\n  ")
+    Lean.Meta.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
+      (header := "Try this:\n")
+where
+  dedent (s : String) : String :=
+    s.splitOn "\n"
+    |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
+    |> String.intercalate "\n"
 
 /--
 Runs a computation for at most the given number of heartbeats times 1000,

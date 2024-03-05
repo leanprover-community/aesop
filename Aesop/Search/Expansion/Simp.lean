@@ -7,6 +7,7 @@ import Lean.Elab.Tactic.Simp
 import Aesop.Options
 import Aesop.Script
 import Aesop.RuleSet
+import Lean.Elab.Tactic.Simp
 
 open Lean Lean.Meta
 open Lean.Elab.Tactic (mkSimpOnly)

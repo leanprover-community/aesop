@@ -125,7 +125,7 @@ def exceptRuleResultToEmoji (toEmoji : α → String) : Except ε α → String
 section
 
 variable [Monad m] [MonadTrace m] [MonadLiftT BaseIO m] [MonadLiftT IO m]
-    [MonadRef m] [AddMessageContext m] [MonadOptions m] [MonadExcept ε m]
+    [MonadRef m] [AddMessageContext m] [MonadOptions m] [MonadAlwaysExcept ε m]
 
 @[inline, always_inline]
 def withAesopTraceNode (opt : TraceOption)
