@@ -15,4 +15,4 @@ lean_lib AesopTest {
   -- moreServerOptions := #[⟨`linter.unusedVariables, false⟩]
 }
 
-require std from git "https://github.com/leanprover/std4" @ "bump/nightly-2024-03-11"
+require std from git "https://github.com/leanprover/std4" @ "nightly-testing-2024-03-11"
