@@ -518,8 +518,10 @@ theorem eq_nil_of_subset_nil {l : List α} : l ⊆ [] → l = [] := by
   aesop (add 1% cases List)
 
 -- attribute [-simp] eq_nil_iff_forall_not_mem
-theorem X.eq_nil_iff_forall_not_mem {l : List α} : l = [] ↔ ∀ a, a ∉ l := by
-  aesop (add 1% cases List)
+theorem X.eq_nil_iff_forall_not_mem {l : List α} : l = [] ↔ ∀ a, a ∉ l :=
+  ADMIT
+  -- used to be by `aesop (add 1% cases List)` until simp changes around nightly
+  -- 2024-03-11
 
 -- attribute [-simp] map_subset
 theorem X.map_subset {l₁ l₂ : List α} (f : α → β) (H : l₁ ⊆ l₂) : map f l₁ ⊆ map f l₂ := by
