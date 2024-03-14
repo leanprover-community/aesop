@@ -227,28 +227,18 @@ Next, we prove another simple theorem about `NonEmpty`:
 
 ``` lean
 theorem nil_not_nonEmpty (xs : MyList α) : xs = nil → ¬ NonEmpty xs := by
-  aesop (add 10% cases MyList, norm simp Not)
+  aesop (add 10% cases MyList)
 ```
 
-Here we add two rules in an **`add`** clause. These rules are not part of a
-rule set but are added for this Aesop call only.
+Here we use an **`add`** clause to add a rule which is only used in this
+specific Aesop call. The rule is an unsafe `cases` rule for `MyList`. (As you
+can see, you can leave out the `unsafe` keyword and specify only a success
+probability.) This rule is dangerous: when we apply it to a hypothesis `xs :
+MyList α`, we get `x : α` and `ys : MyList α`, so we can apply the `cases` rule
+again to `ys`, and so on. We therefore give this rule a very low success
+probability, to make sure that Aesop applies other rules if possible.
 
-The first rule is an unsafe `cases` rule for `MyList`. (As you can see, you can
-leave out the `unsafe` keyword and specify only a success probability.) This
-rule is dangerous: when we apply it to a hypothesis `xs : MyList α`, we get `x :
-α` and `ys : MyList α`, so we can apply the `cases` rule again to `ys`, and so
-on. We therefore give this rule a very low success probability, to make sure
-that Aesop applies other rules if possible.
-
-We also add a **norm** or **normalisation** rule. As mentioned above, these
-rules are used to normalise the goal before any other rules are applied. As part
-of this normalisation process, we run a variant of `simp_all` with the global
-`simp` set plus Aesop-specific `simp` lemmas. The **`simp`** builder adds such
-an Aesop-specific `simp` lemma which unfolds the `Not` definition. (There is
-also a built-in rule which performs the same unfolding, so this rule is
-redundant.)
-
-Here are some other examples where normalisation comes in handy:
+Here are some examples where Aesop's normalisation phase is particularly useful:
 
 ``` lean
 @[simp]
