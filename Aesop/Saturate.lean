@@ -28,7 +28,7 @@ def getSingleGoal [Monad m] [MonadError m] (o : RuleTacOutput) :
     | throwError "rule produced more than one rule application"
   let #[goal] := app.goals
     | throwError "rule did not produce exactly one subgoal"
-  return (goal, app.postState, app.scriptSteps?)
+  return (goal.mvarId, app.postState, app.scriptSteps?)
 
 initialize
   registerTraceClass `saturate

@@ -44,7 +44,12 @@ def assumption : RuleTac := λ input => do
       let #[step] := steps
         | throwError "aesop: internal error in assumption: multiple steps"
       let proofHasMVar := (← fvarId.getType).hasMVar
-      let app := RuleApplication.ofLazyScriptStep step none
+      let app := {
+        goals := #[]
+        postState := step.postState
+        scriptSteps? := #[step]
+        successProbability? := none
+      }
       return some (app, proofHasMVar)
 
 end Aesop.BuiltinRules

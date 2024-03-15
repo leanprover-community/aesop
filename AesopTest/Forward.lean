@@ -26,7 +26,7 @@ def forwardTac (goal : MVarId) (id : Ident) (immediate : Option (Array Syntax))
   let (goal, _) ←
     RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) none ∅ immediate clear
       md (maxDepth? := none) |>.run
-  return [goal]
+  return [goal.mvarId]
 
 @[tactic forward]
 def evalForward : Tactic

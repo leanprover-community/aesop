@@ -84,7 +84,7 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) :
     restoreState rapp.postState
     if rapp.goals.isEmpty then
       return some $ .proved rapp.scriptSteps?
-    let (#[g]) := rapp.goals
+    let (#[{ mvarId := g, .. }]) := rapp.goals
       | err m!"rule produced more than one subgoal."
     let mvars := .ofArray input.mvars.toArray
     if ← Check.rules.isEnabled then

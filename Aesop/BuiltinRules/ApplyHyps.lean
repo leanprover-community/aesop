@@ -13,9 +13,14 @@ open Lean.Meta
 
 def applyHyp (hyp : FVarId) (goal : MVarId) (md : TransparencyMode) :
     MetaM RuleApplication := do
-  let (_, #[step]) ← applyS goal (.fvar hyp) none md |>.run
+  let (goals, #[step]) ← applyS goal (.fvar hyp) none md |>.run
     | throwError "aesop: internal error in applyHyps: multiple steps"
-  return .ofLazyScriptStep step none
+  return {
+    goals := goals.map ({ mvarId := ·, diff := ∅ })
+    postState := step.postState
+    scriptSteps? := #[step]
+    successProbability? := none
+  }
 
 @[aesop unsafe 75% tactic (rule_sets := [builtin])]
 def applyHyps : RuleTac := λ input =>

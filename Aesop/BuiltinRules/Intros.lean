@@ -20,6 +20,9 @@ def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
       | some md => introsUnfoldingS input.goal md |>.run
     if newFVarIds.size == 0 then
       throwError "nothing to introduce"
-    return (#[goal], steps, none)
+    let addedFVars := newFVarIds.foldl (init := ∅) λ set fvarId =>
+      set.insert fvarId
+    let diff := { addedFVars, removedFVars := ∅, fvarSubst := ∅ }
+    return (#[{ mvarId := goal, diff }], steps, none)
 
 end Aesop.BuiltinRules

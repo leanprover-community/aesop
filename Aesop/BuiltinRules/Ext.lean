@@ -22,6 +22,7 @@ def extCore (goal : MVarId) : ScriptM (Option (Array MVarId)) :=
 def ext : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let (some goals, steps) ← extCore input.goal |>.run
     | throwError "found no applicable ext lemma"
+  let goals ← goals.mapM (mvarIdToSubgoal (parentMVarId := input.goal) · ∅)
   return (goals, steps, none)
 
 end Aesop.BuiltinRules

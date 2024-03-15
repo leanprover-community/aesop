@@ -23,9 +23,15 @@ def applyExpr' (goal : MVarId) (e : Expr) (eStx : Term)
         pat.specializeRule patInst e
       else
         pure e
-    let (_, #[step]) ← applyS goal e eStx md |>.run
+    let (goals, #[step]) ← applyS goal e eStx md |>.run
       | throwError "aesop: internal error in applyExpr': multiple steps"
-    return .ofLazyScriptStep step none
+    let goals := goals.map λ mvarId => { mvarId, diff := ∅ }
+    return {
+      goals
+      postState := step.postState
+      scriptSteps? := #[step]
+      successProbability? := none
+    }
 
 def applyExpr (goal : MVarId) (e : Expr) (eStx : Term)
     (pat? : Option RulePattern) (patInsts : HashSet RulePatternInstantiation)

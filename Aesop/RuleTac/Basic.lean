@@ -7,6 +7,8 @@ Authors: Jannis Limperg
 import Aesop.Index.Basic
 import Aesop.Options
 import Aesop.Percent
+import Aesop.RuleTac.GoalDiff
+import Aesop.RuleTac.FVarIdSubst
 import Aesop.Script.CtorNames
 import Aesop.Script.Step
 import Batteries.Lean.Meta.SavedState
@@ -19,6 +21,8 @@ namespace Aesop
 
 
 /-! # Rule Tactic Types -/
+
+-- TODO put docs on the structure fields instead of the structures
 
 /--
 Input for a rule tactic. Contains:
@@ -45,6 +49,23 @@ structure RuleTacInput where
   options : Options'
   deriving Inhabited
 
+/-- A subgoal produced by a rule. -/
+structure Subgoal where
+  /-- The goal mvar. -/
+  mvarId : MVarId
+  /--
+  A diff between the goal the rule was run on and this goal. Many `MetaM`
+  tactics report information that allows you to easily construct a `GoalDiff`.
+  If you don't have access to such information, use `diffGoals`, but note that
+  it may not give optimal results.
+  -/
+  diff : GoalDiff
+  deriving Inhabited
+
+def mvarIdToSubgoal (parentMVarId mvarId : MVarId) (fvarSubst : FVarIdSubst) :
+    MetaM Subgoal :=
+  return { mvarId, diff := ← diffGoals parentMVarId mvarId fvarSubst }
+
 /--
 A single rule application, representing the application of a tactic to the input
 goal. Must accurately report the following information:
@@ -59,26 +80,22 @@ goal. Must accurately report the following information:
   `none`, we use the success probability of the applied rule.
 -/
 structure RuleApplication where
-  goals : Array MVarId
+  goals : Array Subgoal
   postState : Meta.SavedState
   scriptSteps? : Option (Array Script.LazyStep)
   successProbability? : Option Percent
 
 namespace RuleApplication
 
-def check (r : RuleApplication) : MetaM (Option MessageData) :=
+def check (r : RuleApplication) (input : RuleTacInput) :
+    MetaM (Option MessageData) :=
   r.postState.runMetaM' do
     for goal in r.goals do
-      if ← goal.isAssignedOrDelayedAssigned then
-        return some m!"subgoal metavariable {goal.name} is already assigned."
+      if ← goal.mvarId.isAssignedOrDelayedAssigned then
+        return some m!"subgoal metavariable ?{goal.mvarId.name} is already assigned."
+      if let some err ← goal.diff.check input.goal goal.mvarId then
+        return some err
     return none
-
-def ofLazyScriptStep (step : Script.LazyStep)
-    (successProbability? : Option Percent) : RuleApplication where
-  goals := step.postGoals
-  postState := step.postState
-  scriptSteps? := #[step]
-  successProbability? := successProbability?
 
 end RuleApplication
 
@@ -102,7 +119,7 @@ A `RuleTac` which generates only a single `RuleApplication`.
 -/
 def SingleRuleTac :=
   RuleTacInput →
-  MetaM (Array MVarId × Option (Array Script.LazyStep) × Option Percent)
+  MetaM (Array Subgoal × Option (Array Script.LazyStep) × Option Percent)
 
 @[inline]
 def SingleRuleTac.toRuleTac (t : SingleRuleTac) : RuleTac := λ input => do
@@ -125,6 +142,7 @@ def RuleTac.ofTacticSyntax (t : RuleTacInput → MetaM Syntax.Tactic) : RuleTac 
       tacticBuilders := #[return .unstructured stx]
       preState, postState, postGoals
     }
+    let postGoals ← postGoals.mapM (mvarIdToSubgoal input.goal · ∅)
     return (postGoals, some #[step], none)
 
 /--

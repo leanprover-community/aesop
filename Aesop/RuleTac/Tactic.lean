@@ -18,6 +18,7 @@ unsafe def tacticMImpl (decl : Name) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
     let tac ← evalConst (TacticM Unit) decl
     let goals ← run input.goal tac |>.run'
+    let goals ← goals.mapM (mvarIdToSubgoal (parentMVarId := input.goal) · ∅)
     return (goals.toArray, none, none)
 
 -- Precondition: `decl` has type `TacticM Unit`.
@@ -65,6 +66,8 @@ def tacticStx (stx : Syntax) : RuleTac :=
       tacticBuilders := #[tacticBuilder]
       preState, postState, postGoals
     }
+    let postGoals ←
+      postGoals.mapM (mvarIdToSubgoal (parentMVarId := input.goal) · ∅)
     return (postGoals, some #[step], none)
 
 -- Precondition: `decl` has type `TacGen`.
@@ -94,7 +97,14 @@ unsafe def tacGenImpl (decl : Name) : RuleTac := λ input => do
         tacticBuilders := #[return .unstructured ⟨stx⟩]
         postState, postGoals
       }
-      apps := apps.push $ .ofLazyScriptStep step successProbability
+      let postGoals ←
+        postGoals.mapM (mvarIdToSubgoal (parentMVarId := input.goal) · ∅)
+      apps := apps.push {
+        goals := postGoals
+        scriptSteps? := some #[step]
+        successProbability? := successProbability
+        postState
+      }
     catch e =>
       errors := errors.push (tacticStr, e)
   if apps.isEmpty then throwError

@@ -15,6 +15,7 @@ namespace Aesop.BuiltinRules
 def splitTarget : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let (some goals, steps) ← splitTargetS? input.goal |>.run | throwError
     "nothing to split in target"
+  let goals ← goals.mapM (mvarIdToSubgoal input.goal · ∅)
   return (goals, steps, none)
 
 partial def splitHypothesesCore (goal : MVarId) :
@@ -34,6 +35,7 @@ partial def splitHypothesesCore (goal : MVarId) :
 def splitHypotheses : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let (some goals, steps) ← splitHypothesesCore input.goal |>.run
     | throwError "no splittable hypothesis found"
+  let goals ← goals.mapM (mvarIdToSubgoal input.goal · ∅)
   return (goals, steps, none)
 
 end Aesop.BuiltinRules

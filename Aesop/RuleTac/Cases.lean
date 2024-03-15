@@ -36,7 +36,7 @@ namespace RuleTac
 partial def cases (target : CasesTarget) (md : TransparencyMode)
     (isRecursiveType : Bool) (ctorNames : Array CtorNames) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
-    match ← go #[] #[] input.goal |>.run with
+    match ← go #[] #[] ∅ input.goal |>.run with
     | (none, _) => throwError "No matching hypothesis found."
     | (some goals, steps) => return (goals, steps, none)
   where
@@ -58,8 +58,8 @@ partial def cases (target : CasesTarget) (md : TransparencyMode)
           else
             return none
 
-    go (newGoals : Array MVarId) (excluded : Array FVarId) (goal : MVarId) :
-        ScriptM (Option (Array MVarId)) := do
+    go (newGoals : Array Subgoal) (excluded : Array FVarId) (diff : GoalDiff)
+        (goal : MVarId) : ScriptM (Option (Array Subgoal)) := do
       let some hyp ← findFirstApplicableHyp excluded goal
         | return none
       let some goals ← tryCasesS goal hyp ctorNames
@@ -67,21 +67,16 @@ partial def cases (target : CasesTarget) (md : TransparencyMode)
       let mut newGoals := newGoals
       for h : i in [:goals.size] do
         let g := goals[i]
-        let excluded :=
-          if ! isRecursiveType then
-            excluded
-          else
-            let excluded := excluded.map λ fvarId =>
-              match g.subst.find? fvarId with
-              | some (.fvar fvarId' ..) => fvarId'
-              | _ => fvarId
-            let fields := g.fields.filterMap λ
-              | (.fvar fvarId' ..) => some fvarId'
-              | _ => none
-            excluded ++ fields
-        match ← go newGoals excluded g.mvarId with
+        let newDiff ← diffGoals goal g.mvarId
+          (.ofFVarSubstIgnoringNonFVarIds g.subst)
+        let mut excluded := excluded
+        if isRecursiveType then
+          excluded :=
+            excluded.map diff.fvarSubst.get ++ newDiff.addedFVars.toArray
+        let diff := diff.comp newDiff
+        match ← go newGoals excluded diff g.mvarId with
         | some newGoals' => newGoals := newGoals'
-        | none => newGoals := newGoals.push g.mvarId
+        | none => newGoals := newGoals.push { mvarId := g.mvarId, diff }
       return some newGoals
 
 end Aesop.RuleTac

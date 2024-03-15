@@ -136,6 +136,8 @@ private def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
   }
 
 private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
+  let originalSubgoals := r.goals.map (·.mvarId)
+
   let rref : RappRef ← IO.mkRef $ Rapp.mk {
     id := ← getAndIncrementNextRappId
     parent := r.parent
@@ -144,7 +146,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     isIrrelevant := false
     appliedRule := r.appliedRule
     scriptSteps? := r.scriptSteps?
-    originalSubgoals := r.goals
+    originalSubgoals
     successProbability := r.successProbability
     metaState := r.postState
     introducedMVars := {} -- will be filled in later
@@ -153,7 +155,6 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
 
   let parentGoal ← r.parent.get
   let goalDepth := parentGoal.depth + 1
-  let originalSubgoals := r.goals
 
   let (originalSubgoalMVars, assignedMVars, assignedOrDroppedMVars) ←
     r.postState.runMetaM' do
