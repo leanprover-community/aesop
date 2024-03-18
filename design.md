@@ -197,29 +197,7 @@ This map associates pairs `(t, i)`, where `t` is an expression and `i` is a slot
   In other words, `𝕄` contains exactly those partial matches which already contain assignments for all slots up to `i` and which instantiate `?x` with `t`.
 - `ℍ` is the set of all hypotheses `h` suitable for `i` with `sub(h)(?x) = t`, i.e. the set of hypotheses which match `Tᵢ` while instantiating `?x` with `t`.
 
-##### Basic Operations
-
-`AddHypothesis(h, i)` adds a hypothesis `h` suitable for slot `i` to the variable maps of the shared variables of `i`.
-
-```
-AddHypothesis(h, i):
-  For each shared variable ?x of i:
-    Let (𝕄, ℍ) := μₓ(t, i)
-    Update μₓ(t, i) := (𝕄, ℍ ∪ {h})
-```
-
-`AddMatch(M)` adds a partial match `M` to the variable maps of the shared variables of `M`.
-
-```
-AddMatch(M):
-  If M is complete:
-    Push (r, M) onto πₙ, πₛ or πᵤ according to the type of the rule r
-  Else:
-    For each shared variable ?x of M:
-      Let t := μₓ(sub(M)(?x))
-      Let (𝕄, ℍ) := μₓ(t, lvl(M))
-      Update μₓ(t, lvl(M)) := (𝕄 ∪ {M}, ℍ)
-```
+##### Queries
 
 `LookupMatches(h, i)`, where `h` is a hypothesis suitable for slot `i`, looks up those partial matches `M` with `lvl(M) = i - 1` for which `sub(M)` and `sub(h)` are compatible.
 
@@ -241,22 +219,57 @@ LookupHypotheses(M):
   Return ⋂ⱼ ℍⱼ
 ```
 
-Note: both `LookupMatches(h, i)` and `LookupHypotheses(M)` wrongly return the empty set if the set of shared variables of `i` or `lvl(M)` is empty.
+Note: both `LookupMatches(h, i)` and `LookupHypotheses(M)` incorrectly return the empty set if the set of shared variables of `i` or `lvl(M)` is empty.
 However, we can make sure that this doesn't happen by partitioning the input hypotheses into mvar clusters and using a separate rule state for each mvar cluster.
 
 ##### Insertion
 
-When the index indicates that a hypothesis `h : T` may match the input hypothesis `xᵢ : Tᵢ`, we first determine whether `h` is indeed suitable for `i`.
-If so, we run the following function.
+`AddHypothesisToMaps(h, i)` adds a hypothesis `h` suitable for slot `i` to the variable maps of the shared variables of `i`.
 
 ```
-Insert(h, i):
-  AddHypothesis(h, i)
+AddHypothesisToMaps(h, i):
+  For each shared variable ?x of i:
+    Let t := sub(h)(?x)
+    Let (𝕄, ℍ) := μₓ(t, i)
+    Update μₓ(t, i) := (𝕄, ℍ ∪ {h})
+```
+
+`AddMatchToMaps(M)` adds a match `M` to the variable maps of the shared variables of `M`.
+
+```
+AddMatchToMaps(M):
+  For each shared variable ?x of M:
+    Let t := sub(M)(?x)
+    Let (𝕄, ℍ) := μₓ(t, lvl(M))
+    Update μₓ(t, lvl(M)) := (𝕄 ∪ {M}, ℍ)
+```
+
+`AddMatch(M)` adds a match `M` to the rule state (using `AddMatchToMaps(M)`).
+Additionally, it constructs all matches `M'` such that `M ⊆ M'` and `lvl(M') > lvl(M)`.
+If during this process it discovers a complete match, it adds this match onto the complete match queues.
+
+```
+AddMatch(M):
+  If M is complete:
+    Push (r, M) onto πₙ, πₛ or πᵤ according to the type of the rule r
+  Else:
+    AddMatchToMaps(M)
+    For each hypothesis h in LookupHypotheses(M):
+      AddMatch(M ∪ {lvl(M) + 1 ↦ h})
+```
+
+`AddHypothesis(h, i)` adds a hypothesis `h` suitable for slot `i` to the rule state (using `AddHypothesisToMaps`).
+Additionally, it constructs all matches which can be constructed, using `h`, in slots `i`, `i + 1` etc.
+We run `AddHypothesis(h, i)` when the index indicates that a hypothesis `h : T` may match the input hypothesis `xᵢ : Tᵢ`, after we have determined that `h` is indeed suitable for `i`.
+
+```
+AddHypothesis(h, i):
+  AddHypothesisToMaps(h, i)
   If i = 1:
     AddMatch({i ↦ H})
   Else:
     For each match M in LookupMatches(h, i):
-      AddMatch(M ∪ {i ↦ H}).
+      AddMatch(M ∪ {i ↦ H})
 ```
 
 ##### Comparison with Substitution Trees
