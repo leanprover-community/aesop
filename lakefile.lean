@@ -10,7 +10,7 @@ package aesop {
 lean_lib Aesop
 
 lean_lib AesopTest {
-  globs := #[.submodules "AesopTest"]
+  globs := #[.submodules `AesopTest]
   leanOptions := #[⟨`linter.unusedVariables, false⟩]
   -- moreServerOptions := #[⟨`linter.unusedVariables, false⟩]
 }
