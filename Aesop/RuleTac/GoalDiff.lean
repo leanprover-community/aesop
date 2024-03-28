@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleTac.FVarIdSubst
+import Aesop.Util.Basic
 
 open Lean Lean.Meta
 
@@ -87,16 +88,6 @@ def diffGoals (old new : MVarId) (fvarSubst : FVarIdSubst) :
     removedFVars := getNewFVars newLCtx oldLCtx
     fvarSubst
   }
-
--- TODO upstream
-local instance [BEq α] [Hashable α] [Monad m] :
-    ForM m (Batteries.HashMap α β) (α × β) where
-  forM | m, f => m.forM λ a b => f (a, b)
-
--- TODO upstream
-local instance [BEq α] [Hashable α] [Monad m] :
-    ForIn m (Batteries.HashMap α β) (α × β) where
-  forIn := ForM.forIn
 
 namespace GoalDiff
 

@@ -4,14 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Batteries.Data.HashMap
+import Lean
 
 open Lean Lean.Meta
 
 namespace Aesop
 
 structure FVarIdSubst where
-  map : Batteries.HashMap FVarId FVarId
+  map : HashMap FVarId FVarId
   deriving Inhabited
 
 namespace FVarIdSubst
@@ -53,15 +53,16 @@ instance : EmptyCollection FVarIdSubst :=
   ⟨.empty⟩
 
 def insert (s : FVarIdSubst) (old new : FVarId) : FVarIdSubst :=
-  let map : Batteries.HashMap _ _ := s.map.mapVal λ _ v =>
-    if v == old then new else v
+  let map : HashMap _ _ := s.map.fold (init := ∅) λ map k v =>
+    map.insert k $ if v == old then new else v
   ⟨map.insert old new⟩
 
 def erase (s : FVarIdSubst) (fvarId : FVarId) : FVarIdSubst :=
   ⟨s.map.erase fvarId⟩
 
 def append (s t : FVarIdSubst) : FVarIdSubst :=
-  let map := s.map.mapVal λ _ v => t.get v
+  let map : HashMap _ _ := s.map.fold (init := ∅) λ map k v =>
+    map.insert k $ t.get v
   ⟨t.map.fold (init := map) λ s k v => s.insert k v⟩
 
 def ofFVarSubstIgnoringNonFVarIds (s : FVarSubst) : FVarIdSubst := .mk $

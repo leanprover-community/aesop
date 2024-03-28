@@ -11,7 +11,7 @@ import Batteries.Data.String
 import Batteries.Lean.Expr
 import Batteries.Lean.Meta.DiscrTree
 import Batteries.Lean.PersistentHashSet
-import Lean.Meta.Tactic.TryThis
+import Lean
 
 open Lean
 open Lean.Meta Lean.Elab.Tactic
@@ -63,6 +63,17 @@ def toArray [BEq α] [Hashable α] (s : PersistentHashSet α) :
   s.fold (init := #[]) λ as a => as.push a
 
 end PersistentHashSet
+
+-- TODO upstream; generalise to {m : Type u → Type v}.
+-- Need to generalise `HashMap.forM` first.
+scoped instance {m : Type u → Type u} [BEq α] [Hashable α] [Monad m] :
+    ForM m (HashMap α β) (α × β) where
+  forM | m, f => m.forM λ a b => f (a, b)
+
+-- TODO upstream; generalise to {m : Type u → Type v}.
+scoped instance {m : Type u → Type u} [BEq α] [Hashable α] [Monad m] :
+    ForIn m (HashMap α β) (α × β) where
+  forIn := ForM.forIn
 
 section DiscrTree
 
