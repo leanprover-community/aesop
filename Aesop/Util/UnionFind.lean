@@ -4,9 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Std.Data.HashMap.Basic
+import Lean
 
-open Std (HashMap)
+open Lean (HashMap)
 
 namespace Aesop
 
