@@ -97,11 +97,11 @@ def checkRappLimit : SearchM Q (Option MessageData) := do
 def checkRootUnprovable : SearchM Q (Option MessageData) := do
   let root := (← getTree).root
   if (← root.get).state.isUnprovable then
-    let msg :=
+    let msg ←
       if ← wasMaxRuleApplicationDepthReached then
-        m!"failed to prove the goal. Some goals were not explored because the maximum rule application depth ({(← read).options.maxRuleApplicationDepth}) was reached. Set option 'maxRuleApplicationDepth' to increase the limit."
+        pure m!"failed to prove the goal. Some goals were not explored because the maximum rule application depth ({(← read).options.maxRuleApplicationDepth}) was reached. Set option 'maxRuleApplicationDepth' to increase the limit."
       else
-        m!"failed to prove the goal after exhaustive search."
+        pure m!"failed to prove the goal after exhaustive search."
     return msg
   return none
 
