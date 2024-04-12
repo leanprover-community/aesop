@@ -144,7 +144,7 @@ end Common
 
 -- From https://github.com/agda/agda-stdlib/blob/master/src/Data/List/Relation/Binary/Permutation/Propositional.agda
 @[aesop unsafe [50% constructors, 25% cases (cases_patterns := [Perm (_ :: _) (_ :: _ )])]]
-inductive Perm : (xs ys : List α) → Type
+inductive Perm : (xs ys : List α) → Prop
   | refl {xs} : Perm xs xs
   | prep {xs ys} x : Perm xs ys → Perm (x :: xs) (x :: ys)
   | swap {xs ys} x y : Perm xs ys → Perm (x :: y :: xs) (y :: x :: ys)
