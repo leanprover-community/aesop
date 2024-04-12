@@ -34,7 +34,7 @@ def popFront? (as : Subarray α) : Option (α × Subarray α) :=
       let tail :=
         { as with
           start := as.start + 1
-          h₁ := Nat.le_of_lt_succ $ Nat.succ_lt_succ h  }
+          start_le_stop := Nat.le_of_lt_succ $ Nat.succ_lt_succ h  }
       some (head, tail)
     else
       none
