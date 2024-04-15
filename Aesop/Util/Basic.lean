@@ -25,12 +25,6 @@ theorem size_modify (a : Array α) (i : Nat) (f : α → α) :
 
 end Array
 
-namespace Subarray
-
-def popFront? (as : Subarray α) : Option (α × Subarray α) := as.popHead?
-
-end Subarray
-
 @[inline]
 def time [Monad m] [MonadLiftT BaseIO m] (x : m α) : m (α × Aesop.Nanos) := do
   let start ← IO.monoNanosNow
