@@ -27,17 +27,7 @@ end Array
 
 namespace Subarray
 
-def popFront? (as : Subarray α) : Option (α × Subarray α) :=
-  if h : as.start < as.stop
-    then
-      let head := as.as.get ⟨as.start, Nat.lt_of_lt_of_le h as.h₂⟩
-      let tail :=
-        { as with
-          start := as.start + 1
-          h₁ := Nat.le_of_lt_succ $ Nat.succ_lt_succ h  }
-      some (head, tail)
-    else
-      none
+def popFront? (as : Subarray α) : Option (α × Subarray α) := as.popHead?
 
 end Subarray
 
