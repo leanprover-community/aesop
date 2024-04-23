@@ -422,16 +422,18 @@ def unindexPredicate? (options : Options') : Option (RuleName → Bool) :=
 def mkLocalRuleSet (rss : Array (GlobalRuleSet × Name × Name))
     (options : Options') : CoreM LocalRuleSet := do
   let mut result := ∅
+  let simpTheorems ← getSimpTheorems
+  let simprocs ← Simp.getSimprocs
   result := {
     toBaseRuleSet := ∅
     simpTheoremsArray :=
       if options.useDefaultSimpSet then
-        Array.mkEmpty (rss.size + 1) |>.push (`_, ← getSimpTheorems)
+        Array.mkEmpty (rss.size + 1) |>.push (`_, simpTheorems)
       else
         Array.mkEmpty (rss.size + 1) |>.push (`_, {})
     simprocsArray :=
       if options.useDefaultSimpSet then
-        Array.mkEmpty (rss.size + 1) |>.push (`_, ← Simp.getSimprocs)
+        Array.mkEmpty (rss.size + 1) |>.push (`_, simprocs)
       else
         Array.mkEmpty (rss.size + 1) |>.push ((`_, {}))
     simpTheoremsArrayNonempty := by split <;> simp
