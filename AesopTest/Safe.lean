@@ -14,7 +14,7 @@ inductive Even : Nat → Prop
 | zero : Even 0
 | plus_two {n} : Even n → Even (n + 2)
 
-structure Even' (n) where
+structure Even' (n) : Prop where
   even : Even n
 
 theorem even'_of_false : False → Even' n
