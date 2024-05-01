@@ -400,9 +400,7 @@ def addFeature (c : RuleConfig) : Feature → m RuleConfig
     return { c with builderOptions := addBuilderOption c.builderOptions opt }
   | .ruleSets newRuleSets =>
     have _ : Ord RuleSetName := ⟨Name.quickCmp⟩
-    let ruleSets :=
-      ⟨Array.mergeSortedDeduplicating c.ruleSets.ruleSets
-        newRuleSets.ruleSets.qsortOrd⟩
+    let ruleSets := ⟨Array.mergeDedup c.ruleSets.ruleSets newRuleSets.ruleSets.qsortOrd⟩
     return { c with ruleSets := ruleSets }
 
 def getPenalty (phase : PhaseName) (c : RuleConfig) : m Int := do
