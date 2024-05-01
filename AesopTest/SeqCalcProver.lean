@@ -154,15 +154,17 @@ infix:45 " ↭ " => Perm
 
 namespace Perm
 
-theorem sym {xs ys : List α} (perm : xs ↭ ys)
+noncomputable section
+
+def sym {xs ys : List α} (perm : xs ↭ ys)
   : ys ↭ xs := by
   induction perm <;> aesop
 
-theorem shift (v : α) (xs ys : List α)
+def shift (v : α) (xs ys : List α)
   : xs ++ v :: ys ↭ v :: xs ++ ys := by
   induction xs <;> aesop
 
-theorem map {xs ys : List α} (f : α → β) (perm : xs ↭ ys)
+def map {xs ys : List α} (f : α → β) (perm : xs ↭ ys)
   : xs.map f ↭ ys.map f := by
   induction perm <;> aesop
 
@@ -173,6 +175,8 @@ theorem all {xs ys : List α} (perm : xs ↭ ys) (P : α → Prop)
 theorem any {xs ys : List α} (perm : xs ↭ ys) (P : α → Prop)
   : Any P xs → Any P ys := by
   induction perm <;> aesop
+
+end
 
 end Perm
 

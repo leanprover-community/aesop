@@ -82,12 +82,12 @@ def addLetDeclsToSimpTheoremsUnlessZetaDelta (ctx : Simp.Context) :
 def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     (simprocs : Simp.SimprocsArray) (discharge? : Option Simp.Discharge := none)
     (simplifyTarget : Bool := true) (fvarIdsToSimp : Array FVarId := #[])
-    (usedSimps : UsedSimps := {}) : MetaM SimpResult := do
+    (stats : Simp.Stats := {}) : MetaM SimpResult := do
   let mvarIdOld := mvarId
   let ctx := { ctx with config.failIfUnchanged := false }
-  let (result, usedSimps) ←
+  let (result, { usedTheorems := usedSimps, .. }) ←
     Meta.simpGoal mvarId ctx simprocs discharge? simplifyTarget fvarIdsToSimp
-      usedSimps
+      stats
   if let some (_, mvarId) := result then
     if mvarId == mvarIdOld then
       return .unchanged mvarId
@@ -98,7 +98,7 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
 
 def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
     (simprocs : Simp.SimprocsArray) (discharge? : Option Simp.Discharge := none)
-    (simplifyTarget : Bool := true) (usedSimps : UsedSimps := {}) :
+    (simplifyTarget : Bool := true) (stats : Simp.Stats := {}) :
     MetaM SimpResult :=
   mvarId.withContext do
     let lctx ← getLCtx
@@ -109,20 +109,20 @@ def simpGoalWithAllHypotheses (mvarId : MVarId) (ctx : Simp.Context)
       fvarIdsToSimp := fvarIdsToSimp.push ldecl.fvarId
     let ctx ← addLetDeclsToSimpTheoremsUnlessZetaDelta ctx
     Aesop.simpGoal mvarId ctx simprocs discharge? simplifyTarget fvarIdsToSimp
-      usedSimps
+      stats
 
 def simpAll (mvarId : MVarId) (ctx : Simp.Context)
-    (simprocs : Simp.SimprocsArray) (usedSimps : UsedSimps := {}) :
+    (simprocs : Simp.SimprocsArray) (stats : Simp.Stats := {}) :
     MetaM SimpResult :=
   mvarId.withContext do
     let ctx := { ctx with config.failIfUnchanged := false }
     let ctx ← addLetDeclsToSimpTheoremsUnlessZetaDelta ctx
-    match ← Lean.Meta.simpAll mvarId ctx simprocs usedSimps with
-    | (none, usedSimps) => return .solved usedSimps
-    | (some mvarIdNew, usedSimps) =>
+    match ← Lean.Meta.simpAll mvarId ctx simprocs stats with
+    | (none, stats) => return .solved stats.usedTheorems
+    | (some mvarIdNew, stats) =>
       if mvarIdNew == mvarId then
         return .unchanged mvarIdNew
       else
-        return .simplified mvarIdNew usedSimps
+        return .simplified mvarIdNew stats.usedTheorems
 
 end Aesop
