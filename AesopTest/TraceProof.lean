@@ -21,13 +21,14 @@ example : α := by
 @[aesop norm simp]
 def F := False
 
+set_option pp.mvars false in
 /--
 warning: aesop: failed to prove the goal after exhaustive search.
 ---
 error: unsolved goals
 ⊢ False
 ---
-info: [aesop.proof] id ?m.20
+info: [aesop.proof] id ?_
 -/
 #guard_msgs in
 example : F := by
