@@ -18,7 +18,7 @@ def WidePullbackShape A B := Sum A B
 abbrev WalkingCospan : Type := WidePullbackShape Empty Empty
 
 @[aesop norm destruct]
-theorem WalkingCospan_elim : WalkingCospan → Sum Empty Empty := id
+def WalkingCospan_elim : WalkingCospan → Sum Empty Empty := id
 
 example (h : WalkingCospan) : α := by
   aesop (add norm unfold [WidePullbackShape, WalkingCospan])

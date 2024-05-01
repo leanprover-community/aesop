@@ -19,7 +19,7 @@ case left
 P : α → Bool
 x : α
 xs : List α
-h : List.all (x :: xs) P = true
+h : (x :: xs).all P = true
 ⊢ P x = true
 
 case right
@@ -27,8 +27,8 @@ case right
 P : α → Bool
 x : α
 xs : List α
-h : List.all (x :: xs) P = true
-⊢ List.all xs P = true
+h : (x :: xs).all P = true
+⊢ xs.all P = true
 -/
 #guard_msgs in
 theorem all_cons (P : α → Bool) (x : α) (xs : List α) (h : (x :: xs).all P)
