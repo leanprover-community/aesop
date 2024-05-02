@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 import Std.Data.Array.Basic
 import Std.Data.Array.Merge
+import Lean.Message
 
 open Lean
 
