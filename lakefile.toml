@@ -1,0 +1,16 @@
+name = "aesop"
+defaultTargets = ["Aesop"]
+precompileModules = false # We would like to turn this on, but it breaks the Mathlib cache.
+
+[[require]]
+name = "std"
+git = "https://github.com/leanprover/std4"
+rev = "main"
+
+[[lean_lib]]
+name = "Aesop"
+
+[[lean_lib]]
+name = "AesopTest"
+globs = ["AesopTest.+"]
+leanOptions = {linter.unusedVariables = false}
