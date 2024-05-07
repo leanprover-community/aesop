@@ -7,11 +7,11 @@ Authors: Jannis Limperg
 import Aesop.Util.Basic
 import Aesop.Util.Tactic
 import Aesop.Util.EqualUpToIds
-import Std.Lean.Meta.Clear
-import Std.Lean.Meta.Inaccessible
-import Std.Lean.HashSet
-import Std.Tactic.PermuteGoals
-import Std.Tactic.SeqFocus
+import Batteries.Lean.Meta.Clear
+import Batteries.Lean.Meta.Inaccessible
+import Batteries.Lean.HashSet
+import Batteries.Tactic.PermuteGoals
+import Batteries.Tactic.SeqFocus
 
 open Lean
 open Lean.Elab.Tactic

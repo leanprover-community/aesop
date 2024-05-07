@@ -8,10 +8,10 @@ import Aesop.Options
 import Aesop.Tracing
 import Aesop.Tree
 import Aesop.Search.Queue.Class
-import Std.Data.BinomialHeap.Basic
+import Batteries.Data.BinomialHeap.Basic
 
 open Lean
-open Std (BinomialHeap)
+open Batteries (BinomialHeap)
 
 namespace Aesop.BestFirstQueue
 

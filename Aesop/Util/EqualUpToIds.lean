@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 import Lean.Elab.Tactic.Basic
-import Std.Lean.Meta.SavedState
+import Batteries.Lean.Meta.SavedState
 
 open Lean Lean.Meta
 

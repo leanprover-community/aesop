@@ -3,8 +3,8 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-import Std.Data.Array.Basic
-import Std.Data.Array.Merge
+import Batteries.Data.Array.Basic
+import Batteries.Data.Array.Merge
 import Lean.Message
 
 open Lean

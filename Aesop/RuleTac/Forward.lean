@@ -6,8 +6,8 @@ Authors: Jannis Limperg
 
 import Aesop.RuleTac.Basic
 import Aesop.RuleTac.ElabRuleTerm
-import Std.Lean.Meta.UnusedNames
-import Std.Lean.Meta.AssertHypotheses
+import Batteries.Lean.Meta.UnusedNames
+import Batteries.Lean.Meta.AssertHypotheses
 
 open Lean
 open Lean.Meta

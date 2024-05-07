@@ -7,10 +7,10 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Aesop.Nanos
 import Aesop.Util.UnionFind
 import Aesop.Util.UnorderedArraySet
-import Std.Data.String
-import Std.Lean.Expr
-import Std.Lean.Meta.DiscrTree
-import Std.Lean.PersistentHashSet
+import Batteries.Data.String
+import Batteries.Lean.Expr
+import Batteries.Lean.Meta.DiscrTree
+import Batteries.Lean.PersistentHashSet
 import Lean.Meta.Tactic.TryThis
 
 open Lean
