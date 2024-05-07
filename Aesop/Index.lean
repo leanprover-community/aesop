@@ -8,7 +8,7 @@ import Aesop.Index.Basic
 import Aesop.RulePattern
 import Aesop.Rule.Basic
 import Aesop.Tracing
-import Std.Lean.Meta.InstantiateMVars
+import Batteries.Lean.Meta.InstantiateMVars
 
 open Lean
 open Lean.Meta

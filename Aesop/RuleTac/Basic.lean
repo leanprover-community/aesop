@@ -8,7 +8,7 @@ import Aesop.Index.Basic
 import Aesop.Options
 import Aesop.Percent
 import Aesop.Script
-import Std.Lean.Meta.SavedState
+import Batteries.Lean.Meta.SavedState
 
 open Lean
 open Lean.Elab.Tactic

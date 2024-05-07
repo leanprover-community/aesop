@@ -6,7 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Constants
 import Aesop.Rule
-import Std.Data.Array.Merge
+import Batteries.Data.Array.Merge
 
 open Lean
 
