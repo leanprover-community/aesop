@@ -5,7 +5,7 @@ Authors: Jannis Limperg, Kyle Miller
 -/
 
 import Aesop.Frontend.Attribute
-import Std.Tactic.OpenPrivate
+import Batteries.Tactic.OpenPrivate
 
 open Lean
 open Lean.Meta
