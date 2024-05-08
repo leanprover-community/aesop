@@ -362,7 +362,8 @@ def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleFilter) :
   let (rs, anyErased) := rs.onBase (·.erase f)
   let mut anyErased := anyErased
   let mut localNormSimpRules := rs.localNormSimpRules
-  let mut simpTheoremsArray' : Σ' a, a.size = rs.simpTheoremsArray.size :=
+  let mut simpTheoremsArray' :
+      Σ' a : Array (Name × SimpTheorems), a.size = rs.simpTheoremsArray.size :=
     ⟨rs.simpTheoremsArray, rfl⟩
   if let some id := f.matchesLocalNormSimpRule? then
     if let some idx := localNormSimpRules.findIdx? (·.id == id) then
