@@ -74,7 +74,7 @@ def getImmediatePremises (stx : Term) (type : Expr) (pat? : Option RulePattern)
     -- If immediate names are given, we check that corresponding arguments
     -- exists and record these arguments' positions.
     withTransparency md $ forallTelescopeReducing type λ args _ => do
-      let mut unseen := immediate.sortAndDeduplicate (ord := ⟨Name.quickCmp⟩)
+      let mut unseen := immediate.sortDedup (ord := ⟨Name.quickCmp⟩)
       let mut result := #[]
       for h : i in [:args.size] do
         let argName := (← args[i].fvarId!.getDecl).userName
