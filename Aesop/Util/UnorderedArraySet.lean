@@ -41,13 +41,13 @@ protected def ofDeduplicatedArray (xs : Array α) : UnorderedArraySet α :=
 
 /-- Precondition: `xs` is sorted. -/
 protected def ofSortedArray (xs : Array α) : UnorderedArraySet α :=
-  ⟨xs.deduplicateSorted⟩
+  ⟨xs.dedupSorted⟩
 
 set_option linter.unusedVariables false in
 /-- O(n*log(n)) -/
 protected def ofArray [ord : Ord α] [Inhabited α] (xs : Array α) :
     UnorderedArraySet α :=
-  ⟨xs.sortAndDeduplicate⟩
+  ⟨xs.sortDedup⟩
 
 /-- O(n^2) -/
 protected def ofArraySlow (xs : Array α) : UnorderedArraySet α :=
@@ -77,7 +77,7 @@ def filter (p : α → Bool) (s : UnorderedArraySet α) : UnorderedArraySet α :
 
 /-- O(n*m) -/
 def merge (s t : UnorderedArraySet α) : UnorderedArraySet α :=
-  ⟨s.rep.mergeUnsortedDeduplicating t.rep⟩
+  ⟨s.rep.mergeUnsortedDedup t.rep⟩
 
 instance : Append (UnorderedArraySet α) :=
   ⟨merge⟩
