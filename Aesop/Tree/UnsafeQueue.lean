@@ -71,7 +71,7 @@ def initial (postponedSafeRules : Array PostponedSafeRule)
   let postponedSafeRules :=
     postponedSafeRules.map .postponedSafeRule
       |>.qsort (λ x y => compare x y |>.isLT)
-  postponedSafeRules.mergeSortedDeduplicating unsafeRules |>.toSubarray
+  postponedSafeRules.mergeDedup unsafeRules |>.toSubarray
 
 def entriesToMessageData (q : UnsafeQueue) : Array MessageData :=
   q.toArray.map toMessageData

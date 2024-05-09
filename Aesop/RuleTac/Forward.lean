@@ -127,7 +127,7 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
       newHypProofs := newHypProofs'
       usedHyps := usedHyps'
     usedHyps :=
-      usedHyps.sortAndDeduplicate (ord := ⟨λ x y => x.name.quickCmp y.name⟩)
+      usedHyps.sortDedup (ord := ⟨λ x y => x.name.quickCmp y.name⟩)
     if newHypProofs.isEmpty then
       err
     let forwardHypTypes ← getForwardHypTypes
