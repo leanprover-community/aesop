@@ -17,7 +17,7 @@ def T := False
 variable {α : Type}
 
 /--
-error: tactic 'aesop' failed, failed to prove the gal after exhaustive search.
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : T) : α := by
