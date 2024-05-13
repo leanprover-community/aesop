@@ -23,4 +23,4 @@ jobs:
     - name: Build
       run: lake build
     - name: Run tests
-      run: ./test
+      run: lake test
