@@ -362,12 +362,4 @@ register_option aesop.smallErrorMessages : Bool := {
     descr := "(aesop) Print smaller error messages. Used for testing."
   }
 
-def throwAesopEx (mvarId : MVarId) (msg? : Option MessageData) : MetaM α := do
-  if aesop.smallErrorMessages.get (← getOptions) then
-    match msg? with
-    | none => throwError "tactic 'aesop' failed"
-    | some msg => throwError "tactic 'aesop' failed, {msg}"
-  else
-    throwTacticEx `aesop mvarId msg?
-
 end Aesop

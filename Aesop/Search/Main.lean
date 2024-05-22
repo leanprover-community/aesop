@@ -217,6 +217,32 @@ def treeHasProgress : TreeM Bool := do
     (.mvarCluster (← get).root)
   resultRef.get
 
+def throwAesopEx (mvarId : MVarId) (remainingSafeGoals : Array MVarId)
+    (safePrefixExpansionSuccess : Bool) (msg? : Option MessageData) :
+    SearchM Q α := do
+  if aesop.smallErrorMessages.get (← getOptions) then
+    match msg? with
+    | none => throwError "tactic 'aesop' failed"
+    | some msg => throwError "tactic 'aesop' failed, {msg}"
+  else
+    let maxRapps := (← read).options.maxSafePrefixRuleApplications
+    let suffix :=
+      if remainingSafeGoals.isEmpty then
+        m!""
+      else
+        let gs := .joinSep (remainingSafeGoals.toList.map toMessageData) "\n\n"
+        let suffix' :=
+          if safePrefixExpansionSuccess then
+            m!""
+          else
+            m!"\nThe safe prefix was not fully expanded because the maximum number of rule applications ({maxRapps}) was reached."
+        m!"\nRemaining goals after safe rules:{indentD gs}{suffix'}"
+    -- Copy-pasta from `Lean.Meta.throwTacticEx`
+    match msg? with
+    | none => throwError "tactic 'aesop' failed\nInitial goal:{indentD mvarId}{suffix}"
+    | some msg => throwError "tactic 'aesop' failed, {msg}\nInitial goal:{indentD mvarId}{suffix}"
+
+
 -- When we hit a non-fatal error (i.e. the search terminates without a proof
 -- because the root goal is unprovable or because we hit a search limit), we
 -- usually:
@@ -230,23 +256,8 @@ def treeHasProgress : TreeM Bool := do
 -- not expand the safe rules after the fact, the tactic's output would be
 -- sensitive to minor changes in, e.g., rule priority.
 def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
-  let opts := (← read).options
-  if opts.terminal then
-    -- Print the goal after the safe prefix, so we get some indication of where `aesop` got stuck.
-    if (← expandSafePrefix) then
-      let goals ← extractSafePrefix
-      let g ← goals[0]? |>.getDM getRootMVarId
-      throwAesopEx g err
-    else
-      throwAesopEx (← getRootMVarId) err
   let safeExpansionSuccess ← expandSafePrefix
-  if ! safeExpansionSuccess then
-    logWarning m!"aesop: safe prefix was not fully expanded because the maximum number of rule applications ({(← read).options.maxSafePrefixRuleApplications}) was reached."
-  if ! (← treeHasProgress) then
-    throwAesopEx (← getRootMVarId) "made no progress"
-  if opts.warnOnNonterminal then
-    logWarning m!"aesop: {err}"
-  let goals ← extractSafePrefix
+  let safeGoals ← extractSafePrefix
   aesop_trace[proof] do
     match ← getProof? with
     | some proof =>
@@ -254,11 +265,16 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
         aesop_trace![proof] "{proof}"
     | none => aesop_trace![proof] "<no proof>"
   traceTree
-  return goals
-
-def handleFatalError (e : Exception) : SearchM Q α := do
-  traceTree
-  throw e
+  let opts := (← read).options
+  if opts.terminal then
+    throwAesopEx (← getRootMVarId) safeGoals safeExpansionSuccess err
+  if ! (← treeHasProgress) then
+    throwAesopEx (← getRootMVarId) #[] safeExpansionSuccess "made no progress"
+  if opts.warnOnNonterminal then
+    logWarning m!"aesop: {err}"
+  if ! safeExpansionSuccess then
+    logWarning m!"aesop: safe prefix was not fully expanded because the maximum number of rule applications ({(← read).options.maxSafePrefixRuleApplications}) was reached."
+  return safeGoals
 
 partial def searchLoop : SearchM Q (Array MVarId) :=
   withIncRecDepth do
@@ -294,7 +310,6 @@ def search (goal : MVarId) (ruleSet? : Option LocalRuleSet := none)
     SearchM.run ruleSet options simpConfig simpConfigSyntax? goal stats do
       show SearchM Q _ from
       try searchLoop
-      catch e => handleFatalError e
       finally freeTree
   return (goals, stats)
 
