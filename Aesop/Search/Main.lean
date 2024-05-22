@@ -232,7 +232,13 @@ def treeHasProgress : TreeM Bool := do
 def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
   let opts := (← read).options
   if opts.terminal then
-    throwAesopEx (← getRootMVarId) err
+    -- Print the goal after the safe prefix, so we get some indication of where `aesop` got stuck.
+    if (← expandSafePrefix) then
+      let goals ← extractSafePrefix
+      let g ← goals[0]? |>.getDM getRootMVarId
+      throwAesopEx g err
+    else
+      throwAesopEx (← getRootMVarId) err
   let safeExpansionSuccess ← expandSafePrefix
   if ! safeExpansionSuccess then
     logWarning m!"aesop: safe prefix was not fully expanded because the maximum number of rule applications ({(← read).options.maxSafePrefixRuleApplications}) was reached."
