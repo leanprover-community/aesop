@@ -197,6 +197,18 @@ def updateSimpEntryPriority (priority : Nat) (e : SimpEntry) : SimpEntry :=
   | .thm t => .thm { t with priority }
   | .toUnfoldThms .. | .toUnfold .. => e
 
+partial def hasSorry (e : Expr) : MetaM Bool :=
+  (·.isSome) <$> e.findM? λ
+    | .mvar mvarId => do
+      if let some ass ← getDelayedMVarAssignment? mvarId then
+        hasSorry $ .mvar ass.mvarIdPending
+      else if let some ass ← getExprMVarAssignment? mvarId then
+        hasSorry ass
+      else
+        return false
+    | .const ``sorryAx _ => return true
+    | _ => return false
+
 def isAppOfUpToDefeq (f : Expr) (e : Expr) : MetaM Bool :=
   withoutModifyingState do
     let type ← inferType f

@@ -79,7 +79,7 @@ unsafe def tacGenImpl (decl : Name) : RuleTac := λ input => do
       let goals := (← run input.goal (evalTactic stx) |>.run').toArray
       let postState ← saveState
       if let some proof ← getExprMVarAssignment? input.goal then
-        if (← instantiateMVars proof).hasSorry then
+        if ← hasSorry proof then
           throwError "generated proof contains sorry"
       let scriptBuilder? :=
         mkScriptBuilder? input.options.generateScript $
