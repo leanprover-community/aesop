@@ -106,9 +106,7 @@ def checkRootUnprovable : SearchM Q (Option MessageData) := do
   return none
 
 def getProof? : SearchM Q (Option Expr) := do
-  let (some proof) ← getExprMVarAssignment? (← getRootMVarId)
-    | return none
-  instantiateMVars proof
+  getExprMVarAssignment? (← getRootMVarId)
 
 private def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
   withOptions (·.setBool `pp.analyze true) x
@@ -118,7 +116,7 @@ def finalizeProof : SearchM Q Unit := do
     extractProof
     let (some proof) ← getProof? | throwError
       "aesop: internal error: root goal is proven but its metavariable is not assigned"
-    if proof.hasExprMVar then
+    if (← instantiateMVars proof).hasExprMVar then
       let inner :=
         m!"Proof: {proof}\nUnassigned metavariables: {(← getMVarsNoDelayed proof).map (·.name)}"
       throwError "aesop: internal error: extracted proof has metavariables.{indentD inner}"
