@@ -149,6 +149,23 @@ def checkScriptSteps (script : UnstructuredScript) : SearchM Q Unit := do
   catch e =>
     throwError "{Check.script.steps.name}: {e.toMessageData}"
 
+register_option aesop.dev.dynamicStructuring : Bool := {
+  descr := "(aesop) Only for use by Aesop developers. Enables dynamic script structuring."
+  defValue := false
+}
+
+def structureScript (uscript : UnstructuredScript) (rootState : Meta.SavedState)
+    (rootGoal : MVarId) : SearchM Q (Option StructuredScript) := do
+  if aesop.dev.dynamicStructuring.get (← getOptions) then
+    uscript.toStructuredScriptDynamic rootState rootGoal
+  else
+    let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
+    let tacticState := {
+      visibleGoals := #[⟨rootGoal, rootGoalMVars⟩]
+      invisibleGoals := ∅
+    }
+    uscript.toStructuredScriptStatic tacticState
+
 def traceScript : SearchM Q Unit := do
   let options := (← read).options
   if ! options.generateScript then
@@ -157,7 +174,7 @@ def traceScript : SearchM Q Unit := do
   checkScriptSteps uscript
   let rootGoal ← getRootMVarId
   let rootState ← getRootMetaState
-  let structuredScript? ← uscript.toStructuredScriptDynamic rootState rootGoal
+  let structuredScript? ← structureScript uscript rootState rootGoal
   if let some structuredScript := structuredScript? then
     let script ← structuredScript.render
     if options.traceScript then
