@@ -13,6 +13,8 @@ set_option trace.aesop.proof true
 
 /--
 error: tactic 'aesop' failed, made no progress
+---
+info: [aesop.proof] <no proof>
 -/
 #guard_msgs in
 example : α := by

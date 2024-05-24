@@ -10,7 +10,10 @@ set_option aesop.check.all true
 
 /--
 error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
-⊢ False
+Initial goal:
+  ⊢ False
+Remaining goals after safe rules:
+  ⊢ False
 -/
 #guard_msgs in
 example : False := by

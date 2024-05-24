@@ -51,7 +51,8 @@ axiom falso' : True → False
 
 /--
 error: tactic 'aesop' failed, made no progress
-⊢ False
+Initial goal:
+  ⊢ False
 -/
 #guard_msgs in
 example : False := by
