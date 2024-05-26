@@ -754,7 +754,8 @@ def setIntroducedMVars (introducedMVars : UnorderedArraySet MVarId)
   r.modify λ r => { r with introducedMVars }
 
 @[inline]
-def setAssignedMVars (assignedMVars : UnorderedArraySet MVarId) (r : Rapp) : Rapp :=
+def setAssignedMVars (assignedMVars : UnorderedArraySet MVarId) (r : Rapp) :
+    Rapp :=
   r.modify λ r => { r with assignedMVars }
 
 instance : Nonempty Rapp :=
@@ -770,6 +771,12 @@ end Rapp
 
 
 /-! ## Miscellaneous Queries -/
+
+def Rapp.isSafe (r : Rapp) : Bool :=
+  r.appliedRule.isSafe && r.assignedMVars.isEmpty
+  -- During expansion, we postpone safe rules that assign metavariables and
+  -- treat them as unsafe.
+
 
 namespace Goal
 
@@ -800,13 +807,17 @@ def currentGoalAndMetaState (g : Goal) (rootMetaState : Meta.SavedState) :
   | some x => return x
   | none => return (g.preNormGoal, ← g.parentMetaState rootMetaState)
 
+def safeRapps (g : Goal) : BaseIO (Array RappRef) :=
+  g.children.filterM λ rref => return (← rref.get).isSafe
+
+def hasSafeRapp (g : Goal) : BaseIO Bool :=
+  g.children.anyM λ rref => return (← rref.get).isSafe
+
 def isUnsafeExhausted (g : Goal) : Bool :=
   g.unsafeRulesSelected && g.unsafeQueue.isEmpty
 
 def isExhausted (g : Goal) : BaseIO Bool :=
-  pure g.isUnsafeExhausted <||>
-  g.children.anyM λ rref =>
-    return (← rref.get).appliedRule.isSafe
+  pure g.isUnsafeExhausted <||> g.hasSafeRapp
 
 def isActive (g : Goal) : BaseIO Bool :=
   return ! (← pure g.isIrrelevant <||> g.isExhausted)
@@ -817,14 +828,6 @@ def hasProvableRapp (g : Goal) : BaseIO Bool :=
 def firstProvenRapp? (g : Goal) : BaseIO (Option RappRef) :=
   g.children.findSomeM? λ rref =>
     return if (← rref.get).state.isProven then some rref else none
-
-def safeRapps (g : Goal) : BaseIO (Array RappRef) :=
-  g.children.filterM λ rref =>
-    return (← rref.get).appliedRule.isSafe
-
-def hasSafeRapp (g : Goal) : BaseIO Bool :=
-  g.children.anyM λ rref =>
-    return (← rref.get).appliedRule.isSafe
 
 def hasMVar (g : Goal) : Bool :=
   ! g.mvars.isEmpty
