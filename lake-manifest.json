@@ -7,7 +7,7 @@
    "rev": "e40e17375cece89474d63e1ed1455229f3b3b092",
    "name": "batteries",
    "manifestFile": "lake-manifest.json",
-   "inputRev": "nightly-testing-2024-05-11",
+   "inputRev": "nightly-testing",
    "inherited": false,
    "configFile": "lakefile.lean"}],
  "name": "aesop",

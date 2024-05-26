@@ -82,6 +82,10 @@ private def copyMatchEqnsExtState (oldEnv newEnv : Environment) : CoreM Unit := 
       if !oldState.map.contains n then
         registerMatchEqns n eqns
 
+private def copyEnvModifications (oldEnv newEnv : Environment) : CoreM Unit := do
+  copyNewDeclarations oldEnv newEnv
+  copyMatchEqnsExtState oldEnv newEnv
+
 -- ## Copying Metavariables
 
 private partial def copyExprMVar (s : Meta.SavedState) (mvarId : MVarId) :
@@ -120,15 +124,18 @@ private partial def copyExprMVar (s : Meta.SavedState) (mvarId : MVarId) :
 
 -- ## Main Functions
 
-private def visitGoal (g : Goal) : MetaM (Option (MVarId × Array RappRef)) := do
+private def visitGoal (parentEnv : Environment) (g : Goal) :
+    MetaM (Option (MVarId × Array RappRef × Environment)) := do
   aesop_trace[extraction] "visiting G{g.id}"
   match g.normalizationState with
   | NormalizationState.notNormal => throwPRError
     "goal {g.id} was not normalised."
   | NormalizationState.normal postNormGoal postState _ =>
+    copyEnvModifications parentEnv postState.core.env
     copyExprMVar postState g.preNormGoal
-    return (postNormGoal, g.children)
+    return (postNormGoal, g.children, ← getEnv)
   | NormalizationState.provenByNormalization postState _ =>
+    copyEnvModifications parentEnv postState.core.env
     copyExprMVar postState g.preNormGoal
     return none
 
@@ -136,8 +143,7 @@ private def visitRapp (parentEnv : Environment) (parentGoal : MVarId) (r : Rapp)
     MetaM (Array MVarClusterRef × Environment) := do
   aesop_trace[extraction] "visiting R{r.id}"
   let newEnv := r.metaState.core.env
-  copyNewDeclarations parentEnv newEnv
-  copyMatchEqnsExtState parentEnv newEnv
+  copyEnvModifications parentEnv newEnv
   copyExprMVar r.metaState parentGoal
   for m in r.assignedMVars do
     copyExprMVar r.metaState m
@@ -146,12 +152,12 @@ private def visitRapp (parentEnv : Environment) (parentGoal : MVarId) (r : Rapp)
 mutual
   private partial def extractProofGoal (parentEnv : Environment) (g : Goal) :
       MetaM Unit := do
-    let (some (postNormGoal, children)) ← visitGoal g
+    let (some (postNormGoal, children, postNormEnv)) ← visitGoal parentEnv g
       | return
     let rref? ← children.findM? λ rref => return (← rref.get).state.isProven
     let (some rref) := rref? | throwPRError
       "goal {g.id} does not have a proven rapp."
-    extractProofRapp parentEnv postNormGoal (← rref.get)
+    extractProofRapp postNormEnv postNormGoal (← rref.get)
 
   private partial def extractProofRapp (parentEnv : Environment)
       (parentGoal : MVarId) (r : Rapp) : MetaM Unit := do
@@ -174,7 +180,7 @@ private abbrev SafePrefixM := StateRefT SafePrefixState MetaM
 mutual
   private partial def extractSafePrefixGoal (parentEnv : Environment)
       (g : Goal) : SafePrefixM Unit := do
-    let (some (postNormGoal, _)) ← visitGoal g
+    let (some (postNormGoal, _)) ← visitGoal parentEnv g
       | return
     let safeRapps ← g.safeRapps
     if safeRapps.size > 1 then
