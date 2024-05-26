@@ -13,6 +13,8 @@ jobs:
       matrix:
         os: [ubuntu-latest]
     steps:
-      - uses: leanprover/lean-action@v1-alpha
+      - uses: actions/checkout@v4
+
+      - uses: leanprover/lean-action@v1-beta
         with:
           check-reservoir-eligibility: true
