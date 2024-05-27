@@ -367,7 +367,7 @@ def addTryThisTacticSeqSuggestion (ref : Syntax)
   if let some range := (origSpan?.getD ref).getRange? then
     let map ← getFileMap
     let (indent, column) := Lean.Meta.Tactic.TryThis.getIndentAndColumn map range
-    let text := fmt.pretty indent column
+    let text := fmt.pretty (indent := indent) (column := column)
     let suggestion := {
       -- HACK: The `tacticSeq` syntax category is pretty-printed with each line
       -- indented by two spaces (for some reason), so we remove this
