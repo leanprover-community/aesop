@@ -14,7 +14,7 @@ import Batteries.Lean.PersistentHashSet
 import Lean.Meta.Tactic.TryThis
 
 open Lean
-open Lean.Meta
+open Lean.Meta Lean.Elab.Tactic
 
 namespace Aesop.Array
 
@@ -192,22 +192,37 @@ def runMetaMAsCoreM (x : MetaM α) : CoreM α :=
 def runTermElabMAsCoreM (x : Elab.TermElabM α) : CoreM α :=
   runMetaMAsCoreM x.run'
 
+def runTacticMAsMetaM (x : TacticM α) (goals : List MVarId) :
+    MetaM (α × List MVarId) := do
+  let (a, s) ← x |>.run { elaborator := .anonymous } |>.run { goals } |>.run'
+  return (a, s.goals)
+
+def runTacticSyntaxAsMetaM (stx : Syntax) (goals : List MVarId) :
+    MetaM (List MVarId) :=
+  return (← runTacticMAsMetaM (evalTactic stx) goals).snd
+
+
 def updateSimpEntryPriority (priority : Nat) (e : SimpEntry) : SimpEntry :=
   match e with
   | .thm t => .thm { t with priority }
   | .toUnfoldThms .. | .toUnfold .. => e
 
-partial def hasSorry (e : Expr) : MetaM Bool :=
-  (·.isSome) <$> e.findM? λ
-    | .mvar mvarId => do
-      if let some ass ← getDelayedMVarAssignment? mvarId then
-        hasSorry $ .mvar ass.mvarIdPending
-      else if let some ass ← getExprMVarAssignment? mvarId then
-        hasSorry ass
+partial def hasSorry [Monad m] [MonadMCtx m] (e : Expr) : m Bool :=
+  return go (← getMCtx) e
+where
+  go (mctx : MetavarContext) (e : Expr) : Bool :=
+    Option.isSome $ e.find? λ e =>
+      if e.isSorry then
+        true
+      else if let .mvar mvarId := e then
+        if let some ass := mctx.getExprAssignmentCore? mvarId then
+          go mctx ass
+        else if let some ass := mctx.dAssignment.find? mvarId then
+          go mctx $ .mvar ass.mvarIdPending
+        else
+          false
       else
-        return false
-    | .const ``sorryAx _ => return true
-    | _ => return false
+        false
 
 def isAppOfUpToDefeq (f : Expr) (e : Expr) : MetaM Bool :=
   withoutModifyingState do
@@ -252,6 +267,41 @@ def partitionGoalsAndMVars (goals : Array MVarId) :
     else
       goalsAndMVars.filter λ (g, _) => ! mvars.contains g
   return (goals, mvars)
+
+section RunTactic
+
+open Lean.Elab.Tactic
+
+def runTacticMCapturingPostState (t : TacticM Unit) (preState : Meta.SavedState)
+    (preGoals : List MVarId) : MetaM (Meta.SavedState × List MVarId) :=
+  withoutModifyingState do
+    let go : TacticM (Meta.SavedState × List MVarId) := do
+      preState.restore
+      t
+      pruneSolvedGoals
+      let postState ← show MetaM _ from saveState
+      let postGoals ← getGoals
+      pure (postState, postGoals)
+    go |>.run { elaborator := .anonymous, recover := false }
+       |>.run' { goals := preGoals }
+       |>.run'
+
+def runTacticCapturingPostState (t : Syntax.Tactic) (preState : Meta.SavedState)
+    (preGoals : List MVarId) : MetaM (Meta.SavedState × List MVarId) := do
+  runTacticMCapturingPostState (evalTactic t) preState preGoals
+
+def runTacticSeqCapturingPostState (t : TSyntax ``Lean.Parser.Tactic.tacticSeq)
+    (preState : Meta.SavedState) (preGoals : List MVarId) :
+    MetaM (Meta.SavedState × List MVarId) := do
+  runTacticMCapturingPostState (evalTactic t) preState preGoals
+
+def runTacticsCapturingPostState (ts : Array Syntax.Tactic)
+    (preState : Meta.SavedState) (preGoals : List MVarId) :
+    MetaM (Meta.SavedState × List MVarId) := do
+  let t ← `(Lean.Parser.Tactic.tacticSeq| $ts*)
+  runTacticSeqCapturingPostState t preState preGoals
+
+end RunTactic
 
 section TransparencySyntax
 

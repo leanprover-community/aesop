@@ -106,9 +106,7 @@ def checkRootUnprovable : SearchM Q (Option MessageData) := do
   return none
 
 def getProof? : SearchM Q (Option Expr) := do
-  let (some proof) ← getExprMVarAssignment? (← getRootMVarId)
-    | return none
-  instantiateMVars proof
+  getExprMVarAssignment? (← getRootMVarId)
 
 private def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
   withOptions (·.setBool `pp.analyze true) x
@@ -118,7 +116,7 @@ def finalizeProof : SearchM Q Unit := do
     extractProof
     let (some proof) ← getProof? | throwError
       "aesop: internal error: root goal is proven but its metavariable is not assigned"
-    if proof.hasExprMVar then
+    if (← instantiateMVars proof).hasExprMVar then
       let inner :=
         m!"Proof: {proof}\nUnassigned metavariables: {(← getMVarsNoDelayed proof).map (·.name)}"
       throwError "aesop: internal error: extracted proof has metavariables.{indentD inner}"
@@ -144,32 +142,57 @@ def checkRenderedScript (script : Array Syntax.Tactic) : SearchM Q Unit := do
     "{Check.script.name}: error while executing generated script:{indentD e.toMessageData}"
 
 def checkScriptSteps (script : UnstructuredScript) : SearchM Q Unit := do
+  unless ← Check.script.steps.isEnabled do
+    return
   try
     script.validate
   catch e =>
     throwError "{Check.script.steps.name}: {e.toMessageData}"
 
+register_option aesop.dev.dynamicStructuring : Bool := {
+  descr := "(aesop) Only for use by Aesop developers. Enables dynamic script structuring."
+  defValue := false
+}
+
+def structureScript (uscript : UnstructuredScript) (rootState : Meta.SavedState)
+    (rootGoal : MVarId) : SearchM Q (Option StructuredScript) := do
+  if aesop.dev.dynamicStructuring.get (← getOptions) then
+    uscript.toStructuredScriptDynamic rootState rootGoal
+  else
+    let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
+    let tacticState := {
+      visibleGoals := #[⟨rootGoal, rootGoalMVars⟩]
+      invisibleGoals := ∅
+    }
+    uscript.toStructuredScriptStatic tacticState
+
 def traceScript : SearchM Q Unit := do
   let options := (← read).options
   if ! options.generateScript then
     return
-  try
-    let uscript ← (← getRootMVarCluster).extractScript
-    if ← Check.script.steps.isEnabled then
-      checkScriptSteps uscript
-    let goal ← getRootMVarId
-    let goalMVars ← goal.getMVarDependencies
-    let tacticState :=
-      { visibleGoals := #[⟨goal, goalMVars⟩], invisibleGoals := {} }
-    let script ← uscript.toStructuredScript tacticState
-    let script ← script.render tacticState
+  let uscript ← (← getRootMVarCluster).extractScript
+  checkScriptSteps uscript
+  let rootGoal ← getRootMVarId
+  let rootState ← getRootMetaState
+  let structuredScript? ← structureScript uscript rootState rootGoal
+  if let some structuredScript := structuredScript? then
+    let script ← structuredScript.render
     if options.traceScript then
       let script ← `(tacticSeq| $script*)
       addTryThisTacticSeqSuggestion (← getRef) script
     if ← Check.script.isEnabled then
       checkRenderedScript script
-  catch e =>
-    logError m!"aesop: error while generating tactic script:{indentD e.toMessageData}"
+  else
+    let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
+    let tacticState :=
+      { visibleGoals := #[⟨rootGoal, rootGoalMVars⟩], invisibleGoals := ∅ }
+    let uscript ← `(tacticSeq| $(← uscript.render tacticState):tactic*)
+    if options.traceScript then
+      addTryThisTacticSeqSuggestion (← getRef) uscript
+    if ← Check.script.isEnabled then
+      throwError "{Check.script.name}: structuring the script failed"
+    else
+      logWarning m!"aesop: structuring the script failed. Reporting unstructured script."
 
 def traceTree : SearchM Q Unit := do
   (← (← getRootGoal).get).traceTree .tree

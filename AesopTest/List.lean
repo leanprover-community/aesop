@@ -309,7 +309,7 @@ theorem mem_map_of_injective {f : α → β} (H : Injective f) {a : α} {l : Lis
 @[simp] theorem _root_.function.involutive.exists_mem_and_apply_eq_iff {f : α → α}
   (hf : Involutive f) (x : α) (l : List α) :
   (∃ (y : α), y ∈ l ∧ f y = x) ↔ f x ∈ l := by
-  set_option aesop.check.script false in -- TODO
+  set_option aesop.check.script false in -- TODO caused by issue #108
   aesop
 
 theorem mem_map_of_involutive {f : α → α} (hf : Involutive f) {a : α} {l : List α} :
@@ -664,14 +664,12 @@ theorem eq_replicate' {a : α} {l : List α} : l = replicate l.length a ↔ ∀ 
 
 -- attribute [-simp] eq_replicate
 theorem X.eq_replicate {a : α} {n} {l : List α} : l = replicate n a ↔ length l = n ∧ ∀ b, b ∈ l → b = a := by
-  set_option aesop.check.script false in -- TODO
   aesop (add norm simp eq_replicate')
 
 theorem replicate_add (a : α) (m n) : replicate (m + n) a = replicate m a ++ replicate n a :=
   ADMIT -- Need to apply associativity of addition to let `replicate` reduce.
 
 theorem replicate_subset_singleton (a : α) (n) : replicate n a ⊆ [a] := by
-  set_option aesop.check.script false in -- TODO
   aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 theorem subset_singleton_iff {a : α} {L : List α} : L ⊆ [a] ↔ ∃ n, L = replicate n a :=
@@ -715,7 +713,6 @@ theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) :
 @[simp]
 theorem mem_pure {α} (x y : α) :
     x ∈ (pure y : List α) ↔ x = y := by
-  set_option aesop.check.script false in -- TODO
   aesop (add norm simp pure)
 
 /-! ### bind -/
@@ -858,7 +855,7 @@ theorem map_reverse_core (f : α → β) (l₁ l₂ : List α) :
 
 attribute [-simp] mem_reverse
 @[simp] theorem X.mem_reverse {a : α} {l : List α} : a ∈ reverse l ↔ a ∈ l := by
-  induction l <;> aesop
+  induction l <;> set_option aesop.check.script false in aesop -- TODO
 
 @[simp] theorem reverse_replicate (a : α) (n) : reverse (replicate n a) = replicate n a :=
   ADMIT -- Several missing lemmas.

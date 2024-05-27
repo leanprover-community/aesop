@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleTac.Basic
+import Aesop.Script.SpecificTactics
 
 open Lean
 open Lean.Meta
