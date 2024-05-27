@@ -424,4 +424,7 @@ register_option aesop.smallErrorMessages : Bool := {
     descr := "(aesop) Print smaller error messages. Used for testing."
   }
 
+def tacticsToMessageData (ts : Array Syntax.Tactic) : MessageData :=
+  MessageData.joinSep (ts.map toMessageData |>.toList) "\n"
+
 end Aesop
