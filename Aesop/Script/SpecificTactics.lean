@@ -14,6 +14,13 @@ open Lean.PrettyPrinter (delab)
 
 namespace Aesop.ScriptBuilder
 
+def replace (preGoal postGoal : MVarId) (userName : Name) (type : Expr) (proof : Expr) :
+    ScriptBuilder MetaM :=
+  .ofTactics 1 $ do
+    let type ← postGoal.withContext $ delab type
+    let proof ← preGoal.withContext $ delab proof
+    return #[← `(tactic| replace $(mkIdent userName) : $type := $proof)]
+
 def assertHypotheses (goal : MVarId) (hs : Array Hypothesis) :
     ScriptBuilder MetaM :=
   .ofTactics 1 $ goal.withContext $ hs.mapM λ h => do
@@ -59,6 +66,15 @@ def assertHypothesesWithScript (goal : MVarId)
   let (fvarIds, goal') ← goal.assertHypotheses hs
   let scriptBuilder? := mkScriptBuilder? generateScript $ .assertHypotheses goal hs
   return (fvarIds, goal', scriptBuilder?)
+
+def replaceFVarWithScript (goal : MVarId) (fvarId : FVarId) (type : Expr)
+    (proof : Expr) (generateScript : Bool) :
+    MetaM (MVarId × FVarId × Option (ScriptBuilder MetaM)) := do
+  let userName ← fvarId.getUserName
+  let (postGoal, newFVarId, _) ← replaceFVar goal fvarId type proof
+  let scriptBuilder? := mkScriptBuilder? generateScript $
+    .replace goal postGoal userName type proof
+  return (postGoal, newFVarId, scriptBuilder?)
 
 def clearWithScript (goal : MVarId) (fvarId : FVarId) (generateScript : Bool) :
     MetaM (MVarId × Option (ScriptBuilder MetaM)) :=
