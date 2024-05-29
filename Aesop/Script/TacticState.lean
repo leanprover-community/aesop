@@ -50,14 +50,11 @@ def getVisibleGoalIndex (ts : TacticState) (goal : MVarId) : m Nat := do
 def getMainGoal? (ts : TacticState) : Option MVarId :=
   ts.visibleGoals[0]?.map (·.goal)
 
-def hasNoVisibleGoals (ts : TacticState) : Bool :=
-  ts.visibleGoals.isEmpty
-
-def hasSingleVisibleGoal (ts : TacticState) : Bool :=
-  ts.visibleGoals.size == 1
-
 def visibleGoalsHaveMVars (ts : TacticState) : Bool :=
   ts.visibleGoals.any λ g => ! g.mvars.isEmpty
+
+def solveVisibleGoals (ts : TacticState) : TacticState :=
+  { ts with visibleGoals := #[] }
 
 private def replaceWithArray [BEq α] (xs : Array α) (x : α) (r : Array α) :
     Option (Array α) := Id.run do

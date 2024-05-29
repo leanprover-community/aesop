@@ -12,6 +12,24 @@ open Lean.Meta
 
 namespace Aesop
 
+/--
+A `MetaM` version of the `replace` tactic. If `fvarId` refers to the
+hypothesis `h`, this tactic asserts a new hypothesis `h : type` with proof
+`proof : type` and then tries to clear `fvarId`. Unlike `replaceLocalDecl`,
+`replaceFVar` always adds the new hypothesis at the end of the local context.
+
+`replaceFVar` returns the new goal, the `FVarId` of the newly asserted
+hypothesis and whether the old hypothesis was cleared.
+-/
+def replaceFVar (goal : MVarId) (fvarId : FVarId) (type : Expr) (proof : Expr) :
+    MetaM (MVarId × FVarId × Bool) := do
+  let userName ← goal.withContext $ fvarId.getUserName
+  let preClearGoal ← goal.assert userName type proof
+  let goal ← preClearGoal.tryClear fvarId
+  let clearSuccess := preClearGoal != goal
+  let (newFVarId, goal) ← intro1Core goal (preserveBinderNames := true)
+  return (goal, newFVarId, clearSuccess)
+
 -- TODO This tactic simply executes the `MetaM` version of `cases`. We need this
 -- when generating tactic scripts because the `MetaM` version and the `TacticM`
 -- version of `cases` use different naming heuristics. If the two tactics were

@@ -17,14 +17,14 @@ namespace Aesop
 
 inductive SimpResult
   | solved (usedTheorems : Simp.UsedSimps)
-  | unchanged (newGoal : MVarId)
+  | unchanged
   | simplified (newGoal : MVarId) (usedTheorems : UsedSimps)
 
 namespace SimpResult
 
 def newGoal? : SimpResult → Option MVarId
   | solved .. => none
-  | unchanged g => some g
+  | unchanged => none
   | simplified g .. => some g
 
 end SimpResult
@@ -90,7 +90,7 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
       stats
   if let some (_, mvarId) := result then
     if mvarId == mvarIdOld then
-      return .unchanged mvarId
+      return .unchanged
     else
       return .simplified mvarId usedSimps
   else
@@ -121,7 +121,7 @@ def simpAll (mvarId : MVarId) (ctx : Simp.Context)
     | (none, stats) => return .solved stats.usedTheorems
     | (some mvarIdNew, stats) =>
       if mvarIdNew == mvarId then
-        return .unchanged mvarIdNew
+        return .unchanged
       else
         return .simplified mvarIdNew stats.usedTheorems
 

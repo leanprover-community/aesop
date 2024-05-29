@@ -124,13 +124,14 @@ def finalizeProof : SearchM Q Unit := do
       aesop_trace[proof] "Final proof:{indentExpr proof}"
 
 open Lean.Elab.Tactic in
-def checkRenderedScript (script : Array Syntax.Tactic) : SearchM Q Unit := do
+def checkRenderedScript (completeProof : Bool) (script : Array Syntax.Tactic) :
+    SearchM Q Unit := do
   let initialState ← getRootMetaState
   let rootGoal ← getRootMVarId
   let go : TacticM Unit := do
     setGoals [rootGoal]
     evalTactic $ ← `(tacticSeq| $script:tactic*)
-    unless (← getUnsolvedGoals).isEmpty do
+    if completeProof && ! (← getUnsolvedGoals).isEmpty then
       throwError "script executed successfully but did not solve the main goal"
   try
     show MetaM Unit from withoutModifyingState do
@@ -154,11 +155,15 @@ register_option aesop.dev.dynamicStructuring : Bool := {
   defValue := false
 }
 
-def structureScript (uscript : UnstructuredScript) (rootState : Meta.SavedState)
-    (rootGoal : MVarId) : SearchM Q (Option StructuredScript) := do
-  if aesop.dev.dynamicStructuring.get (← getOptions) then
+def structureScript (completeProof : Bool) (uscript : UnstructuredScript)
+    (rootState : Meta.SavedState) (rootGoal : MVarId) :
+    SearchM Q (Option StructuredScript) := do
+  let dynamicStructuring := aesop.dev.dynamicStructuring.get (← getOptions)
+  if dynamicStructuring && completeProof then
     uscript.toStructuredScriptDynamic rootState rootGoal
   else
+    if dynamicStructuring then
+      logWarning "aesop: falling back to static structuring for incomplete proof"
     let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
     let tacticState := {
       visibleGoals := #[⟨rootGoal, rootGoalMVars⟩]
@@ -166,22 +171,23 @@ def structureScript (uscript : UnstructuredScript) (rootState : Meta.SavedState)
     }
     uscript.toStructuredScriptStatic tacticState
 
-def traceScript : SearchM Q Unit := do
+def traceScript (completeProof : Bool) : SearchM Q Unit := do
   let options := (← read).options
   if ! options.generateScript then
     return
-  let uscript ← (← getRootMVarCluster).extractScript
+  let uscript ← if completeProof then extractScript else extractSafePrefixScript
   checkScriptSteps uscript
   let rootGoal ← getRootMVarId
   let rootState ← getRootMetaState
-  let structuredScript? ← structureScript uscript rootState rootGoal
+  let structuredScript? ←
+    structureScript completeProof uscript rootState rootGoal
   if let some structuredScript := structuredScript? then
     let script ← structuredScript.render
     if options.traceScript then
       let script ← `(tacticSeq| $script*)
       addTryThisTacticSeqSuggestion (← getRef) script
     if ← Check.script.isEnabled then
-      checkRenderedScript script
+      checkRenderedScript completeProof script
   else
     let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
     let tacticState :=
@@ -201,7 +207,7 @@ def finishIfProven : SearchM Q Bool := do
   unless (← (← getRootMVarCluster).get).state.isProven do
     return false
   finalizeProof
-  traceScript
+  traceScript (completeProof := true)
   traceTree
   return true
 
@@ -288,6 +294,7 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
         aesop_trace![proof] "{proof}"
     | none => aesop_trace![proof] "<no proof>"
   traceTree
+  traceScript (completeProof := false)
   let opts := (← read).options
   if opts.terminal then
     throwAesopEx (← getRootMVarId) safeGoals safeExpansionSuccess err

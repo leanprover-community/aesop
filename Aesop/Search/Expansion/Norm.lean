@@ -41,8 +41,7 @@ inductive NormRuleResult
   | succeeded (goal : MVarId)
       (scriptStep? : Except DisplayRuleName TacticInvocation)
   | proved (scriptStep? : Except DisplayRuleName TacticInvocation)
-  | failed (scriptStep? : Option TacticInvocation)
-    -- `simp` may generate a 'dummy' script step even when it fails.
+  | failed
 
 namespace NormRuleResult
 
@@ -95,7 +94,7 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) :
   match result? with
   | Sum.inl e =>
     aesop_trace[steps] e.toMessageData
-    return .failed none
+    return .failed
   | Sum.inr result =>
     let #[rapp] := result.applications
       | err m!"rule did not produce exactly one rule application."
@@ -139,7 +138,7 @@ def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     let result ← runNormRule goal mvars rule
     if result.isSuccessful then
       return result
-  return .failed none
+  return .failed
 
 def mkNormSimpScriptStep
     (preGoal : MVarId) (postGoal? : Option GoalWithMVars)
@@ -157,14 +156,7 @@ def mkNormSimpScriptStep
 def SimpResult.toNormRuleResult (ruleName : DisplayRuleName)
     (originalGoal : GoalWithMVars) (preState postState : Meta.SavedState) :
     SimpResult → NormM NormRuleResult
-  | .unchanged newGoal => do
-    let scriptStep? :=
-      if (← read).options.generateScript then
-        some $ .noop originalGoal.goal ⟨newGoal, originalGoal.mvars⟩ preState
-                 postState
-      else
-        none
-    return .failed scriptStep?
+  | .unchanged => return .failed
   | .solved usedTheorems => do
     let scriptStep? ← mkScriptStep? none usedTheorems
     return .proved scriptStep?
@@ -209,7 +201,7 @@ def normSimpCore (goal : MVarId)
         if anyMVarDropped then
           aesop_trace[steps] "Normalisation simp solved the goal but dropped some metavariables. Skipping normalisation simp."
           restoreState preState
-          pure $ .unchanged goal
+          pure .unchanged
         else
           pure result
       | .unchanged .. =>
@@ -275,7 +267,7 @@ def normUnfoldCore (goal : MVarId) (goalMVars : HashSet MVarId) :
   match result with
   | .unchanged =>
     aesop_trace[steps] "nothing to unfold"
-    return .failed none
+    return .failed
   | .changed newGoal _ =>
     let scriptStep? ← do
       match scriptBuilder? with
@@ -338,11 +330,7 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
     | .proved scriptStep? =>
       script? := return (← script?).push (← scriptStep?)
       return .proved script?
-    | .failed scriptStep? =>
-      script? :=
-        match scriptStep? with
-        | none => script?
-        | some scriptStep => return (← script?).push scriptStep
+    | .failed =>
       if h : step.val + 1 < steps.size then
         step := ⟨step.val + 1, h⟩
       else
@@ -365,13 +353,13 @@ def NormStep.unfold (mvars : HashSet MVarId) : NormStep
       normUnfold goal mvars
     else
       aesop_trace[steps] "norm unfold is disabled (options := \{ ..., enableUnfold := false })"
-      return .failed none
+      return .failed
 
 def NormStep.simp (mvars : HashSet MVarId) : NormStep
   | goal, _, _ => do
     if ! (← readThe NormM.Context).normSimpContext.enabled then
       aesop_trace[steps] "norm simp is disabled (simp_options := \{ ..., enabled := false })"
-      return .failed none
+      return .failed
     normSimp goal mvars
 
 partial def normalizeGoalMVar (goal : MVarId)

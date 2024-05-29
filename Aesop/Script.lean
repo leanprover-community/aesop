@@ -71,12 +71,9 @@ def TacticState.applyTacticInvocation (tacticState : TacticState)
 
 namespace TacticInvocation
 
-def noop (preGoal : MVarId) (postGoal : GoalWithMVars)
-    (preState postState : Meta.SavedState) : TacticInvocation := {
-  tacticSeq := #[]
-  postGoals := #[postGoal]
-  preGoal, preState, postState
-}
+instance : ToMessageData TacticInvocation where
+  toMessageData ti :=
+    m!"{ti.preGoal.name} → {ti.postGoals.map (·.goal.name)}:{indentD $ tacticsToMessageData ti.tacticSeq}"
 
 def render (acc : Array Syntax.Tactic) (ti : TacticInvocation)
     (tacticState : TacticState) : m (Array Syntax.Tactic × TacticState) := do
@@ -133,10 +130,12 @@ inductive StructuredScript
   | empty
   | onGoal (goalPos : Nat) (ti : TacticInvocation) (tail : StructuredScript)
   | focusAndSolve (goalPos : Nat) (here tail : StructuredScript)
+  | sorryN (n : Nat)
   deriving Inhabited
 
-def StructuredScript.render (script : StructuredScript) :
-    m (Array Syntax.Tactic) := do
+namespace StructuredScript
+
+def render (script : StructuredScript) : m (Array Syntax.Tactic) := do
   go #[] script
   where
     go (acc : Array Syntax.Tactic) :
@@ -154,32 +153,52 @@ def StructuredScript.render (script : StructuredScript) :
             let posLit := mkOneBasedNumLit goalPos
             `(tactic| on_goal $posLit:num => { $nestedScript:tactic* })
         go (acc.push t) tail
+      | sorryN n => do
+        let sorryStx ← `(tactic| sorry)
+        let mut acc := acc
+        for _ in [:n] do
+          acc := acc.push sorryStx
+        return acc
 
+end StructuredScript
+
+variable [MonadRecDepth m] [MonadOptions m] [MonadTrace m] [AddMessageContext m]
+  [MonadLiftT BaseIO m] [MonadLiftT IO m] [MonadAlwaysExcept Exception m] in
 partial def UnstructuredScript.toStructuredScriptStatic
     (tacticState : TacticState) (script : UnstructuredScript) :
-    m StructuredScript := do
-  let mut steps : HashMap MVarId (Nat × TacticInvocation) := {}
+    m StructuredScript :=
+  withConstAesopTraceNode .debug (return m!"statically structuring the tactic script") do
+  aesop_trace[debug] "unstructured script:{indentD $ MessageData.joinSep (script.toList.map λ ti => m!"{ti}") "\n"}"
+  let mut steps : HashMap MVarId (Nat × TacticInvocation) :=
+    mkHashMap script.size
   for h : i in [:script.size] do
     let step := script[i]'h.2
+    if h : step.postGoals.size = 1 then
+      if step.postGoals[0].goal == step.preGoal then
+        continue
     steps := steps.insert step.preGoal (i, step)
   (·.fst) <$> go steps tacticState
 where
   go (steps : HashMap MVarId (Nat × TacticInvocation))
-      (tacticState : TacticState) : m (StructuredScript × TacticState) := do
-    if tacticState.hasNoVisibleGoals then
+      (tacticState : TacticState) : m (StructuredScript × TacticState) :=
+    withIncRecDepth do
+    if tacticState.visibleGoals.isEmpty then
       return (.empty, tacticState)
-    else if tacticState.hasSingleVisibleGoal ||
+    else if tacticState.visibleGoals.size == 1 ||
             tacticState.visibleGoalsHaveMVars then
       -- "Unstructured mode"
       -- TODO If the original order happens to solve the main goal, we can
       -- structure opportunistically.
       let firstStep? :=
         findFirstStep? tacticState.visibleGoals (steps.find? ·.goal) (·.fst)
-      let some (goalPos, _, _, firstStep) := firstStep?
-        | throwError "internal error: found no step to solve any visible goal"
-      let tacticState ← tacticState.applyTacticInvocation firstStep
-      let (tailScript, tacticState) ← go steps tacticState
-      return (.onGoal goalPos firstStep tailScript, tacticState)
+      if let some (goalPos, _, _, firstStep) := firstStep? then
+        let tacticState ← tacticState.applyTacticInvocation firstStep
+        let (tailScript, tacticState) ← go steps tacticState
+        return (.onGoal goalPos firstStep tailScript, tacticState)
+      else
+        let numVisibleGoals := tacticState.visibleGoals.size
+        let tacticState := tacticState.solveVisibleGoals
+        return (.sorryN numVisibleGoals, tacticState)
     else
       -- "Structured mode"
       let mut tacticState := tacticState
@@ -283,7 +302,7 @@ partial def UnstructuredScript.toStructuredScriptDynamic
     (preState : Meta.SavedState) (preGoal : MVarId)
     (script : UnstructuredScript) : MetaM (Option StructuredScript) :=
   withAesopTraceNode .debug (λ r => return m!"{ExceptToEmoji.toEmoji r} structuring generated tactic script") do
-    aesop_trace[debug] "unstructured script:{indentD $ toMessageData $ tacticsToTacticSeq $ script.concatMap (·.tacticSeq)}"
+    aesop_trace[debug] "unstructured script:{indentD $ tacticsToMessageData $ script.concatMap (·.tacticSeq)}"
     let (some result) ← go preState #[preGoal] |>.run script
       | return none
     return some result.script
@@ -309,7 +328,7 @@ where
         if preGoals.size = 1 then
           let (some (_, ti)) := (← read).steps[preGoal]
             | throwError "found no step for goal {preGoal.name}:{indentD $ ← preState.runMetaM' do addMessageContext $ toMessageData preGoal}"
-          aesop_trace[debug] "running tactics:{indentD $ toMessageData $ tacticsToTacticSeq ti.tacticSeq}"
+          aesop_trace[debug] "running tactics:{indentD $ tacticsToMessageData ti.tacticSeq}"
           withConstAesopTraceNode .debug (return m!"expected post goals:") do
             aesop_trace[debug] ← goalsToMessageData ti.postState $ ti.postGoals.map (·.goal)
           let (postState, postGoals) ←
@@ -363,7 +382,7 @@ where
       let firstStep? := findFirstStep? preGoals (steps[·]) (·.fst)
       let some (goalPos, goal, _, ti) := firstStep?
         | throwError "found no step for any of the visible goals{indentD $ ← goalsToMessageData preState preGoals}"
-      aesop_trace[debug] "running tactics on goal {goalPos}:{indentD $ toMessageData $ tacticsToTacticSeq ti.tacticSeq}"
+      aesop_trace[debug] "running tactics on goal {goalPos}:{indentD $ tacticsToMessageData ti.tacticSeq}"
       withConstAesopTraceNode .debug (return m!"expected post goals:") do
         aesop_trace[debug] ← goalsToMessageData ti.postState $ ti.postGoals.map (·.goal)
       let (postState, postGoals) ←
@@ -393,9 +412,5 @@ where
         MessageData.joinSep
           (goals.map λ g => m!"?{g.name}:{indentD $ toMessageData g}").toList
           "\n"
-
-  tacticsToTacticSeq (ts : Array Syntax.Tactic) :
-      TSyntax ``Lean.Parser.Tactic.tacticSeq :=
-    Unhygienic.run do `(Lean.Parser.Tactic.tacticSeq| $ts:tactic*)
 
 end Aesop

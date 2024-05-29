@@ -59,10 +59,12 @@ partial def traverseUp : TreeRef → m Unit
 
 end
 
+variable [Monad m] [MonadLiftT (ST IO.RealWorld) m]
+
 @[inline]
-def preTraverseDown [Monad m] [MonadLiftT (ST IO.RealWorld) m]
-  (visitGoal : GoalRef → m Bool) (visitRapp : RappRef → m Bool)
-  (visitMVarCluster : MVarClusterRef → m Bool) : TreeRef → m Unit :=
+def preTraverseDown (visitGoal : GoalRef → m Bool)
+    (visitRapp : RappRef → m Bool) (visitMVarCluster : MVarClusterRef → m Bool) :
+    TreeRef → m Unit :=
   traverseDown
     visitGoal
     (λ _ => pure ())
@@ -72,9 +74,8 @@ def preTraverseDown [Monad m] [MonadLiftT (ST IO.RealWorld) m]
     (λ _ => pure ())
 
 @[inline]
-def preTraverseUp [Monad m] [MonadLiftT (ST IO.RealWorld) m]
-  (visitGoal : GoalRef → m Bool) (visitRapp : RappRef → m Bool)
-  (visitMVarCluster : MVarClusterRef → m Bool) : TreeRef → m Unit :=
+def preTraverseUp (visitGoal : GoalRef → m Bool) (visitRapp : RappRef → m Bool)
+    (visitMVarCluster : MVarClusterRef → m Bool) : TreeRef → m Unit :=
   traverseUp
     visitGoal
     (λ _ => pure ())
@@ -84,9 +85,9 @@ def preTraverseUp [Monad m] [MonadLiftT (ST IO.RealWorld) m]
     (λ _ => pure ())
 
 @[inline]
-def postTraverseDown [Monad m] [MonadLiftT (ST IO.RealWorld) m]
-  (visitGoal : GoalRef → m Unit) (visitRapp : RappRef → m Unit)
-  (visitMVarCluster : MVarClusterRef → m Unit) : TreeRef → m Unit :=
+def postTraverseDown (visitGoal : GoalRef → m Unit)
+    (visitRapp : RappRef → m Unit) (visitMVarCluster : MVarClusterRef → m Unit) :
+    TreeRef → m Unit :=
   traverseDown
     (λ _ => pure true)
     visitGoal
@@ -96,9 +97,8 @@ def postTraverseDown [Monad m] [MonadLiftT (ST IO.RealWorld) m]
     visitMVarCluster
 
 @[inline]
-def postTraverseUp [Monad m] [MonadLiftT (ST IO.RealWorld) m]
-  (visitGoal : GoalRef → m Unit) (visitRapp : RappRef → m Unit)
-  (visitMVarCluster : MVarClusterRef → m Unit) : TreeRef → m Unit :=
+def postTraverseUp (visitGoal : GoalRef → m Unit) (visitRapp : RappRef → m Unit)
+    (visitMVarCluster : MVarClusterRef → m Unit) : TreeRef → m Unit :=
   traverseUp
     (λ _ => pure true)
     visitGoal

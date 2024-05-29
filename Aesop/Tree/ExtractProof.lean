@@ -180,7 +180,7 @@ private abbrev SafePrefixM := StateRefT SafePrefixState MetaM
 mutual
   private partial def extractSafePrefixGoal (parentEnv : Environment)
       (g : Goal) : SafePrefixM Unit := do
-    let (some (postNormGoal, _)) ← visitGoal parentEnv g
+    let (some (postNormGoal, _, parentEnv)) ← visitGoal parentEnv g
       | return
     let safeRapps ← g.safeRapps
     if safeRapps.size > 1 then
