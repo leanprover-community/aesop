@@ -11,8 +11,9 @@ open Lean.Meta
 
 namespace Aesop.BuiltinRules
 
-private def destructProductHyp (goal : MVarId) (hyp : FVarId)
-    (md : TransparencyMode) : MetaM MVarId :=
+private def destructProductHyp? (goal : MVarId) (hyp : FVarId)
+    (md : TransparencyMode) (generateScript : Bool) :
+    MetaM (Option (MVarId × Option RuleTacScriptBuilder)) :=
   goal.withContext do
     let hypType ← hyp.getType
     let (f, args) ← withTransparency md $ getAppUpToDefeq hypType
@@ -20,70 +21,90 @@ private def destructProductHyp (goal : MVarId) (hyp : FVarId)
     | #[α, β] =>
       match f with
       | (.const ``And _) =>
-        go hypType (mkApp2 (.const ``And.casesOn [← mkFreshLevelMVar]) α β)
+        go hypType (.const ``And.casesOn [← mkFreshLevelMVar]) α β
+          ``And.intro `left `right
       | (.const ``Prod lvls) =>
-        go hypType (mkApp2 (.const ``Prod.casesOn  ((← mkFreshLevelMVar) :: lvls)) α β)
+        go hypType (.const ``Prod.casesOn  ((← mkFreshLevelMVar) :: lvls)) α β
+          ``Prod.mk `fst `snd
       | (.const ``PProd lvls) =>
-        go hypType (mkApp2 (.const ``PProd.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
+        go hypType (.const ``PProd.casesOn ((← mkFreshLevelMVar) :: lvls)) α β
+          ``PProd.mk `fst `snd
       | (.const ``MProd lvls) =>
-        go hypType (mkApp2 (.const ``MProd.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
+        go hypType (.const ``MProd.casesOn ((← mkFreshLevelMVar) :: lvls)) α β
+          ``MProd.mk `fst `snd
       | (.const ``Exists lvls) =>
-        go hypType (mkApp2 (.const ``Exists.casesOn lvls) α β)
+        go hypType (.const ``Exists.casesOn lvls) α β ``Exists.intro `w `h
       | (.const ``Subtype lvls) =>
-        go hypType (mkApp2 (.const ``Subtype.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
+        go hypType (.const ``Subtype.casesOn ((← mkFreshLevelMVar) :: lvls)) α β
+          ``Subtype.mk `val `property
       | (.const ``Sigma lvls) =>
-        go hypType (mkApp2 (.const ``Sigma.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
+        go hypType (.const ``Sigma.casesOn ((← mkFreshLevelMVar) :: lvls)) α β
+          ``Sigma.mk `fst `snd
       | (.const ``PSigma lvls) =>
-        go hypType (mkApp2 (.const ``PSigma.casesOn ((← mkFreshLevelMVar) :: lvls)) α β)
-      | _ => return goal
-    | _ => return goal
+        go hypType (.const ``PSigma.casesOn ((← mkFreshLevelMVar) :: lvls)) α β
+          ``PSigma.mk `fst `snd
+      | _ => return none
+    | _ => return none
   where
     -- `rec` is the partially applied recursor. Missing arguments to `rec` are
     -- the motive, the hypothesis and the new proof.
-    go (hypType : Expr) (rec : Expr) : MetaM MVarId := do
+    go (hypType rec lType rType : Expr) (ctor lName rName : Name) :
+        MetaM (MVarId × Option RuleTacScriptBuilder) := do
+      let initialGoal := goal
+      let initialHyp := hyp
       let (genHyps, goal) ← goal.revert #[hyp] (preserveOrder := true)
-      let (hyp, goal) ← goal.intro1
+      let (hyp, goal) ← intro1Core goal (preserveBinderNames := true)
       let hypExpr := mkFVar hyp
       let tgt ← instantiateMVars (← goal.getType)
       let motive := mkLambda `h .default hypType $ tgt.abstract #[hypExpr]
-      let prf := mkApp2 rec motive hypExpr
+      let prf := mkApp4 rec lType rType motive hypExpr
       goal.withContext $ check prf
       let [goal] ← goal.apply prf
         | throwError "destructProducts: apply did not return exactly one goal"
-      let (_, goal) ← goal.introN (genHyps.size - 1)
-      let (_, goal) ← goal.introN 2
-      goal.clear hyp
+      let goal ← goal.clear hyp
+      let lctx := (← goal.getDecl).lctx
+      -- The following is only valid if `lName` and `rName` are distinct.
+      -- Otherwise they could yield two identical unused names.
+      let lName := lctx.getUnusedName lName
+      let rName := lctx.getUnusedName rName
+      let (_, goal) ← goal.introN 2 [lName, rName]
+      let (_, goal) ← introNCore goal (genHyps.size - 1) []
+        (preserveBinderNames := true) (useNamesForExplicitOnly := false)
+      let scriptBuilder? := mkScriptBuilder? generateScript $
+        let ctorNames :=
+          #[{ ctor, args := #[lName, rName], hasImplicitArg := false }]
+        .rcases initialGoal initialHyp ctorNames
+      return (goal, scriptBuilder?)
 
-partial def destructProductsCore (goal : MVarId) (md : TransparencyMode) :
-    MetaM MVarId :=
+partial def destructProductsCore (goal : MVarId) (md : TransparencyMode)
+    (generateScript : Bool) : MetaM (MVarId × Option RuleTacScriptBuilder) :=
   goal.withContext do
-    let newGoal ← go 0 goal
-    if newGoal == goal then
+    let result ← go 0 goal (mkScriptBuilder? generateScript .id)
+    if result.fst == goal then
       throwError "destructProducts: found no hypothesis with a product-like type"
-    else
-      return newGoal
+    return result
   where
-    go (i : Nat) (goal : MVarId) : MetaM MVarId := do
+    go (i : Nat) (goal : MVarId) (scriptBuilder? : Option RuleTacScriptBuilder) :
+        MetaM (MVarId × Option RuleTacScriptBuilder) := do
       goal.withContext $ withIncRecDepth do
         let lctx ← getLCtx
         if h : i < lctx.decls.size then
           match lctx.decls[i] with
-          | none => go (i + 1) goal
+          | none => go (i + 1) goal scriptBuilder?
           | some ldecl =>
             if ldecl.isImplementationDetail then
-              go (i + 1) goal
+              go (i + 1) goal scriptBuilder?
             else
-              let newGoal ← destructProductHyp goal ldecl.fvarId md
-              if newGoal == goal then
-                go (i + 1) newGoal
+              let result? ←
+                destructProductHyp? goal ldecl.fvarId md generateScript
+              if let some (newGoal, newScriptBuilder?) := result? then
+                let scriptBuilder? :=
+                  return (← scriptBuilder?).seq #[← newScriptBuilder?]
+                go i newGoal scriptBuilder?
               else
-                go i newGoal
+                go (i + 1) goal scriptBuilder?
         else
-          return goal
-
-elab "aesop_destruct_products" : tactic =>
-  Elab.Tactic.liftMetaTactic1 λ goal =>
-    return some (← destructProductsCore goal (← getTransparency))
+          return (goal, scriptBuilder?)
 
 -- This tactic splits hypotheses of product-like types: `And`, `Prod`, `PProd`,
 -- `MProd`, `Exists`, `Subtype`, `Sigma` and `PSigma`. It's a restricted version
@@ -99,11 +120,8 @@ elab "aesop_destruct_products" : tactic =>
                hyp Exists _, hyp Subtype _, hyp Sigma _, hyp PSigma _])]
 partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let md := input.options.destructProductsTransparency
-  let goal ← unhygienic $ destructProductsCore input.goal md
-  let scriptBuilder? :=
-    mkScriptBuilder? input.options.generateScript $ .ofTactic 1 do
-      let tac ← withTransparencySyntax md (← `(tactic| aesop_destruct_products))
-      `(tactic| unhygienic $tac:tactic)
+  let (goal, scriptBuilder?) ←
+    destructProductsCore input.goal md input.options.generateScript
   return (#[goal], scriptBuilder?, none)
 
 end Aesop.BuiltinRules
