@@ -180,7 +180,7 @@ script. At time of writing, it looks like this:
 
 ``` lean
 intro a
-unhygienic aesop_cases a
+rcases a with @⟨x, xs_1⟩
 simp_all only [cons_append]
 apply MyList.NonEmpty.cons
 ```

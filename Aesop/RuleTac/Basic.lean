@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Index.Basic
 import Aesop.Options
 import Aesop.Percent
+import Aesop.Script.CtorNames
 import Aesop.Script.ScriptBuilder
 import Batteries.Lean.Meta.SavedState
 
@@ -137,7 +138,7 @@ inductive RuleTacDescr
       (immediate : UnorderedArraySet Nat) (isDestruct : Bool)
       (md : TransparencyMode)
   | cases (target : CasesTarget) (md : TransparencyMode)
-      (isRecursiveType : Bool)
+      (isRecursiveType : Bool) (ctorNames : Array CtorNames)
   | tacticM (decl : Name)
   | ruleTac (decl : Name)
   | tacGen (decl : Name)

@@ -427,4 +427,21 @@ register_option aesop.smallErrorMessages : Bool := {
 def tacticsToMessageData (ts : Array Syntax.Tactic) : MessageData :=
   MessageData.joinSep (ts.map toMessageData |>.toList) "\n"
 
+/--
+Note: the returned local context contains invalid `LocalDecl`s.
+-/
+def getUnusedNames (lctx : LocalContext) (suggestions : Array Name) : Array Name × LocalContext :=
+  go 0 (Array.mkEmpty suggestions.size) lctx
+where
+  go (i : Nat) (acc : Array Name) (lctx : LocalContext) : Array Name × LocalContext :=
+    if h : i < suggestions.size then
+      let name := lctx.getUnusedName suggestions[i]
+      let lctx := lctx.addDecl $ dummyLDecl name
+      go (i + 1) (acc.push name) lctx
+    else
+      (acc, lctx)
+
+  dummyLDecl (name : Name) : LocalDecl :=
+    .cdecl 0 ⟨`_⟩ name (.sort levelZero) .default .default
+
 end Aesop

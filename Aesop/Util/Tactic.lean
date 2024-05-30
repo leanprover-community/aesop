@@ -30,17 +30,6 @@ def replaceFVar (goal : MVarId) (fvarId : FVarId) (type : Expr) (proof : Expr) :
   let (newFVarId, goal) ← intro1Core goal (preserveBinderNames := true)
   return (goal, newFVarId, clearSuccess)
 
--- TODO This tactic simply executes the `MetaM` version of `cases`. We need this
--- when generating tactic scripts because the `MetaM` version and the `TacticM`
--- version of `cases` use different naming heuristics. If the two tactics were
--- harmonised, we could use regular `cases` in the script (assuming there are no
--- other differences).
-elab "aesop_cases " x:ident : tactic =>
-  liftMetaTactic λ goal => do
-    let fvarId ← getFVarFromUserName x.getId
-    let subgoals ← goal.cases fvarId.fvarId!
-    return subgoals.map (·.mvarId) |>.toList
-
 inductive UnfoldResult (α : Type)
   | unchanged
   | changed (new : α) (usedDecls : HashSet Name)

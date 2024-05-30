@@ -33,7 +33,8 @@ def CasesTarget.toCasesTarget' : CasesTarget → MetaM CasesTarget'
 
 namespace RuleTac
 
-partial def cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveType : Bool) : RuleTac :=
+partial def cases (target : CasesTarget) (md : TransparencyMode)
+    (isRecursiveType : Bool) (ctorNames : Array CtorNames) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
     match ← go #[] #[] input.goal input.options.generateScript with
     | none => throwError "No matching hypothesis found."
@@ -64,7 +65,7 @@ partial def cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveTyp
         | return none
       let (goals, scriptBuilder?) ←
         try
-          commitIfNoEx $ unhygienicCasesWithScript goal hyp generateScript
+          commitIfNoEx $ casesWithScript goal hyp ctorNames generateScript
         catch _ =>
           return none
       let mut newGoals := newGoals

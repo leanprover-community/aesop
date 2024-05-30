@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Script.CtorNames
 import Aesop.Script.ScriptBuilder
 import Batteries.Lean.Meta.Clear
 import Batteries.Lean.Meta.Inaccessible
@@ -32,11 +33,12 @@ def clear (goal : MVarId) (fvarIds : Array FVarId) :
     let userNames ← fvarIds.mapM (mkIdent <$> ·.getUserName)
     `(tactic| clear $userNames*)
 
-def unhygienicAesopCases (goal : MVarId) (fvarId : FVarId) (subgoals : Nat) :
-    ScriptBuilder MetaM :=
-  .ofTactic subgoals do
+def rcases (goal : MVarId) (fvarId : FVarId)
+    (ctorNames : Array CtorNames) : ScriptBuilder MetaM :=
+  .ofTactic ctorNames.size do
     let userName ← goal.withContext fvarId.getUserName
-    `(tactic| unhygienic aesop_cases $(mkIdent userName):ident)
+    let pat ← ctorNamesToRCasesPats ctorNames
+    `(tactic| rcases $(mkIdent userName):ident with $pat)
 
 def renameInaccessibleFVars (goal : MVarId) (renamedFVars : Array FVarId) :
     ScriptBuilder MetaM :=
@@ -98,13 +100,20 @@ def tryClearManyWithScript (goal : MVarId) (fvarIds : Array FVarId)
   let scriptBuilder? := mkScriptBuilder? generateScript $ .clear goal cleared
   return (goal', cleared, scriptBuilder?)
 
-def unhygienicCasesWithScript (goal : MVarId) (fvarId : FVarId)
-    (generateScript : Bool) :
+def casesWithScript (goal : MVarId) (fvarId : FVarId)
+    (ctorNames : Array CtorNames) (generateScript : Bool) :
     MetaM (Array CasesSubgoal × Option (ScriptBuilder MetaM)) := do
-  let goals ← unhygienic $ goal.cases fvarId
+  let ctorNames := getUnusedCtorNames (← goal.getDecl).lctx
+  let goals ← goal.cases fvarId (ctorNames.map (·.toAltVarNames))
   let scriptBuilder? := mkScriptBuilder? generateScript $
-    .unhygienicAesopCases goal fvarId goals.size
+    .rcases goal fvarId ctorNames
   return (goals, scriptBuilder?)
+where
+  getUnusedCtorNames (lctx : LocalContext) : Array CtorNames :=
+    Prod.fst $ ctorNames.foldl (init := (Array.mkEmpty ctorNames.size, lctx))
+      λ (ctorNames, lctx) cn =>
+        let (cn, lctx) := cn.mkFreshArgNames lctx
+        (ctorNames.push cn, lctx)
 
 def renameInaccessibleFVarsWithScript (goal : MVarId) (generateScript : Bool) :
     MetaM (MVarId × Array FVarId × Option (ScriptBuilder MetaM)) := do
