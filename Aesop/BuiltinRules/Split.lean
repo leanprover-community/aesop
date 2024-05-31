@@ -24,8 +24,9 @@ def splitTarget : RuleTac := RuleTac.ofSingleRuleTac λ input => do
 def splitFirstHypothesis (goal : MVarId) : MetaM (Option (Array MVarId)) :=
   goal.withContext do
     for ldecl in ← getLCtx do
-      if let some goals ← splitLocalDecl? goal ldecl.fvarId then
-        return goals.toArray
+      if ! ldecl.isImplementationDetail then
+        if let some goals ← splitLocalDecl? goal ldecl.fvarId then
+          return goals.toArray
     return none
 
 def splitHypothesesCore (goal : MVarId) : MetaM (Option (Array MVarId)) :=
