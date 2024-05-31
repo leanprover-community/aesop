@@ -62,9 +62,11 @@ def seqFocus (b : UnstructuredScriptBuilder m)
     let tss ← tss.mapM λ (ts₂ : Array Syntax.Tactic) =>
       if ts₂.isEmpty then
         `(tactic| skip)
+      else if h : ts₂.size = 1 then
+        return ts₂[0]
       else
         `(tactic| ($ts₂:tactic*))
-    if let (some t) := ts[ts.size - 1]? then
+    if let some t := ts[ts.size - 1]? then
       return ts.pop.push (← `(tactic| $t:tactic <;> [ $tss;* ]))
     else
       return #[← `(tactic| map_tacs [ $tss;* ])]

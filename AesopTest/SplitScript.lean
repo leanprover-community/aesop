@@ -14,7 +14,7 @@ inductive MyFalse : Prop
 
 /--
 info: Try this:
-  split <;> [(rename_i h); (rename_i h)]
+  split <;> [rename_i h; rename_i h]
   · sorry
   · sorry
 ---
