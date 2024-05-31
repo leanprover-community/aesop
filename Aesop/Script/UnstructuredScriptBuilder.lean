@@ -56,7 +56,7 @@ def seqFocus (b : UnstructuredScriptBuilder m)
   if tss.all (·.isEmpty) then
     return ts
   if h : tss.size = 1 then
-    let ts₂ := tss[0]'(by simp [h])
+    let ts₂ := tss[0]
     return ts.push (← `(tactic| focus $ts₂:tactic*))
   else
     let tss ← tss.mapM λ (ts₂ : Array Syntax.Tactic) =>
@@ -66,10 +66,18 @@ def seqFocus (b : UnstructuredScriptBuilder m)
         return ts₂[0]
       else
         `(tactic| ($ts₂:tactic*))
-    if let some t := ts[ts.size - 1]? then
-      return ts.pop.push (← `(tactic| $t:tactic <;> [ $tss;* ]))
+    let firstTs := tss[0]!
+    let allSame := tss[1:].all λ ts => ts == firstTs
+    if allSame then
+      if let some t := ts[ts.size - 1]? then
+        return ts.pop.push (← `(tactic| $t:tactic <;> $firstTs))
+      else
+        return ts.push (← `(tactic| all_goals $firstTs:tactic ))
     else
-      return #[← `(tactic| map_tacs [ $tss;* ])]
+      if let some t := ts[ts.size - 1]? then
+        return ts.pop.push (← `(tactic| $t:tactic <;> [ $tss;* ]))
+      else
+        return ts.push (← `(tactic| map_tacs [ $tss;* ]))
 
 @[inline]
 protected def id : UnstructuredScriptBuilder m :=
