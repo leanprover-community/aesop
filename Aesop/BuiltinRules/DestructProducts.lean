@@ -71,9 +71,8 @@ private def destructProductHyp? (goal : MVarId) (hyp : FVarId)
       let (_, goal) ← introNCore goal (genHyps.size - 1) []
         (preserveBinderNames := true) (useNamesForExplicitOnly := false)
       let scriptBuilder? := mkScriptBuilder? generateScript $
-        let ctorNames :=
-          #[{ ctor, args := #[lName, rName], hasImplicitArg := false }]
-        .rcases initialGoal initialHyp ctorNames
+        .obtain initialGoal (.fvar initialHyp)
+          { ctor, args := #[lName, rName], hasImplicitArg := false }
       return (goal, scriptBuilder?)
 
 partial def destructProductsCore (goal : MVarId) (md : TransparencyMode)

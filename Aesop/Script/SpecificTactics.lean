@@ -33,12 +33,23 @@ def clear (goal : MVarId) (fvarIds : Array FVarId) :
     let userNames ← fvarIds.mapM (mkIdent <$> ·.getUserName)
     `(tactic| clear $userNames*)
 
-def rcases (goal : MVarId) (fvarId : FVarId)
-    (ctorNames : Array CtorNames) : ScriptBuilder MetaM :=
-  .ofTactic ctorNames.size do
-    let userName ← goal.withContext fvarId.getUserName
+def rcases (goal : MVarId) (e : Expr) (ctorNames : Array CtorNames) :
+    ScriptBuilder MetaM :=
+  .ofTactic ctorNames.size $ goal.withContext do
     let pat ← ctorNamesToRCasesPats ctorNames
-    `(tactic| rcases $(mkIdent userName):ident with $pat)
+    `(tactic| rcases $(← delab e):term with $pat)
+
+def obtain (goal : MVarId) (e : Expr) (ctorNames : CtorNames) :
+    ScriptBuilder MetaM :=
+  .ofTactic 1 $ goal.withContext do
+    `(tactic| obtain $(← ctorNames.toRCasesPat) := $(← delab e))
+
+def rcasesOrObtain (goal : MVarId) (e : Expr) (ctorNames : Array CtorNames) :
+    ScriptBuilder MetaM :=
+  if h : ctorNames.size = 1 then
+    obtain goal e ctorNames[0]
+  else
+    rcases goal e ctorNames
 
 def renameInaccessibleFVars (goal : MVarId) (renamedFVars : Array FVarId) :
     ScriptBuilder MetaM :=
@@ -106,7 +117,7 @@ def casesWithScript (goal : MVarId) (fvarId : FVarId)
   let ctorNames := getUnusedCtorNames (← goal.getDecl).lctx
   let goals ← goal.cases fvarId (ctorNames.map (·.toAltVarNames))
   let scriptBuilder? := mkScriptBuilder? generateScript $
-    .rcases goal fvarId ctorNames
+    .rcasesOrObtain goal (.fvar fvarId) ctorNames
   return (goals, scriptBuilder?)
 where
   getUnusedCtorNames (lctx : LocalContext) : Array CtorNames :=

@@ -42,7 +42,7 @@ theorem nonEmpty_append₁ {xs : MyList α} ys :
 /--
 info: Try this:
   intro a
-  rcases a with @⟨x, xs_1⟩
+  obtain @⟨x, xs_1⟩ := a
   simp_all only [cons_append]
   apply MyList.NonEmpty.cons
 -/
