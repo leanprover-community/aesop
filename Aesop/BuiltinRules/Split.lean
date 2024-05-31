@@ -13,13 +13,23 @@ namespace Aesop.BuiltinRules
 
 @[aesop (rule_sets := [builtin]) safe 100]
 def splitTarget : RuleTac := RuleTac.ofSingleRuleTac λ input => do
+  let generateScript := input.options.generateScript
   let (some goals) ← splitTarget? input.goal | throwError
     "nothing to split in target"
   let goals := goals.toArray
+  let mut renameScriptBuilders := Array.mkEmpty goals.size
+  let mut renamedGoals := Array.mkEmpty goals.size
+  for goal in goals do
+    let (goal, _, scriptBuilder?) ←
+      renameInaccessibleFVarsWithScript goal generateScript
+    renamedGoals := renamedGoals.push goal
+    if let some scriptBuilder := scriptBuilder? then
+      renameScriptBuilders := renameScriptBuilders.push scriptBuilder
   let scriptBuilder? :=
     mkScriptBuilder? input.options.generateScript $
-      .ofTactic goals.size `(tactic| split)
-  return (goals, scriptBuilder?, none)
+      ScriptBuilder.ofTactic goals.size `(tactic| split)
+        |>.seq renameScriptBuilders
+  return (renamedGoals, scriptBuilder?, none)
 
 def splitFirstHypothesis (goal : MVarId) : MetaM (Option (Array MVarId)) :=
   goal.withContext do
