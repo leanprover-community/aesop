@@ -4,6 +4,17 @@ open Lean Lean.Meta
 
 namespace Aesop
 
+variable [Monad m] [MonadQuotation m]
+
+def namesToRCasesPat (ns : Array Name) (implicit : Bool) :
+    m (TSyntax `rcasesPat) := do
+  let ns ← ns.mapM λ n =>
+    `(Lean.Parser.Tactic.rcasesPatLo| $(mkIdent n):ident)
+  if implicit then
+    `(rcasesPat| @⟨ $ns,* ⟩)
+  else
+    `(rcasesPat| ⟨ $ns,* ⟩)
+
 structure CtorNames where
   ctor : Name
   args : Array Name
@@ -12,14 +23,8 @@ structure CtorNames where
 
 namespace CtorNames
 
-def toRCasesPat [Monad m] [MonadQuotation m] (cn : CtorNames) :
-    m (TSyntax `rcasesPat) := do
-  let ns ← cn.args.mapM λ n =>
-    `(Lean.Parser.Tactic.rcasesPatLo| $(mkIdent n):ident)
-  if cn.hasImplicitArg then
-    `(rcasesPat| @⟨ $ns,* ⟩)
-  else
-    `(rcasesPat| ⟨ $ns,* ⟩)
+def toRCasesPat (cn : CtorNames) : m (TSyntax `rcasesPat) :=
+  namesToRCasesPat cn.args cn.hasImplicitArg
 
 def toAltVarNames (cn : CtorNames) : AltVarNames where
   explicit := true
@@ -32,13 +37,10 @@ def mkFreshArgNames (lctx : LocalContext) (cn : CtorNames) :
 
 end CtorNames
 
-open Lean.Parser.Tactic Syntax in
-def ctorNamesToRCasesPats [Monad m] [MonadQuotation m] (cns : Array CtorNames) :
-    m (TSyntax ``rcasesPatLo) := do
-  -- I can't figure out the quotation magic to generate the stuff below.
-  let pat : TSyntax ``rcasesPatMed :=
-    ⟨mkNode ``rcasesPatMed #[mkSep (← cns.mapM (·.toRCasesPat)) (mkAtom "|")]⟩
-  `(rcasesPatLo| $pat)
+open Lean.Parser.Tactic in
+def ctorNamesToRCasesPats (cns : Array CtorNames) :
+    m (TSyntax ``rcasesPatMed) := do
+  `(rcasesPatMed| $(← cns.mapM (·.toRCasesPat)):rcasesPat|*)
 
 def mkCtorNames (iv : InductiveVal) : CoreM (Array CtorNames) := MetaM.run' do
   iv.ctors.toArray.mapM λ ctor => do
