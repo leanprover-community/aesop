@@ -19,7 +19,8 @@ macro "falso" : tactic => `(tactic| exact falso)
 axiom nat_pos (n : Nat) : 0 ≤ (↑n : Int)
 
 example (m n : Nat) : (↑m : Int) < 0 ∧ (↑n : Int) > 0 := by
-  set_option aesop.check.script.steps false in -- TODO
+  set_option aesop.check.script.steps false in -- TODO lean4#4315
+  set_option aesop.check.script false in
   aesop!
   all_goals
     guard_hyp fwd : 0 ≤ (n : Int)
