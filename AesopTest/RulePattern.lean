@@ -19,7 +19,8 @@ macro "falso" : tactic => `(tactic| exact falso)
 axiom nat_pos (n : Nat) : 0 ≤ (↑n : Int)
 
 example (m n : Nat) : (↑m : Int) < 0 ∧ (↑n : Int) > 0 := by
-  set_option aesop.check.script.steps false in -- TODO
+  set_option aesop.check.script.steps false in -- TODO lean4#4315
+  set_option aesop.check.script false in
   aesop!
   all_goals
     guard_hyp fwd : 0 ≤ (n : Int)
@@ -43,8 +44,8 @@ axiom triangle (a b : Int) : |a + b| ≤ |a| + |b|
 
 example : |a + b| ≤ |c + d| := by
   aesop!
-  guard_hyp fwd   : |c + d| ≤ |c| + |d|
-  guard_hyp fwd_1 : |a + b| ≤ |a| + |b|
+  guard_hyp fwd   : |a + b| ≤ |a| + |b|
+  guard_hyp fwd_1 : |c + d| ≤ |c| + |d|
   falso
 
 @[aesop safe apply (pattern := (0 : Nat))]
