@@ -6,14 +6,12 @@ Authors: Jannis Limperg
 
 import Aesop.Frontend.Attribute
 
-open Lean
-open Lean.Meta
+open Lean Lean.Meta Aesop.Script
 
 namespace Aesop.BuiltinRules
 
 private def destructProductHyp? (goal : MVarId) (hyp : FVarId)
-    (md : TransparencyMode) (generateScript : Bool) :
-    MetaM (Option (MVarId × Option RuleTacScriptBuilder)) :=
+    (md : TransparencyMode) : MetaM (Option (LazyStep × MVarId)) :=
   goal.withContext do
     let hypType ← hyp.getType
     let (f, args) ← withTransparency md $ getAppUpToDefeq hypType
@@ -49,9 +47,18 @@ private def destructProductHyp? (goal : MVarId) (hyp : FVarId)
     -- `rec` is the partially applied recursor. Missing arguments to `rec` are
     -- the motive, the hypothesis and the new proof.
     go (hypType rec lType rType : Expr) (ctor lName rName : Name) :
-        MetaM (MVarId × Option RuleTacScriptBuilder) := do
-      let initialGoal := goal
-      let initialHyp := hyp
+        MetaM (LazyStep × MVarId) := do
+      let (step, mvarId, _) ← LazyStep.build goal {
+        tac := tac hypType rec lType rType lName rName
+        postGoals := (#[·.1])
+        tacticBuilder := λ (_, lName, rName) =>
+          TacticBuilder.obtain goal (.fvar hyp)
+            { ctor, args := #[lName, rName], hasImplicitArg := false }
+      }
+      return (step, mvarId)
+
+    tac (hypType rec lType rType : Expr) (lName rName : Name) :
+        MetaM (MVarId × Name × Name) := do
       let (genHyps, goal) ← goal.revert #[hyp] (preserveOrder := true)
       let (hyp, goal) ← intro1Core goal (preserveBinderNames := true)
       let hypExpr := mkFVar hyp
@@ -70,40 +77,33 @@ private def destructProductHyp? (goal : MVarId) (hyp : FVarId)
       let (_, goal) ← goal.introN 2 [lName, rName]
       let (_, goal) ← introNCore goal (genHyps.size - 1) []
         (preserveBinderNames := true) (useNamesForExplicitOnly := false)
-      let scriptBuilder? := mkScriptBuilder? generateScript $
-        .obtain initialGoal (.fvar initialHyp)
-          { ctor, args := #[lName, rName], hasImplicitArg := false }
-      return (goal, scriptBuilder?)
+      return (goal, lName, rName)
 
-partial def destructProductsCore (goal : MVarId) (md : TransparencyMode)
-    (generateScript : Bool) : MetaM (MVarId × Option RuleTacScriptBuilder) :=
-  goal.withContext do
-    let result ← go 0 goal (mkScriptBuilder? generateScript .id)
-    if result.fst == goal then
-      throwError "destructProducts: found no hypothesis with a product-like type"
-    return result
-  where
-    go (i : Nat) (goal : MVarId) (scriptBuilder? : Option RuleTacScriptBuilder) :
-        MetaM (MVarId × Option RuleTacScriptBuilder) := do
-      goal.withContext $ withIncRecDepth do
-        let lctx ← getLCtx
-        if h : i < lctx.decls.size then
-          match lctx.decls[i] with
-          | none => go (i + 1) goal scriptBuilder?
-          | some ldecl =>
-            if ldecl.isImplementationDetail then
-              go (i + 1) goal scriptBuilder?
+partial def destructProductsCore (goal : MVarId) (md : TransparencyMode) :
+    MetaM (MVarId × Array LazyStep) := do
+  let result ← go 0 goal |>.run
+  if result.fst == goal then
+    throwError "destructProducts: found no hypothesis with a product-like type"
+  return result
+where
+  go (i : Nat) (goal : MVarId) : ScriptM MVarId := do
+    withIncRecDepth $ goal.withContext do
+      let lctx ← getLCtx
+      if h : i < lctx.decls.size then
+        match lctx.decls[i] with
+        | none => go (i + 1) goal
+        | some ldecl =>
+          if ldecl.isImplementationDetail then
+            go (i + 1) goal
+          else
+            let result? ← destructProductHyp? goal ldecl.fvarId md
+            if let some (newScriptStep, newGoal) := result? then
+              recordScriptStep newScriptStep
+              go i newGoal
             else
-              let result? ←
-                destructProductHyp? goal ldecl.fvarId md generateScript
-              if let some (newGoal, newScriptBuilder?) := result? then
-                let scriptBuilder? :=
-                  return (← scriptBuilder?).seq #[← newScriptBuilder?]
-                go i newGoal scriptBuilder?
-              else
-                go (i + 1) goal scriptBuilder?
-        else
-          return (goal, scriptBuilder?)
+              go (i + 1) goal
+      else
+        return goal
 
 -- This tactic splits hypotheses of product-like types: `And`, `Prod`, `PProd`,
 -- `MProd`, `Exists`, `Subtype`, `Sigma` and `PSigma`. It's a restricted version
@@ -119,8 +119,7 @@ partial def destructProductsCore (goal : MVarId) (md : TransparencyMode)
                hyp Exists _, hyp Subtype _, hyp Sigma _, hyp PSigma _])]
 partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let md := input.options.destructProductsTransparency
-  let (goal, scriptBuilder?) ←
-    destructProductsCore input.goal md input.options.generateScript
-  return (#[goal], scriptBuilder?, none)
+  let (goal, steps) ← destructProductsCore input.goal md
+  return (#[goal], steps, none)
 
 end Aesop.BuiltinRules

@@ -3,12 +3,10 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-import Lean.Meta.Tactic.Delta
 import Aesop.Util.Basic
+import Batteries.Tactic.OpenPrivate
 
-open Lean
-open Lean.Elab.Tactic
-open Lean.Meta
+open Lean Lean.Meta Lean.Elab.Tactic
 
 namespace Aesop
 
@@ -152,5 +150,22 @@ elab "aesop_unfold " "[" ids:ident,+ "]" : tactic => do
     | .unchanged =>
       throwTacticEx `aesop_unfold goal "could not unfold any of the given constants"
     | .changed goal _ => return [goal]
+
+open private getIntrosSize in Lean.MVarId.intros
+
+/-- Introduce as many binders as possible while unfolding definitions with the
+ambient transparency. -/
+partial def introsUnfolding (mvarId : MVarId) : MetaM (Array FVarId × MVarId) :=
+  run mvarId #[]
+where
+  run (mvarId : MVarId) (fvars : Array FVarId) : MetaM (Array FVarId × MVarId) :=
+    mvarId.withContext do
+      let type ← whnf (← mvarId.getType)
+      let size := getIntrosSize type
+      if 0 < size then
+        let (fvars', mvarId') ← mvarId.introN size
+        run mvarId' (fvars ++ fvars')
+      else
+        return (fvars, mvarId)
 
 end Aesop

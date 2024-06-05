@@ -6,7 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Frontend.Attribute
 
-open Lean Lean.Meta
+open Lean Lean.Meta Aesop.Script
 
 namespace Aesop.BuiltinRules
 
@@ -37,48 +37,45 @@ def getSubstitutableHyp (fvarId : FVarId) : MetaM (Option SubstitutableHyp) := d
     else
       return none
 
-def getSubstitutableEqs (goal : MVarId) (fvarIds : Array FVarId)
-    (generateScript : Bool) :
-    MetaM (MVarId × Array SubstitutableEq × Option RuleTacScriptBuilder) := do
-  let hyps ← goal.withContext $ fvarIds.mapM getSubstitutableHyp
+def getSubstitutableEqs (goal : MVarId) (fvarIds : Array FVarId) :
+    ScriptM (MVarId × Array SubstitutableEq) := do
+  let hyps ← goal.withContext $ fvarIds.mapM (getSubstitutableHyp ·)
   let mut eqs := Array.mkEmpty fvarIds.size
   let mut goal := goal
-  let mut scriptBuilder? : Option RuleTacScriptBuilder := some .id
   for hyp in hyps do
     match hyp with
     | some (.eq e) => eqs := eqs.push e
     | some (.iff fvarId eqProof eqType symm) =>
-      let (goal', newFVarId, replaceScriptBuilder?) ←
-        replaceFVarWithScript goal fvarId eqType eqProof generateScript
+      let (step, goal', newFVarId) ← replaceFVarS goal fvarId eqType eqProof
+      recordScriptStep step
       goal := goal'
       eqs := eqs.push { fvarId := newFVarId, symm }
-      scriptBuilder? := return (← scriptBuilder?).seq #[← replaceScriptBuilder?]
     | none => continue
-  return (goal, eqs, scriptBuilder?)
+  return (goal, eqs)
 
-def substFVars (goal : MVarId) (fvarIds : Array FVarId) (generateScript : Bool) :
-    MetaM (MVarId × Array Name × Option RuleTacScriptBuilder) := do
-  let (goal, eqs, replaceScriptBuilder?) ←
-    getSubstitutableEqs goal fvarIds generateScript
+def substFVars (goal : MVarId) (fvarIds : Array FVarId) :
+    ScriptM MVarId := do
+  let (goal, eqs) ← getSubstitutableEqs goal fvarIds
   let preGoal := goal
   let mut goal := goal
-  let mut substitutedHypNames := Array.mkEmpty fvarIds.size
+  let mut substitutedFVarIds := Array.mkEmpty fvarIds.size
   let mut fvarSubst : FVarSubst := {}
+  let preState ← show MetaM _ from saveState
   for eq in eqs do
     let (.fvar fvarId) := fvarSubst.get eq.fvarId | throwError
       "unexpected expr in FVarSubst"
-    let hypName ← goal.withContext fvarId.getUserName
-    let substResult? ← substCore? goal eq.fvarId (symm := eq.symm) fvarSubst
+    let substResult? ← substCore? goal fvarId (symm := eq.symm) fvarSubst
     if let (some (fvarSubst', goal')) := substResult? then
       goal := goal'
       fvarSubst := fvarSubst'
-      substitutedHypNames := substitutedHypNames.push hypName
-  let substScriptBuilder? := mkScriptBuilder? generateScript $
-    .ofTactics 1 $ preGoal.withContext do
-      return #[← `(tactic| subst $(substitutedHypNames.map mkIdent):ident*)]
-  let scriptBuilder? :=
-    return (← replaceScriptBuilder?).seq #[← substScriptBuilder?]
-  return (goal, substitutedHypNames, scriptBuilder?)
+      substitutedFVarIds := substitutedFVarIds.push eq.fvarId
+  let postState ← show MetaM _ from saveState
+  recordScriptStep {
+    postGoals := #[goal]
+    tacticBuilder := TacticBuilder.substFVars preGoal substitutedFVarIds
+    preGoal, preState, postState
+  }
+  return goal
 
 @[aesop (rule_sets := [builtin]) norm -50 tactic (index := [hyp _ = _, hyp _ ↔ _])]
 def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
@@ -86,10 +83,9 @@ def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
     let hyps ← input.indexMatchLocations.toArray.mapM λ
       | .hyp ldecl => pure ldecl.fvarId
       | _ => throwError "unexpected index match location"
-    let (goal, substitutedUserNames, scriptBuilder?) ←
-      substFVars input.goal hyps input.options.generateScript
-    if substitutedUserNames.size == 0 then
+    let (goal, steps) ← substFVars input.goal hyps |>.run
+    if goal == input.goal then
       throwError "no suitable hypothesis found"
-    return (#[goal], scriptBuilder?, none)
+    return (#[goal], steps, none)
 
 end Aesop.BuiltinRules

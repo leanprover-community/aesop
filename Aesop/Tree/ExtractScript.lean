@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Script.UScript
 import Aesop.Tracing
 import Aesop.Tree.TreeM
 
@@ -13,37 +14,36 @@ open Lean.Parser.Tactic (tacticSeq)
 
 namespace Aesop
 
-abbrev ExtractScriptM := StateRefT UnstructuredScript TreeM
+open Script
 
-def visitGoal (g : Goal) : ExtractScriptM (Option (MVarId × Meta.SavedState)) := do
-  match g.normalizationState with
-  | .notNormal => throwError "expected goal {g.id} to be normalised"
-  | .provenByNormalization _ normScript? =>
-    go g.id normScript?
-    return none
-  | .normal postGoal postState normScript? =>
-    go g.id normScript?
-    return some (postGoal, postState)
-where
-  go (gid : GoalId) : Except DisplayRuleName UnstructuredScript →
-      ExtractScriptM Unit
-    | .ok script => do
+abbrev ExtractScriptM := StateRefT UScript TreeM
+
+private def lazyStepToStep (ruleName : DisplayRuleName) (lstep : LazyStep) :
+    MetaM Step :=
+  try
+    lstep.toStep
+  catch e =>
+    throwError "tactic script generation failed for rule {ruleName}:{indentD e.toMessageData}"
+
+private def lazyStepsToSteps (ruleName : DisplayRuleName)
+    (lsteps : Array LazyStep) : MetaM (Array Step) :=
+  if lsteps.isEmpty then
+    throwError "tactic script generation is not supported by rule {ruleName}"
+  else
+    lsteps.mapM (lazyStepToStep ruleName)
+
+def visitGoal (g : Goal) : ExtractScriptM Unit := do
+  if let some scripts := g.normalizationState.scriptSteps? then
+    for (rule, script) in scripts do
+      let script ← lazyStepsToSteps rule script
       modify (· ++ script)
-    | .error rule => throwError "normalization rule {rule} (at goal {gid}) does not support tactic script generation"
+  else
+    throwError "expected goal {g.id} to be normalised"
 
-def visitRapp (r : Rapp) (preGoal : MVarId) (preState : Meta.SavedState) :
-    ExtractScriptM Unit := do
-  let postState := r.metaState
-  let (some scriptBuilder) := r.scriptBuilder?
-    | throwError "rule {r.appliedRule.name} (at rapp {r.id}) does not support tactic script generation"
-  let tacticSeq ←
-    try
-      postState.runMetaM' scriptBuilder.unstructured.run
-    catch e =>
-      throwError "script builder for rapp {r.id} reported error:{indentD $ e.toMessageData}"
-  let postGoals ← postState.runMetaM' do
-    r.originalSubgoals.mapM λ g => return ⟨g, ← g.getMVarDependencies⟩
-  modify λ s => s.push { postState, tacticSeq, preGoal, postGoals, preState }
+def visitRapp (r : Rapp) : ExtractScriptM Unit := do
+  let lsteps := r.scriptSteps
+  let steps ← lazyStepsToSteps r.appliedRule.name lsteps
+  modify λ s => s ++ steps
 
 mutual
   partial def MVarClusterRef.extractScriptCore (cref : MVarClusterRef) :
@@ -55,20 +55,21 @@ mutual
 
   partial def GoalRef.extractScriptCore (gref : GoalRef) : ExtractScriptM Unit := do
     let g ← gref.get
-    if let some (postNormGoal, postNormState) ← visitGoal g then
+    visitGoal g
+    if ! g.normalizationState.isProvenByNormalization then
       let (some rref) ← g.firstProvenRapp? | throwError
         m!"goal {g.id} does not have a proven rapp"
-      rref.extractScriptCore postNormGoal postNormState
+      rref.extractScriptCore
 
-  partial def RappRef.extractScriptCore (rref : RappRef) (preGoal : MVarId)
-      (preState : Meta.SavedState) : ExtractScriptM Unit := do
+  partial def RappRef.extractScriptCore (rref : RappRef) :
+      ExtractScriptM Unit := do
     let r ← rref.get
-    visitRapp r preGoal preState
+    visitRapp r
     r.children.forM (·.extractScriptCore)
 end
 
 @[inline]
-def extractScript : TreeM UnstructuredScript := do
+def extractScript : TreeM UScript := do
   (·.snd) <$> (← getRootGoal).extractScriptCore.run #[]
 
 mutual
@@ -79,22 +80,22 @@ mutual
   partial def GoalRef.extractSafePrefixScriptCore (gref : GoalRef) :
       ExtractScriptM Unit := do
     let g ← gref.get
-    if let some (postNormGoal, postNormState) ← visitGoal g then
+    visitGoal g
+    if ! g.normalizationState.isProvenByNormalization then
       let safeRapps ← g.safeRapps
       if safeRapps.size > 1 then
         throwError "aesop: internal error: goal {g.id} has {safeRapps.size} safe rapps"
       if let some rref := safeRapps[0]? then
-        rref.extractSafePrefixScriptCore postNormGoal postNormState
+        rref.extractSafePrefixScriptCore
 
-  partial def RappRef.extractSafePrefixScriptCore (rref : RappRef)
-      (preGoal : MVarId) (preState : Meta.SavedState) :
+  partial def RappRef.extractSafePrefixScriptCore (rref : RappRef) :
       ExtractScriptM Unit := do
     let r ← rref.get
-    visitRapp r preGoal preState
+    visitRapp r
     r.forSubgoalsM (·.extractSafePrefixScriptCore)
 end
 
-def extractSafePrefixScript : TreeM UnstructuredScript := do
+def extractSafePrefixScript : TreeM UScript := do
   (·.snd) <$> (← getRootGoal).extractSafePrefixScriptCore.run #[]
 
 end Aesop

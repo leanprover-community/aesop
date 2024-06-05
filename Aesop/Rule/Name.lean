@@ -138,6 +138,9 @@ inductive DisplayRuleName
 
 namespace DisplayRuleName
 
+instance : Coe RuleName DisplayRuleName :=
+  ⟨DisplayRuleName.ruleName⟩
+
 instance : ToString DisplayRuleName where
   toString
     | ruleName n => toString n

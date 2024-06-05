@@ -10,23 +10,9 @@ namespace Aesop.BuiltinRules
 
 open Lean Lean.Meta
 
-def unhygienicExt (goal : MVarId) : MetaM (Array MVarId) :=
-  unhygienic do
-    let (_, subgoals) ←
-      Lean.Elab.Tactic.Ext.extCore goal [] (failIfUnchanged := true) |>.run' {}
-    return subgoals.map (·.fst)
-
-def unhygienicExtWithScript (goal : MVarId) (generateScript : Bool) :
-    MetaM (Array MVarId × Option RuleTacScriptBuilder) := do
-  let subgoals ← unhygienicExt goal
-  let scriptBuilder? :=
-    mkScriptBuilder? generateScript (.unhygienicExt subgoals.size)
-  return (subgoals, scriptBuilder?)
-
 @[aesop 80% tactic (index := [target _ = _]) (rule_sets := [builtin])]
 def ext : RuleTac := RuleTac.ofSingleRuleTac λ input => do
-  let (goals, scriptBuilder?) ←
-    unhygienicExtWithScript input.goal input.options.generateScript
-  return (goals, scriptBuilder?, none)
+  let (step, goals) ← unhygienicExtS input.goal
+  return (goals, #[step], none)
 
 end Aesop.BuiltinRules

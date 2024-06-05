@@ -309,6 +309,8 @@ variable [Monad m] [MonadQuotation m]
 
 open Parser.Tactic
 
+-- TODO These could all be made non-monadic via `Unhygienic`.
+
 def withTransparencySeqSyntax (md : TransparencyMode)
     (k : TSyntax ``tacticSeq) : m (TSyntax ``tacticSeq) :=
   match md with

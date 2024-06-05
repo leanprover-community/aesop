@@ -4,27 +4,12 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Script.ScriptBuilder
+import Aesop.Script.GoalWithMVars
+import Aesop.Util.Basic
 
 open Lean
 
-namespace Aesop
-
-structure GoalWithMVars where
-  goal : MVarId
-  mvars : HashSet MVarId
-  deriving Inhabited
-
-instance : Repr GoalWithMVars where
-  reprPrec
-    | g, _ => s!"\{ goal := {repr g.goal}, mvars := {repr g.mvars.toArray} }"
-
-instance : BEq GoalWithMVars :=
-  ⟨λ g₁ g₂ => g₁.goal == g₂.goal⟩
-
-def GoalWithMVars.ofMVarId (goal : MVarId) : MetaM GoalWithMVars := do
-  return { goal, mvars := ← goal.getMVarDependencies }
-
+namespace Aesop.Script
 
 variable [Monad m] [MonadError m]
 
@@ -68,24 +53,25 @@ private def replaceWithArray [BEq α] (xs : Array α) (x : α) (r : Array α) :
       ys := ys.push x'
   return if found then some ys else none
 
-def eraseSolvedGoals (ts : TacticState) (mctx : MetavarContext) :
+def eraseSolvedGoals (ts : TacticState) (preMCtx postMCtx : MetavarContext) :
     TacticState := {
   ts with
-  visibleGoals :=
-    ts.visibleGoals.filter (! mctx.isExprMVarAssignedOrDelayedAssigned ·.goal)
-  invisibleGoals :=
-    HashSet.filter ts.invisibleGoals
-      (! mctx.isExprMVarAssignedOrDelayedAssigned ·)
+  visibleGoals := ts.visibleGoals.filter (! mvarWasSolved ·.goal)
+  invisibleGoals := HashSet.filter ts.invisibleGoals (! mvarWasSolved ·)
 }
+where
+  mvarWasSolved (mvarId : MVarId) : Bool :=
+    postMCtx.isExprMVarAssignedOrDelayedAssigned mvarId &&
+    ! preMCtx.isExprMVarAssignedOrDelayedAssigned mvarId
 
 def applyTactic (ts : TacticState) (inGoal : MVarId)
-    (outGoals : Array GoalWithMVars) (postMCtx : MetavarContext) :
+    (outGoals : Array GoalWithMVars) (preMCtx postMCtx : MetavarContext) :
     m TacticState := do
   let (some visibleGoals) :=
         replaceWithArray ts.visibleGoals ⟨inGoal, {}⟩ outGoals
     | throwUnknownGoalError inGoal "applyTactic"
   let ts := { ts with visibleGoals }
-  return eraseSolvedGoals ts postMCtx
+  return eraseSolvedGoals ts preMCtx postMCtx
 
 -- Focus the visible goal `goal` and move all other previously visible goals
 -- to `invisibleGoals`.
@@ -110,4 +96,4 @@ def onGoalM (ts : TacticState) (g : MVarId)
       visibleGoals := visibleGoals.push preGoal
   return (a, { visibleGoals, invisibleGoals := postTs.invisibleGoals })
 
-end Aesop.TacticState
+end Aesop.Script.TacticState
