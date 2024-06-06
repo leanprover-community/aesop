@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Util.Tactic
+import Aesop.Util.Tactic.Unfold
 import Aesop.Script.CtorNames
 import Aesop.Script.ScriptM
 import Batteries.Lean.Meta.Clear
