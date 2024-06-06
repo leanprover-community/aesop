@@ -22,19 +22,19 @@ def Tactic.skip : Tactic :=
 namespace TacticBuilder
 
 def applyStx (e : Term) (md : TransparencyMode) : TacticBuilder := do
-  let tac ← withAllTransparencySyntax md (← `(tactic| apply $e))
+  let tac := withAllTransparencySyntax md (← `(tactic| apply $e))
   return .unstructured tac
 
 def apply (mvarId : MVarId) (e : Expr) (md : TransparencyMode) :
     TacticBuilder := do
   let e ← mvarId.withContext $ delab e
-  let tac ← withAllTransparencySyntax md (← `(tactic| apply $e))
+  let tac := withAllTransparencySyntax md (← `(tactic| apply $e))
   return .unstructured tac
 
 def exactFVar (goal : MVarId) (fvarId : FVarId) (md : TransparencyMode) :
     TacticBuilder := do
   let ident := mkIdent (← goal.withContext $ fvarId.getUserName)
-  let tac ← withAllTransparencySyntax md $ ← `(tactic| exact $ident)
+  let tac := withAllTransparencySyntax md $ ← `(tactic| exact $ident)
   return .unstructured tac
 
 def replace (preGoal postGoal : MVarId) (fvarId : FVarId) (type : Expr)
@@ -49,7 +49,7 @@ def assertHypothesis (goal : MVarId) (h : Hypothesis) (md : TransparencyMode) :
     TacticBuilder :=
   goal.withContext do
     let tac ← `(tactic| have $(mkIdent h.userName) : $(← delab h.type) := $(← delab h.value))
-    return .unstructured (← withAllTransparencySyntax md tac)
+    return .unstructured $ withAllTransparencySyntax md tac
 
 def clear (goal : MVarId) (fvarIds : Array FVarId) : TacticBuilder :=
   goal.withContext do
@@ -116,7 +116,7 @@ def intros (postGoal : MVarId) (newFVarIds : Array FVarId)
   let newFVarUserNames ← postGoal.withContext $
     newFVarIds.mapM (mkIdent <$> ·.getUserName)
   let tac ← `(tactic| intro $newFVarUserNames:ident*)
-  let tac ← withAllTransparencySyntax md tac
+  let tac := withAllTransparencySyntax md tac
   return .unstructured ⟨tac⟩
 
 def splitTarget : TacticBuilder :=

@@ -309,10 +309,8 @@ variable [Monad m] [MonadQuotation m]
 
 open Parser.Tactic
 
--- TODO These could all be made non-monadic via `Unhygienic`.
-
 def withTransparencySeqSyntax (md : TransparencyMode)
-    (k : TSyntax ``tacticSeq) : m (TSyntax ``tacticSeq) :=
+    (k : TSyntax ``tacticSeq) : TSyntax ``tacticSeq := Unhygienic.run do
   match md with
   | .default => return k
   | .all => `(tacticSeq| with_unfolding_all $k)
@@ -320,13 +318,13 @@ def withTransparencySeqSyntax (md : TransparencyMode)
   | .instances => `(tacticSeq| with_reducible_and_instances $k)
 
 def withAllTransparencySeqSyntax (md : TransparencyMode)
-    (k : TSyntax ``tacticSeq) : m (TSyntax ``tacticSeq) :=
+    (k : TSyntax ``tacticSeq) : TSyntax ``tacticSeq :=
   match md with
-  | .all => `(tacticSeq| with_unfolding_all $k)
-  | _ => return k
+  | .all => Unhygienic.run `(tacticSeq| with_unfolding_all $k)
+  | _ => k
 
 def withTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
-    m (TSyntax `tactic) :=
+    TSyntax `tactic := Unhygienic.run do
   match md with
   | .default   => return k
   | .all       => `(tactic| with_unfolding_all $k:tactic)
@@ -334,10 +332,10 @@ def withTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
   | .instances => `(tactic| with_reducible_and_instances $k:tactic)
 
 def withAllTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
-    m (TSyntax `tactic) :=
+    TSyntax `tactic :=
   match md with
-  | .all  => `(tactic| with_unfolding_all $k:tactic)
-  | _     => return k
+  | .all  => Unhygienic.run `(tactic| with_unfolding_all $k:tactic)
+  | _     => k
 
 end TransparencySyntax
 
