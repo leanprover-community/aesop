@@ -39,9 +39,10 @@ def assumption : RuleTac := λ input => do
   where
     tryHyp (goal : MVarId) (fvarId : FVarId) (md : TransparencyMode) :
         MetaM (Option (RuleApplication × Bool)) := do
-      let step? ← tryExactFVarS goal fvarId md
-      let some step := step?
+      let (true, steps) ← tryExactFVarS goal fvarId md |>.run
         | return none
+      let #[step] := steps
+        | throwError "aesop: internal error in assumption: multiple steps"
       let proofHasMVar := (← fvarId.getType).hasMVar
       let app := RuleApplication.ofLazyScriptStep step none
       return some (app, proofHasMVar)

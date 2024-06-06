@@ -57,14 +57,14 @@ def clear (goal : MVarId) (fvarIds : Array FVarId) : TacticBuilder :=
     return .unstructured $ ← `(tactic| clear $userNames*)
 
 def rcases (goal : MVarId) (e : Expr) (ctorNames : Array CtorNames) :
-    TacticBuilder :=
+    TacticBuilder := do
   goal.withContext do
-    let pat ← ctorNamesToRCasesPats ctorNames
+    let pat := ctorNamesToRCasesPats ctorNames
     return .unstructured $ ← `(tactic| rcases $(← delab e):term with $pat)
 
 def obtain (goal : MVarId) (e : Expr) (ctorNames : CtorNames) : TacticBuilder :=
   goal.withContext do
-    let tac ← `(tactic| obtain $(← ctorNames.toRCasesPat) := $(← delab e))
+    let tac ← `(tactic| obtain $(ctorNames.toRCasesPat) := $(← delab e))
     return .unstructured tac
 
 def rcasesOrObtain (goal : MVarId) (e : Expr) (ctorNames : Array CtorNames) :
@@ -138,75 +138,57 @@ end Script.TacticBuilder
 open Script
 
 def assertHypothesisS (goal : MVarId) (h : Hypothesis) (md : TransparencyMode) :
-    MetaM (LazyStep × MVarId × Array FVarId) :=
-  LazyStep.build goal {
-    tac := do
-      let (fvarIds, goal) ← withTransparency md $ goal.assertHypotheses #[h]
-      return (goal, fvarIds)
-    postGoals := (#[·.1])
-    tacticBuilder := λ _ => TacticBuilder.assertHypothesis goal h md
-  }
+    ScriptM (MVarId × Array FVarId) :=
+  withScriptStep goal (#[·.1]) (λ _ => true) tacticBuilder do
+    let (fvarIds, goal) ← withTransparency md $ goal.assertHypotheses #[h]
+    return (goal, fvarIds)
+where
+  tacticBuilder _ := TacticBuilder.assertHypothesis goal h md
 
 def applyS (goal : MVarId) (e : Expr) (eStx? : Option Term)
-    (md : TransparencyMode) : MetaM (LazyStep × Array MVarId) :=
-  LazyStep.build goal {
-    tac := (·.toArray) <$> withTransparency md (goal.apply e)
-    postGoals := id
-    tacticBuilder := λ _ =>
+    (md : TransparencyMode) : ScriptM (Array MVarId) :=
+  withScriptStep goal id (λ _ => true) tacticBuilder do
+    (·.toArray) <$> withTransparency md (goal.apply e)
+where
+  tacticBuilder _ :=
       match eStx? with
       | none => TacticBuilder.apply goal e md
       | some eStx => TacticBuilder.applyStx eStx md
-  }
 
 def replaceFVarS (goal : MVarId) (fvarId : FVarId) (type : Expr) (proof : Expr) :
-    MetaM (LazyStep × MVarId × FVarId) :=
-  LazyStep.build goal {
-    tac := do
-      let (postGoal, newFVarId, _) ← replaceFVar goal fvarId type proof
-      return (postGoal, newFVarId)
-    postGoals := (#[·.1])
-    tacticBuilder := (TacticBuilder.replace goal ·.1 fvarId type proof)
-  }
+    ScriptM (MVarId × FVarId) :=
+  withScriptStep goal (#[·.1]) (λ _ => true) tacticBuilder do
+    let (postGoal, newFVarId, _) ← replaceFVar goal fvarId type proof
+    return (postGoal, newFVarId)
+where
+  tacticBuilder := (TacticBuilder.replace goal ·.1 fvarId type proof)
 
-def clearS (goal : MVarId) (fvarId : FVarId) : MetaM (LazyStep × MVarId) :=
-  LazyStep.build goal {
-    tac := goal.clear fvarId
-    postGoals := (#[·])
-    tacticBuilder := λ _ => TacticBuilder.clear goal #[fvarId]
-  }
+def clearS (goal : MVarId) (fvarId : FVarId) : ScriptM MVarId :=
+  withScriptStep goal (#[·]) (λ _ => true) tacticBuilder do
+    goal.clear fvarId
+where
+  tacticBuilder _ := TacticBuilder.clear goal #[fvarId]
 
-def tryClearS (goal : MVarId) (fvarId : FVarId) :
-    MetaM (Option (LazyStep × MVarId)) := do
-  let preState ← saveState
-  let postGoal ← goal.tryClear fvarId
-  let postState ← saveState
-  if postGoal == goal then
-    return none
-  let step := {
-    preGoal := goal
-    postGoals := #[postGoal]
-    tacticBuilder := TacticBuilder.clear goal #[fvarId]
-    preState, postState
-  }
-  return some (step, postGoal)
+def tryClearS (goal : MVarId) (fvarId : FVarId) : ScriptM (Option MVarId) :=
+  withOptScriptStep goal (#[·]) tacticBuilder do
+    goal.tryClear fvarId
+where
+  tacticBuilder _ := TacticBuilder.clear goal #[fvarId]
 
 def tryClearManyS (goal : MVarId) (fvarIds : Array FVarId) :
-    MetaM (LazyStep × MVarId × Array FVarId) :=
-  LazyStep.build goal {
-    tac := goal.tryClearMany' fvarIds
-    postGoals := (#[·.fst])
-    tacticBuilder := (TacticBuilder.clear goal ·.2)
-  }
+    ScriptM (MVarId × Array FVarId) :=
+  withScriptStep goal (#[·.fst]) (! ·.2.isEmpty) tacticBuilder do
+    goal.tryClearMany' fvarIds
+where
+  tacticBuilder := λ (_, fvarIds) => TacticBuilder.clear goal fvarIds
 
-def casesS (goal : MVarId) (fvarId : FVarId) (ctorNames : Array CtorNames) :
-    MetaM (LazyStep × Array CasesSubgoal) := do
+def tryCasesS (goal : MVarId) (fvarId : FVarId) (ctorNames : Array CtorNames) :
+    ScriptM (Option (Array CasesSubgoal)) := do
   let ctorNames := getUnusedCtorNames (← goal.getDecl).lctx
-  LazyStep.build goal {
-    tac := goal.cases fvarId (ctorNames.map (·.toAltVarNames))
-    postGoals := (·.map (·.mvarId))
-    tacticBuilder := λ _ =>
-      TacticBuilder.rcasesOrObtain goal (.fvar fvarId) ctorNames
-  }
+  let tacticBuilder _ :=
+    TacticBuilder.rcasesOrObtain goal (.fvar fvarId) ctorNames
+  withOptScriptStep goal (·.map (·.mvarId)) tacticBuilder do
+    observing? $ goal.cases fvarId (ctorNames.map (·.toAltVarNames))
 where
   getUnusedCtorNames (lctx : LocalContext) : Array CtorNames :=
     Prod.fst $ ctorNames.foldl (init := (Array.mkEmpty ctorNames.size, lctx))
@@ -215,123 +197,98 @@ where
         (ctorNames.push cn, lctx)
 
 def renameInaccessibleFVarsS (goal : MVarId) :
-    MetaM (LazyStep × MVarId × Array FVarId) :=
-  LazyStep.build goal {
-    tac := goal.renameInaccessibleFVars
-    postGoals := (#[·.1])
-    tacticBuilder := λ (goal, renamedFVars) =>
-      TacticBuilder.renameInaccessibleFVars goal renamedFVars
-  }
+    ScriptM (MVarId × Array FVarId) :=
+  withScriptStep goal (#[·.1]) (! ·.snd.isEmpty) tacticBuilder do
+    goal.renameInaccessibleFVars
+where
+  tacticBuilder := λ (goal, renamedFVars) =>
+    TacticBuilder.renameInaccessibleFVars goal renamedFVars
 
 def unfoldManyStarS (goal : MVarId) (unfold? : Name → Option (Option Name))  :
-    MetaM (UnfoldResult (LazyStep × MVarId)) := do
-  let preState ← saveState
-  let result ← unfoldManyStar goal unfold?
-  let postState ← saveState
-  match result with
-  | .unchanged => return .unchanged
-  | .changed postGoal usedDecls =>
-    let step := {
-      preGoal := goal
-      tacticBuilder := TacticBuilder.aesopUnfold result.usedDecls
-      postGoals := #[postGoal]
-      preState, postState
-    }
-    return .changed (step, postGoal) usedDecls
-
-def introsS (goal : MVarId) : MetaM (LazyStep × MVarId × Array FVarId) :=
-  LazyStep.build goal {
-    tac := do
-      let (newFVarIds, mvarId) ← unhygienic $ goal.intros
-      return (mvarId, newFVarIds)
-    postGoals := (#[·.fst])
-    tacticBuilder := λ (postGoal, newFVarIds) =>
-      TacticBuilder.intros postGoal newFVarIds .default
+    ScriptM (UnfoldResult MVarId) := do
+  let preState ← show MetaM _ from saveState
+  let .changed postGoal usedDecls ← unfoldManyStar goal unfold?
+    | return .unchanged
+  let postState ← show MetaM _ from saveState
+  let step := {
+    preGoal := goal
+    tacticBuilder := TacticBuilder.aesopUnfold usedDecls
+    postGoals := #[postGoal]
+    preState, postState
   }
+  recordScriptStep step
+  return .changed postGoal usedDecls
+
+def introsS (goal : MVarId) : ScriptM (MVarId × Array FVarId) :=
+  withScriptStep goal (#[·.fst]) (! ·.2.isEmpty) tacticBuilder do
+    let (newFVarIds, mvarId) ← unhygienic $ goal.intros
+    return (mvarId, newFVarIds)
+where
+  tacticBuilder := λ (postGoal, newFVarIds) =>
+      TacticBuilder.intros postGoal newFVarIds .default
 
 def introsUnfoldingS (goal : MVarId) (md : TransparencyMode) :
-    MetaM (LazyStep × MVarId × Array FVarId) :=
-  LazyStep.build goal {
-    tac := do
-      let (newFVarIds, mvarId) ← withTransparency md $ unhygienic $
-        introsUnfolding goal
-      return (mvarId, newFVarIds)
-    postGoals := (#[·.fst])
-    tacticBuilder := λ (postGoal, newFVarIds) =>
+    ScriptM (MVarId × Array FVarId) :=
+  withScriptStep goal (#[·.fst]) (! ·.2.isEmpty) tacticBuilder do
+    let (newFVarIds, mvarId) ← withTransparency md $ unhygienic $
+      introsUnfolding goal
+    return (mvarId, newFVarIds)
+where
+  tacticBuilder := λ (postGoal, newFVarIds) =>
       TacticBuilder.intros postGoal newFVarIds md
-  }
 
-def unhygienicExtS (goal : MVarId) : MetaM (LazyStep × Array MVarId) :=
-  LazyStep.build goal {
-    tac := do
-      let (_, subgoals) ←
-        Lean.Elab.Tactic.Ext.extCore goal [] (failIfUnchanged := true) |>.run' {}
-      return subgoals.map (·.fst)
-    postGoals := id
-    tacticBuilder := λ _ => TacticBuilder.unhygienicExt
-  }
+def unhygienicExtS (goal : MVarId) : ScriptM (Array MVarId) :=
+  withScriptStep goal id (λ _ => true) tacticBuilder do
+    let (_, subgoals) ←
+      Lean.Elab.Tactic.Ext.extCore goal [] (failIfUnchanged := true) |>.run' {}
+    return subgoals.map (·.fst)
+where
+  tacticBuilder _ := TacticBuilder.unhygienicExt
 
 def tryExactFVarS (goal : MVarId) (fvarId : FVarId) (md : TransparencyMode) :
-    MetaM (Option LazyStep) := do
-  let preState ← saveState
+    ScriptM Bool := do
+  let preState ← show MetaM _ from saveState
   let ldecl ← fvarId.getDecl
   let tgt ← goal.getType
   if ! (← withTransparency md $ isDefEq ldecl.type tgt) then
-    restoreState preState
-    return none
+    show MetaM _ from restoreState preState
+    return false
   goal.assign ldecl.toExpr
-  let postState ← saveState
-  return some {
+  let postState ← show MetaM _ from saveState
+  let step := {
     preGoal := goal
     postGoals := #[]
     tacticBuilder := TacticBuilder.exactFVar goal fvarId md
     preState, postState
   }
+  recordScriptStep step
+  return true
 
-private def renameInaccessibleFVarsS' (acc : Array LazyStep)
-    (goals : Array MVarId) : MetaM (Array LazyStep × Array MVarId) := do
-  let mut steps := acc
-  let mut newGoals := Array.mkEmpty goals.size
-  for goal in goals do
-    let (step, newGoal, renamedFVarIds) ← renameInaccessibleFVarsS goal
-    if renamedFVarIds.isEmpty then
-      newGoals := newGoals.push goal
-    else
-      newGoals := newGoals.push newGoal
-      steps := steps.push step
-  return (steps, newGoals)
+private def renameInaccessibleFVarsS' (goals : Array MVarId) :
+    ScriptM (Array MVarId) :=
+  goals.mapM ((·.fst) <$> renameInaccessibleFVarsS ·)
 
 def splitTargetS? (goal : MVarId) :
-    MetaM (Option (Array LazyStep × Array MVarId)) := do
-  let preState ← saveState
-  let some goals ← splitTarget? goal
+    ScriptM (Option (Array MVarId)) := do
+  let some subgoals ← withOptScriptStep goal id tacticBuilder do
+    (·.map (·.toArray)) <$> splitTarget? goal
     | return none
-  let postState ← saveState
-  let goals := goals.toArray
-  let step := {
-    preGoal := goal
-    postGoals := goals
-    tacticBuilder := TacticBuilder.splitTarget
-    preState, postState
-  }
-  renameInaccessibleFVarsS' #[step] goals
+  some <$> renameInaccessibleFVarsS' subgoals
+where
+  tacticBuilder _ := TacticBuilder.splitTarget
 
 def splitFirstHypothesisS? (goal : MVarId) :
-    MetaM (Option (Array LazyStep × Array MVarId)) := do
-  let preState ← saveState
-  for ldecl in (← goal.getDecl).lctx do
-    if ldecl.isImplementationDetail then
-      continue
-    if let some goals ← splitLocalDecl? goal ldecl.fvarId then
-      let postState ← saveState
-      let goals := goals.toArray
-      let step := {
-        preGoal := goal
-        postGoals := goals
-        tacticBuilder := TacticBuilder.splitAt goal ldecl.fvarId
-        preState, postState
-      }
-      return ← renameInaccessibleFVarsS' #[step] goals
-  return none
+    ScriptM (Option (Array MVarId)) := do
+  let some (subgoals, _) ← withOptScriptStep goal (·.1) tacticBuilder do
+    for ldecl in (← goal.getDecl).lctx do
+      if ldecl.isImplementationDetail then
+        continue
+      if let some goals ← splitLocalDecl? goal ldecl.fvarId then
+        return some (goals.toArray, ldecl.fvarId)
+    return none
+    | return none
+  some <$> renameInaccessibleFVarsS' subgoals
+where
+  tacticBuilder := λ (_, fvarId) => TacticBuilder.splitAt goal fvarId
 
 end Aesop

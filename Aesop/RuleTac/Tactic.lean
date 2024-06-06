@@ -18,7 +18,7 @@ unsafe def tacticMImpl (decl : Name) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
     let tac ← evalConst (TacticM Unit) decl
     let goals ← run input.goal tac |>.run'
-    return (goals.toArray, #[], none)
+    return (goals.toArray, none, none)
 
 -- Precondition: `decl` has type `TacticM Unit`.
 @[implemented_by tacticMImpl]
@@ -64,7 +64,7 @@ def tacticStx (stx : Syntax) : RuleTac :=
       preGoal := input.goal
       preState, tacticBuilder, postState, postGoals
     }
-    return (postGoals, #[step], none)
+    return (postGoals, some #[step], none)
 
 -- Precondition: `decl` has type `TacGen`.
 unsafe def tacGenImpl (decl : Name) : RuleTac := λ input => do

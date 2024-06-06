@@ -38,14 +38,17 @@ instance [Queue Q] : MonadLift NormM (SearchM Q) where
   monadLift x := do x.run { (← read) with }
 
 inductive NormRuleResult
-  | succeeded (goal : MVarId) (steps : Array Script.LazyStep)
-  | proved (steps : Array Script.LazyStep)
+  | succeeded (goal : MVarId) (steps? : Option (Array Script.LazyStep))
+  | proved (steps? : Option (Array Script.LazyStep))
 
 namespace NormRuleResult
 
 def newGoal? : NormRuleResult → Option MVarId
   | succeeded goal .. => goal
   | proved .. => none
+
+def steps? : NormRuleResult → Option (Array Script.LazyStep)
+  | .succeeded (steps? := steps?) .. | .proved (steps? := steps?) .. => steps?
 
 end NormRuleResult
 
@@ -80,7 +83,7 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) :
       | err m!"rule did not produce exactly one rule application."
     restoreState rapp.postState
     if rapp.goals.isEmpty then
-      return some $ .proved rapp.scriptSteps
+      return some $ .proved rapp.scriptSteps?
     let (#[g]) := rapp.goals
       | err m!"rule produced more than one subgoal."
     let mvars := .ofArray input.mvars.toArray
@@ -88,7 +91,7 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) :
       let actualMVars ← rapp.postState.runMetaM' g.getMVarDependencies
       if ! actualMVars == mvars then
          err "the goal produced by the rule depends on different metavariables than the original goal."
-    return some $ .succeeded g rapp.scriptSteps
+    return some $ .succeeded g rapp.scriptSteps?
   where
     err {α} (msg : MessageData) : MetaM α := throwError
       "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal input.goal}"
@@ -224,13 +227,13 @@ def normSimp (goal : MVarId) (goalMVars : HashSet MVarId) :
 
 def normUnfoldCore (goal : MVarId) : NormM (Option NormRuleResult) := do
   let unfoldRules := (← read).ruleSet.unfoldRules
-  let result ← unfoldManyStarS goal (unfoldRules.find? ·)
+  let (result, steps) ← unfoldManyStarS goal (unfoldRules.find? ·) |>.run
   match result with
   | .unchanged =>
     aesop_trace[steps] "nothing to unfold"
     return none
-  | .changed (step, newGoal) _ =>
-    return some $ .succeeded newGoal #[step]
+  | .changed newGoal _ =>
+    return some $ .succeeded newGoal steps
 
 def normUnfold (goal : MVarId) : NormM (Option NormRuleResult) := do
   profilingRule .normUnfold (wasSuccessful := λ _ => true) do
@@ -243,15 +246,15 @@ def normUnfold (goal : MVarId) : NormM (Option NormRuleResult) := do
         throwError "aesop: error in norm unfold: {e.toMessageData}"
 
 inductive NormSeqResult where
-  | proved (script : Array (DisplayRuleName × Array Script.LazyStep))
+  | proved (script : Array (DisplayRuleName × Option (Array Script.LazyStep)))
   | changed (goal : MVarId)
-      (script : Array (DisplayRuleName × Array Script.LazyStep))
+      (script : Array (DisplayRuleName × Option (Array Script.LazyStep)))
   | unchanged
 
 def NormRuleResult.toNormSeqResult (ruleName : DisplayRuleName) :
     NormRuleResult → NormSeqResult
-  | .proved steps => .proved #[(ruleName, steps)]
-  | .succeeded goal steps => .changed goal #[(ruleName, steps)]
+  | .proved steps? => .proved #[(ruleName, steps?)]
+  | .succeeded goal steps? => .changed goal #[(ruleName, steps?)]
 
 def optNormRuleResultToNormSeqResult :
     Option (DisplayRuleName × NormRuleResult) → NormSeqResult
@@ -269,7 +272,7 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
   let mut iteration := 0
   let mut step : Fin steps.size := ⟨0, stepsNe⟩
   let mut goal := goal
-  let mut scriptSteps : Array (DisplayRuleName × Array Script.LazyStep) := #[]
+  let mut scriptSteps := #[]
   let mut preSimpRules := ∅
   let mut postSimpRules := ∅
   let mut anySuccess := false

@@ -16,8 +16,7 @@ This `RuleTac` is applied once to the root goal, before any other rules are
 tried.
 -/
 def preprocess : RuleTac := RuleTac.ofSingleRuleTac λ input => do
-  let (step, postMVarId, _) ←
-    renameInaccessibleFVarsS input.goal
-  return (#[postMVarId], #[step], none)
+  let ((postMVarId, _), steps) ← renameInaccessibleFVarsS input.goal |>.run
+  return (#[postMVarId], steps, none)
 
 end Aesop.RuleTac

@@ -14,12 +14,12 @@ namespace Aesop.BuiltinRules
 @[aesop norm -100 (rule_sets := [builtin])]
 def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
     let md? := input.options.introsTransparency?
-    let (step, goal, newFVarIds) ←
+    let ((goal, newFVarIds), steps) ←
       match md? with
-      | none => introsS input.goal
-      | some md => introsUnfoldingS input.goal md
+      | none => introsS input.goal |>.run
+      | some md => introsUnfoldingS input.goal md |>.run
     if newFVarIds.size == 0 then
       throwError "nothing to introduce"
-    return (#[goal], #[step], none)
+    return (#[goal], steps, none)
 
 end Aesop.BuiltinRules

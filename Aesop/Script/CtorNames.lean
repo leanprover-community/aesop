@@ -4,10 +4,8 @@ open Lean Lean.Meta
 
 namespace Aesop
 
-variable [Monad m] [MonadQuotation m]
-
 def namesToRCasesPat (ns : Array Name) (implicit : Bool) :
-    m (TSyntax `rcasesPat) := do
+    TSyntax `rcasesPat := Unhygienic.run do
   let ns ← ns.mapM λ n =>
     `(Lean.Parser.Tactic.rcasesPatLo| $(mkIdent n):ident)
   if implicit then
@@ -23,7 +21,7 @@ structure CtorNames where
 
 namespace CtorNames
 
-def toRCasesPat (cn : CtorNames) : m (TSyntax `rcasesPat) :=
+def toRCasesPat (cn : CtorNames) : TSyntax `rcasesPat :=
   namesToRCasesPat cn.args cn.hasImplicitArg
 
 def toAltVarNames (cn : CtorNames) : AltVarNames where
@@ -38,9 +36,8 @@ def mkFreshArgNames (lctx : LocalContext) (cn : CtorNames) :
 end CtorNames
 
 open Lean.Parser.Tactic in
-def ctorNamesToRCasesPats (cns : Array CtorNames) :
-    m (TSyntax ``rcasesPatMed) := do
-  `(rcasesPatMed| $(← cns.mapM (·.toRCasesPat)):rcasesPat|*)
+def ctorNamesToRCasesPats (cns : Array CtorNames) : (TSyntax ``rcasesPatMed) :=
+  Unhygienic.run do `(rcasesPatMed| $(cns.map (·.toRCasesPat)):rcasesPat|*)
 
 def mkCtorNames (iv : InductiveVal) : CoreM (Array CtorNames) := MetaM.run' do
   iv.ctors.toArray.mapM λ ctor => do

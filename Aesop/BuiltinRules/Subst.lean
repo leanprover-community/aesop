@@ -46,8 +46,7 @@ def getSubstitutableEqs (goal : MVarId) (fvarIds : Array FVarId) :
     match hyp with
     | some (.eq e) => eqs := eqs.push e
     | some (.iff fvarId eqProof eqType symm) =>
-      let (step, goal', newFVarId) ← replaceFVarS goal fvarId eqType eqProof
-      recordScriptStep step
+      let (goal', newFVarId) ← replaceFVarS goal fvarId eqType eqProof
       goal := goal'
       eqs := eqs.push { fvarId := newFVarId, symm }
     | none => continue

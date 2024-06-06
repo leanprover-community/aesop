@@ -13,16 +13,15 @@ namespace Aesop.BuiltinRules
 
 @[aesop (rule_sets := [builtin]) safe 100]
 def splitTarget : RuleTac := RuleTac.ofSingleRuleTac λ input => do
-  let (some (steps, goals)) ← splitTargetS? input.goal | throwError
+  let (some goals, steps) ← splitTargetS? input.goal |>.run | throwError
     "nothing to split in target"
   return (goals, steps, none)
 
 partial def splitHypothesesCore (goal : MVarId) :
     ScriptM (Option (Array MVarId)) :=
   withIncRecDepth do
-  let some (steps, goals) ← splitFirstHypothesisS? goal
+  let some goals ← splitFirstHypothesisS? goal
     | return none
-  recordScriptSteps steps
   let mut subgoals := #[]
   for g in goals do
     if let some subgoals' ← splitHypothesesCore g then

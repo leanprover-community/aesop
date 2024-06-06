@@ -12,7 +12,7 @@ open Lean Lean.Meta
 
 @[aesop 80% tactic (index := [target _ = _]) (rule_sets := [builtin])]
 def ext : RuleTac := RuleTac.ofSingleRuleTac λ input => do
-  let (step, goals) ← unhygienicExtS input.goal
-  return (goals, #[step], none)
+  let (goals, steps) ← unhygienicExtS input.goal |>.run
+  return (goals, steps, none)
 
 end Aesop.BuiltinRules

@@ -62,10 +62,8 @@ partial def cases (target : CasesTarget) (md : TransparencyMode)
         ScriptM (Option (Array MVarId)) := do
       let some hyp ← findFirstApplicableHyp excluded goal
         | return none
-      let some (step, goals) ← show MetaM _ from
-        observing? (casesS goal hyp ctorNames)
+      let some goals ← tryCasesS goal hyp ctorNames
         | return none
-      recordScriptStep step
       let mut newGoals := newGoals
       for h : i in [:goals.size] do
         let g := goals[i]

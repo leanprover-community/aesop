@@ -23,7 +23,8 @@ def applyExpr' (goal : MVarId) (e : Expr) (eStx : Term)
         pat.specializeRule patInst e
       else
         pure e
-    let (step, _) ← applyS goal e eStx md
+    let (_, #[step]) ← applyS goal e eStx md |>.run
+      | throwError "aesop: internal error in applyExpr': multiple steps"
     return .ofLazyScriptStep step none
 
 def applyExpr (goal : MVarId) (e : Expr) (eStx : Term)

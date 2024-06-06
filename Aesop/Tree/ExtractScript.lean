@@ -25,24 +25,23 @@ private def lazyStepToStep (ruleName : DisplayRuleName) (lstep : LazyStep) :
   catch e =>
     throwError "tactic script generation failed for rule {ruleName}:{indentD e.toMessageData}"
 
-private def lazyStepsToSteps (ruleName : DisplayRuleName)
-    (lsteps : Array LazyStep) : MetaM (Array Step) :=
-  if lsteps.isEmpty then
-    throwError "tactic script generation is not supported by rule {ruleName}"
-  else
-    lsteps.mapM (lazyStepToStep ruleName)
+private def lazyStepsToSteps (ruleName : DisplayRuleName) :
+    Option (Array LazyStep) → MetaM (Array Step)
+  | none => throwError "tactic script generation is not supported by rule {ruleName}"
+  | some lsteps => lsteps.mapM (lazyStepToStep ruleName)
 
 def visitGoal (g : Goal) : ExtractScriptM Unit := do
-  if let some scripts := g.normalizationState.scriptSteps? then
-    for (rule, script) in scripts do
-      let script ← lazyStepsToSteps rule script
+  match g.normalizationState with
+  | .notNormal => throwError "expected goal {g.id} to be normalised"
+  | .normal (script := script) ..
+  | .provenByNormalization (script := script) .. =>
+    for (rule, script?) in script do
+      let script ← lazyStepsToSteps rule script?
       modify (· ++ script)
-  else
-    throwError "expected goal {g.id} to be normalised"
 
 def visitRapp (r : Rapp) : ExtractScriptM Unit := do
-  let lsteps := r.scriptSteps
-  let steps ← lazyStepsToSteps r.appliedRule.name lsteps
+  let lsteps? := r.scriptSteps?
+  let steps ← lazyStepsToSteps r.appliedRule.name lsteps?
   modify λ s => s ++ steps
 
 mutual

@@ -85,7 +85,7 @@ def getForwardHypTypes : MetaM (HashSet Expr) := do
 def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     (patInsts : HashSet RulePatternInstantiation)
     (immediate : UnorderedArraySet Nat) (clear : Bool)
-    (md : TransparencyMode) : MetaM (MVarId × Array Script.LazyStep) :=
+    (md : TransparencyMode) : ScriptM MVarId :=
   withTransparency md $ goal.withContext do
     let mut newHypProofs := #[]
     let mut usedHyps := ∅
@@ -118,12 +118,10 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     let newHypUserNames ← getUnusedUserNames newHyps'.size forwardHypPrefix
     let newHyps := newHyps'.zipWith newHypUserNames λ (proof, type) userName =>
       { value := proof, type, userName }
-    let mut steps := #[]
     let mut goal := goal
     for newHyp in newHyps do
-      let (step, goal', _) ← assertHypothesisS goal newHyp md
+      let (goal', _) ← assertHypothesisS goal newHyp md
       goal := goal'
-      steps := steps.push step
     let implDetailHyps ← newHyps.mapM λ hyp =>
       return {
         hyp with
@@ -134,10 +132,9 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     let (_, goal') ← goal.assertHypotheses' implDetailHyps
     goal := goal'
     if clear then
-      let (step, goal', _) ← tryClearManyS goal usedHyps
+      let (goal', _) ← tryClearManyS goal usedHyps
       goal := goal'
-      steps := steps.push step
-    return (goal, steps)
+    return goal
   where
     err {α} : MetaM α := throwError
       "found no instances of {e} (other than possibly those which had been previously added by forward rules)"
@@ -149,7 +146,7 @@ def forwardExpr (e : Expr) (pat? : Option RulePattern)
   SingleRuleTac.toRuleTac λ input => input.goal.withContext do
     let (goal, steps) ←
       applyForwardRule input.goal e pat? input.patternInstantiations immediate
-        (clear := clear) md
+        (clear := clear) md |>.run
     return (#[goal], steps, none)
 
 def forwardConst (decl : Name) (pat? : Option RulePattern)
