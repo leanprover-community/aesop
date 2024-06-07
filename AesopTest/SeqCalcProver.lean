@@ -235,7 +235,7 @@ def sum : List Nat → Nat
   | [] => 0
   | x :: xs => sum xs + x
 
-@[simp]
+@[simp, semireducible]
 def Cal (l r : List Φ) : (Γ Δ : List (Form Φ)) → Prop
   | [], [] => Common l r
   | ⊥ :: _, [] => true
