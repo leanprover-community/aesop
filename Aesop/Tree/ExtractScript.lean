@@ -16,33 +16,61 @@ namespace Aesop
 
 open Script
 
-abbrev ExtractScriptM := StateRefT UScript TreeM
+structure ExtractScriptM.Context where
+  completeProof : Bool
 
-private def lazyStepToStep (ruleName : DisplayRuleName) (lstep : LazyStep) :
+structure ExtractScriptM.State where
+  script : UScript := #[]
+
+abbrev ExtractScriptM :=
+  ReaderT ExtractScriptM.Context $ StateRefT ExtractScriptM.State TreeM
+
+def ExtractScriptM.run (completeProof : Bool) (x : ExtractScriptM α) :
+    TreeM UScript :=
+  (·.2.script) <$> (ReaderT.run x { completeProof } |>.run {})
+
+namespace ExtractScript
+
+def lazyStepToStep (ruleName : DisplayRuleName) (lstep : LazyStep) :
     MetaM Step :=
   try
     lstep.toStep
   catch e =>
     throwError "tactic script generation failed for rule {ruleName}:{indentD e.toMessageData}"
 
-private def lazyStepsToSteps (ruleName : DisplayRuleName) :
+def lazyStepsToSteps (ruleName : DisplayRuleName) :
     Option (Array LazyStep) → MetaM (Array Step)
   | none => throwError "tactic script generation is not supported by rule {ruleName}"
   | some lsteps => lsteps.mapM (lazyStepToStep ruleName)
+
+def recordStep (step : Script.Step) : ExtractScriptM Unit := do
+  modify λ s => { s with script := s.script.push step }
+
+def recordLazySteps (ruleName : DisplayRuleName)
+    (steps? : Option (Array Script.LazyStep)) : ExtractScriptM Unit := do
+  let steps ← lazyStepsToSteps ruleName steps?
+  modify λ s => { s with script := s.script ++ steps }
 
 def visitGoal (g : Goal) : ExtractScriptM Unit := do
   match g.normalizationState with
   | .notNormal => throwError "expected goal {g.id} to be normalised"
   | .normal (script := script) ..
   | .provenByNormalization (script := script) .. =>
-    for (rule, script?) in script do
-      let script ← lazyStepsToSteps rule script?
-      modify (· ++ script)
+    for (ruleName, script?) in script do
+      recordLazySteps ruleName script?
 
 def visitRapp (r : Rapp) : ExtractScriptM Unit := do
-  let lsteps? := r.scriptSteps?
-  let steps ← lazyStepsToSteps r.appliedRule.name lsteps?
-  modify λ s => s ++ steps
+  recordLazySteps r.appliedRule.name r.scriptSteps?
+  -- The safe prefix can't assign mvars because any safe rule that assigns mvars
+  -- is downgraded to an unsafe rule. So we add `sorry` steps for all introduced
+  -- mvars.
+  if ! (← read).completeProof then
+    for mvarId in r.introducedMVars do
+      recordStep $ ← Step.mkSorry mvarId r.metaState
+
+end ExtractScript
+
+open ExtractScript
 
 mutual
   partial def MVarClusterRef.extractScriptCore (cref : MVarClusterRef) :
@@ -69,7 +97,7 @@ end
 
 @[inline]
 def extractScript : TreeM UScript := do
-  (·.snd) <$> (← getRootGoal).extractScriptCore.run #[]
+  (← getRootGoal).extractScriptCore.run (completeProof := true)
 
 mutual
   partial def MVarClusterRef.extractSafePrefixScriptCore
@@ -86,6 +114,10 @@ mutual
         throwError "aesop: internal error: goal {g.id} has {safeRapps.size} safe rapps"
       if let some rref := safeRapps[0]? then
         rref.extractSafePrefixScriptCore
+      else
+        let some (postNormGoal, postNormState) := g.postNormGoalAndMetaState?
+          | throwError "aesop: internal error at extractSafePrefixScript"
+        recordStep $ ← Step.mkSorry postNormGoal postNormState
 
   partial def RappRef.extractSafePrefixScriptCore (rref : RappRef) :
       ExtractScriptM Unit := do
@@ -95,6 +127,6 @@ mutual
 end
 
 def extractSafePrefixScript : TreeM UScript := do
-  (·.snd) <$> (← getRootGoal).extractSafePrefixScriptCore.run #[]
+  (← getRootGoal).extractSafePrefixScriptCore.run (completeProof := false)
 
 end Aesop

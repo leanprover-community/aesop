@@ -38,9 +38,7 @@ where
         let (tailScript, tacticState) ← go steps tacticState
         return (.onGoal goalPos firstStep tailScript, tacticState)
       else
-        let numVisibleGoals := tacticState.visibleGoals.size
-        let tacticState := tacticState.solveVisibleGoals
-        return (.sorryN numVisibleGoals, tacticState)
+        throwError "aesop: internal error while structuring script: no script step found for any of the goals {tacticState.visibleGoals.map (·.goal.name)}"
     else
       -- "Structured mode"
       let mut tacticState := tacticState
