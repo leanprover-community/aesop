@@ -10,23 +10,18 @@ namespace Aesop.BuiltinRules
 
 open Lean Lean.Meta
 
-def unhygienicExt (goal : MVarId) : MetaM (Array MVarId) :=
-  unhygienic do
-    let (_, subgoals) ←
-      Lean.Elab.Tactic.Ext.extCore goal [] (failIfUnchanged := true) |>.run' {}
-    return subgoals.map (·.fst)
-
-def unhygienicExtWithScript (goal : MVarId) (generateScript : Bool) :
-    MetaM (Array MVarId × Option RuleTacScriptBuilder) := do
-  let subgoals ← unhygienicExt goal
-  let scriptBuilder? :=
-    mkScriptBuilder? generateScript (.unhygienicExt subgoals.size)
-  return (subgoals, scriptBuilder?)
+def extCore (goal : MVarId) : ScriptM (Option (Array MVarId)) :=
+  saturate1 goal λ goal => do
+    let r ← straightLineExtS goal
+    if r.depth == 0 then
+      return none
+    else
+      return r.goals.map (·.1)
 
 @[aesop 80% tactic (index := [target _ = _]) (rule_sets := [builtin])]
 def ext : RuleTac := RuleTac.ofSingleRuleTac λ input => do
-  let (goals, scriptBuilder?) ←
-    unhygienicExtWithScript input.goal input.options.generateScript
-  return (goals, scriptBuilder?, none)
+  let (some goals, steps) ← extCore input.goal |>.run
+    | throwError "found no applicable ext lemma"
+  return (goals, steps, none)
 
 end Aesop.BuiltinRules

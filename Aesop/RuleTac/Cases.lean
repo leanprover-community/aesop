@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleTac.Basic
+import Aesop.Script.SpecificTactics
 
 open Lean
 open Lean.Meta
@@ -32,11 +33,12 @@ def CasesTarget.toCasesTarget' : CasesTarget → MetaM CasesTarget'
 
 namespace RuleTac
 
-partial def cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveType : Bool) : RuleTac :=
+partial def cases (target : CasesTarget) (md : TransparencyMode)
+    (isRecursiveType : Bool) (ctorNames : Array CtorNames) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
-    match ← go #[] #[] input.goal input.options.generateScript with
-    | none => throwError "No matching hypothesis found."
-    | some (goals, scriptBuilder?) => return (goals, scriptBuilder?, none)
+    match ← go #[] #[] input.goal |>.run with
+    | (none, _) => throwError "No matching hypothesis found."
+    | (some goals, steps) => return (goals, steps, none)
   where
     findFirstApplicableHyp (excluded : Array FVarId) (goal : MVarId) :
         MetaM (Option FVarId) :=
@@ -56,19 +58,15 @@ partial def cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveTyp
           else
             return none
 
-    go (newGoals : Array MVarId) (excluded : Array FVarId)
-        (goal : MVarId) (generateScript : Bool) :
-        MetaM (Option (Array MVarId × Option RuleTacScriptBuilder)) := do
-      let (some hyp) ← findFirstApplicableHyp excluded goal
+    go (newGoals : Array MVarId) (excluded : Array FVarId) (goal : MVarId) :
+        ScriptM (Option (Array MVarId)) := do
+      let some hyp ← findFirstApplicableHyp excluded goal
         | return none
-      let (goals, scriptBuilder?) ←
-        try
-          commitIfNoEx $ unhygienicCasesWithScript goal hyp generateScript
-        catch _ =>
-          return none
+      let some goals ← tryCasesS goal hyp ctorNames
+        | return none
       let mut newGoals := newGoals
-      let mut newScriptBuilders := #[]
-      for g in goals do
+      for h : i in [:goals.size] do
+        let g := goals[i]
         let excluded :=
           if ! isRecursiveType then
             excluded
@@ -81,15 +79,9 @@ partial def cases (target : CasesTarget) (md : TransparencyMode) (isRecursiveTyp
               | (.fvar fvarId' ..) => some fvarId'
               | _ => none
             excluded ++ fields
-        match ← go newGoals excluded g.mvarId generateScript with
-        | some (newGoals', newScriptBuilder?) =>
-          newGoals := newGoals'
-          if let some newScriptBuilder := newScriptBuilder? then
-            newScriptBuilders := newScriptBuilders.push newScriptBuilder
-        | none =>
-          newGoals := newGoals.push g.mvarId
-          if generateScript then
-            newScriptBuilders := newScriptBuilders.push .id
-      return some (newGoals, scriptBuilder?.bind (·.seq newScriptBuilders))
+        match ← go newGoals excluded g.mvarId with
+        | some newGoals' => newGoals := newGoals'
+        | none => newGoals := newGoals.push g.mvarId
+      return some newGoals
 
 end Aesop.RuleTac

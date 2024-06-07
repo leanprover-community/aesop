@@ -5,6 +5,7 @@ Authors: Jannis Limperg, Kaiyu Yang
 -/
 
 import Aesop.RuleTac.Basic
+import Aesop.Script.Step
 
 open Lean
 open Lean.Meta
@@ -43,22 +44,27 @@ unsafe def singleRuleTacImpl (decl : Name) : RuleTac :=
 opaque singleRuleTac (decl : Name) : RuleTac
 
 /--
-Elaborates and runs the given tactic syntax `stx`. The syntax `stx` can be
-in any syntax category supported by `evalTactic`, particularly `tactic` and
-`tacticSeq`.
+Elaborates and runs the given tactic syntax `stx`. The syntax `stx` must be of
+kind `tactic` or `tacticSeq`.
 -/
 def tacticStx (stx : Syntax) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
-    let goals := (← run input.goal (evalTactic stx) |>.run').toArray
-    let scriptBuilder? : Option RuleTacScriptBuilder :=
+    let preState ← saveState
+    let postGoals := (← run input.goal (evalTactic stx) |>.run').toArray
+    let postState ← saveState
+    let tacticBuilder : Script.TacticBuilder := do
       if stx.isOfKind `tactic then
-        some $ .ofTactic goals.size (pure ⟨stx⟩)
-      else if let `(Parser.Tactic.tacticSeq| $ts:tactic*) := stx then
-        some $ ScriptBuilder.ofUnstructuredScriptBuilder (m := MetaM)
-          goals.size (pure ts)
+        return .unstructured ⟨stx⟩
+      else if stx.isOfKind ``Parser.Tactic.tacticSeq then
+        let stx := ⟨stx⟩
+        (.unstructured ·) <$> `(tactic| ($stx:tacticSeq))
       else
-        none
-    return (goals, scriptBuilder?, none)
+        throwError "expected either a single tactic or a sequence of tactics"
+    let step := {
+      preGoal := input.goal
+      preState, tacticBuilder, postState, postGoals
+    }
+    return (postGoals, some #[step], none)
 
 -- Precondition: `decl` has type `TacGen`.
 unsafe def tacGenImpl (decl : Name) : RuleTac := λ input => do
@@ -76,18 +82,18 @@ unsafe def tacGenImpl (decl : Name) : RuleTac := λ input => do
       let .ok stx :=
         Parser.runParserCategory env `tactic tacticStr (fileName := "<stdin>")
         | throwError "failed to parse tactic syntax{indentD tacticStr}"
-      let goals := (← run input.goal (evalTactic stx) |>.run').toArray
+      let postGoals := (← run input.goal (evalTactic stx) |>.run').toArray
       let postState ← saveState
       if let some proof ← getExprMVarAssignment? input.goal then
-        if (← instantiateMVars proof).hasSorry then
+        if ← hasSorry proof then
           throwError "generated proof contains sorry"
-      let scriptBuilder? :=
-        mkScriptBuilder? input.options.generateScript $
-          .ofTactic goals.size (return ⟨stx⟩)
-      apps := apps.push {
-        successProbability? := some successProbability
-        goals, postState, scriptBuilder?
+      let step := {
+        preState := initialState
+        preGoal := input.goal
+        tacticBuilder := return .unstructured ⟨stx⟩
+        postState, postGoals
       }
+      apps := apps.push $ .ofLazyScriptStep step successProbability
     catch e =>
       errors := errors.push (tacticStr, e)
   if apps.isEmpty then throwError

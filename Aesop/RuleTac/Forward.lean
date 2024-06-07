@@ -8,13 +8,15 @@ import Aesop.RuleTac.Basic
 import Aesop.RuleTac.ElabRuleTerm
 import Batteries.Lean.Meta.UnusedNames
 import Batteries.Lean.Meta.AssertHypotheses
+import Aesop.Script.SpecificTactics
+import Aesop.RuleTac.Forward.Basic
 
 open Lean
 open Lean.Meta
 
 namespace Aesop.RuleTac
 
-private partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
+partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
     (patInst : RulePatternInstantiation) (immediate : UnorderedArraySet Nat)
     (collectUsedHyps : Bool) : MetaM (Array Expr × Array FVarId) :=
   withNewMCtxDepth (allowLevelAssignments := true) do
@@ -73,34 +75,6 @@ private partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
         let usedHypsAcc := usedHypsAcc ++ currentUsedHyps
         return (proofsAcc, usedHypsAcc)
 
-/-
-Forward rules must only succeed once for each combination of immediate
-hypotheses; otherwise any forward rule could be applied infinitely often (if
-it can be applied at all). We use the following scheme to ensure this:
-
-- Whenever we add a hypothesis `h : T` as an instance of a forward rule, we also
-  add an `implDetail` decl `h' : T`.
-- Before we add a hypothesis `h : T`, we check whether there is already an
-  `implDetail` `h' : T`. If so, `h` is not added.
-
-This scheme ensures that forward rules never add more than one hypothesis of
-any given type. `h'` is added as an `implDetail`, rather than as a regular
-hypothesis, to ensure that future rule applications do not change its type.
--/
-
--- Prefix of the regular hyps added by `forward`.
-def forwardHypPrefix := `fwd
-
--- Prefix of the `implDetail` hyps added by `forward`.
-def forwardImplDetailHypPrefix := `_fwd
-
--- Names for the `implDetail` hyps added by `forward`.
-def mkFreshForwardImplDetailHypName : MetaM Name :=
-  mkFreshIdWithPrefix forwardImplDetailHypPrefix
-
-def isForwardImplDetailHypName (n : Name) : Bool :=
-  forwardImplDetailHypPrefix.isPrefixOf n
-
 def getForwardHypTypes : MetaM (HashSet Expr) := do
   let mut result := {}
   for ldecl in (← getLCtx) do
@@ -110,8 +84,8 @@ def getForwardHypTypes : MetaM (HashSet Expr) := do
 
 def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     (patInsts : HashSet RulePatternInstantiation)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) (generateScript : Bool)
-    (md : TransparencyMode) : MetaM (MVarId × Option RuleTacScriptBuilder) :=
+    (immediate : UnorderedArraySet Nat) (clear : Bool)
+    (md : TransparencyMode) : ScriptM MVarId :=
   withTransparency md $ goal.withContext do
     let mut newHypProofs := #[]
     let mut usedHyps := ∅
@@ -144,10 +118,10 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     let newHypUserNames ← getUnusedUserNames newHyps'.size forwardHypPrefix
     let newHyps := newHyps'.zipWith newHypUserNames λ (proof, type) userName =>
       { value := proof, type, userName }
-    let (_, goal, assertScriptBuilder?) ←
-      assertHypothesesWithScript goal newHyps generateScript
-    let assertScriptBuilder? :=
-      assertScriptBuilder?.map (·.withAllTransparency md)
+    let mut goal := goal
+    for newHyp in newHyps do
+      let (goal', _) ← assertHypothesisS goal newHyp md
+      goal := goal'
     let implDetailHyps ← newHyps.mapM λ hyp =>
       return {
         hyp with
@@ -155,15 +129,12 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
         binderInfo := .default
         kind := .implDetail
       }
-    let (_, goal) ← goal.assertHypotheses' implDetailHyps
+    let (_, goal') ← goal.assertHypotheses' implDetailHyps
+    goal := goal'
     if clear then
-      let (goal, _, clearScriptBuilder?) ←
-        tryClearManyWithScript goal usedHyps generateScript
-      let scriptBuilder? :=
-        return (← assertScriptBuilder?).seq #[(← clearScriptBuilder?)]
-      return (goal, scriptBuilder?)
-    else
-      return (goal, assertScriptBuilder?)
+      let (goal', _) ← tryClearManyS goal usedHyps
+      goal := goal'
+    return goal
   where
     err {α} : MetaM α := throwError
       "found no instances of {e} (other than possibly those which had been previously added by forward rules)"
@@ -173,10 +144,10 @@ def forwardExpr (e : Expr) (pat? : Option RulePattern)
     (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
     RuleTac :=
   SingleRuleTac.toRuleTac λ input => input.goal.withContext do
-    let (goal, scriptBuilder?) ←
+    let (goal, steps) ←
       applyForwardRule input.goal e pat? input.patternInstantiations immediate
-        (clear := clear) (generateScript := input.options.generateScript) md
-    return (#[goal], scriptBuilder?, none)
+        (clear := clear) md |>.run
+    return (#[goal], steps, none)
 
 def forwardConst (decl : Name) (pat? : Option RulePattern)
     (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :

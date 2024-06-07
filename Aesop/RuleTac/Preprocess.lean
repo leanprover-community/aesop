@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleTac.Basic
+import Aesop.Script.SpecificTactics
 
 open Lean Lean.Meta
 
@@ -15,8 +16,7 @@ This `RuleTac` is applied once to the root goal, before any other rules are
 tried.
 -/
 def preprocess : RuleTac := RuleTac.ofSingleRuleTac λ input => do
-  let (postMVarId, _, scriptBuilder?) ←
-    renameInaccessibleFVarsWithScript input.goal input.options.generateScript
-  return (#[postMVarId], scriptBuilder?, none)
+  let ((postMVarId, _), steps) ← renameInaccessibleFVarsS input.goal |>.run
+  return (#[postMVarId], steps, none)
 
 end Aesop.RuleTac

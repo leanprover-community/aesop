@@ -71,7 +71,9 @@ def RuleBuilder.cases : RuleBuilder := λ input => do
     opts.casesPatterns.forM (·.check decl)
     let imode ← opts.casesIndexingMode decl
     let target := opts.casesTarget decl
-    let tac := .cases target opts.casesTransparency inductiveInfo.isRec
+    let ctorNames ← mkCtorNames inductiveInfo
+    let tac :=
+      .cases target opts.casesTransparency inductiveInfo.isRec ctorNames
     return .global $ .base $ input.toRule .cases decl .global tac imode none
 
 end Aesop

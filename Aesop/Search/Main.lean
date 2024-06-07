@@ -8,6 +8,8 @@ import Aesop.Check
 import Aesop.Frontend.Attribute
 import Aesop.Options
 import Aesop.RuleSet
+import Aesop.Script.StructureStatic
+import Aesop.Script.StructureDynamic
 import Aesop.Search.Expansion
 import Aesop.Search.ExpandSafePrefix
 import Aesop.Search.Queue
@@ -106,9 +108,7 @@ def checkRootUnprovable : SearchM Q (Option MessageData) := do
   return none
 
 def getProof? : SearchM Q (Option Expr) := do
-  let (some proof) ← getExprMVarAssignment? (← getRootMVarId)
-    | return none
-  instantiateMVars proof
+  getExprMVarAssignment? (← getRootMVarId)
 
 private def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
   withOptions (·.setBool `pp.analyze true) x
@@ -118,7 +118,7 @@ def finalizeProof : SearchM Q Unit := do
     extractProof
     let (some proof) ← getProof? | throwError
       "aesop: internal error: root goal is proven but its metavariable is not assigned"
-    if proof.hasExprMVar then
+    if (← instantiateMVars proof).hasExprMVar then
       let inner :=
         m!"Proof: {proof}\nUnassigned metavariables: {(← getMVarsNoDelayed proof).map (·.name)}"
       throwError "aesop: internal error: extracted proof has metavariables.{indentD inner}"
@@ -126,13 +126,14 @@ def finalizeProof : SearchM Q Unit := do
       aesop_trace[proof] "Final proof:{indentExpr proof}"
 
 open Lean.Elab.Tactic in
-def checkRenderedScript (script : Array Syntax.Tactic) : SearchM Q Unit := do
+def checkRenderedScript (completeProof : Bool) (script : Array Syntax.Tactic) :
+    SearchM Q Unit := do
   let initialState ← getRootMetaState
   let rootGoal ← getRootMVarId
   let go : TacticM Unit := do
     setGoals [rootGoal]
     evalTactic $ ← `(tacticSeq| $script:tactic*)
-    unless (← getUnsolvedGoals).isEmpty do
+    if completeProof && ! (← getUnsolvedGoals).isEmpty then
       throwError "script executed successfully but did not solve the main goal"
   try
     show MetaM Unit from withoutModifyingState do
@@ -143,33 +144,63 @@ def checkRenderedScript (script : Array Syntax.Tactic) : SearchM Q Unit := do
   catch e => throwError
     "{Check.script.name}: error while executing generated script:{indentD e.toMessageData}"
 
-def checkScriptSteps (script : UnstructuredScript) : SearchM Q Unit := do
+def checkScriptSteps (script : Script.UScript) : SearchM Q Unit := do
+  unless ← Check.script.steps.isEnabled do
+    return
   try
     script.validate
   catch e =>
     throwError "{Check.script.steps.name}: {e.toMessageData}"
 
-def traceScript : SearchM Q Unit := do
+register_option aesop.dev.dynamicStructuring : Bool := {
+  descr := "(aesop) Only for use by Aesop developers. Enables dynamic script structuring."
+  defValue := false
+}
+
+def structureScript (completeProof : Bool) (uscript : Script.UScript)
+    (rootState : Meta.SavedState) (rootGoal : MVarId) :
+    SearchM Q (Option Script.SScript) := do
+  let dynamicStructuring := aesop.dev.dynamicStructuring.get (← getOptions)
+  if dynamicStructuring && completeProof then
+    uscript.toSScriptDynamic rootState rootGoal
+  else
+    if dynamicStructuring then
+      logWarning "aesop: falling back to static structuring for incomplete proof"
+    let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
+    let tacticState := {
+      visibleGoals := #[⟨rootGoal, rootGoalMVars⟩]
+      invisibleGoals := ∅
+    }
+    uscript.toSScriptStatic tacticState
+
+def traceScript (completeProof : Bool) : SearchM Q Unit := do
   let options := (← read).options
   if ! options.generateScript then
     return
-  try
-    let uscript ← (← getRootMVarCluster).extractScript
-    if ← Check.script.steps.isEnabled then
-      checkScriptSteps uscript
-    let goal ← getRootMVarId
-    let goalMVars ← goal.getMVarDependencies
-    let tacticState :=
-      { visibleGoals := #[⟨goal, goalMVars⟩], invisibleGoals := {} }
-    let script ← uscript.toStructuredScript tacticState
-    let script ← script.render tacticState
+  let uscript ← if completeProof then extractScript else extractSafePrefixScript
+  checkScriptSteps uscript
+  let rootGoal ← getRootMVarId
+  let rootState ← getRootMetaState
+  let structuredScript? ←
+    structureScript completeProof uscript rootState rootGoal
+  if let some structuredScript := structuredScript? then
+    let script ← structuredScript.render
     if options.traceScript then
       let script ← `(tacticSeq| $script*)
       addTryThisTacticSeqSuggestion (← getRef) script
     if ← Check.script.isEnabled then
-      checkRenderedScript script
-  catch e =>
-    logError m!"aesop: error while generating tactic script:{indentD e.toMessageData}"
+      checkRenderedScript completeProof script
+  else
+    let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
+    let tacticState :=
+      { visibleGoals := #[⟨rootGoal, rootGoalMVars⟩], invisibleGoals := ∅ }
+    let uscript ← `(tacticSeq| $(← uscript.render tacticState):tactic*)
+    if options.traceScript then
+      addTryThisTacticSeqSuggestion (← getRef) uscript
+    if ← Check.script.isEnabled then
+      throwError "{Check.script.name}: structuring the script failed"
+    else
+      logWarning m!"aesop: structuring the script failed. Reporting unstructured script."
 
 def traceTree : SearchM Q Unit := do
   (← (← getRootGoal).get).traceTree .tree
@@ -178,7 +209,7 @@ def finishIfProven : SearchM Q Bool := do
   unless (← (← getRootMVarCluster).get).state.isProven do
     return false
   finalizeProof
-  traceScript
+  traceScript (completeProof := true)
   traceTree
   return true
 
@@ -217,6 +248,32 @@ def treeHasProgress : TreeM Bool := do
     (.mvarCluster (← get).root)
   resultRef.get
 
+def throwAesopEx (mvarId : MVarId) (remainingSafeGoals : Array MVarId)
+    (safePrefixExpansionSuccess : Bool) (msg? : Option MessageData) :
+    SearchM Q α := do
+  if aesop.smallErrorMessages.get (← getOptions) then
+    match msg? with
+    | none => throwError "tactic 'aesop' failed"
+    | some msg => throwError "tactic 'aesop' failed, {msg}"
+  else
+    let maxRapps := (← read).options.maxSafePrefixRuleApplications
+    let suffix :=
+      if remainingSafeGoals.isEmpty then
+        m!""
+      else
+        let gs := .joinSep (remainingSafeGoals.toList.map toMessageData) "\n\n"
+        let suffix' :=
+          if safePrefixExpansionSuccess then
+            m!""
+          else
+            m!"\nThe safe prefix was not fully expanded because the maximum number of rule applications ({maxRapps}) was reached."
+        m!"\nRemaining goals after safe rules:{indentD gs}{suffix'}"
+    -- Copy-pasta from `Lean.Meta.throwTacticEx`
+    match msg? with
+    | none => throwError "tactic 'aesop' failed\nInitial goal:{indentD mvarId}{suffix}"
+    | some msg => throwError "tactic 'aesop' failed, {msg}\nInitial goal:{indentD mvarId}{suffix}"
+
+
 -- When we hit a non-fatal error (i.e. the search terminates without a proof
 -- because the root goal is unprovable or because we hit a search limit), we
 -- usually:
@@ -230,17 +287,8 @@ def treeHasProgress : TreeM Bool := do
 -- not expand the safe rules after the fact, the tactic's output would be
 -- sensitive to minor changes in, e.g., rule priority.
 def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
-  let opts := (← read).options
-  if opts.terminal then
-    throwAesopEx (← getRootMVarId) err
   let safeExpansionSuccess ← expandSafePrefix
-  if ! safeExpansionSuccess then
-    logWarning m!"aesop: safe prefix was not fully expanded because the maximum number of rule applications ({(← read).options.maxSafePrefixRuleApplications}) was reached."
-  if ! (← treeHasProgress) then
-    throwAesopEx (← getRootMVarId) "made no progress"
-  if opts.warnOnNonterminal then
-    logWarning m!"aesop: {err}"
-  let goals ← extractSafePrefix
+  let safeGoals ← extractSafePrefix
   aesop_trace[proof] do
     match ← getProof? with
     | some proof =>
@@ -248,11 +296,17 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
         aesop_trace![proof] "{proof}"
     | none => aesop_trace![proof] "<no proof>"
   traceTree
-  return goals
-
-def handleFatalError (e : Exception) : SearchM Q α := do
-  traceTree
-  throw e
+  traceScript (completeProof := false)
+  let opts := (← read).options
+  if opts.terminal then
+    throwAesopEx (← getRootMVarId) safeGoals safeExpansionSuccess err
+  if ! (← treeHasProgress) then
+    throwAesopEx (← getRootMVarId) #[] safeExpansionSuccess "made no progress"
+  if opts.warnOnNonterminal then
+    logWarning m!"aesop: {err}"
+  if ! safeExpansionSuccess then
+    logWarning m!"aesop: safe prefix was not fully expanded because the maximum number of rule applications ({(← read).options.maxSafePrefixRuleApplications}) was reached."
+  return safeGoals
 
 partial def searchLoop : SearchM Q (Array MVarId) :=
   withIncRecDepth do
@@ -288,7 +342,6 @@ def search (goal : MVarId) (ruleSet? : Option LocalRuleSet := none)
     SearchM.run ruleSet options simpConfig simpConfigSyntax? goal stats do
       show SearchM Q _ from
       try searchLoop
-      catch e => handleFatalError e
       finally freeTree
   return (goals, stats)
 

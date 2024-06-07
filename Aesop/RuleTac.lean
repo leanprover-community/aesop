@@ -23,7 +23,8 @@ protected def run : RuleTacDescr → RuleTacInput → MetaM RuleTacOutput
     RuleTac.forwardConst decl pat? immediate clear md
   | forwardTerm stx pat? immediate clear md =>
     RuleTac.forwardTerm stx pat? immediate clear md
-  | cases decl md isRecursiveType => RuleTac.cases decl md isRecursiveType
+  | cases target md isRecursiveType ctorNames =>
+    RuleTac.cases target md isRecursiveType ctorNames
   | tacticM decl => RuleTac.tacticM decl
   | singleRuleTac decl => RuleTac.singleRuleTac decl
   | ruleTac decl => RuleTac.ruleTac decl

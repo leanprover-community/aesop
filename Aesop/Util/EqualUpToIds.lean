@@ -8,7 +8,7 @@ import Batteries.Lean.Meta.SavedState
 
 open Lean Lean.Meta
 
-namespace Aesop.EqualUpToIds
+namespace Aesop
 
 -- TODO caching -- but maybe the ptrEq optimisation is enough
 
@@ -17,13 +17,28 @@ initialize registerTraceClass `Aesop.Util.EqualUpToIds
 namespace EqualUpToIdsM
 
 structure Context where
-  commonMCtx : MetavarContext
+  commonMCtx? : Option MetavarContext
   mctx₁ : MetavarContext
   mctx₂ : MetavarContext
+  /-- Allow metavariables to be unassigned on one side of the comparison and
+  assigned on the other. So when we compare two expressions and we encounter
+  a metavariable `?x` in one of them and a subexpression `e` in the other (at
+  the same position), we consider `?x` equal to `e`. -/
+  -- TODO we should also allow ?P x₁ ... xₙ = e
+  allowAssignmentDiff : Bool
+  ignoreFVar : LocalDecl → Bool
 
 structure State where
   equalMVarIds : HashMap MVarId MVarId := {}
   equalLMVarIds : HashMap LMVarId LMVarId := {}
+  /-- A map from metavariables which are unassigned in the left goal
+  to their corresponding expression in the right goal. Only used when
+  `allowAssignmentDiff = true`. -/
+  leftUnassignedMVarValues : HashMap MVarId Expr := {}
+  /-- A map from metavariables which are unassigned in the right goal
+  to their corresponding expression in the left goal. Only used when
+  `allowAssignmentDiff = true`. -/
+  rightUnassignedMVarValues : HashMap MVarId Expr := {}
 
 end EqualUpToIdsM
 
@@ -31,8 +46,27 @@ end EqualUpToIdsM
 abbrev EqualUpToIdsM :=
   ReaderT EqualUpToIdsM.Context $ StateRefT EqualUpToIdsM.State MetaM
 
-def readCommonMCtx : EqualUpToIdsM MetavarContext :=
-  return (← read).commonMCtx
+-- Make the compiler generate specialized `pure`/`bind` so we do not have to optimize through the
+-- whole monad stack at every use site. May eventually be covered by `deriving`.
+@[inline, always_inline]
+instance : Monad EqualUpToIdsM :=
+  { inferInstanceAs (Monad EqualUpToIdsM) with }
+
+protected def EqualUpToIdsM.run' (x : EqualUpToIdsM α)
+    (commonMCtx? : Option MetavarContext) (mctx₁ mctx₂ : MetavarContext)
+    (allowAssignmentDiff : Bool) (ignoreFVar : LocalDecl → Bool) :
+    MetaM (α × EqualUpToIdsM.State) :=
+  x { commonMCtx?, mctx₁, mctx₂, allowAssignmentDiff, ignoreFVar } |>.run {}
+
+protected def EqualUpToIdsM.run (x : EqualUpToIdsM α)
+    (commonMCtx? : Option MetavarContext) (mctx₁ mctx₂ : MetavarContext)
+    (allowAssignmentDiff : Bool) (ignoreFVar : LocalDecl → Bool) : MetaM α :=
+  (·.fst) <$> x.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff ignoreFVar
+
+namespace EqualUpToIds
+
+def readCommonMCtx? : EqualUpToIdsM (Option MetavarContext) :=
+  return (← read).commonMCtx?
 
 def readMCtx₁ : EqualUpToIdsM MetavarContext :=
   return (← read).mctx₁
@@ -40,16 +74,28 @@ def readMCtx₁ : EqualUpToIdsM MetavarContext :=
 def readMCtx₂ : EqualUpToIdsM MetavarContext :=
   return (← read).mctx₂
 
--- Make the compiler generate specialized `pure`/`bind` so we do not have to optimize through the
--- whole monad stack at every use site. May eventually be covered by `deriving`.
-@[inline, always_inline]
-instance : Monad EqualUpToIdsM :=
-  { inferInstanceAs (Monad EqualUpToIdsM) with }
+def readAllowAssignmentDiff : EqualUpToIdsM Bool :=
+  return (← read).allowAssignmentDiff
 
-protected def EqualUpToIdsM.run (x : EqualUpToIdsM α)
-    (commonMCtx mctx₁ mctx₂ : MetavarContext) :
-    MetaM α :=
-  (·.fst) <$> (x { commonMCtx, mctx₁, mctx₂ }).run {}
+def equalCommonLMVars? (lmvarId₁ lmvarId₂ : LMVarId) :
+    EqualUpToIdsM (Option Bool) := do
+  match ← readCommonMCtx? with
+  | none => return none
+  | some mctx =>
+    if mctx.lDepth.contains lmvarId₁ || mctx.lDepth.contains lmvarId₂ then
+      return some $ lmvarId₁ == lmvarId₂
+    else
+      return none
+
+def equalCommonMVars? (mvarId₁ mvarId₂ : MVarId) :
+    EqualUpToIdsM (Option Bool) := do
+  match ← readCommonMCtx? with
+  | none => return none
+  | some mctx =>
+    if mctx.isExprMVarDeclared mvarId₁ || mctx.isExprMVarDeclared mvarId₂ then
+      return some $ mvarId₁ == mvarId₂
+    else
+      return none
 
 structure GoalContext where
   mdecl₁ : MetavarDecl
@@ -80,10 +126,9 @@ mutual
     | .param n₁, .param n₂ =>
       return n₁ == n₂
     | .mvar m₁, .mvar m₂ => do
-      let commonMCtx := (← read).commonMCtx
-      if commonMCtx.lDepth.contains m₁ || commonMCtx.lDepth.contains m₂ then
-        return m₁ == m₂
-      if let some m₂' := (← get).equalLMVarIds.find? m₁ then
+      if let some result ← equalCommonLMVars? m₁ m₂ then
+        return result
+      else if let some m₂' := (← get).equalLMVarIds.find? m₁ then
         return m₂' == m₂
       else
         modify λ s => { s with equalLMVarIds := s.equalLMVarIds.insert m₁ m₂ }
@@ -100,9 +145,10 @@ private def namesEqualUpToMacroScopes (n₁ n₂ : Name) : Bool :=
   n₁.hasMacroScopes == n₂.hasMacroScopes &&
   n₁.eraseMacroScopes == n₂.eraseMacroScopes
 
-private def lctxDecls (lctx : LocalContext) : Array LocalDecl :=
-  lctx.foldl (init := Array.mkEmpty lctx.numIndices) λ decls d =>
-    if d.isImplementationDetail then decls else decls.push d
+private def lctxDecls (lctx : LocalContext) : EqualUpToIdsM (Array LocalDecl) := do
+  let ignoreFVar := (← read).ignoreFVar
+  return lctx.foldl (init := Array.mkEmpty lctx.numIndices) λ decls d =>
+    if d.isImplementationDetail || ignoreFVar d then decls else decls.push d
 
 namespace Unsafe
 
@@ -184,8 +230,32 @@ mutual
       | .mvarId m₁, .mvarId m₂ => unassignedMVarsEqualUpToIdsCore m₁ m₂
       | .delayedAssignment dAss₁, .delayedAssignment dAss₂ =>
         unassignedMVarsEqualUpToIdsCore dAss₁.mvarIdPending dAss₂.mvarIdPending
-        -- I'm not sure whether this suffices -- do we also need to check that
-        -- the `fvars` in `dAss₁` correspond to the `fvars` in `dAss₂`?
+        -- TODO I'm not sure whether this suffices -- do we also need to check
+        -- that the `fvars` in `dAss₁` correspond to the `fvars` in `dAss₂`?
+      | .mvarId m₁, .expr e₂ => do
+        if ! (← readAllowAssignmentDiff) then
+          return false
+        let map := (← get).leftUnassignedMVarValues
+        if let some e₁ := map.find? m₁ then
+          exprsEqualUpToIdsCore e₁ e₂
+        else
+          modify λ s => {
+            s with
+            leftUnassignedMVarValues := s.leftUnassignedMVarValues.insert m₁ e₂
+          }
+          return true
+      | .expr e₁, .mvarId m₂ => do
+        if ! (← readAllowAssignmentDiff) then
+          return false
+        let map := (← get).rightUnassignedMVarValues
+        if let some e₂ := map.find? m₂ then
+          exprsEqualUpToIdsCore e₁ e₂
+        else
+          modify λ s => {
+            s with
+            rightUnassignedMVarValues := s.rightUnassignedMVarValues.insert m₂ e₁
+          }
+          return true
       | _, _ => return false
 
   unsafe def localDeclsEqualUpToIdsCore :
@@ -205,8 +275,8 @@ mutual
 
   unsafe def localContextsEqualUpToIdsCore (mdecl₁ mdecl₂ : MetavarDecl) :
       EqualUpToIdsM (Option GoalContext) := do
-    let decls₁ := lctxDecls mdecl₁.lctx
-    let decls₂ := lctxDecls mdecl₂.lctx
+    let decls₁ ← lctxDecls mdecl₁.lctx
+    let decls₂ ← lctxDecls mdecl₂.lctx
     if h : decls₁.size = decls₂.size then
       go decls₁ decls₂ h 0 { mdecl₁, mdecl₂ }
     else
@@ -231,14 +301,9 @@ mutual
   unsafe def unassignedMVarsEqualUpToIdsCore (mvarId₁ mvarId₂ : MVarId) :
       EqualUpToIdsM Bool :=
     withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing mvars {mvarId₁.name}, {mvarId₂.name}") do
-      let commonMCtx ← readCommonMCtx
-      if commonMCtx.decls.contains mvarId₁ || commonMCtx.decls.contains mvarId₂ then
-        if mvarId₁ == mvarId₂ then
-          trace[Aesop.Util.EqualUpToIds] "common mvars are identical"
-          return true
-        else
-          trace[Aesop.Util.EqualUpToIds] "common mvars are different"
-          return false
+      if let some result ← equalCommonMVars? mvarId₁ mvarId₂ then
+        trace[Aesop.Util.EqualUpToIds] "common mvars are {if result then "identical" else "different"}"
+        return result
       else if let some m₂ := (← get).equalMVarIds.find? mvarId₁ then
         if mvarId₂ == m₂ then
           trace[Aesop.Util.EqualUpToIds] "mvars already known to be equal"
@@ -281,29 +346,34 @@ def tacticStatesEqualUpToIdsCore (goals₁ goals₂ : Array MVarId) :
 
 end EqualUpToIds
 
-def unassignedMVarsEqualUptoIds (commonMCtx mctx₁ mctx₂ : MetavarContext)
-    (mvarId₁ mvarId₂ : MVarId) : MetaM Bool := do
+def unassignedMVarsEqualUptoIds (commonMCtx? : Option MetavarContext)
+    (mctx₁ mctx₂ : MetavarContext) (mvarId₁ mvarId₂ : MVarId)
+    (allowAssignmentDiff := false)
+    (ignoreFVar : LocalDecl → Bool := λ _ => false) : MetaM Bool :=
   EqualUpToIds.unassignedMVarsEqualUpToIdsCore mvarId₁ mvarId₂
-    |>.run commonMCtx mctx₁ mctx₂
+    |>.run commonMCtx? mctx₁ mctx₂ allowAssignmentDiff ignoreFVar
 
-def tacticStatesEqualUpToIds (commonMCtx mctx₁ mctx₂ : MetavarContext)
-    (goals₁ goals₂ : Array MVarId) : MetaM Bool := do
+def unassignedMVarsEqualUptoIds' (commonMCtx? : Option MetavarContext)
+    (mctx₁ mctx₂ : MetavarContext) (mvarId₁ mvarId₂ : MVarId)
+    (allowAssignmentDiff := false)
+    (ignoreFVar : LocalDecl → Bool := λ _ => false) :
+    MetaM (Bool × EqualUpToIdsM.State) :=
+  EqualUpToIds.unassignedMVarsEqualUpToIdsCore mvarId₁ mvarId₂
+    |>.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff ignoreFVar
+
+def tacticStatesEqualUpToIds (commonMCtx? : Option MetavarContext)
+    (mctx₁ mctx₂ : MetavarContext) (goals₁ goals₂ : Array MVarId)
+    (allowAssignmentDiff := false)
+    (ignoreFVar : LocalDecl → Bool := λ _ => false) : MetaM Bool :=
   EqualUpToIds.tacticStatesEqualUpToIdsCore goals₁ goals₂
-    |>.run commonMCtx mctx₁ mctx₂
+    |>.run commonMCtx? mctx₁ mctx₂ allowAssignmentDiff ignoreFVar
 
-open Lean.Elab.Tactic in
-def runTacticMCapturingPostState (t : TacticM Unit) (preState : Meta.SavedState)
-    (preGoals : List MVarId) : MetaM (Meta.SavedState × List MVarId) :=
-  withoutModifyingState do
-    let go : TacticM (Meta.SavedState × List MVarId) := do
-      preState.restore
-      t
-      pruneSolvedGoals
-      let postState ← show MetaM _ from saveState
-      let postGoals ← getGoals
-      pure (postState, postGoals)
-    go |>.run { elaborator := .anonymous, recover := false }
-       |>.run' { goals := preGoals }
-       |>.run'
+def tacticStatesEqualUpToIds' (commonMCtx? : Option MetavarContext)
+    (mctx₁ mctx₂ : MetavarContext) (goals₁ goals₂ : Array MVarId)
+    (allowAssignmentDiff := false)
+    (ignoreFVar : LocalDecl → Bool := λ _ => false) :
+    MetaM (Bool × EqualUpToIdsM.State) :=
+  EqualUpToIds.tacticStatesEqualUpToIdsCore goals₁ goals₂
+    |>.run' commonMCtx? mctx₁ mctx₂ allowAssignmentDiff ignoreFVar
 
 end Aesop

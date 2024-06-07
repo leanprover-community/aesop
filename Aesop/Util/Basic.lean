@@ -14,7 +14,7 @@ import Batteries.Lean.PersistentHashSet
 import Lean.Meta.Tactic.TryThis
 
 open Lean
-open Lean.Meta
+open Lean.Meta Lean.Elab.Tactic
 
 namespace Aesop.Array
 
@@ -192,10 +192,37 @@ def runMetaMAsCoreM (x : MetaM α) : CoreM α :=
 def runTermElabMAsCoreM (x : Elab.TermElabM α) : CoreM α :=
   runMetaMAsCoreM x.run'
 
+def runTacticMAsMetaM (x : TacticM α) (goals : List MVarId) :
+    MetaM (α × List MVarId) := do
+  let (a, s) ← x |>.run { elaborator := .anonymous } |>.run { goals } |>.run'
+  return (a, s.goals)
+
+def runTacticSyntaxAsMetaM (stx : Syntax) (goals : List MVarId) :
+    MetaM (List MVarId) :=
+  return (← runTacticMAsMetaM (evalTactic stx) goals).snd
+
+
 def updateSimpEntryPriority (priority : Nat) (e : SimpEntry) : SimpEntry :=
   match e with
   | .thm t => .thm { t with priority }
   | .toUnfoldThms .. | .toUnfold .. => e
+
+partial def hasSorry [Monad m] [MonadMCtx m] (e : Expr) : m Bool :=
+  return go (← getMCtx) e
+where
+  go (mctx : MetavarContext) (e : Expr) : Bool :=
+    Option.isSome $ e.find? λ e =>
+      if e.isSorry then
+        true
+      else if let .mvar mvarId := e then
+        if let some ass := mctx.getExprAssignmentCore? mvarId then
+          go mctx ass
+        else if let some ass := mctx.dAssignment.find? mvarId then
+          go mctx $ .mvar ass.mvarIdPending
+        else
+          false
+      else
+        false
 
 def isAppOfUpToDefeq (f : Expr) (e : Expr) : MetaM Bool :=
   withoutModifyingState do
@@ -241,6 +268,41 @@ def partitionGoalsAndMVars (goals : Array MVarId) :
       goalsAndMVars.filter λ (g, _) => ! mvars.contains g
   return (goals, mvars)
 
+section RunTactic
+
+open Lean.Elab.Tactic
+
+def runTacticMCapturingPostState (t : TacticM Unit) (preState : Meta.SavedState)
+    (preGoals : List MVarId) : MetaM (Meta.SavedState × List MVarId) :=
+  withoutModifyingState do
+    let go : TacticM (Meta.SavedState × List MVarId) := do
+      preState.restore
+      t
+      pruneSolvedGoals
+      let postState ← show MetaM _ from saveState
+      let postGoals ← getGoals
+      pure (postState, postGoals)
+    go |>.run { elaborator := .anonymous, recover := false }
+       |>.run' { goals := preGoals }
+       |>.run'
+
+def runTacticCapturingPostState (t : Syntax.Tactic) (preState : Meta.SavedState)
+    (preGoals : List MVarId) : MetaM (Meta.SavedState × List MVarId) := do
+  runTacticMCapturingPostState (evalTactic t) preState preGoals
+
+def runTacticSeqCapturingPostState (t : TSyntax ``Lean.Parser.Tactic.tacticSeq)
+    (preState : Meta.SavedState) (preGoals : List MVarId) :
+    MetaM (Meta.SavedState × List MVarId) := do
+  runTacticMCapturingPostState (evalTactic t) preState preGoals
+
+def runTacticsCapturingPostState (ts : Array Syntax.Tactic)
+    (preState : Meta.SavedState) (preGoals : List MVarId) :
+    MetaM (Meta.SavedState × List MVarId) := do
+  let t ← `(Lean.Parser.Tactic.tacticSeq| $ts*)
+  runTacticSeqCapturingPostState t preState preGoals
+
+end RunTactic
+
 section TransparencySyntax
 
 variable [Monad m] [MonadQuotation m]
@@ -248,7 +310,7 @@ variable [Monad m] [MonadQuotation m]
 open Parser.Tactic
 
 def withTransparencySeqSyntax (md : TransparencyMode)
-    (k : TSyntax ``tacticSeq) : m (TSyntax ``tacticSeq) :=
+    (k : TSyntax ``tacticSeq) : TSyntax ``tacticSeq := Unhygienic.run do
   match md with
   | .default => return k
   | .all => `(tacticSeq| with_unfolding_all $k)
@@ -256,13 +318,13 @@ def withTransparencySeqSyntax (md : TransparencyMode)
   | .instances => `(tacticSeq| with_reducible_and_instances $k)
 
 def withAllTransparencySeqSyntax (md : TransparencyMode)
-    (k : TSyntax ``tacticSeq) : m (TSyntax ``tacticSeq) :=
+    (k : TSyntax ``tacticSeq) : TSyntax ``tacticSeq :=
   match md with
-  | .all => `(tacticSeq| with_unfolding_all $k)
-  | _ => return k
+  | .all => Unhygienic.run `(tacticSeq| with_unfolding_all $k)
+  | _ => k
 
 def withTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
-    m (TSyntax `tactic) :=
+    TSyntax `tactic := Unhygienic.run do
   match md with
   | .default   => return k
   | .all       => `(tactic| with_unfolding_all $k:tactic)
@@ -270,10 +332,10 @@ def withTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
   | .instances => `(tactic| with_reducible_and_instances $k:tactic)
 
 def withAllTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
-    m (TSyntax `tactic) :=
+    TSyntax `tactic :=
   match md with
-  | .all  => `(tactic| with_unfolding_all $k:tactic)
-  | _     => return k
+  | .all  => Unhygienic.run `(tactic| with_unfolding_all $k:tactic)
+  | _     => k
 
 end TransparencySyntax
 
@@ -305,7 +367,7 @@ def addTryThisTacticSeqSuggestion (ref : Syntax)
   if let some range := (origSpan?.getD ref).getRange? then
     let map ← getFileMap
     let (indent, column) := Lean.Meta.Tactic.TryThis.getIndentAndColumn map range
-    let text := fmt.pretty indent column
+    let text := fmt.pretty (indent := indent) (column := column)
     let suggestion := {
       -- HACK: The `tacticSeq` syntax category is pretty-printed with each line
       -- indented by two spaces (for some reason), so we remove this
@@ -362,12 +424,24 @@ register_option aesop.smallErrorMessages : Bool := {
     descr := "(aesop) Print smaller error messages. Used for testing."
   }
 
-def throwAesopEx (mvarId : MVarId) (msg? : Option MessageData) : MetaM α := do
-  if aesop.smallErrorMessages.get (← getOptions) then
-    match msg? with
-    | none => throwError "tactic 'aesop' failed"
-    | some msg => throwError "tactic 'aesop' failed, {msg}"
-  else
-    throwTacticEx `aesop mvarId msg?
+def tacticsToMessageData (ts : Array Syntax.Tactic) : MessageData :=
+  MessageData.joinSep (ts.map toMessageData |>.toList) "\n"
+
+/--
+Note: the returned local context contains invalid `LocalDecl`s.
+-/
+def getUnusedNames (lctx : LocalContext) (suggestions : Array Name) : Array Name × LocalContext :=
+  go 0 (Array.mkEmpty suggestions.size) lctx
+where
+  go (i : Nat) (acc : Array Name) (lctx : LocalContext) : Array Name × LocalContext :=
+    if h : i < suggestions.size then
+      let name := lctx.getUnusedName suggestions[i]
+      let lctx := lctx.addDecl $ dummyLDecl name
+      go (i + 1) (acc.push name) lctx
+    else
+      (acc, lctx)
+
+  dummyLDecl (name : Name) : LocalDecl :=
+    .cdecl 0 ⟨`_⟩ name (.sort levelZero) .default .default
 
 end Aesop

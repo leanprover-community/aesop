@@ -24,7 +24,7 @@ def forwardTac (goal : MVarId) (id : Ident) (immediate : Option (Array Syntax))
     none md (immediate.map (·.map (·.getId)))
   let (goal, _) ←
     RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) none ∅ immediate clear
-      (generateScript := false) md
+      md |>.run
   return [goal]
 
 @[tactic forward]

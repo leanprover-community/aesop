@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-
-env LEAN_ABORT_ON_PANIC=1 lake build AesopTest

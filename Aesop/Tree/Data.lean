@@ -5,7 +5,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Aesop.Constants
-import Aesop.Script
+import Aesop.Script.Step
 import Aesop.Tracing
 import Aesop.Tree.UnsafeQueue
 
@@ -251,12 +251,9 @@ end GoalState
 inductive NormalizationState
   | notNormal
   | normal (postGoal : MVarId) (postState : Meta.SavedState)
-      (script? : Except DisplayRuleName UnstructuredScript)
-      -- The `DisplayRuleName` indicates the first rule which failed to produce a
-      -- script step. If script tracing is turned off, this will be the first
-      -- rule. Same below.
+      (script : Array (DisplayRuleName × Option (Array Script.LazyStep)))
   | provenByNormalization (postState : Meta.SavedState)
-      (script? : Except DisplayRuleName UnstructuredScript)
+      (script : Array (DisplayRuleName × Option (Array Script.LazyStep)))
   deriving Inhabited
 
 namespace NormalizationState
@@ -355,7 +352,7 @@ structure RappData (Goal MVarCluster : Type) : Type where
   state : NodeState
   isIrrelevant : Bool
   appliedRule : RegularRule
-  scriptBuilder? : Option RuleTacScriptBuilder
+  scriptSteps? : Option (Array Script.LazyStep)
   originalSubgoals : Array MVarId
   successProbability : Percent
   metaState : Meta.SavedState
@@ -683,8 +680,8 @@ def appliedRule (r : Rapp) : RegularRule :=
   r.elim.appliedRule
 
 @[inline]
-def scriptBuilder? (r : Rapp) : Option RuleTacScriptBuilder :=
-  r.elim.scriptBuilder?
+def scriptSteps? (r : Rapp) : Option (Array Script.LazyStep) :=
+  r.elim.scriptSteps?
 
 @[inline]
 def originalSubgoals (r : Rapp) : Array MVarId :=
@@ -731,9 +728,9 @@ def setAppliedRule (appliedRule : RegularRule) (r : Rapp) : Rapp :=
   r.modify λ r => { r with appliedRule }
 
 @[inline]
-def setScriptBuilder? (scriptBuilder? : Option RuleTacScriptBuilder)
-    (r : Rapp) : Rapp :=
-  r.modify λ r => { r with scriptBuilder? }
+def setScriptSteps? (scriptSteps? : Option (Array Script.LazyStep)) (r : Rapp) :
+    Rapp :=
+  r.modify λ r => { r with scriptSteps? }
 
 @[inline]
 def setOriginalSubgoals (originalSubgoals : Array MVarId)
@@ -754,7 +751,8 @@ def setIntroducedMVars (introducedMVars : UnorderedArraySet MVarId)
   r.modify λ r => { r with introducedMVars }
 
 @[inline]
-def setAssignedMVars (assignedMVars : UnorderedArraySet MVarId) (r : Rapp) : Rapp :=
+def setAssignedMVars (assignedMVars : UnorderedArraySet MVarId) (r : Rapp) :
+    Rapp :=
   r.modify λ r => { r with assignedMVars }
 
 instance : Nonempty Rapp :=
@@ -770,6 +768,12 @@ end Rapp
 
 
 /-! ## Miscellaneous Queries -/
+
+def Rapp.isSafe (r : Rapp) : Bool :=
+  r.appliedRule.isSafe && r.assignedMVars.isEmpty
+  -- During expansion, we postpone safe rules that assign metavariables and
+  -- treat them as unsafe.
+
 
 namespace Goal
 
@@ -800,13 +804,17 @@ def currentGoalAndMetaState (g : Goal) (rootMetaState : Meta.SavedState) :
   | some x => return x
   | none => return (g.preNormGoal, ← g.parentMetaState rootMetaState)
 
+def safeRapps (g : Goal) : BaseIO (Array RappRef) :=
+  g.children.filterM λ rref => return (← rref.get).isSafe
+
+def hasSafeRapp (g : Goal) : BaseIO Bool :=
+  g.children.anyM λ rref => return (← rref.get).isSafe
+
 def isUnsafeExhausted (g : Goal) : Bool :=
   g.unsafeRulesSelected && g.unsafeQueue.isEmpty
 
 def isExhausted (g : Goal) : BaseIO Bool :=
-  pure g.isUnsafeExhausted <||>
-  g.children.anyM λ rref =>
-    return (← rref.get).appliedRule.isSafe
+  pure g.isUnsafeExhausted <||> g.hasSafeRapp
 
 def isActive (g : Goal) : BaseIO Bool :=
   return ! (← pure g.isIrrelevant <||> g.isExhausted)
@@ -817,14 +825,6 @@ def hasProvableRapp (g : Goal) : BaseIO Bool :=
 def firstProvenRapp? (g : Goal) : BaseIO (Option RappRef) :=
   g.children.findSomeM? λ rref =>
     return if (← rref.get).state.isProven then some rref else none
-
-def safeRapps (g : Goal) : BaseIO (Array RappRef) :=
-  g.children.filterM λ rref =>
-    return (← rref.get).appliedRule.isSafe
-
-def hasSafeRapp (g : Goal) : BaseIO Bool :=
-  g.children.anyM λ rref =>
-    return (← rref.get).appliedRule.isSafe
 
 def hasMVar (g : Goal) : Bool :=
   ! g.mvars.isEmpty
