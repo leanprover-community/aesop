@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Util.Tactic
+import Aesop.Util.Tactic.Ext
 import Aesop.Util.Tactic.Unfold
 import Aesop.Script.CtorNames
 import Aesop.Script.ScriptM
@@ -93,8 +94,27 @@ def aesopUnfold (usedDecls : HashSet Name) : TacticBuilder := do
     let tac ← `(tactic| aesop_unfold [$(usedDecls.toArray.map mkIdent):ident,*])
     return .unstructured tac
 
-def unhygienicExt : TacticBuilder :=
-  return .unstructured $ ← `(tactic| unhygienic ext)
+open Lean.Parser.Tactic in
+def extN (r : ExtResult) : TacticBuilder := do
+  if r.depth == 0 then
+    return .skip
+  let mut pats := #[]
+  if h : 0 < r.goals.size then
+    let pats' ← r.goals[0].1.withContext do r.commonFVarIds.mapM mkPat
+    pats := pats ++ pats'
+    for (g, fvarIds) in r.goals do
+      let pats' ← g.withContext do fvarIds.mapM mkPat
+      pats := pats ++ pats'
+  let tac ←
+    if r.depth == 1 then
+      `(tactic| ext1 $pats:rintroPat*)
+    else
+      let depth := Syntax.mkNumLit $ toString r.depth
+      `(tactic| ext $pats:rintroPat* : $depth)
+  return .unstructured tac
+where
+  mkPat (fvarId : FVarId) : MetaM (TSyntax `rintroPat) := do
+    `(rintroPat| $(mkIdent $ ← fvarId.getUserName):ident)
 
 def simpAllOrSimpAtStarOnly (simpAll : Bool) (inGoal : MVarId)
     (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
@@ -238,13 +258,11 @@ where
   tacticBuilder := λ (postGoal, newFVarIds) =>
       TacticBuilder.intros postGoal newFVarIds md
 
-def unhygienicExtS (goal : MVarId) : ScriptM (Array MVarId) :=
-  withScriptStep goal id (λ _ => true) tacticBuilder do
-    let (_, subgoals) ←
-      Lean.Elab.Tactic.Ext.extCore goal [] (failIfUnchanged := true) |>.run' {}
-    return subgoals.map (·.fst)
+def straightLineExtS (goal : MVarId) : ScriptM ExtResult :=
+  withScriptStep goal (·.goals.map (·.1)) (·.depth != 0) tacticBuilder do
+    unhygienic $ straightLineExt goal
 where
-  tacticBuilder _ := TacticBuilder.unhygienicExt
+  tacticBuilder := TacticBuilder.extN
 
 def tryExactFVarS (goal : MVarId) (fvarId : FVarId) (md : TransparencyMode) :
     ScriptM Bool := do
