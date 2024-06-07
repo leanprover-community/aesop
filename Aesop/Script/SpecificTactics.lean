@@ -210,6 +210,7 @@ def tryCasesS (goal : MVarId) (fvarId : FVarId) (ctorNames : Array CtorNames) :
     TacticBuilder.rcasesOrObtain goal (.fvar fvarId) ctorNames
   withOptScriptStep goal (·.map (·.mvarId)) tacticBuilder do
     observing? $ goal.cases fvarId (ctorNames.map (·.toAltVarNames))
+      (useNatCasesAuxOn := true)
 where
   getUnusedCtorNames (lctx : LocalContext) : Array CtorNames :=
     Prod.fst $ ctorNames.foldl (init := (Array.mkEmpty ctorNames.size, lctx))
