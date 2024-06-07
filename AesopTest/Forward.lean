@@ -69,6 +69,19 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
   aesop (add safe [forward r₁, forward (immediate := [a]) r₂])
 
 /--
+info: Try this:
+  have fwd : γ₁ ∧ γ₂ := r₁ a b
+  simp_all only [and_self, implies_true, true_and]
+  obtain ⟨left, right⟩ := fwd
+  have fwd : δ₁ ∧ δ₂ := r₂ a
+  simp_all only [and_self, implies_true]
+-/
+#guard_msgs in
+example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
+    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+  aesop? (add safe [forward r₁, forward (immediate := [a]) r₂])
+
+/--
 error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
