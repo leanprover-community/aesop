@@ -45,8 +45,7 @@ end DynStructureM
 
 abbrev DynStructureM := ReaderT DynStructureM.Context MetaM
 
-def DynStructureM.run (x : DynStructureM α) (script : UScript) :
-    MetaM α := do
+def DynStructureM.run (x : DynStructureM α) (script : UScript) : MetaM α := do
   let mut steps : PHashMap MVarId (Nat × Step) := {}
   for h : i in [:script.size] do
     let step := script[i]'h.2
@@ -60,10 +59,6 @@ def withUpdatedMVarIds
   match ← matchGoals newPostState oldPostState newPostGoals oldPostGoals with
   | some m => withReader (·.updateMVarIds m) onSuccess
   | none => onFailure
-
--- TODO upstream
-local instance [Nonempty α] [Nonempty β] : Nonempty (α × β) :=
-  ⟨Classical.ofNonempty, Classical.ofNonempty⟩
 
 structure DynStructureResult where
   script : SScript
