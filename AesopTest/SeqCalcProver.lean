@@ -235,6 +235,8 @@ def sum : List Nat → Nat
   | [] => 0
   | x :: xs => sum xs + x
 
+-- As of Lean v4.9.0, well-founded definitions are by default irreducible.
+-- We override this here to preserve the previous behaviour.
 @[simp, semireducible]
 def Cal (l r : List Φ) : (Γ Δ : List (Form Φ)) → Prop
   | [], [] => Common l r
