@@ -5,7 +5,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Aesop.Constants
-import Aesop.Script
+import Aesop.Script.Step
 import Aesop.Tracing
 import Aesop.Tree.UnsafeQueue
 
@@ -251,12 +251,9 @@ end GoalState
 inductive NormalizationState
   | notNormal
   | normal (postGoal : MVarId) (postState : Meta.SavedState)
-      (script? : Except DisplayRuleName UnstructuredScript)
-      -- The `DisplayRuleName` indicates the first rule which failed to produce a
-      -- script step. If script tracing is turned off, this will be the first
-      -- rule. Same below.
+      (script : Array (DisplayRuleName × Option (Array Script.LazyStep)))
   | provenByNormalization (postState : Meta.SavedState)
-      (script? : Except DisplayRuleName UnstructuredScript)
+      (script : Array (DisplayRuleName × Option (Array Script.LazyStep)))
   deriving Inhabited
 
 namespace NormalizationState
@@ -355,7 +352,7 @@ structure RappData (Goal MVarCluster : Type) : Type where
   state : NodeState
   isIrrelevant : Bool
   appliedRule : RegularRule
-  scriptBuilder? : Option RuleTacScriptBuilder
+  scriptSteps? : Option (Array Script.LazyStep)
   originalSubgoals : Array MVarId
   successProbability : Percent
   metaState : Meta.SavedState
@@ -683,8 +680,8 @@ def appliedRule (r : Rapp) : RegularRule :=
   r.elim.appliedRule
 
 @[inline]
-def scriptBuilder? (r : Rapp) : Option RuleTacScriptBuilder :=
-  r.elim.scriptBuilder?
+def scriptSteps? (r : Rapp) : Option (Array Script.LazyStep) :=
+  r.elim.scriptSteps?
 
 @[inline]
 def originalSubgoals (r : Rapp) : Array MVarId :=
@@ -731,9 +728,9 @@ def setAppliedRule (appliedRule : RegularRule) (r : Rapp) : Rapp :=
   r.modify λ r => { r with appliedRule }
 
 @[inline]
-def setScriptBuilder? (scriptBuilder? : Option RuleTacScriptBuilder)
-    (r : Rapp) : Rapp :=
-  r.modify λ r => { r with scriptBuilder? }
+def setScriptSteps? (scriptSteps? : Option (Array Script.LazyStep)) (r : Rapp) :
+    Rapp :=
+  r.modify λ r => { r with scriptSteps? }
 
 @[inline]
 def setOriginalSubgoals (originalSubgoals : Array MVarId)

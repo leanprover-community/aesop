@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Builder.Basic
+import Aesop.Util.Tactic.Unfold
 
 open Lean
 open Lean.Meta

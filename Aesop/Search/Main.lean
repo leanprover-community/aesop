@@ -8,6 +8,8 @@ import Aesop.Check
 import Aesop.Frontend.Attribute
 import Aesop.Options
 import Aesop.RuleSet
+import Aesop.Script.StructureStatic
+import Aesop.Script.StructureDynamic
 import Aesop.Search.Expansion
 import Aesop.Search.ExpandSafePrefix
 import Aesop.Search.Queue
@@ -142,7 +144,7 @@ def checkRenderedScript (completeProof : Bool) (script : Array Syntax.Tactic) :
   catch e => throwError
     "{Check.script.name}: error while executing generated script:{indentD e.toMessageData}"
 
-def checkScriptSteps (script : UnstructuredScript) : SearchM Q Unit := do
+def checkScriptSteps (script : Script.UScript) : SearchM Q Unit := do
   unless ← Check.script.steps.isEnabled do
     return
   try
@@ -155,12 +157,12 @@ register_option aesop.dev.dynamicStructuring : Bool := {
   defValue := false
 }
 
-def structureScript (completeProof : Bool) (uscript : UnstructuredScript)
+def structureScript (completeProof : Bool) (uscript : Script.UScript)
     (rootState : Meta.SavedState) (rootGoal : MVarId) :
-    SearchM Q (Option StructuredScript) := do
+    SearchM Q (Option Script.SScript) := do
   let dynamicStructuring := aesop.dev.dynamicStructuring.get (← getOptions)
   if dynamicStructuring && completeProof then
-    uscript.toStructuredScriptDynamic rootState rootGoal
+    uscript.toSScriptDynamic rootState rootGoal
   else
     if dynamicStructuring then
       logWarning "aesop: falling back to static structuring for incomplete proof"
@@ -169,7 +171,7 @@ def structureScript (completeProof : Bool) (uscript : UnstructuredScript)
       visibleGoals := #[⟨rootGoal, rootGoalMVars⟩]
       invisibleGoals := ∅
     }
-    uscript.toStructuredScriptStatic tacticState
+    uscript.toSScriptStatic tacticState
 
 def traceScript (completeProof : Bool) : SearchM Q Unit := do
   let options := (← read).options

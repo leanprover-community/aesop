@@ -13,37 +13,27 @@ namespace Aesop.BuiltinRules
 
 @[aesop (rule_sets := [builtin]) safe 100]
 def splitTarget : RuleTac := RuleTac.ofSingleRuleTac λ input => do
-  let (some goals) ← splitTarget? input.goal | throwError
+  let (some goals, steps) ← splitTargetS? input.goal |>.run | throwError
     "nothing to split in target"
-  let goals := goals.toArray
-  let scriptBuilder? :=
-    mkScriptBuilder? input.options.generateScript $
-      .ofTactic goals.size `(tactic| split)
-  return (goals, scriptBuilder?, none)
+  return (goals, steps, none)
 
-def splitFirstHypothesis (goal : MVarId) : MetaM (Option (Array MVarId)) :=
-  goal.withContext do
-    for ldecl in ← getLCtx do
-      if let some goals ← splitLocalDecl? goal ldecl.fvarId then
-        return goals.toArray
-    return none
-
-def splitHypothesesCore (goal : MVarId) : MetaM (Option (Array MVarId)) :=
-  saturate1 goal splitFirstHypothesis
-
-elab "aesop_split_hyps" : tactic =>
-  Elab.Tactic.liftMetaTactic λ goal => do
-    match ← splitHypothesesCore goal with
-    | none => throwError "no splittable hypothesis found"
-    | some goals => return goals.toList
+partial def splitHypothesesCore (goal : MVarId) :
+    ScriptM (Option (Array MVarId)) :=
+  withIncRecDepth do
+  let some goals ← splitFirstHypothesisS? goal
+    | return none
+  let mut subgoals := #[]
+  for g in goals do
+    if let some subgoals' ← splitHypothesesCore g then
+      subgoals := subgoals ++ subgoals'
+    else
+      subgoals := subgoals.push g
+  return subgoals
 
 @[aesop (rule_sets := [builtin]) safe 1000]
 def splitHypotheses : RuleTac := RuleTac.ofSingleRuleTac λ input => do
-  let (some goals) ← splitHypothesesCore input.goal | throwError
-    "no splittable hypothesis found"
-  let scriptBuilder? :=
-    mkScriptBuilder? input.options.generateScript $
-      .ofTactic goals.size `(tactic| aesop_split_hyps)
-  return (goals, scriptBuilder?, none)
+  let (some goals, steps) ← splitHypothesesCore input.goal |>.run
+    | throwError "no splittable hypothesis found"
+  return (goals, steps, none)
 
 end Aesop.BuiltinRules

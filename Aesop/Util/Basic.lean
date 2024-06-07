@@ -310,7 +310,7 @@ variable [Monad m] [MonadQuotation m]
 open Parser.Tactic
 
 def withTransparencySeqSyntax (md : TransparencyMode)
-    (k : TSyntax ``tacticSeq) : m (TSyntax ``tacticSeq) :=
+    (k : TSyntax ``tacticSeq) : TSyntax ``tacticSeq := Unhygienic.run do
   match md with
   | .default => return k
   | .all => `(tacticSeq| with_unfolding_all $k)
@@ -318,13 +318,13 @@ def withTransparencySeqSyntax (md : TransparencyMode)
   | .instances => `(tacticSeq| with_reducible_and_instances $k)
 
 def withAllTransparencySeqSyntax (md : TransparencyMode)
-    (k : TSyntax ``tacticSeq) : m (TSyntax ``tacticSeq) :=
+    (k : TSyntax ``tacticSeq) : TSyntax ``tacticSeq :=
   match md with
-  | .all => `(tacticSeq| with_unfolding_all $k)
-  | _ => return k
+  | .all => Unhygienic.run `(tacticSeq| with_unfolding_all $k)
+  | _ => k
 
 def withTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
-    m (TSyntax `tactic) :=
+    TSyntax `tactic := Unhygienic.run do
   match md with
   | .default   => return k
   | .all       => `(tactic| with_unfolding_all $k:tactic)
@@ -332,10 +332,10 @@ def withTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
   | .instances => `(tactic| with_reducible_and_instances $k:tactic)
 
 def withAllTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
-    m (TSyntax `tactic) :=
+    TSyntax `tactic :=
   match md with
-  | .all  => `(tactic| with_unfolding_all $k:tactic)
-  | _     => return k
+  | .all  => Unhygienic.run `(tactic| with_unfolding_all $k:tactic)
+  | _     => k
 
 end TransparencySyntax
 
@@ -426,5 +426,22 @@ register_option aesop.smallErrorMessages : Bool := {
 
 def tacticsToMessageData (ts : Array Syntax.Tactic) : MessageData :=
   MessageData.joinSep (ts.map toMessageData |>.toList) "\n"
+
+/--
+Note: the returned local context contains invalid `LocalDecl`s.
+-/
+def getUnusedNames (lctx : LocalContext) (suggestions : Array Name) : Array Name × LocalContext :=
+  go 0 (Array.mkEmpty suggestions.size) lctx
+where
+  go (i : Nat) (acc : Array Name) (lctx : LocalContext) : Array Name × LocalContext :=
+    if h : i < suggestions.size then
+      let name := lctx.getUnusedName suggestions[i]
+      let lctx := lctx.addDecl $ dummyLDecl name
+      go (i + 1) (acc.push name) lctx
+    else
+      (acc, lctx)
+
+  dummyLDecl (name : Name) : LocalDecl :=
+    .cdecl 0 ⟨`_⟩ name (.sort levelZero) .default .default
 
 end Aesop

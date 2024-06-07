@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 import Lean.Elab.Tactic.Simp
 import Aesop.Options
-import Aesop.Script
 import Aesop.RuleSet
 import Lean.Elab.Tactic.Simp
 
@@ -28,27 +27,6 @@ def newGoal? : SimpResult → Option MVarId
   | simplified g .. => some g
 
 end SimpResult
-
-variable [Monad m] [MonadQuotation m] [MonadError m]
-
-def mkNormSimpSyntax (normSimpUseHyps : Bool)
-    (configStx? : Option Term) : MetaM Syntax.Tactic := do
-  if normSimpUseHyps then
-    match configStx? with
-    | none => `(tactic| simp_all)
-    | some cfg => `(tactic| simp_all (config := $cfg))
-  else
-    match configStx? with
-    | none => `(tactic| simp at *)
-    | some cfg => `(tactic| simp (config := $cfg) at *)
-
-def mkNormSimpOnlySyntax (inGoal : MVarId) (normSimpUseHyps : Bool)
-    (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
-    MetaM Syntax.Tactic := do
-  let originalStx ← mkNormSimpSyntax normSimpUseHyps configStx?
-  let stx ← inGoal.withContext do
-    Elab.Tactic.mkSimpOnly originalStx usedTheorems
-  return ⟨stx⟩
 
 /--
 Add all `let` hypotheses in the local context as `simp` theorems.
