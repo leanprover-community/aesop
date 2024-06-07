@@ -245,12 +245,11 @@ def Cal (l r : List Φ) : (Γ Δ : List (Form Φ)) → Prop
   | φ ⇒ ψ :: Γ, [] => Cal l r Γ [φ] ∧ Cal l r (ψ :: Γ) []
   | Γ, φ ⇒ ψ :: Δ => Cal l r (φ :: Γ) (ψ :: Δ)
 termination_by Γ Δ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
-decreasing_by all_goals simp_wf <;> simp_arith
 
 instance Cal.instDecidable [DecidableEq Φ] (l r : List Φ) (Γ Δ : List (Form Φ))
   : Decidable (Cal l r Γ Δ) := by
   match Γ, Δ with
-  | [], [] => apply Common.instDecidable l r
+  | [], [] => unfold Cal; apply Common.instDecidable l r
   | ⊥ :: Γ, [] => aesop
   | Γ, ⊥ :: Δ =>
     have ih : Decidable (Cal l r Γ Δ) := instDecidable l r Γ Δ
@@ -293,7 +292,9 @@ theorem Cal_sound_complete [DecidableEq Φ]
     apply Iff.intro
     case mp =>
       intro h i _ A
-      let ⟨a, al, ar⟩ : ∃ a, a ∈ l ∧ a ∈ r := Common.mem h
+      let ⟨a, al, ar⟩ : ∃ a, a ∈ l ∧ a ∈ r := by
+        unfold Cal at h
+        exact Common.mem h
       have ml : ♩a ∈ l.map (♩·) := Mem.map (♩·) al
       have Va : Val i (♩a) := Iff.mp (All.mem (Val i) (l.map (♩·))) A (♩a) ml
       have mr : ♩a ∈ r.map (♩·) := Mem.map (♩·) ar
@@ -306,6 +307,7 @@ theorem Cal_sound_complete [DecidableEq Φ]
       have All_l : All (Val i) (l.map (♩·)) := Iff.mpr (All.map (Val i) (♩·) l) (All.in_self l)
       have Any_r : Any (Val (· ∈ l)) (r.map (♩·)) := h' All_l
       have Any_r' : Any (fun n => Val (· ∈ l) (♩n)) r := Iff.mp (Any.map (Val i) (♩·) r) Any_r
+      unfold Cal
       apply Common.sym Any_r'
   | ⊥ :: Γ, [] =>
     simp
@@ -320,6 +322,7 @@ theorem Cal_sound_complete [DecidableEq Φ]
     apply Iff.intro
     case mp =>
       intro h i dec
+      unfold Cal at h
       have ihr : SC' i (n :: l) r Γ [] := Iff.mp ih h i dec
       apply SC.all (Perm.sym perm) ihr
     case mpr =>
@@ -327,6 +330,7 @@ theorem Cal_sound_complete [DecidableEq Φ]
       have hSC : ∀ i, DecidablePred i → SC' i (n :: l) r Γ [] := by
         intro i dec
         apply SC.all perm (h i dec)
+      unfold Cal
       apply Iff.mpr ih hSC
   | Γ, ♩n :: Δ =>
     have ih : Cal l (n :: r) Γ Δ ↔ ∀ i, DecidablePred i → SC' i l (n :: r) Γ Δ :=
@@ -449,7 +453,9 @@ theorem Cal_Proof [DecidableEq Φ]
   : Proof' l r Γ Δ := by
   match Γ, Δ with
   | [], [] =>
-    let ⟨a, al, ar⟩ : ∃ a, a ∈ l ∧ a ∈ r := Common.mem h
+    let ⟨a, al, ar⟩ : ∃ a, a ∈ l ∧ a ∈ r := by
+      unfold Cal at h
+      exact Common.mem h
     let ⟨ll, lr, leq⟩ : ∃ ll lr, l = ll ++ a :: lr := Mem.split al
     let ⟨rl, rr, req⟩ : ∃ rl rr, r = rl ++ a :: rr := Mem.split ar
     rw [leq, req]
@@ -464,6 +470,7 @@ theorem Cal_Proof [DecidableEq Φ]
     have ih : Proof' l r Γ Δ := Cal_Proof l r Γ Δ h
     apply Proof.weaken _ _ ih ⊥
   | ♩n :: Γ, [] =>
+    unfold Cal at h
     have ih : Proof' (n :: l) r Γ [] := Cal_Proof (n :: l) r Γ [] h
     apply Proof.per_l _ _ _ ih
     aesop (add unsafe apply [Perm.shift, Perm.sym])
