@@ -109,6 +109,10 @@ inductive MVarValue where
 
 namespace Unsafe
 
+private def namesEqualUpToMacroScopes (n₁ n₂ : Name) : Bool :=
+  n₁.hasMacroScopes == n₂.hasMacroScopes &&
+  n₁.eraseMacroScopes == n₂.eraseMacroScopes
+
 mutual
   unsafe def levelsEqualUpToIdsCore (l₁ l₂ : Level) : EqualUpToIdsM Bool :=
     if ptrEq l₁ l₂ then
@@ -140,10 +144,6 @@ end Unsafe
 
 @[implemented_by Unsafe.levelsEqualUpToIdsCore]
 opaque levelsEqualUpToIdsCore (l₁ l₂ : Level) : EqualUpToIdsM Bool
-
-private def namesEqualUpToMacroScopes (n₁ n₂ : Name) : Bool :=
-  n₁.hasMacroScopes == n₂.hasMacroScopes &&
-  n₁.eraseMacroScopes == n₂.eraseMacroScopes
 
 private def lctxDecls (lctx : LocalContext) : EqualUpToIdsM (Array LocalDecl) := do
   let ignoreFVar := (← read).ignoreFVar
@@ -188,15 +188,15 @@ mutual
     | .app f₁ x₁, .app f₂ x₂ =>
       exprsEqualUpToIdsCore f₁ f₂ <&&> exprsEqualUpToIdsCore x₁ x₂
     | .lam n₁ t₁ e₁ bi₁, .lam n₂ t₂ e₂ bi₂ =>
-      pure (n₁ == n₂ && bi₁ == bi₂) <&&>
+      pure (namesEqualUpToMacroScopes n₁ n₂ && bi₁ == bi₂) <&&>
       exprsEqualUpToIdsCore t₁ t₂ <&&>
       exprsEqualUpToIdsCore e₁ e₂
     | .forallE n₁ t₁ e₁ bi₁, .forallE n₂ t₂ e₂ bi₂ =>
-      pure (n₁ == n₂ && bi₁ == bi₂) <&&>
+      pure (namesEqualUpToMacroScopes n₁ n₂ && bi₁ == bi₂) <&&>
       exprsEqualUpToIdsCore t₁ t₂ <&&>
       exprsEqualUpToIdsCore e₁ e₂
     | .letE n₁ t₁ v₁ e₁ _, .letE n₂ t₂ v₂ e₂ _ =>
-      pure (n₁ == n₂) <&&>
+      pure (namesEqualUpToMacroScopes n₁ n₂) <&&>
       exprsEqualUpToIdsCore t₁ t₂ <&&>
       exprsEqualUpToIdsCore v₁ v₂ <&&>
       exprsEqualUpToIdsCore e₁ e₂
