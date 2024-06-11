@@ -288,13 +288,13 @@ mutual
       if h' : i < decls₁.size then
         let ldecl₁ := decls₁[i]
         let ldecl₂ := decls₂[i]'(by simp [← h, h'])
-        withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing hyps {ldecl₁.userName}, {ldecl₂.userName}") do
-          if ! (← localDeclsEqualUpToIdsCore ldecl₁ ldecl₂ |>.run gctx) then
-            return none
-          else
-            let equalFVarIds :=
-              gctx.equalFVarIds.insert ldecl₁.fvarId ldecl₂.fvarId
-            go decls₁ decls₂ h (i + 1) { gctx with equalFVarIds }
+        let eq ← withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing hyps {ldecl₁.userName}, {ldecl₂.userName}") do
+          localDeclsEqualUpToIdsCore ldecl₁ ldecl₂ |>.run gctx
+        if ! eq then
+          return none
+        let equalFVarIds :=
+          gctx.equalFVarIds.insert ldecl₁.fvarId ldecl₂.fvarId
+        go decls₁ decls₂ h (i + 1) { gctx with equalFVarIds }
       else
         return some gctx
 
