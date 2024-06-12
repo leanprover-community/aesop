@@ -94,6 +94,10 @@ def onGoalM (ts : TacticState) (g : MVarId)
       visibleGoals := visibleGoals ++ postTs.visibleGoals
     else if postTs.invisibleGoals.contains preGoal.goal then
       visibleGoals := visibleGoals.push preGoal
-  return (a, { visibleGoals, invisibleGoals := postTs.invisibleGoals })
+  let mut invisibleGoals := ∅
+  for g in ts.invisibleGoals do
+    if postTs.invisibleGoals.contains g then
+      invisibleGoals := invisibleGoals.insert g
+  return (a, { visibleGoals, invisibleGoals })
 
 end Aesop.Script.TacticState
