@@ -1,7 +1,7 @@
 name = "aesop"
 defaultTargets = ["Aesop"]
 testDriver = "AesopTest"
-precompileModules = false # We would like to turn this on, but it breaks the Mathlib cache.
+precompileModules = true
 
 [[require]]
 name = "batteries"
