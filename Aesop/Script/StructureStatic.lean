@@ -47,18 +47,14 @@ where
       -- the later visible goals may be solved while solving an earlier visible
       -- goal.
       while h : tacticState.visibleGoals.size > 0 do
-        -- TODO is the goal pos not always 0?
         let goal := tacticState.visibleGoals[0]
-        let goalPos ← tacticState.getVisibleGoalIndex goal.goal
         let (nestedScript, nestedTacticState) ←
-          withConstAesopTraceNode .debug (return m!"visiting goal {goalPos}: {goal.goal.name}") do
+          withConstAesopTraceNode .debug (return m!"visiting main goal: {goal.goal.name}") do
             tacticState.onGoalM goal.goal λ tacticState => do
               go steps tacticState
-        nestedScripts := nestedScripts.push (goalPos, nestedScript)
+        nestedScripts := nestedScripts.push nestedScript
         tacticState := nestedTacticState
-      let script := nestedScripts.foldr (init := .empty)
-        λ (goalPos, nestedScript) tail =>
-          .focusAndSolve goalPos nestedScript tail
+      let script := nestedScripts.foldr (init := .empty) (.focusAndSolve 0)
       return (script, tacticState)
 
 end Aesop.Script
