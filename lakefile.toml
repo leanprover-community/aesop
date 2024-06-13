@@ -1,6 +1,6 @@
 name = "aesop"
 defaultTargets = ["Aesop"]
-testDriver = "test"
+testDriver = "AesopTest"
 precompileModules = false # We would like to turn this on, but it breaks the Mathlib cache.
 
 [[require]]
@@ -15,7 +15,3 @@ name = "Aesop"
 name = "AesopTest"
 globs = ["AesopTest.+"]
 leanOptions = {linter.unusedVariables = false}
-
-[[lean_exe]]
-name = "test"
-srcDir = "scripts"
