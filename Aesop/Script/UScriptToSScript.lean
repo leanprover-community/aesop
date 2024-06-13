@@ -22,10 +22,7 @@ namespace StepTree
 protected partial def toMessageData? : StepTree → Option MessageData
   | empty => none
   | node step index children =>
-    if children.isEmpty then
-      m!"- {index}: {step}"
-    else
-      m!"- {index}: {step}{indentD $ MessageData.joinSep (children.filterMap (·.toMessageData?) |>.toList) "\n"}"
+    m!"- {index}: {step}{if children.isEmpty then m!"" else indentD $ MessageData.joinSep (children.filterMap (·.toMessageData?) |>.toList) "\n"}"
 
 protected def toMessageData (t : StepTree) : MessageData :=
   t.toMessageData?.getD "empty"
@@ -50,13 +47,14 @@ where
     else
       .empty
 
-def mergeSortedArrays [Ord α] (as : Array (Array α)) : Array α :=
-  -- TODO inefficient
-  as.foldl (init := #[]) Array.mergeDedup
+def sortDedupArrays [Ord α] (as : Array (Array α)) : Array α :=
+  let sz := as.foldl (init := 0) (· + ·.size)
+  let as := as.foldl (init := Array.mkEmpty sz) (· ++ ·)
+  as.sortDedup
 
 def isConsecutiveSequence (ns : Array Nat) : Bool := Id.run do
-  if h : 0 < ns.size then
-    let mut prev := ns[0]
+  if let some hd := ns[0]? then
+    let mut prev := hd
     for n in ns[1:] do
       if n != prev + 1 then
         return false
@@ -66,22 +64,24 @@ def isConsecutiveSequence (ns : Array Nat) : Bool := Id.run do
 namespace StepTree
 
 partial def focusableGoals (t : StepTree) : HashMap MVarId Nat :=
-  go t |>.run ∅ |>.2
+  runST (λ _ => go t |>.run ∅) |>.2
 where
-  go : StepTree → StateM (HashMap MVarId Nat) (Array Nat) -- TODO StateRefT
+  go {σ} : StepTree → StateRefT (HashMap MVarId Nat) (ST σ) (Array Nat)
     | .empty => return #[]
     | .node step i children => do
-      let childIndexes := mergeSortedArrays $ ← children.mapM go
-      let indexes := #[i] ++ childIndexes
+      let childIndexes := sortDedupArrays $ ← children.mapM go
+      let indexes :=
+        (Array.mkEmpty $ childIndexes.size + 1).push i ++ childIndexes
       if isConsecutiveSequence indexes then
         let lastIndex := childIndexes[childIndexes.size - 1]?.getD i
         modify (·.insert step.preGoal lastIndex)
       return indexes
 
 partial def numSiblings (t : StepTree) : HashMap MVarId Nat :=
-  go 0 t |>.run ∅ |>.2
+  runST (λ _ => go 0 t |>.run ∅) |>.2
 where
-  go (parentNumGoals : Nat) : StepTree → StateM (HashMap MVarId Nat) Unit -- TODO StateRefT
+  go {σ} (parentNumGoals : Nat) :
+      StepTree → StateRefT (HashMap MVarId Nat) (ST σ) Unit
     | .empty => return
     | .node step _ children => do
       modify (·.insert step.preGoal (parentNumGoals - 1))
@@ -99,7 +99,9 @@ partial def orderedUScriptToSScript (uscript : UScript) (tacticState : TacticSta
   aesop_trace[debug] "focusable goals: {focusable.toArray.map λ (mvarId, n) => (mvarId.name, n)}"
   (·.fst) <$> go focusable numSiblings 0 (uscript.size - 1) tacticState
 where
-  go (focusable : HashMap MVarId Nat) (numSiblings : HashMap MVarId Nat) (start stop : Nat) (tacticState : TacticState) : CoreM (SScript × TacticState) := do
+  go (focusable : HashMap MVarId Nat) (numSiblings : HashMap MVarId Nat)
+      (start stop : Nat) (tacticState : TacticState) :
+      CoreM (SScript × TacticState) := do
     if start > stop then
       return (.empty, tacticState)
     if let some step := uscript[start]? then
