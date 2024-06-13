@@ -169,7 +169,8 @@ def structureScript (uscript : Script.UScript) (rootState : Meta.SavedState)
     }
     uscript.toSScriptStatic tacticState
 
-def traceScript (completeProof : Bool) : SearchM Q Unit := do
+def traceScript (completeProof : Bool) : SearchM Q Unit :=
+  profiling (λ stats _ elapsed => { stats with script := elapsed }) do
   let options := (← read).options
   if ! options.generateScript then
     return

@@ -42,6 +42,7 @@ structure Stats where
   ruleSetConstruction : Nanos
   search : Nanos
   ruleSelection : Nanos
+  script : Nanos
   ruleStats : Array RuleStats
   deriving Inhabited
 
@@ -53,6 +54,7 @@ protected def empty : Stats where
   ruleSetConstruction := 0
   search := 0
   ruleSelection := 0
+  script := 0
   ruleStats := #[]
 
 instance : EmptyCollection Stats :=
@@ -133,6 +135,7 @@ def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
   aesop_trace![opt] "Total: {p.total.printAsMillis}"
   aesop_trace![opt] "Configuration parsing: {p.configParsing.printAsMillis}"
   aesop_trace![opt] "Rule set construction: {p.ruleSetConstruction.printAsMillis}"
+  aesop_trace![opt] "Script generation: {p.script.printAsMillis}"
   withConstAesopTraceNode opt (collapsed := false)
       (return m!"Search: {p.search.printAsMillis}") do
     aesop_trace![opt] "Rule selection: {p.ruleSelection.printAsMillis}"

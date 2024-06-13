@@ -23,6 +23,7 @@ protected def default : StatsReport := λ statsArray => Id.run do
   let mut ruleSetConstruction := 0
   let mut search := 0
   let mut ruleSelection := 0
+  let mut script := 0
   let mut ruleStats : HashMap DisplayRuleName RuleStatsTotals := ∅
   for stats in statsArray do
     let stats := stats.stats
@@ -31,6 +32,7 @@ protected def default : StatsReport := λ statsArray => Id.run do
     ruleSetConstruction := ruleSetConstruction + stats.ruleSetConstruction
     search := search + stats.search
     ruleSelection := ruleSelection + stats.ruleSelection
+    script := script + stats.script
     ruleStats := stats.ruleStatsTotals (init := ruleStats)
   let samples := statsArray.size
   f!"Statistics for {statsArray.size} Aesop calls in current and imported modules\n\
@@ -39,6 +41,7 @@ protected def default : StatsReport := λ statsArray => Id.run do
      Config parsing:        {fmtTime configParsing samples}\n\
      Rule set construction: {fmtTime ruleSetConstruction samples}\n\
      Rule selection:        {fmtTime ruleSelection samples}\n\
+     Script generation:     {fmtTime script samples}\n\
      Search:                {fmtTime search samples}\n\
      Rules:{Std.Format.indentD $ fmtRuleStats $ sortRuleStatsTotals $ ruleStats.toArray}"
 where
