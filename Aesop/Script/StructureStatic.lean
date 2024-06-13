@@ -5,10 +5,10 @@ open Lean Lean.Meta
 
 namespace Aesop.Script
 
-partial def structureStaticCore (tacticState : TacticState) (script : UScript) :
-    CoreM UScript :=
-  withConstAesopTraceNode .debug (return m!"statically structuring the tactic script") do
-  aesop_trace[debug] "unstructured script:{indentD $ MessageData.joinSep (script.toList.map λ step => m!"{step}") "\n"}"
+abbrev StaticStructureM := ReaderT (HashMap MVarId (Nat × Step)) CoreM
+
+protected def StaticStructureM.run (script : UScript) (x : StaticStructureM α) :
+    CoreM α := do
   let mut steps : HashMap MVarId (Nat × Step) := mkHashMap script.size
   for h : i in [:script.size] do
     let step := script[i]'h.2
@@ -16,22 +16,28 @@ partial def structureStaticCore (tacticState : TacticState) (script : UScript) :
       if step.postGoals[0].goal == step.preGoal then
         continue
     steps := steps.insert step.preGoal (i, step)
-  (·.fst.toArray) <$> go steps tacticState
+  ReaderT.run x steps
+
+partial def structureStaticCore (tacticState : TacticState) (script : UScript) :
+    CoreM UScript :=
+  withConstAesopTraceNode .debug (return m!"statically structuring the tactic script") do
+  aesop_trace[debug] "unstructured script:{indentD $ MessageData.joinSep (script.toList.map λ step => m!"{step}") "\n"}"
+  (·.fst.toArray) <$> (go tacticState |>.run script)
 where
-  go (steps : HashMap MVarId (Nat × Step)) (tacticState : TacticState) :
-      CoreM (List Step × TacticState) :=
+  go (tacticState : TacticState) : StaticStructureM (List Step × TacticState) :=
     withIncRecDepth do
     if let some goal := tacticState.visibleGoals[0]? then
-      let step ← nextStep steps tacticState goal
+      let step ← nextStep tacticState goal
       aesop_trace[debug] "rendering step:{indentD $ toMessageData step}"
       let tacticState ← tacticState.applyStep step
-      let (tailScript, tacticState) ← go steps tacticState
+      let (tailScript, tacticState) ← go tacticState
       return (step :: tailScript, tacticState)
     else
       return ([], tacticState)
 
-  nextStep (steps : HashMap MVarId (Nat × Step)) (tacticState : TacticState)
-      (mainGoal : GoalWithMVars) : CoreM Step := do
+  nextStep (tacticState : TacticState) (mainGoal : GoalWithMVars) :
+      StaticStructureM Step := do
+    let steps ← read
     if mainGoal.mvars.isEmpty then
       if let some (_, step) := steps[mainGoal.goal] then
         return step
