@@ -16,7 +16,7 @@ inductive Even : Nat → Prop
   | plusTwo : Even n → Even (n + 2)
 
 /--
-error: (deterministic) timeout at `isDefEq`, maximum number of heartbeats (1) has been reached
+error: (deterministic) timeout at `whnf`, maximum number of heartbeats (1) has been reached
 use `set_option maxHeartbeats <num>` to set the limit
 use `set_option diagnostics true` to get diagnostic information
 -/
