@@ -33,6 +33,9 @@ structure Context where
   steps : PHashMap MVarId (Nat × Step)
   deriving Inhabited
 
+structure State where
+  perfect : Bool := true
+
 /--
 Given a bijective map `map` from new `MVarId`s to old `MVarId`s, update the
 `steps` of the context `c` such that each entry whose key is an old `MVarId` `m`
@@ -50,14 +53,17 @@ def Context.updateMVarIds (c : Context) (map : HashMap MVarId MVarId) :
 
 end DynStructureM
 
-abbrev DynStructureM := ReaderT DynStructureM.Context MetaM
+abbrev DynStructureM :=
+  ReaderT DynStructureM.Context $ StateRefT DynStructureM.State MetaM
 
-def DynStructureM.run (x : DynStructureM α) (script : UScript) : MetaM α := do
+def DynStructureM.run (x : DynStructureM α) (script : UScript) :
+    MetaM (α × Bool) := do
   let mut steps : PHashMap MVarId (Nat × Step) := {}
   for h : i in [:script.size] do
     let step := script[i]'h.2
     steps := steps.insert step.preGoal (i, step)
-  ReaderT.run x { steps }
+  let (a, s) ← ReaderT.run x { steps } |>.run {}
+  return (a, s.perfect)
 
 def withUpdatedMVarIds
     (oldPostState newPostState : Meta.SavedState)
@@ -72,10 +78,13 @@ structure DynStructureResult where
   postState : Meta.SavedState
 
 partial def structureDynamicCore (preState : Meta.SavedState) (preGoal : MVarId)
-    (uscript : UScript) : MetaM (Option UScript) :=
+    (uscript : UScript) : MetaM (Option (UScript × Bool)) :=
   withAesopTraceNode .debug (λ r => return m!"{exceptOptionEmoji r} Dynamically structuring the script") do
     aesop_trace[debug] "unstructured script:{indentD $ MessageData.joinSep (uscript.map toMessageData |>.toList) "\n"}"
-    (·.map (·.script.toArray)) <$> go preState #[preGoal] |>.run uscript
+    let (result?, perfect) ← go preState #[preGoal] |>.run uscript
+    let some result := result?
+      | return none
+    return some (result.script.toArray, perfect)
 where
   go (preState : Meta.SavedState) (preGoals : Array MVarId) :
       DynStructureM (Option DynStructureResult) :=
@@ -90,6 +99,7 @@ where
       | some result => return result
       | none =>
         -- If this fails, apply the chronologically next step and solve the remaining goals.
+        modify ({ · with perfect := false })
         withAesopTraceNode .debug (λ r => return m!"{exceptOptionEmoji r} Applying step to chronologically first goal") do
           goUnstructured preState preGoals
     else
@@ -147,14 +157,14 @@ where
       return some { script, postState }
 
 def UScript.toSScriptDynamic (preState : Meta.SavedState) (preGoal : MVarId)
-    (uscript : UScript) : MetaM (Option SScript) := do
-  let some uscript ← structureDynamicCore preState preGoal uscript
+    (uscript : UScript) : MetaM (Option (SScript × Bool)) := do
+  let some (uscript, perfect) ← structureDynamicCore preState preGoal uscript
     | return none
   let preGoalMVars ← preState.runMetaM' preGoal.getMVarDependencies
   let tacticState := {
     visibleGoals := #[⟨preGoal, preGoalMVars⟩]
     invisibleGoals := ∅
   }
-  return some $ ← orderedUScriptToSScript uscript tacticState
+  return some (← orderedUScriptToSScript uscript tacticState, perfect)
 
 end Aesop.Script

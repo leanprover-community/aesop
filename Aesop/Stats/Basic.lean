@@ -36,6 +36,19 @@ instance : ToString RuleStats where
 end RuleStats
 
 
+inductive ScriptGenerated
+  | none
+  | staticallyStructured (perfect : Bool)
+  | dynamicallyStructured (perfect : Bool)
+  deriving Inhabited
+
+def ScriptGenerated.toString : ScriptGenerated → String
+  | none => "no"
+  | staticallyStructured perfect => s!"with {go perfect} static structuring"
+  | dynamicallyStructured perfect => s!"with {go perfect} dynamic structuring"
+where
+  go b := if b then "perfect" else "imperfect"
+
 structure Stats where
   total : Nanos
   configParsing : Nanos
@@ -43,6 +56,7 @@ structure Stats where
   search : Nanos
   ruleSelection : Nanos
   script : Nanos
+  scriptGenerated : ScriptGenerated
   ruleStats : Array RuleStats
   deriving Inhabited
 
@@ -55,6 +69,7 @@ protected def empty : Stats where
   search := 0
   ruleSelection := 0
   script := 0
+  scriptGenerated := .none
   ruleStats := #[]
 
 instance : EmptyCollection Stats :=
@@ -136,6 +151,7 @@ def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
   aesop_trace![opt] "Configuration parsing: {p.configParsing.printAsMillis}"
   aesop_trace![opt] "Rule set construction: {p.ruleSetConstruction.printAsMillis}"
   aesop_trace![opt] "Script generation: {p.script.printAsMillis}"
+  aesop_trace![opt] "Script generated: {p.scriptGenerated.toString}"
   withConstAesopTraceNode opt (collapsed := false)
       (return m!"Search: {p.search.printAsMillis}") do
     aesop_trace![opt] "Rule selection: {p.ruleSelection.printAsMillis}"
@@ -178,7 +194,7 @@ variable [MonadStats m]
 def profiling (recordStats : Stats → α → Nanos → Stats) (x : m α) : m α := do
   if ← isStatsCollectionOrTracingEnabled then
     let (result, elapsed) ← time x
-    (← readStatsRef).modify λ stats => recordStats stats result elapsed
+    (← readStatsRef).modify (recordStats · result elapsed)
     return result
   else
     x
@@ -194,5 +210,12 @@ def profilingRule (rule : DisplayRuleName) (wasSuccessful : α → Bool) :
   profiling λ stats a elapsed =>
     let rp := { successful := wasSuccessful a, rule, elapsed }
     { stats with ruleStats := stats.ruleStats.push rp }
+
+def modifyCurrentStats (f : Stats → Stats) : m Unit := do
+  if ← isStatsCollectionEnabled then
+    (← readStatsRef).modify f
+
+def recordScriptGenerated (x : ScriptGenerated) : m Unit := do
+  modifyCurrentStats ({ · with scriptGenerated := x })
 
 end Aesop

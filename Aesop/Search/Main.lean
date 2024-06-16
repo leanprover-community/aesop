@@ -160,14 +160,19 @@ register_option aesop.dev.dynamicStructuring : Bool := {
 def structureScript (uscript : Script.UScript) (rootState : Meta.SavedState)
     (rootGoal : MVarId) : SearchM Q (Option Script.SScript) := do
   if aesop.dev.dynamicStructuring.get (← getOptions) then
-    uscript.toSScriptDynamic rootState rootGoal
+    let some (script, perfect) ← uscript.toSScriptDynamic rootState rootGoal
+      | return none
+    recordScriptGenerated $ .dynamicallyStructured perfect
+    return some script
   else
     let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
     let tacticState := {
       visibleGoals := #[⟨rootGoal, rootGoalMVars⟩]
       invisibleGoals := ∅
     }
-    uscript.toSScriptStatic tacticState
+    let (script, perfect) ← uscript.toSScriptStatic tacticState
+    recordScriptGenerated $ .staticallyStructured perfect
+    return some script
 
 def traceScript (completeProof : Bool) : SearchM Q Unit :=
   profiling (λ stats _ elapsed => { stats with script := elapsed }) do

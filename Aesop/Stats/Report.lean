@@ -17,6 +17,9 @@ namespace StatsReport
 local instance : ToString Nanos :=
   ⟨Nanos.printAsMillis⟩
 
+private def fmtTime (n : Nanos) (samples : Nat) : Format :=
+    f!"{n} [{if samples == 0 then 0 else n / samples}]"
+
 protected def default : StatsReport := λ statsArray => Id.run do
   let mut total := 0
   let mut configParsing := 0
@@ -45,9 +48,6 @@ protected def default : StatsReport := λ statsArray => Id.run do
      Search:                {fmtTime search samples}\n\
      Rules:{Std.Format.indentD $ fmtRuleStats $ sortRuleStatsTotals $ ruleStats.toArray}"
 where
-  fmtTime (n : Nanos) (samples : Nat) : Format :=
-    f!"{n} [{if samples == 0 then 0 else n / samples}]"
-
   fmtRuleStats (stats : Array (DisplayRuleName × RuleStatsTotals)) :
       Format := Id.run do
     let fmtSection (n : Nanos) (samples : Nat) : Format :=
@@ -60,5 +60,37 @@ where
           {"  "}successful: {fmtSection totals.elapsedSuccessful totals.numSuccessful}\n\
           {"  "}failed:     {fmtSection totals.elapsedFailed totals.numFailed}\n"
     return fmt
+
+protected def scripts : StatsReport := λ statsArray => Id.run do
+  let mut scriptTime := 0
+  let mut generated := 0
+  let mut staticallyStructured := 0
+  let mut perfectlyStaticallyStructured := 0
+  let mut dynamicallyStructured := 0
+  let mut perfectlyDynamicallyStructured := 0
+  for stats in statsArray do
+    let stats := stats.stats
+    scriptTime := scriptTime + stats.script
+    match stats.scriptGenerated with
+    | .none => pure ()
+    | .staticallyStructured perfect =>
+      generated := generated + 1
+      staticallyStructured := staticallyStructured + 1
+      if perfect then
+        perfectlyStaticallyStructured := perfectlyStaticallyStructured + 1
+    | .dynamicallyStructured perfect =>
+      generated := generated + 1
+      dynamicallyStructured := dynamicallyStructured + 1
+      if perfect then
+        perfectlyDynamicallyStructured := perfectlyDynamicallyStructured + 1
+  let samples := statsArray.size
+  f!"Statistics for {statsArray.size} Aesop calls in current and imported modules\n\
+     Durations are given as totals and [averages] in milliseconds\n\
+     Script generation time:   {fmtTime scriptTime samples}\n\
+     Scripts generated:        {generated}\n\
+     - Statically  structured: {staticallyStructured}\n" ++
+  f!"  - perfectly:            {perfectlyStaticallyStructured}\n\
+     - Dynamically structured: {dynamicallyStructured}\n" ++
+  f!"  - perfectly:            {perfectlyStaticallyStructured}"
 
 end Aesop.StatsReport
