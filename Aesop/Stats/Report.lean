@@ -20,7 +20,7 @@ local instance : ToString Nanos :=
 private def fmtTime (n : Nanos) (samples : Nat) : Format :=
     f!"{n} [{if samples == 0 then 0 else n / samples}]"
 
-protected def default : StatsReport := λ statsArray => Id.run do
+def default : StatsReport := λ statsArray => Id.run do
   let mut total := 0
   let mut configParsing := 0
   let mut ruleSetConstruction := 0
@@ -61,7 +61,7 @@ where
           {"  "}failed:     {fmtSection totals.elapsedFailed totals.numFailed}\n"
     return fmt
 
-protected def scripts : StatsReport := λ statsArray => Id.run do
+def scripts : StatsReport := λ statsArray => Id.run do
   let mut scriptTime := 0
   let mut generated := 0
   let mut staticallyStructured := 0
