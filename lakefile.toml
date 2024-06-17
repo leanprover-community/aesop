@@ -1,6 +1,7 @@
 name = "aesop"
 defaultTargets = ["Aesop"]
 testDriver = "AesopTest"
+platformIndependent = true
 precompileModules = true
 
 [[require]]
