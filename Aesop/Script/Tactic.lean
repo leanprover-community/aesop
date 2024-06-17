@@ -12,7 +12,9 @@ namespace Aesop.Script
 
 abbrev UTactic := Syntax.Tactic
 
-abbrev STactic := Array Syntax.Tactic → Syntax.Tactic
+structure STactic where
+  numSubgoals : Nat
+  run : Array (Array Syntax.Tactic) → Syntax.Tactic
 
 structure Tactic where
   uTactic : UTactic
@@ -23,9 +25,13 @@ namespace Tactic
 instance : ToMessageData Tactic where
   toMessageData t := toMessageData t.uTactic
 
-def unstructured (t : Syntax.Tactic) : Tactic where
-  uTactic := t
+def unstructured (uTactic : UTactic) : Tactic where
+  uTactic := uTactic
   sTactic? := none
+
+def structured (uTactic : UTactic) (sTactic : STactic) : Tactic where
+  uTactic := uTactic
+  sTactic? := some sTactic
 
 end Tactic
 
