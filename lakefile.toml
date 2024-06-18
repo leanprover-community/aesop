@@ -7,7 +7,7 @@ precompileModules = true
 [[require]]
 name = "batteries"
 git = "https://github.com/leanprover-community/batteries"
-rev = "main"
+rev = "nightly-testing-2024-06-17"
 
 [[lean_lib]]
 name = "Aesop"

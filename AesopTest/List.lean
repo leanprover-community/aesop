@@ -912,7 +912,7 @@ theorem last_mem : ∀ {l : List α} (h : l ≠ []), last l h ∈ l := by
 
 theorem last_replicate_succ (a m : Nat) :
   (replicate m.succ a).last
-    (ne_nil_of_length_eq_succ
+    (ne_nil_of_length_eq_add_one
       (show (replicate m.succ a).length = m.succ by rw [length_replicate])) =
   a := by
   induction m <;> aesop
