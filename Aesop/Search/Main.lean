@@ -8,6 +8,7 @@ import Aesop.Check
 import Aesop.Frontend.Attribute
 import Aesop.Options
 import Aesop.RuleSet
+import Aesop.Script.OptimizeSyntax
 import Aesop.Script.StructureStatic
 import Aesop.Script.StructureDynamic
 import Aesop.Search.Expansion
@@ -126,13 +127,13 @@ def finalizeProof : SearchM Q Unit := do
       aesop_trace[proof] "Final proof:{indentExpr proof}"
 
 open Lean.Elab.Tactic in
-def checkRenderedScript (completeProof : Bool) (script : Array Syntax.Tactic) :
+def checkRenderedScript (completeProof : Bool) (script : TSyntax ``tacticSeq) :
     SearchM Q Unit := do
   let initialState ← getRootMetaState
   let rootGoal ← getRootMVarId
   let go : TacticM Unit := do
     setGoals [rootGoal]
-    evalTactic $ ← `(tacticSeq| $script:tactic*)
+    evalTactic script
     if completeProof && ! (← getUnsolvedGoals).isEmpty then
       throwError "script executed successfully but did not solve the main goal"
   try
@@ -186,8 +187,9 @@ def traceScript (completeProof : Bool) : SearchM Q Unit :=
   let structuredScript? ← structureScript uscript rootState rootGoal
   if let some structuredScript := structuredScript? then
     let script ← structuredScript.render
+    let script ← `(tacticSeq| $script*)
+    let script ← optimizeSyntax script
     if options.traceScript then
-      let script ← `(tacticSeq| $script*)
       addTryThisTacticSeqSuggestion (← getRef) script
     if ← Check.script.isEnabled then
       checkRenderedScript completeProof script
