@@ -40,7 +40,7 @@ def casesPatterns (opts : RuleBuilderOptions) : Array CasesPattern :=
 
 def casesIndexingMode (decl : Name) (opts : RuleBuilderOptions) :
     MetaM IndexingMode :=
-  opts.getIndexingModeM do
+  opts.indexingMode?.getDM do
     if opts.casesIndexTransparency != .reducible then
       return .unindexed
     let casesPatterns := opts.casesPatterns

@@ -21,7 +21,7 @@ def applyIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
 
 def applyIndexingMode (opts : RuleBuilderOptions) (type : Expr) :
     MetaM IndexingMode :=
-  opts.getIndexingModeM do
+  opts.indexingMode?.getDM do
     if opts.applyIndexTransparency != .reducible then
       return .unindexed
     else

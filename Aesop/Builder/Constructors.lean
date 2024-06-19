@@ -19,7 +19,7 @@ def constructorsIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode
 
 def constructorsIndexingMode (opts : RuleBuilderOptions) (info : InductiveVal) :
     MetaM IndexingMode :=
-  opts.getIndexingModeM do
+  opts.indexingMode?.getDM do
     if opts.constructorsIndexTransparency != .reducible then
       return .unindexed
     else

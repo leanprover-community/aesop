@@ -18,7 +18,7 @@ def matchByTactic : Term → Option (TSyntax ``Parser.Tactic.tacticSeq)
 
 def RuleBuilder.tactic : RuleBuilder := λ input => do
   let opts := input.options
-  let imode ← opts.getIndexingModeM $ pure IndexingMode.unindexed
+  let imode := opts.indexingMode?.getD .unindexed
   if input.term.raw.isIdent then
     let decl ← elabGlobalRuleIdent .tactic input.term
     let type := (← getConstInfo decl).type

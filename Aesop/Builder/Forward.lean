@@ -39,7 +39,7 @@ private def forwardIndexingModeCore (type : Expr)
 def forwardIndexingMode (type : Expr)
     (immediate : UnorderedArraySet Nat) (opts : RuleBuilderOptions) :
     MetaM IndexingMode := do
-  opts.getIndexingModeM do
+  opts.indexingMode?.getDM do
     if opts.forwardIndexTransparency != .reducible then
       return .unindexed
     else

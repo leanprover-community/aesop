@@ -35,12 +35,6 @@ protected def default : RuleBuilderOptions :=
 instance : EmptyCollection RuleBuilderOptions :=
   ⟨.default⟩
 
-def getIndexingModeM [Monad m] (dflt : m IndexingMode)
-    (opts : RuleBuilderOptions) : m IndexingMode :=
-  match opts.indexingMode? with
-  | none => dflt
-  | some imode => return imode
-
 end RuleBuilderOptions
 
 
