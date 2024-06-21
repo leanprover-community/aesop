@@ -399,9 +399,15 @@ def applicableUnsafeRules (rs : LocalRuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult UnsafeRule)) := do
   rs.unsafeRules.applicableRules goal (!rs.isErased ·.name)
 
+def applicableSafeRulesWith (rs : LocalRuleSet) (goal : MVarId)
+    (include? : Rule SafeRuleInfo → Bool) :=
+  rs.safeRules.applicableRules goal
+    (λ rule => include? rule && !rs.isErased rule.name)
+
+@[inline]
 def applicableSafeRules (rs : LocalRuleSet) (goal : MVarId) :
-    MetaM (Array (IndexMatchResult SafeRule)) := do
-  rs.safeRules.applicableRules goal (!rs.isErased ·.name)
+    MetaM (Array (IndexMatchResult SafeRule)) :=
+  rs.applicableSafeRulesWith goal (include? := λ _ => true)
 
 def unindex (rs : LocalRuleSet) (p : RuleName → Bool) : LocalRuleSet := {
   rs with
