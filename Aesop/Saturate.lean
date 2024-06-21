@@ -33,6 +33,7 @@ def RuleTacOutput.getSingleGoal [Monad m] [MonadError m] (o : RuleTacOutput) :
 
 def applyForwardRules (rs : LocalRuleSet) (goal : MVarId) :
     ForwardM MVarId := do
+  goal.checkNotAssigned `forward
   let matchResults ← rs.applicableSafeRulesWith goal
     (include? := (·.name.isForwardOrDestruct))
   let mut goal := goal
@@ -54,10 +55,11 @@ def applyForwardRules (rs : LocalRuleSet) (goal : MVarId) :
       let (goal', postState) ← output.getSingleGoal
       postState.restore
       goal := goal'
-  return goal
+  clearForwardImplDetailHyps goal
 
 -- TODO exc prefixes
 partial def saturate (rs : LocalRuleSet) (goal : MVarId) : ForwardM MVarId := do
+  goal.checkNotAssigned `saturate
   go goal
 where
   go (goal : MVarId) : ForwardM MVarId :=
@@ -82,6 +84,6 @@ where
         let (goal, postState) ← output.getSingleGoal
         postState.restore
         return ← go goal
-    return goal
+    clearForwardImplDetailHyps goal
 
 end Aesop

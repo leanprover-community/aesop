@@ -309,7 +309,7 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
     logWarning m!"aesop: {err}"
   if ! safeExpansionSuccess then
     logWarning m!"aesop: safe prefix was not fully expanded because the maximum number of rule applications ({(← read).options.maxSafePrefixRuleApplications}) was reached."
-  return safeGoals
+  safeGoals.mapM (clearForwardImplDetailHyps ·)
 
 partial def searchLoop : SearchM Q (Array MVarId) :=
   withIncRecDepth do

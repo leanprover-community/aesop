@@ -75,12 +75,24 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
         let usedHypsAcc := usedHypsAcc ++ currentUsedHyps
         return (proofsAcc, usedHypsAcc)
 
-def getForwardHypTypes : MetaM (HashSet Expr) := do
-  let mut result := {}
-  for ldecl in (← getLCtx) do
-    if ldecl.isImplementationDetail && isForwardImplDetailHypName ldecl.userName then
-      result := result.insert ldecl.type
+def isForwardImplDetailHyp (ldecl : LocalDecl) : Bool :=
+  ldecl.isImplementationDetail && isForwardImplDetailHypName ldecl.userName
+
+def getForwardImplDetailHyps : MetaM (Array LocalDecl) := do
+ let mut result := #[]
+ for ldecl in ← getLCtx do
+    if isForwardImplDetailHyp ldecl then
+      result := result.push ldecl
   return result
+
+def getForwardHypTypes : MetaM (HashSet Expr) := do
+  let ldecls ← getForwardImplDetailHyps
+  return ldecls.foldl (init := ∅) λ result ldecl => result.insert ldecl.type
+
+def _root_.Aesop.clearForwardImplDetailHyps (goal : MVarId) : MetaM MVarId :=
+  goal.withContext do
+    let hyps ← getForwardImplDetailHyps
+    goal.tryClearMany $ hyps.map (·.fvarId)
 
 def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (md : TransparencyMode) :
     ScriptM MVarId := do
