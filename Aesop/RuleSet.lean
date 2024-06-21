@@ -163,7 +163,7 @@ def BaseRuleSet.trace (rs : BaseRuleSet) (traceOpt : TraceOption) :
     return
   withConstAesopTraceNode traceOpt (return "Erased rules") do
     aesop_trace![traceOpt] "(Note: even if these rules appear in the sections below, they will not be applied by Aesop.)"
-    let erased := rs.erased.fold (init := Array.mkEmpty rs.erased.size)
+    let erased := rs.erased.fold (init := #[])
       λ ary r => ary.push r
     for r in erased.qsortOrd do
       aesop_trace![traceOpt] r

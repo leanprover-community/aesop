@@ -8,6 +8,7 @@ import Aesop.Check
 import Aesop.Frontend.Attribute
 import Aesop.Options
 import Aesop.RuleSet
+import Aesop.Script.OptimizeSyntax
 import Aesop.Script.StructureStatic
 import Aesop.Script.StructureDynamic
 import Aesop.Search.Expansion
@@ -126,13 +127,13 @@ def finalizeProof : SearchM Q Unit := do
       aesop_trace[proof] "Final proof:{indentExpr proof}"
 
 open Lean.Elab.Tactic in
-def checkRenderedScript (completeProof : Bool) (script : Array Syntax.Tactic) :
+def checkRenderedScript (completeProof : Bool) (script : TSyntax ``tacticSeq) :
     SearchM Q Unit := do
   let initialState ← getRootMetaState
   let rootGoal ← getRootMVarId
   let go : TacticM Unit := do
     setGoals [rootGoal]
-    evalTactic $ ← `(tacticSeq| $script:tactic*)
+    evalTactic script
     if completeProof && ! (← getUnsolvedGoals).isEmpty then
       throwError "script executed successfully but did not solve the main goal"
   try
@@ -157,23 +158,25 @@ register_option aesop.dev.dynamicStructuring : Bool := {
   defValue := false
 }
 
-def structureScript (completeProof : Bool) (uscript : Script.UScript)
-    (rootState : Meta.SavedState) (rootGoal : MVarId) :
-    SearchM Q (Option Script.SScript) := do
-  let dynamicStructuring := aesop.dev.dynamicStructuring.get (← getOptions)
-  if dynamicStructuring && completeProof then
-    uscript.toSScriptDynamic rootState rootGoal
+def structureScript (uscript : Script.UScript) (rootState : Meta.SavedState)
+    (rootGoal : MVarId) : SearchM Q (Option Script.SScript) := do
+  if aesop.dev.dynamicStructuring.get (← getOptions) then
+    let some (script, perfect) ← uscript.toSScriptDynamic rootState rootGoal
+      | return none
+    recordScriptGenerated $ .dynamicallyStructured perfect
+    return some script
   else
-    if dynamicStructuring then
-      logWarning "aesop: falling back to static structuring for incomplete proof"
     let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
     let tacticState := {
       visibleGoals := #[⟨rootGoal, rootGoalMVars⟩]
       invisibleGoals := ∅
     }
-    uscript.toSScriptStatic tacticState
+    let (script, perfect) ← uscript.toSScriptStatic tacticState
+    recordScriptGenerated $ .staticallyStructured perfect
+    return some script
 
-def traceScript (completeProof : Bool) : SearchM Q Unit := do
+def traceScript (completeProof : Bool) : SearchM Q Unit :=
+  profiling (λ stats _ elapsed => { stats with script := elapsed }) do
   let options := (← read).options
   if ! options.generateScript then
     return
@@ -181,12 +184,12 @@ def traceScript (completeProof : Bool) : SearchM Q Unit := do
   checkScriptSteps uscript
   let rootGoal ← getRootMVarId
   let rootState ← getRootMetaState
-  let structuredScript? ←
-    structureScript completeProof uscript rootState rootGoal
+  let structuredScript? ← structureScript uscript rootState rootGoal
   if let some structuredScript := structuredScript? then
     let script ← structuredScript.render
+    let script ← `(tacticSeq| $script*)
+    let script ← optimizeSyntax script
     if options.traceScript then
-      let script ← `(tacticSeq| $script*)
       addTryThisTacticSeqSuggestion (← getRef) script
     if ← Check.script.isEnabled then
       checkRenderedScript completeProof script

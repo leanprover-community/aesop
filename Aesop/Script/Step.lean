@@ -50,6 +50,15 @@ instance : ToMessageData Step where
   toMessageData step :=
     m!"{step.preGoal.name} → {step.postGoals.map (·.goal.name)}:{indentD $ toMessageData step.tactic}"
 
+def mkSorry (preGoal : MVarId) (preState : Meta.SavedState) : MetaM Step := do
+  let (_, postState) ← preState.runMetaM do
+    preGoal.admit (synthetic := false)
+  let tactic ← .unstructured <$> `(tactic| sorry)
+  return {
+    postGoals := #[]
+    preState, postState, preGoal, tactic
+  }
+
 def render (acc : Array Syntax.Tactic) (step : Step)
     (tacticState : TacticState) : m (Array Syntax.Tactic × TacticState) := do
   let pos ← tacticState.getVisibleGoalIndex step.preGoal

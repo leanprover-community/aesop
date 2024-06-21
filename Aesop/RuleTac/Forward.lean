@@ -82,6 +82,25 @@ def getForwardHypTypes : MetaM (HashSet Expr) := do
       result := result.insert ldecl.type
   return result
 
+def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (md : TransparencyMode) :
+    ScriptM MVarId := do
+  withScriptStep goal (#[·]) (λ _ => true) tacticBuilder do
+  withTransparency md do
+    let hyp := {
+      hyp with
+      binderInfo := .default
+      kind := .default
+    }
+    let implDetailHyp := {
+        hyp with
+        userName := ← mkFreshForwardImplDetailHypName
+        binderInfo := .default
+        kind := .implDetail
+    }
+    (·.snd) <$> goal.assertHypotheses' #[hyp, implDetailHyp]
+where
+  tacticBuilder _ := Script.TacticBuilder.assertHypothesis goal hyp md
+
 def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     (patInsts : HashSet RulePatternInstantiation)
     (immediate : UnorderedArraySet Nat) (clear : Bool)
@@ -120,17 +139,7 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
       { value := proof, type, userName }
     let mut goal := goal
     for newHyp in newHyps do
-      let (goal', _) ← assertHypothesisS goal newHyp md
-      goal := goal'
-    let implDetailHyps ← newHyps.mapM λ hyp =>
-      return {
-        hyp with
-        userName := ← mkFreshForwardImplDetailHypName
-        binderInfo := .default
-        kind := .implDetail
-      }
-    let (_, goal') ← goal.assertHypotheses' implDetailHyps
-    goal := goal'
+      goal ← assertForwardHyp goal newHyp md
     if clear then
       let (goal', _) ← tryClearManyS goal usedHyps
       goal := goal'

@@ -12,8 +12,10 @@ namespace Aesop.Script
 
 abbrev UScript := Array Step
 
+namespace UScript
+
 variable [Monad m] [MonadError m] [MonadQuotation m] in
-def UScript.render (tacticState : TacticState) (s : UScript) :
+def render (tacticState : TacticState) (s : UScript) :
     m (Array Syntax.Tactic) := do
   let mut script := Array.mkEmpty s.size
   let mut tacticState := tacticState
@@ -23,7 +25,7 @@ def UScript.render (tacticState : TacticState) (s : UScript) :
     tacticState := tacticState'
   return script
 
-def UScript.validate (s : UScript) : MetaM Unit :=
+def validate (s : UScript) : MetaM Unit :=
   s.forM (·.validate)
 
-end Aesop.Script
+end Aesop.Script.UScript

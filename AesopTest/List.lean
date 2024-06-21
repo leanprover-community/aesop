@@ -356,7 +356,7 @@ theorem X.bind_map {g : α → List β} {f : β → γ} :
   ∀ l : List α, map f (l.bind g) = l.bind (λa => (g a).map f) := by
   intro l; induction l <;> aesop
 
-theorem map_bind (g : β → List γ) (f : α → β) :
+theorem map_bind' (g : β → List γ) (f : α → β) :
   ∀ l : List α, (map f l).bind g = l.bind (λ a => g (f a)) := by
   intro l; induction l <;> aesop
 
@@ -675,20 +675,20 @@ theorem replicate_subset_singleton (a : α) (n) : replicate n a ⊆ [a] := by
 theorem subset_singleton_iff {a : α} {L : List α} : L ⊆ [a] ↔ ∃ n, L = replicate n a :=
   ADMIT -- Nontrivial existential.
 
-@[simp] theorem map_const (l : List α) (b : β) : map (λ _ => b) l = replicate l.length b := by
+@[simp] theorem map_const'' (l : List α) (b : β) : map (λ _ => b) l = replicate l.length b := by
   induction l <;> aesop
 
 theorem eq_of_mem_map_const {b₁ b₂ : β} {l : List α} (h : b₁ ∈ map (λ _ => b₂) l) :
   b₁ = b₂ := by
   aesop
 
-@[simp] theorem map_replicate (f : α → β) (a : α) (n) : map f (replicate n a) = replicate n (f a) := by
+@[simp] theorem map_replicate' (f : α → β) (a : α) (n) : map f (replicate n a) = replicate n (f a) := by
   induction n <;> aesop
 
 @[simp] theorem tail_replicate (a : α) (n) : tail (replicate n a) = replicate n.pred a := by
   aesop (add 1% cases Nat)
 
-@[simp] theorem join_replicate_nil (n : Nat) : join (replicate n []) = @nil α := by
+@[simp] theorem join_replicate_nil' (n : Nat) : join (replicate n []) = @nil α := by
   induction n <;> aesop
 
 theorem replicate_left_injective {n : Nat} (hn : n ≠ 0) :
@@ -706,7 +706,7 @@ theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) :
 
 @[simp] theorem replicate_right_inj {a : α} {n m : Nat} :
     replicate n a = replicate m a ↔ n = m := by
-  induction n generalizing m <;> aesop (add 1% cases Nat)
+  aesop
 
 /-! ### pure -/
 
@@ -727,16 +727,16 @@ theorem bind_append (f : α → List β) (l₁ l₂ : List α) :
   (l₁ ++ l₂).bind f = l₁.bind f ++ l₂.bind f := by
   induction l₁ <;> aesop
 
-@[simp] theorem bind_singleton (f : α → List β) (x : α) : [x].bind f = f x := by
+@[simp] theorem bind_singleton'' (f : α → List β) (x : α) : [x].bind f = f x := by
   aesop
 
-@[simp] theorem bind_singleton' (l : List α) : l.bind (λ x => [x]) = l := by
+@[simp] theorem bind_singleton''' (l : List α) : l.bind (λ x => [x]) = l := by
   induction l <;> aesop
 
-theorem map_eq_bind {α β} (f : α → β) (l : List α) : map f l = l.bind (λ x => [f x]) := by
+theorem map_eq_bind' {α β} (f : α → β) (l : List α) : map f l = l.bind (λ x => [f x]) := by
   induction l <;> aesop
 
-theorem bind_assoc {α β γ : Type u} (l : List α) (f : α → List β) (g : β → List γ) :
+theorem bind_assoc' {α β γ : Type u} (l : List α) (f : α → List β) (g : β → List γ) :
     (l.bind f).bind g = l.bind (λ x => (f x).bind g) :=
   ADMIT
   -- have aux {δ : Type u} (xs ys : List (List δ)) : join (xs ++ ys) = join xs ++ join ys := by
@@ -845,19 +845,19 @@ attribute [-simp] length_reverse
 @[simp] theorem X.length_reverse (l : List α) : length (reverse l) = length l := by
   induction l <;> aesop
 
-theorem map_reverse (f : α → β) (l : List α) : map f (reverse l) = reverse (map f l) := by
+theorem map_reverse' (f : α → β) (l : List α) : map f (reverse l) = reverse (map f l) := by
   induction l <;> aesop
 
 -- attribute [-simp] map_reverseAux
 theorem map_reverse_core (f : α → β) (l₁ l₂ : List α) :
   map f (reverseAux l₁ l₂) = reverseAux (map f l₁) (map f l₂) := by
-  aesop (add norm simp reverse_map)
+  aesop (add norm simp map_reverse')
 
 attribute [-simp] mem_reverse
 @[simp] theorem X.mem_reverse {a : α} {l : List α} : a ∈ reverse l ↔ a ∈ l := by
   induction l <;> set_option aesop.check.script false in aesop -- TODO
 
-@[simp] theorem reverse_replicate (a : α) (n) : reverse (replicate n a) = replicate n a :=
+@[simp] theorem reverse_replicate' (a : α) (n) : reverse (replicate n a) = replicate n a :=
   ADMIT -- Several missing lemmas.
 
 /-! ### empty -/
@@ -912,7 +912,7 @@ theorem last_mem : ∀ {l : List α} (h : l ≠ []), last l h ∈ l := by
 
 theorem last_replicate_succ (a m : Nat) :
   (replicate m.succ a).last
-    (ne_nil_of_length_eq_succ
+    (ne_nil_of_length_eq_add_one
       (show (replicate m.succ a).length = m.succ by rw [length_replicate])) =
   a := by
   induction m <;> aesop

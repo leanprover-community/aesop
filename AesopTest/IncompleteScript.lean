@@ -43,19 +43,6 @@ error: tactic 'aesop' failed, made no progress
 example : Even 5 := by
   aesop?
 
-set_option aesop.dev.dynamicStructuring true in
-/--
-warning: aesop: falling back to static structuring for incomplete proof
----
-info: Try this:
-sorry
----
-error: tactic 'aesop' failed, made no progress
--/
-#guard_msgs in
-example : Even 5 := by
-  aesop?
-
 attribute [aesop safe constructors] Even
 
 /--

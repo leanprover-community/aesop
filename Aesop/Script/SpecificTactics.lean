@@ -58,23 +58,32 @@ def clear (goal : MVarId) (fvarIds : Array FVarId) : TacticBuilder :=
     let userNames ← fvarIds.mapM (mkIdent <$> ·.getUserName)
     return .unstructured $ ← `(tactic| clear $userNames*)
 
-def rcases (goal : MVarId) (e : Expr) (ctorNames : Array CtorNames) :
+def cases (goal : MVarId) (e : Expr) (ctorNames : Array CtorNames) :
     TacticBuilder := do
   goal.withContext do
-    let pat := ctorNamesToRCasesPats ctorNames
-    return .unstructured $ ← `(tactic| rcases $(← delab e):term with $pat)
+    let rcasesPat := ctorNamesToRCasesPats ctorNames
+    let e ← delab e
+    let uTactic ← `(tactic| rcases $e:term with $rcasesPat)
+    let sTactic := {
+      numSubgoals := ctorNames.size
+      run := λ conts =>
+        Unhygienic.run do
+          let alts := ctorNamesToInductionAlts (ctorNames.zip conts)
+          `(tactic| cases $e:term $alts:inductionAlts)
+    }
+    return .structured uTactic sTactic
 
 def obtain (goal : MVarId) (e : Expr) (ctorNames : CtorNames) : TacticBuilder :=
   goal.withContext do
     let tac ← `(tactic| obtain $(ctorNames.toRCasesPat) := $(← delab e))
     return .unstructured tac
 
-def rcasesOrObtain (goal : MVarId) (e : Expr) (ctorNames : Array CtorNames) :
+def casesOrObtain (goal : MVarId) (e : Expr) (ctorNames : Array CtorNames) :
     TacticBuilder :=
   if h : ctorNames.size = 1 then
     obtain goal e ctorNames[0]
   else
-    rcases goal e ctorNames
+    cases goal e ctorNames
 
 def renameInaccessibleFVars (postGoal : MVarId) (renamedFVars : Array FVarId) :
     TacticBuilder :=
@@ -207,9 +216,10 @@ def tryCasesS (goal : MVarId) (fvarId : FVarId) (ctorNames : Array CtorNames) :
     ScriptM (Option (Array CasesSubgoal)) := do
   let ctorNames := getUnusedCtorNames (← goal.getDecl).lctx
   let tacticBuilder _ :=
-    TacticBuilder.rcasesOrObtain goal (.fvar fvarId) ctorNames
+    TacticBuilder.casesOrObtain goal (.fvar fvarId) ctorNames
   withOptScriptStep goal (·.map (·.mvarId)) tacticBuilder do
     observing? $ goal.cases fvarId (ctorNames.map (·.toAltVarNames))
+      (useNatCasesAuxOn := true)
 where
   getUnusedCtorNames (lctx : LocalContext) : Array CtorNames :=
     Prod.fst $ ctorNames.foldl (init := (Array.mkEmpty ctorNames.size, lctx))

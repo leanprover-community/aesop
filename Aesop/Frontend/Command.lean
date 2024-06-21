@@ -58,13 +58,25 @@ elab "#aesop_rules" : command => do
         withConstAesopTraceNode .ruleSet (return m!"Rule set '{name}'") do
           rs.trace .ruleSet
 
+def evalStatsReport? (name : Name) : CoreM (Option StatsReport) := do
+  try
+    unsafe evalConstCheck StatsReport ``StatsReport name
+  catch _ =>
+    return none
+
 elab "#aesop_stats" report?:(ident)? : command => do
-  let report ←
-    if let some report := report? then
-      liftTermElabM do
-        unsafe evalConstCheck StatsReport ``StatsReport report.getId
-    else
-      pure StatsReport.default
+  let resolveReport : Option Ident → CommandElabM StatsReport
+    | none => pure StatsReport.default
+    | some id => do
+      let openDecl := OpenDecl.simple ``Aesop.StatsReport []
+      withScope (λ s => { s with openDecls := openDecl :: s.openDecls }) do
+        let names ← resolveGlobalConst id
+        liftTermElabM do
+          for name in names do
+            if let some report ← evalStatsReport? name then
+              return report
+          throwError "'{id}' is not a constant of type 'Aesop.StatsReport'"
+  let report ← resolveReport report?
   logInfo $ report $ ← getStatsArray
 
 end Aesop.Frontend.Parser

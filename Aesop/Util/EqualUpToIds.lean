@@ -109,6 +109,10 @@ inductive MVarValue where
 
 namespace Unsafe
 
+private def namesEqualUpToMacroScopes (n₁ n₂ : Name) : Bool :=
+  n₁.hasMacroScopes == n₂.hasMacroScopes &&
+  n₁.eraseMacroScopes == n₂.eraseMacroScopes
+
 mutual
   unsafe def levelsEqualUpToIdsCore (l₁ l₂ : Level) : EqualUpToIdsM Bool :=
     if ptrEq l₁ l₂ then
@@ -140,10 +144,6 @@ end Unsafe
 
 @[implemented_by Unsafe.levelsEqualUpToIdsCore]
 opaque levelsEqualUpToIdsCore (l₁ l₂ : Level) : EqualUpToIdsM Bool
-
-private def namesEqualUpToMacroScopes (n₁ n₂ : Name) : Bool :=
-  n₁.hasMacroScopes == n₂.hasMacroScopes &&
-  n₁.eraseMacroScopes == n₂.eraseMacroScopes
 
 private def lctxDecls (lctx : LocalContext) : EqualUpToIdsM (Array LocalDecl) := do
   let ignoreFVar := (← read).ignoreFVar
@@ -188,15 +188,15 @@ mutual
     | .app f₁ x₁, .app f₂ x₂ =>
       exprsEqualUpToIdsCore f₁ f₂ <&&> exprsEqualUpToIdsCore x₁ x₂
     | .lam n₁ t₁ e₁ bi₁, .lam n₂ t₂ e₂ bi₂ =>
-      pure (n₁ == n₂ && bi₁ == bi₂) <&&>
+      pure (namesEqualUpToMacroScopes n₁ n₂ && bi₁ == bi₂) <&&>
       exprsEqualUpToIdsCore t₁ t₂ <&&>
       exprsEqualUpToIdsCore e₁ e₂
     | .forallE n₁ t₁ e₁ bi₁, .forallE n₂ t₂ e₂ bi₂ =>
-      pure (n₁ == n₂ && bi₁ == bi₂) <&&>
+      pure (namesEqualUpToMacroScopes n₁ n₂ && bi₁ == bi₂) <&&>
       exprsEqualUpToIdsCore t₁ t₂ <&&>
       exprsEqualUpToIdsCore e₁ e₂
     | .letE n₁ t₁ v₁ e₁ _, .letE n₂ t₂ v₂ e₂ _ =>
-      pure (n₁ == n₂) <&&>
+      pure (namesEqualUpToMacroScopes n₁ n₂) <&&>
       exprsEqualUpToIdsCore t₁ t₂ <&&>
       exprsEqualUpToIdsCore v₁ v₂ <&&>
       exprsEqualUpToIdsCore e₁ e₂
@@ -288,13 +288,13 @@ mutual
       if h' : i < decls₁.size then
         let ldecl₁ := decls₁[i]
         let ldecl₂ := decls₂[i]'(by simp [← h, h'])
-        withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing hyps {ldecl₁.userName}, {ldecl₂.userName}") do
-          if ! (← localDeclsEqualUpToIdsCore ldecl₁ ldecl₂ |>.run gctx) then
-            return none
-          else
-            let equalFVarIds :=
-              gctx.equalFVarIds.insert ldecl₁.fvarId ldecl₂.fvarId
-            go decls₁ decls₂ h (i + 1) { gctx with equalFVarIds }
+        let eq ← withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing hyps {ldecl₁.userName}, {ldecl₂.userName}") do
+          localDeclsEqualUpToIdsCore ldecl₁ ldecl₂ |>.run gctx
+        if ! eq then
+          return none
+        let equalFVarIds :=
+          gctx.equalFVarIds.insert ldecl₁.fvarId ldecl₂.fvarId
+        go decls₁ decls₂ h (i + 1) { gctx with equalFVarIds }
       else
         return some gctx
 

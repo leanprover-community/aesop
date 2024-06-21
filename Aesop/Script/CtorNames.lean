@@ -4,15 +4,6 @@ open Lean Lean.Meta
 
 namespace Aesop
 
-def namesToRCasesPat (ns : Array Name) (implicit : Bool) :
-    TSyntax `rcasesPat := Unhygienic.run do
-  let ns ← ns.mapM λ n =>
-    `(Lean.Parser.Tactic.rcasesPatLo| $(mkIdent n):ident)
-  if implicit then
-    `(rcasesPat| @⟨ $ns,* ⟩)
-  else
-    `(rcasesPat| ⟨ $ns,* ⟩)
-
 structure CtorNames where
   ctor : Name
   args : Array Name
@@ -21,8 +12,33 @@ structure CtorNames where
 
 namespace CtorNames
 
-def toRCasesPat (cn : CtorNames) : TSyntax `rcasesPat :=
-  namesToRCasesPat cn.args cn.hasImplicitArg
+def toRCasesPat (cn : CtorNames) : TSyntax `rcasesPat := Unhygienic.run do
+  let ns ← cn.args.mapM λ n =>
+    `(Lean.Parser.Tactic.rcasesPatLo| $(mkIdent n):ident)
+  if cn.hasImplicitArg then
+    `(rcasesPat| @⟨ $ns,* ⟩)
+  else
+    `(rcasesPat| ⟨ $ns,* ⟩)
+
+private def nameBase : Name → Name
+  | .anonymous => .anonymous
+  | .str _ s => .str .anonymous s
+  | .num _ n => .num .anonymous n
+
+open Lean.Parser.Tactic in
+def toInductionAltLHS (cn : CtorNames) :
+    TSyntax ``inductionAltLHS := Unhygienic.run do
+  let ns := cn.args.map mkIdent
+  let ctor := mkIdent $ nameBase cn.ctor
+  if cn.hasImplicitArg then
+    `(inductionAltLHS| | @$ctor $ns:ident*)
+  else
+    `(inductionAltLHS| | $ctor $ns:ident*)
+
+open Lean.Parser.Tactic in
+def toInductionAlt (cn : CtorNames) (tacticSeq : Array Syntax.Tactic) :
+    TSyntax ``inductionAlt := Unhygienic.run do
+  `(inductionAlt| $(cn.toInductionAltLHS):inductionAltLHS => $tacticSeq:tactic*)
 
 def toAltVarNames (cn : CtorNames) : AltVarNames where
   explicit := true
@@ -36,8 +52,14 @@ def mkFreshArgNames (lctx : LocalContext) (cn : CtorNames) :
 end CtorNames
 
 open Lean.Parser.Tactic in
-def ctorNamesToRCasesPats (cns : Array CtorNames) : (TSyntax ``rcasesPatMed) :=
+def ctorNamesToRCasesPats (cns : Array CtorNames) : TSyntax ``rcasesPatMed :=
   Unhygienic.run do `(rcasesPatMed| $(cns.map (·.toRCasesPat)):rcasesPat|*)
+
+open Lean.Parser.Tactic in
+def ctorNamesToInductionAlts (cns : Array (CtorNames × Array Syntax.Tactic)) :
+    TSyntax ``inductionAlts := Unhygienic.run do
+  let alts := cns.map λ (cn, tacticSeq) => cn.toInductionAlt tacticSeq
+  `(inductionAlts| with $alts:inductionAlt*)
 
 def mkCtorNames (iv : InductiveVal) : CoreM (Array CtorNames) := MetaM.run' do
   iv.ctors.toArray.mapM λ ctor => do

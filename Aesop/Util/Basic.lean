@@ -60,7 +60,7 @@ def toList [BEq α] [Hashable α] (s : PersistentHashSet α) :
 @[inline]
 def toArray [BEq α] [Hashable α] (s : PersistentHashSet α) :
     Array α :=
-  s.fold (init := Array.mkEmpty s.size) λ as a => as.push a
+  s.fold (init := #[]) λ as a => as.push a
 
 end PersistentHashSet
 
