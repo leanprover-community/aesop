@@ -17,8 +17,8 @@ open Lean.Meta
 namespace Aesop.RuleTac
 
 partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
-    (patInst : RulePatternInstantiation) (immediate : UnorderedArraySet Nat)
-    (collectUsedHyps : Bool) : MetaM (Array Expr × Array FVarId) :=
+    (patInst : RulePatternInstantiation) (immediate : UnorderedArraySet Nat) :
+    MetaM (Array Expr × Array FVarId) :=
   withNewMCtxDepth (allowLevelAssignments := true) do
     let type ← inferType e
     let (argMVars, binderInfos, patInstantiatedMVars) ←
@@ -44,8 +44,7 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
   where
     loop (app : Expr) (instMVars : Array MVarId) (immediateMVars : Array MVarId)
         (i : Nat) (proofsAcc : Array Expr) (currentUsedHyps : Array FVarId)
-        (usedHypsAcc : Array FVarId) :
-        MetaM (Array Expr × Array FVarId) := do
+        (usedHypsAcc : Array FVarId) : MetaM (Array Expr × Array FVarId) := do
       if h : i < immediateMVars.size then
         let mvarId := immediateMVars.get ⟨i, h⟩
         let type ← mvarId.getType
@@ -56,13 +55,9 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
             withoutModifyingState do
               if ← isDefEq ldecl.type type then
                 mvarId.assign (mkFVar ldecl.fvarId)
-                let currentUsedHyps :=
-                  if collectUsedHyps then
-                    currentUsedHyps.push ldecl.fvarId
-                  else
-                    currentUsedHyps
+                let currentUsedHyps := currentUsedHyps.push ldecl.fvarId
                 loop app instMVars immediateMVars (i + 1) proofsAcc
-                    currentUsedHyps usedHypsAcc
+                  currentUsedHyps usedHypsAcc
               else
                 pure s
       else
@@ -123,12 +118,11 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     if pat?.isSome then
       for patInst in patInsts do
         let (newHypProofs', usedHyps') ←
-          makeForwardHyps e pat? patInst immediate (collectUsedHyps := clear)
+          makeForwardHyps e pat? patInst immediate
         newHypProofs := newHypProofs ++ newHypProofs'
         usedHyps := usedHyps ++ usedHyps'
     else
-      let (newHypProofs', usedHyps') ←
-        makeForwardHyps e pat? .empty immediate (collectUsedHyps := clear)
+      let (newHypProofs', usedHyps') ← makeForwardHyps e pat? .empty immediate
       newHypProofs := newHypProofs'
       usedHyps := usedHyps'
     usedHyps :=
