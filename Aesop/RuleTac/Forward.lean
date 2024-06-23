@@ -16,8 +16,45 @@ open Lean.Meta
 
 namespace Aesop.RuleTac
 
+def isForwardImplDetailHyp (ldecl : LocalDecl) : Bool :=
+  ldecl.isImplementationDetail && isForwardImplDetailHypName ldecl.userName
+
+def getForwardImplDetailHyps : MetaM (Array LocalDecl) := do
+ let mut result := #[]
+ for ldecl in ← getLCtx do
+    if isForwardImplDetailHyp ldecl then
+      result := result.push ldecl
+  return result
+
+def _root_.Aesop.clearForwardImplDetailHyps (goal : MVarId) : MetaM MVarId :=
+  goal.withContext do
+    let hyps ← getForwardImplDetailHyps
+    goal.tryClearMany $ hyps.map (·.fvarId)
+
+structure ForwardHypData where
+  /--
+  Types of the hypotheses that have already been added by forward reasoning.
+  -/
+  types : HashSet Expr
+  /--
+  Depths of the hypotheses that have already been added by forward reasoning.
+  -/
+  depths : HashMap FVarId Nat
+
+def getForwardHypData : MetaM ForwardHypData := do
+  let ldecls ← getForwardImplDetailHyps
+  let mut types := ∅
+  let mut depths := ∅
+  for ldecl in ldecls do
+    types := types.insert (← instantiateMVars ldecl.type)
+    if let some (depth, name) := matchForwardImplDetailHypName ldecl.userName then
+      if let some ldecl := (← getLCtx).findFromUserName? name then
+        depths := depths.insert ldecl.fvarId depth
+  return { types, depths }
+
 partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
-    (patInst : RulePatternInstantiation) (immediate : UnorderedArraySet Nat) :
+    (patInst : RulePatternInstantiation) (immediate : UnorderedArraySet Nat)
+    (forwardHypData : ForwardHypData) :
     MetaM (Array Expr × Array FVarId) :=
   withNewMCtxDepth (allowLevelAssignments := true) do
     let type ← inferType e
@@ -40,15 +77,17 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
         immediateMVars := immediateMVars.push mvarId
       else if binderInfos[i]!.isInstImplicit then
         instMVars := instMVars.push mvarId
-    loop app instMVars immediateMVars 0 #[] #[] #[]
+    let (proofs, usedHyps, _) ← loop app instMVars immediateMVars 0 #[] #[] #[] ∅
+    return (proofs, usedHyps)
   where
     loop (app : Expr) (instMVars : Array MVarId) (immediateMVars : Array MVarId)
         (i : Nat) (proofsAcc : Array Expr) (currentUsedHyps : Array FVarId)
-        (usedHypsAcc : Array FVarId) : MetaM (Array Expr × Array FVarId) := do
+        (usedHypsAcc : Array FVarId) (proofTypesAcc : HashSet Expr) :
+        MetaM (Array Expr × Array FVarId × HashSet Expr) := do
       if h : i < immediateMVars.size then
         let mvarId := immediateMVars.get ⟨i, h⟩
         let type ← mvarId.getType
-        (← getLCtx).foldlM (init := (proofsAcc, usedHypsAcc)) λ s@(proofsAcc, usedHypsAcc) ldecl =>
+        (← getLCtx).foldlM (init := (proofsAcc, usedHypsAcc, proofTypesAcc)) λ s@(proofsAcc, usedHypsAcc, proofTypesAcc) ldecl =>
           if ldecl.isImplementationDetail then
             pure s
           else
@@ -57,7 +96,7 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
                 mvarId.assign (mkFVar ldecl.fvarId)
                 let currentUsedHyps := currentUsedHyps.push ldecl.fvarId
                 loop app instMVars immediateMVars (i + 1) proofsAcc
-                  currentUsedHyps usedHypsAcc
+                  currentUsedHyps usedHypsAcc proofTypesAcc
               else
                 pure s
       else
@@ -66,28 +105,14 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
             let inst ← synthInstance (← instMVar.getType)
             instMVar.assign inst
         let proof := (← abstractMVars app).expr
-        let proofsAcc := proofsAcc.push proof
-        let usedHypsAcc := usedHypsAcc ++ currentUsedHyps
-        return (proofsAcc, usedHypsAcc)
-
-def isForwardImplDetailHyp (ldecl : LocalDecl) : Bool :=
-  ldecl.isImplementationDetail && isForwardImplDetailHypName ldecl.userName
-
-def getForwardImplDetailHyps : MetaM (Array LocalDecl) := do
- let mut result := #[]
- for ldecl in ← getLCtx do
-    if isForwardImplDetailHyp ldecl then
-      result := result.push ldecl
-  return result
-
-def getForwardHypTypes : MetaM (HashSet Expr) := do
-  let ldecls ← getForwardImplDetailHyps
-  return ldecls.foldl (init := ∅) λ result ldecl => result.insert ldecl.type
-
-def _root_.Aesop.clearForwardImplDetailHyps (goal : MVarId) : MetaM MVarId :=
-  goal.withContext do
-    let hyps ← getForwardImplDetailHyps
-    goal.tryClearMany $ hyps.map (·.fvarId)
+        let type ← instantiateMVars (← inferType proof)
+        if proofTypesAcc.contains type || forwardHypData.types.contains type then
+          return (proofsAcc, usedHypsAcc, proofTypesAcc)
+        else
+          let proofsAcc := proofsAcc.push proof
+          let proofTypesAcc := proofTypesAcc.insert type
+          let usedHypsAcc := usedHypsAcc ++ currentUsedHyps
+          return (proofsAcc, usedHypsAcc, proofTypesAcc)
 
 def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (md : TransparencyMode) :
     ScriptM MVarId := do
@@ -113,36 +138,29 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     (immediate : UnorderedArraySet Nat) (clear : Bool)
     (md : TransparencyMode) : ScriptM MVarId :=
   withTransparency md $ goal.withContext do
+    let forwardHypData ← getForwardHypData
     let mut newHypProofs := #[]
     let mut usedHyps := ∅
     if pat?.isSome then
       for patInst in patInsts do
         let (newHypProofs', usedHyps') ←
-          makeForwardHyps e pat? patInst immediate
+          makeForwardHyps e pat? patInst immediate forwardHypData
         newHypProofs := newHypProofs ++ newHypProofs'
         usedHyps := usedHyps ++ usedHyps'
     else
-      let (newHypProofs', usedHyps') ← makeForwardHyps e pat? .empty immediate
+      let (newHypProofs', usedHyps') ←
+        makeForwardHyps e pat? .empty immediate forwardHypData
       newHypProofs := newHypProofs'
       usedHyps := usedHyps'
     usedHyps :=
       usedHyps.sortDedup (ord := ⟨λ x y => x.name.quickCmp y.name⟩)
     if newHypProofs.isEmpty then
       err
-    let forwardHypTypes ← getForwardHypTypes
-    let mut newHyps' := Array.mkEmpty newHypProofs.size
-    let mut newHypTypes : HashSet Expr := {}
-    for proof in newHypProofs do
+    let newHypUserNames ← getUnusedUserNames newHypProofs.size forwardHypPrefix
+    let mut newHyps := #[]
+    for proof in newHypProofs, userName in newHypUserNames do
       let type ← inferType proof
-      if forwardHypTypes.contains type || newHypTypes.contains type then
-        continue
-      newHypTypes := newHypTypes.insert type
-      newHyps' := newHyps'.push (proof, type)
-    if newHyps'.isEmpty then
-      err
-    let newHypUserNames ← getUnusedUserNames newHyps'.size forwardHypPrefix
-    let newHyps := newHyps'.zipWith newHypUserNames λ (proof, type) userName =>
-      { value := proof, type, userName }
+      newHyps := newHyps.push { value := proof, type, userName }
     let mut goal := goal
     for newHyp in newHyps do
       goal ← assertForwardHyp goal newHyp md
