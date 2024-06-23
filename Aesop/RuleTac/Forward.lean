@@ -105,7 +105,7 @@ def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (md : TransparencyMode) 
     }
     let implDetailHyp := {
         hyp with
-        userName := ← mkFreshForwardImplDetailHypName
+        userName := forwardImplDetailHypName hyp.userName 0 -- TODO depth
         binderInfo := .default
         kind := .implDetail
     }
