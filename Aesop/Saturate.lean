@@ -31,31 +31,8 @@ def RuleTacOutput.getSingleGoal [Monad m] [MonadError m] (o : RuleTacOutput) :
     | throwError "rule did not produce exactly one subgoal"
   return (goal, app.postState)
 
-def applyForwardRules (rs : LocalRuleSet) (goal : MVarId) :
-    ForwardM MVarId := do
-  goal.checkNotAssigned `forward
-  let matchResults ← rs.applicableSafeRulesWith goal
-    (include? := (·.name.isForwardOrDestruct))
-  let mut goal := goal
-  for matchResult in matchResults do
-    let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
-    let preState ← show MetaM _ from saveState
-    let input := {
-      indexMatchLocations := matchResult.locations
-      patternInstantiations := matchResult.patternInstantiations
-      options := (← read).options
-      goal, mvars
-    }
-    let tacResult ←
-      runRuleTac matchResult.rule.tac.run matchResult.rule.name preState input
-    match tacResult with
-    | .inl _exc =>
-      continue
-    | .inr output =>
-      let (goal', postState) ← output.getSingleGoal
-      postState.restore
-      goal := goal'
-  clearForwardImplDetailHyps goal
+initialize
+  registerTraceClass `saturate
 
 -- TODO exc prefixes
 partial def saturate (rs : LocalRuleSet) (goal : MVarId) : ForwardM MVarId := do

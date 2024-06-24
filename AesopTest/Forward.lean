@@ -25,7 +25,7 @@ def forwardTac (goal : MVarId) (id : Ident) (immediate : Option (Array Syntax))
     none md (immediate.map (·.map (·.getId)))
   let (goal, _) ←
     RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) none ∅ immediate clear
-      md |>.run
+      md (maxDepth? := none) |>.run
   return [goal]
 
 @[tactic forward]
@@ -82,6 +82,62 @@ example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ
   guard_hyp fwd : β
   guard_hyp fwd_1 : γ
   assumption
+
+/--
+error: unsolved goals
+α β γ : Prop
+h₁ : α → β
+h₂ : β → γ
+h₃ : α
+fwd : β
+⊢ γ
+-/
+#guard_msgs in
+example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
+  forward [*]
+
+/--
+error: unsolved goals
+α β γ : Prop
+h₁ : α → β
+h₂ : β → γ
+h₃ : α
+fwd : β
+⊢ γ
+-/
+#guard_msgs in
+example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
+  saturate 1 [*]
+
+/--
+error: unsolved goals
+α β γ δ : Prop
+h₁ : α → β
+h₂ : β → γ
+h₃ : γ → δ
+h₄ : α
+fwd : β
+fwd_1 : γ
+⊢ δ
+-/
+#guard_msgs in
+example {α β γ δ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : γ → δ) (h₄ : α) : δ := by
+  saturate 2 [*]
+
+/--
+error: unsolved goals
+α β γ δ : Prop
+h₁ : α → β
+h₂ : α → γ
+h₃ : β → γ → δ
+h₄ : α
+fwd : β
+fwd_1 : γ
+⊢ δ
+-/
+#guard_msgs in
+example {α β γ δ : Prop} (h₁ : α → β) (h₂ : α → γ) (h₃ : β → γ → δ) (h₄ : α) : δ := by
+  saturate 1 [*]
 
 /-! # Tests for Aesop's forward rules -/
 

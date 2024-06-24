@@ -444,4 +444,10 @@ where
   dummyLDecl (name : Name) : LocalDecl :=
     .cdecl 0 ⟨`_⟩ name (.sort levelZero) .default .default
 
+def Name.ofComponents (cs : List Name) : Name :=
+  cs.foldl (init := .anonymous) λ
+    | result, .str _ s => .str result s
+    | result, .num _ n => .num result n
+    | result, .anonymous => result
+
 end Aesop

@@ -23,8 +23,8 @@ def _root_.Aesop.ElabM.runForwardElab (goal : MVarId) (x : ElabM α) :
     TermElabM α :=
   x |>.run { parsePriorities := true, goal }
 
-def elabForwardOptions : CoreM Options' :=
-  ({} : Aesop.Options).toOptions'
+def elabForwardOptions (maxDepth? : Option Nat) : CoreM Options' :=
+  ({} : Aesop.Options).toOptions' maxDepth?
 
 def elabGlobalRuleSets (rsNames : Array Ident) :
     CoreM (Array (GlobalRuleSet × Name × Name)) := do
@@ -101,16 +101,14 @@ def elabForwardRuleSet (rsNames? : Option (TSyntax ``usingRuleSets))
 
 open Lean.Elab.Tactic
 
-elab "saturate " rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic => do
-  let options ← elabForwardOptions
+elab "saturate " depth?:(num)? ppSpace rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic => do
+  let depth? := depth?.map (·.getNat)
+  let options ← elabForwardOptions depth?
   let rs ← elabForwardRuleSet rs? rules? options
     |>.runForwardElab (← getMainGoal)
   liftMetaTactic1 (saturate rs · |>.run { options })
 
-elab "forward " rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic => do
-  let options ← elabForwardOptions
-  let rs ← elabForwardRuleSet rs? rules? options
-    |>.runForwardElab (← getMainGoal)
-  liftMetaTactic1 (applyForwardRules rs · |>.run { options })
+macro "forward " rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic =>
+  `(tactic| saturate 1 $[$rules?]? $[$rs?]?)
 
 end Aesop.Frontend
