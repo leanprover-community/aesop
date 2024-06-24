@@ -64,11 +64,13 @@ partial def saturate (rs : LocalRuleSet) (goal : MVarId) : ForwardM MVarId := do
 where
   go (goal : MVarId) : ForwardM MVarId :=
     withIncRecDepth do
+    trace[saturate] "goal:{indentD goal}"
     let matchResults ← rs.applicableSafeRulesWith goal
       (include? := (·.name.isForwardOrDestruct))
     let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
     let preState ← show MetaM _ from saveState
     for matchResult in matchResults do
+      trace[saturate] "running rule {matchResult.rule.name}"
       let input := {
         indexMatchLocations := matchResult.locations
         patternInstantiations := matchResult.patternInstantiations
@@ -78,7 +80,8 @@ where
       let tacResult ←
         runRuleTac matchResult.rule.tac.run matchResult.rule.name preState input
       match tacResult with
-      | .inl _exc =>
+      | .inl exc =>
+        trace[saturate] "rule failed:{indentD exc.toMessageData}"
         continue
       | .inr output =>
         let (goal, postState) ← output.getSingleGoal
