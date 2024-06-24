@@ -16,10 +16,10 @@ namespace Aesop
 def isForwardOrDestructRuleName (n : RuleName) : Bool :=
   n.builder == .forward || n.builder == .destruct
 
-structure ForwardM.Context where
+structure SaturateM.Context where
   options : Aesop.Options'
 
-abbrev ForwardM := ReaderT ForwardM.Context MetaM
+abbrev SaturateM := ReaderT SaturateM.Context MetaM
 
 def getSingleGoal [Monad m] [MonadError m] (o : RuleTacOutput) :
     m (MVarId × Meta.SavedState) := do
@@ -33,12 +33,12 @@ initialize
   registerTraceClass `saturate
 
 -- TODO exc prefixes
-partial def saturate (rs : LocalRuleSet) (goal : MVarId) : ForwardM MVarId :=
+partial def saturate (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId :=
   withExceptionPrefix "saturate: internal error: " do
   goal.checkNotAssigned `saturate
   go goal
 where
-  go (goal : MVarId) : ForwardM MVarId :=
+  go (goal : MVarId) : SaturateM MVarId :=
     withIncRecDepth do
     trace[saturate] "goal:{indentD goal}"
     let matchResults ← rs.applicableSafeRulesWith goal
