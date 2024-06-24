@@ -13,8 +13,7 @@ open Lean Lean.Meta
 
 namespace Aesop
 
--- TODO mv
-def RuleName.isForwardOrDestruct (n : RuleName) : Bool :=
+def isForwardOrDestructRuleName (n : RuleName) : Bool :=
   n.builder == .forward || n.builder == .destruct
 
 structure ForwardM.Context where
@@ -22,8 +21,7 @@ structure ForwardM.Context where
 
 abbrev ForwardM := ReaderT ForwardM.Context MetaM
 
--- TODO mv?
-def RuleTacOutput.getSingleGoal [Monad m] [MonadError m] (o : RuleTacOutput) :
+def getSingleGoal [Monad m] [MonadError m] (o : RuleTacOutput) :
     m (MVarId × Meta.SavedState) := do
   let #[app] := o.applications
     | throwError "rule produced more than one rule application"
@@ -35,7 +33,8 @@ initialize
   registerTraceClass `saturate
 
 -- TODO exc prefixes
-partial def saturate (rs : LocalRuleSet) (goal : MVarId) : ForwardM MVarId := do
+partial def saturate (rs : LocalRuleSet) (goal : MVarId) : ForwardM MVarId :=
+  withExceptionPrefix "saturate: internal error: " do
   goal.checkNotAssigned `saturate
   go goal
 where
@@ -43,7 +42,7 @@ where
     withIncRecDepth do
     trace[saturate] "goal:{indentD goal}"
     let matchResults ← rs.applicableSafeRulesWith goal
-      (include? := (·.name.isForwardOrDestruct))
+      (include? := (isForwardOrDestructRuleName ·.name))
     let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
     let preState ← show MetaM _ from saveState
     for matchResult in matchResults do
@@ -61,7 +60,7 @@ where
         trace[saturate] "rule failed:{indentD exc.toMessageData}"
         continue
       | .inr output =>
-        let (goal, postState) ← output.getSingleGoal
+        let (goal, postState) ← getSingleGoal output
         postState.restore
         return ← go goal
     clearForwardImplDetailHyps goal

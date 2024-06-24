@@ -450,4 +450,14 @@ def Name.ofComponents (cs : List Name) : Name :=
     | result, .num _ n => .num result n
     | result, .anonymous => result
 
+@[macro_inline]
+def withExceptionPrefix [Monad m] [MonadError m] (pre : MessageData) (x : m α) :
+    m α := do
+  try
+    x
+  catch e =>
+    match e with
+    | .internal _ _ => throw e
+    | .error ref msg => throw $ .error ref (pre ++ msg)
+
 end Aesop
