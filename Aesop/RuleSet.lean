@@ -391,20 +391,33 @@ def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleFilter) :
 
 namespace LocalRuleSet
 
+def applicableNormalizationRulesWith (rs : LocalRuleSet) (goal : MVarId)
+    (include? : NormRule → Bool) : MetaM (Array (IndexMatchResult NormRule)) :=
+  rs.normRules.applicableRules goal
+    (λ rule => include? rule && !rs.isErased rule.name)
+
+@[inline, always_inline]
 def applicableNormalizationRules (rs : LocalRuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult NormRule)) :=
-  rs.normRules.applicableRules goal (!rs.isErased ·.name)
+  rs.applicableNormalizationRulesWith goal (λ _ => true)
 
+def applicableUnsafeRulesWith (rs : LocalRuleSet) (goal : MVarId)
+    (include? : UnsafeRule → Bool) :
+    MetaM (Array (IndexMatchResult UnsafeRule)) := do
+  rs.unsafeRules.applicableRules goal
+    (λ rule => include? rule && !rs.isErased rule.name)
+
+@[inline, always_inline]
 def applicableUnsafeRules (rs : LocalRuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult UnsafeRule)) := do
-  rs.unsafeRules.applicableRules goal (!rs.isErased ·.name)
+  rs.applicableUnsafeRulesWith goal (λ _ => true)
 
 def applicableSafeRulesWith (rs : LocalRuleSet) (goal : MVarId)
-    (include? : Rule SafeRuleInfo → Bool) :=
+    (include? : SafeRule → Bool) :=
   rs.safeRules.applicableRules goal
     (λ rule => include? rule && !rs.isErased rule.name)
 
-@[inline]
+@[inline, always_inline]
 def applicableSafeRules (rs : LocalRuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult SafeRule)) :=
   rs.applicableSafeRulesWith goal (include? := λ _ => true)

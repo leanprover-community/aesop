@@ -32,7 +32,6 @@ def getSingleGoal [Monad m] [MonadError m] (o : RuleTacOutput) :
 initialize
   registerTraceClass `saturate
 
--- TODO exc prefixes
 partial def saturate (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId :=
   withExceptionPrefix "saturate: internal error: " do
   goal.checkNotAssigned `saturate
@@ -41,28 +40,48 @@ where
   go (goal : MVarId) : SaturateM MVarId :=
     withIncRecDepth do
     trace[saturate] "goal:{indentD goal}"
-    let matchResults ← rs.applicableSafeRulesWith goal
-      (include? := (isForwardOrDestructRuleName ·.name))
     let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
     let preState ← show MetaM _ from saveState
-    for matchResult in matchResults do
-      trace[saturate] "running rule {matchResult.rule.name}"
-      let input := {
-        indexMatchLocations := matchResult.locations
-        patternInstantiations := matchResult.patternInstantiations
-        options := (← read).options
-        goal, mvars
-      }
-      let tacResult ←
-        runRuleTac matchResult.rule.tac.run matchResult.rule.name preState input
-      match tacResult with
-      | .inl exc =>
-        trace[saturate] "rule failed:{indentD exc.toMessageData}"
-        continue
-      | .inr output =>
-        let (goal, postState) ← getSingleGoal output
-        postState.restore
+    let normMatchResults ← rs.applicableNormalizationRulesWith goal
+      (include? := (isForwardOrDestructRuleName ·.name))
+    if let some goal ← runFirstRule goal mvars preState normMatchResults then
+      return ← go goal
+    else
+      let safeMatchResults ← rs.applicableSafeRulesWith goal
+        (include? := (isForwardOrDestructRuleName ·.name))
+      if let some goal ← runFirstRule goal mvars preState safeMatchResults then
         return ← go goal
-    clearForwardImplDetailHyps goal
+      else
+        clearForwardImplDetailHyps goal
+
+  runRule {α} (goal : MVarId) (mvars : UnorderedArraySet MVarId)
+      (preState : Meta.SavedState) (matchResult : IndexMatchResult (Rule α)) :
+      SaturateM (Option MVarId) := do
+    trace[saturate] "running rule {matchResult.rule.name}"
+    let input := {
+      indexMatchLocations := matchResult.locations
+      patternInstantiations := matchResult.patternInstantiations
+      options := (← read).options
+      goal, mvars
+    }
+    let tacResult ←
+      runRuleTac matchResult.rule.tac.run matchResult.rule.name preState input
+    match tacResult with
+    | .inl exc =>
+      trace[saturate] "rule failed:{indentD exc.toMessageData}"
+      return none
+    | .inr output =>
+      let (goal, postState) ← getSingleGoal output
+      postState.restore
+      return goal
+
+  runFirstRule {α} (goal : MVarId) (mvars : UnorderedArraySet MVarId)
+      (preState : Meta.SavedState)
+      (matchResults : Array (IndexMatchResult (Rule α))) :
+      SaturateM (Option MVarId) := do
+    for matchResult in matchResults do
+      if let some goal ← runRule goal mvars preState matchResult then
+        return some goal
+    return none
 
 end Aesop

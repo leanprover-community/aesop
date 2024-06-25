@@ -139,6 +139,23 @@ fwd_1 : γ
 example {α β γ δ : Prop} (h₁ : α → β) (h₂ : α → γ) (h₃ : β → γ → δ) (h₄ : α) : δ := by
   saturate 1 [*]
 
+axiom A : Type
+axiom B : Type
+axiom C : Type
+
+@[aesop safe forward]
+axiom ab : A → B
+
+@[aesop norm forward]
+axiom bc : B → C
+
+noncomputable example : A → C := by
+  intro a
+  saturate
+  guard_hyp fwd : B
+  guard_hyp fwd_1 : C
+  exact fwd_1
+
 /-! # Tests for Aesop's forward rules -/
 
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
