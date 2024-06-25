@@ -19,29 +19,33 @@ def applyTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
 def applyIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
   opts.indexTransparency?.getD .reducible
 
-def applyIndexingMode (opts : RuleBuilderOptions) (type : Expr) :
-    MetaM IndexingMode :=
-  opts.indexingMode?.getDM do
-    if opts.applyIndexTransparency != .reducible then
-      return .unindexed
-    else
-      IndexingMode.targetMatchingConclusion type
-
 end RuleBuilderOptions
 
+namespace RuleBuilder
 
-def RuleBuilder.apply : RuleBuilder := λ input => do
+def getApplyIndexingMode (indexMd : TransparencyMode) (type : Expr) :
+    MetaM IndexingMode :=
+  if indexMd != .reducible then
+    return .unindexed
+  else
+    IndexingMode.targetMatchingConclusion type
+
+def applyCore (t : ElabRuleTerm) (pat? : Option RulePattern)
+    (imode? : Option IndexingMode) (md indexMd : TransparencyMode)
+    (phase : PhaseSpec) : MetaM LocalRuleSetMember := do
+  let e ← t.expr
+  let type ← inferType e
+  let imode ← imode?.getDM $ getApplyIndexingMode indexMd type
+  let tac := .apply t.toRuleTerm md pat?
+  return .global $ .base $ phase.toRule (← t.name) .apply t.scope tac imode pat?
+
+def apply : RuleBuilder := λ input => do
   let opts := input.options
   let e ← elabRuleTermForApplyLike input.term
+  let t := ElabRuleTerm.ofElaboratedTerm input.term e
   let type ← inferType e
   let pat? ← opts.pattern?.mapM (RulePattern.elab · type)
-  let imode ← opts.applyIndexingMode type
-  if let some decl := e.constName? then
-    let tac := .applyConst decl opts.applyTransparency pat?
-    return .global $ .base $ input.toRule .apply decl .global tac imode pat?
-  else
-    let name ← getRuleName e
-    let tac := .applyTerm input.term opts.applyTransparency pat?
-    return .global $ .base $ input.toRule .apply name .local tac imode pat?
+  applyCore t pat? opts.indexingMode? opts.applyTransparency
+    opts.applyIndexTransparency input.phase
 
-end Aesop
+end Aesop.RuleBuilder

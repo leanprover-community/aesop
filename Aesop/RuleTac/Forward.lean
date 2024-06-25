@@ -202,4 +202,11 @@ def forwardTerm (stx : Term) (pat? : Option RulePattern)
     let e ← elabRuleTermForApplyLikeMetaM input.goal stx
     forwardExpr e pat? immediate (clear := clear) md input
 
+def forward (t : RuleTerm) (pat? : Option RulePattern)
+    (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
+    RuleTac :=
+  match t with
+  | .const decl => forwardConst decl pat? immediate clear md
+  | .term tm => forwardTerm tm pat? immediate clear md
+
 end Aesop.RuleTac

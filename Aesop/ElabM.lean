@@ -55,9 +55,4 @@ def shouldParsePriorities : ElabM Bool :=
 def getGoal : ElabM MVarId :=
   return (← read).goal
 
-def getRuleName : Expr → MetaM Name
-  | .const decl _ => return decl
-  | .fvar fvarId => return (← fvarId.getDecl).userName
-  | _ => mkFreshId
-
 end Aesop

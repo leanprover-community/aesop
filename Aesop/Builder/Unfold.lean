@@ -33,10 +33,13 @@ def checkUnfoldableConst (decl : Name) : MetaM (Option Name) :=
           throwError "Recursive definition '{decl}' cannot be used as an unfold rule (it would be unfolded infinitely often). Try adding a simp rule for it."
     return unfoldThm?
 
+def unfoldCore (decl : Name) : MetaM LocalRuleSetMember := do
+  let unfoldThm? ← checkUnfoldableConst decl
+  return .global $ .base $ .unfoldRule { decl, unfoldThm? }
+
 -- TODO support local unfold rules
 def unfold : RuleBuilder := λ input => do
   let decl ← elabGlobalRuleIdent .unfold input.term
-  let unfoldThm? ← checkUnfoldableConst decl
-  return .global $ .base $ .unfoldRule { decl, unfoldThm? }
+  unfoldCore decl
 
 end Aesop.RuleBuilder

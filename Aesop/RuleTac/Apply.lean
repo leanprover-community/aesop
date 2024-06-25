@@ -59,6 +59,12 @@ def applyTerm (stx : Term) (pat? : Option RulePattern) (md : TransparencyMode) :
     applyExpr input.goal (← elabRuleTermForApplyLikeMetaM input.goal stx) stx
       pat? input.patternInstantiations md
 
+def apply (t : RuleTerm) (pat? : Option RulePattern) (md : TransparencyMode) :
+    RuleTac :=
+  match t with
+  | .const decl => applyConst decl pat? md
+  | .term tm => applyTerm tm pat? md
+
 -- Tries to apply each constant in `decls`. For each one that applies, a rule
 -- application is returned. If none applies, the tactic fails.
 def applyConsts (decls : Array Name) (md : TransparencyMode) :

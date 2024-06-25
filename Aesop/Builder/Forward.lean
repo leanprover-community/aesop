@@ -19,6 +19,10 @@ def forwardTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
 def forwardIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
   opts.indexTransparency?.getD .reducible
 
+end RuleBuilderOptions
+
+namespace RuleBuilder
+
 private def forwardIndexingModeCore (type : Expr)
     (immediate : UnorderedArraySet Nat) (md : TransparencyMode) :
     MetaM IndexingMode := do
@@ -36,20 +40,15 @@ private def forwardIndexingModeCore (type : Expr)
         "aesop: internal error: immediate arg for forward rule is out of range"
   | none => return .unindexed
 
-def forwardIndexingMode (type : Expr)
-    (immediate : UnorderedArraySet Nat) (opts : RuleBuilderOptions) :
-    MetaM IndexingMode := do
-  opts.indexingMode?.getDM do
-    if opts.forwardIndexTransparency != .reducible then
-      return .unindexed
-    else
-      forwardIndexingModeCore type immediate opts.forwardTransparency
+def getForwardIndexingMode (type : Expr) (immediate : UnorderedArraySet Nat)
+    (md indexMd : TransparencyMode) : MetaM IndexingMode := do
+  if indexMd != .reducible then
+    return .unindexed
+  else
+    forwardIndexingModeCore type immediate md
 
-end RuleBuilderOptions
 
-namespace RuleBuilder
-
-def getImmediatePremises (stx : Term) (type : Expr) (pat? : Option RulePattern)
+def getImmediatePremises  (type : Expr) (pat? : Option RulePattern)
     (md : TransparencyMode) :
     Option (Array Name) → MetaM (UnorderedArraySet Nat)
   | none =>
@@ -80,12 +79,12 @@ def getImmediatePremises (stx : Term) (type : Expr) (pat? : Option RulePattern)
         let argName := (← args[i].fvarId!.getDecl).userName
         if immediate.contains argName then
           if isPatternInstantiated i then
-            throwError "{errPrefix}: argument '{argName}' cannot be immediate since it is already determined by a pattern"
+            throwError "{errPrefix}argument '{argName}' cannot be immediate since it is already determined by a pattern"
           else
             result := result.push i
             unseen := unseen.erase argName
       if ! unseen.isEmpty then throwError
-        "{errPrefix}: function does not have arguments with these names: '{unseen}'"
+        "{errPrefix}function does not have arguments with these names: '{unseen}'"
       return UnorderedArraySet.ofDeduplicatedArray result
 where
   isPatternInstantiated (i : Nat) : Bool :=
@@ -93,40 +92,33 @@ where
     idx?.isSome
 
   errPrefix : MessageData :=
-    m!"aesop: while registering '{stx}' as a forward rule"
+    m!"aesop: forward builder: "
 
-def forwardCore (isDestruct : Bool) : RuleBuilder := λ input => do
+def forwardCore (t : ElabRuleTerm) (immediate? : Option (Array Name))
+    (pat? : Option RulePattern) (imode? : Option IndexingMode)
+    (md indexMd : TransparencyMode) (phase : PhaseSpec) (isDestruct : Bool) :
+    MetaM LocalRuleSetMember := do
+  let builderName : BuilderName := if isDestruct then .destruct else .forward
+  if let .all := md then
+    throwError "aesop: forward builder currently does not support transparency 'all'"
+  let type ← inferType (← t.expr)
+  aesop_trace[debug] "decl type: {type}"
+  let immediate ← getImmediatePremises type pat? md immediate?
+  aesop_trace[debug] "immediate premises: {immediate}"
+  let imode ← imode?.getDM $ getForwardIndexingMode type immediate md indexMd
+  let tac := .forward t.toRuleTerm pat? immediate isDestruct md
+  return .global $ .base $
+    phase.toRule (← t.name) builderName t.scope tac imode pat?
+
+def forward (isDestruct : Bool) : RuleBuilder := λ input => do
   withConstAesopTraceNode .debug (return "forward builder") do
-    let builderName : BuilderName := if isDestruct then .destruct else .forward
     let opts := input.options
-    if let .all := opts.forwardTransparency then
-      throwError "aesop: forward builder currently does not support transparency 'all'"
     let e ← elabRuleTermForApplyLike input.term
+    let t := ElabRuleTerm.ofElaboratedTerm input.term e
     let type ← inferType e
-    aesop_trace[debug] "decl type: {type}"
     let pat? ← opts.pattern?.mapM (RulePattern.elab · type)
-    let immediate ←
-      getImmediatePremises input.term type pat? opts.forwardTransparency
-        opts.immediatePremises?
-    aesop_trace[debug] "immediate premises: {immediate}"
-    let imode ← opts.forwardIndexingMode type immediate
-    if let some decl := e.constName? then
-      let tac :=
-        .forwardConst decl pat? immediate isDestruct opts.forwardTransparency
-      return .global $ .base $
-        input.toRule builderName decl .global tac imode pat?
-    else
-      let tac :=
-        .forwardTerm input.term pat? immediate isDestruct
-          opts.forwardTransparency
-      let name ← getRuleName e
-      return .global $ .base $
-        input.toRule builderName name .local tac imode pat?
-
-def forward : RuleBuilder :=
-  forwardCore (isDestruct := false)
-
-def destruct : RuleBuilder :=
-  forwardCore (isDestruct := true)
+    forwardCore t opts.immediatePremises? pat? opts.indexingMode?
+      opts.forwardTransparency opts.forwardIndexTransparency input.phase
+      (isDestruct := isDestruct)
 
 end Aesop.RuleBuilder

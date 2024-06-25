@@ -25,28 +25,28 @@ private def getSimpEntriesForConst (decl : Name) : MetaM (Array SimpEntry) := do
     thms ← thms.addDeclToUnfold decl
   return SimpTheorems.simpEntries thms
 
-def RuleBuilderInput.getSimpPrio [Monad m] [MonadError m]
-    (input : RuleBuilderInput) : m Nat :=
-  match input.extra with
-  | .norm penalty =>
-    if penalty ≥ 0 then
-      return penalty.toNat
+def PhaseSpec.getSimpPrio [Monad m] [MonadError m] : PhaseSpec → m Nat
+  | .norm info =>
+    if info.penalty ≥ 0 then
+      return info.penalty.toNat
     else
       throwError "aesop: simp rules must be given a non-negative integer priority"
   | _ => throwError "aesop: simp builder can only construct 'norm' rules"
 
-def RuleBuilder.simp : RuleBuilder := λ input => do
+namespace RuleBuilder
+
+def simpCore (decl : Name) (phase : PhaseSpec) : MetaM LocalRuleSetMember :=
+  withExceptionTransform (λ msg => m!"aesop: simp builder: exception while trying to add {decl} as a simp theorem:{indentD msg}") do
+    let entries ← getSimpEntriesForConst decl
+    let prio ← phase.getSimpPrio
+    let entries := entries.map (updateSimpEntryPriority prio)
+    let name :=
+      { name := decl, scope := .global, builder := .simp, phase := .norm }
+    return .global $ .normSimpRule { name, entries }
+
+def simp : RuleBuilder := λ input => do
   if let some decl ← elabGlobalRuleIdent? input.term then
-    try {
-      let entries ← getSimpEntriesForConst decl
-      let prio ← input.getSimpPrio
-      let entries := entries.map (updateSimpEntryPriority prio)
-      let name :=
-        { name := decl, scope := .global, builder := .simp, phase := .norm }
-      return .global $ .normSimpRule { name, entries }
-    } catch e => {
-      throwError "aesop: simp builder: exception while trying to add {decl} as a simp theorem:{indentD e.toMessageData}"
-    }
+    simpCore decl input.phase
   else
     checkElabRuleTermForSimp input.term (isSimpAll := true) -- TODO (isSimpAll := true) correct?
     return .localNormSimpRule {
@@ -54,4 +54,4 @@ def RuleBuilder.simp : RuleBuilder := λ input => do
       simpTheorem := input.term
     }
 
-end Aesop
+end Aesop.RuleBuilder

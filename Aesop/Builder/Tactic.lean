@@ -6,21 +6,26 @@ Authors: Jannis Limperg
 
 import Aesop.Builder.Basic
 
-open Lean
-open Lean.Meta
+open Lean Lean.Meta
 open Lean.Elab.Tactic (TacticM)
+open Lean.Parser.Tactic (tacticSeq)
 
 namespace Aesop
 
-def matchByTactic : Term → Option (TSyntax ``Parser.Tactic.tacticSeq)
+def matchByTactic? : Term → Option (TSyntax ``tacticSeq)
   | `(by $ts:tacticSeq) => some ts
   | _ => none
 
-def RuleBuilder.tactic : RuleBuilder := λ input => do
-  let opts := input.options
-  let imode := opts.indexingMode?.getD .unindexed
-  if input.term.raw.isIdent then
-    let decl ← elabGlobalRuleIdent .tactic input.term
+namespace RuleBuilder
+
+def tacticIMode (imode? : Option IndexingMode) : IndexingMode :=
+  imode?.getD .unindexed
+
+def tacticCore (t : Sum Name (TSyntax ``tacticSeq)) (imode? : Option IndexingMode) (phase : PhaseSpec) :
+    MetaM LocalRuleSetMember := do
+  let imode := imode?.getD .unindexed
+  match t with
+  | .inl decl =>
     let type := (← getConstInfo decl).type
     let tac ←
       if ← isDefEq (mkApp (mkConst ``TacticM) (mkConst ``Unit)) type then
@@ -33,12 +38,21 @@ def RuleBuilder.tactic : RuleBuilder := λ input => do
         pure $ .tacGen decl
       else
         throwError "aesop: tactic builder: expected {decl} to be a tactic, i.e. to have one of these types:\n  TacticM Unit\n  SimpleRuleTac\n  RuleTac\n  TacGen\nHowever, it has type{indentExpr type}"
-    return .global $ .base $ input.toRule .tactic decl .global tac imode none
-  else if let some stx := matchByTactic input.term then
+    return .global $ .base $ phase.toRule decl .tactic .global tac imode none
+  | .inr tacticSeq =>
     let name ← mkFreshId
-    let tac := .tacticStx stx
-    return .global $ .base $ input.toRule .tactic name .global tac imode none
-  else
-    throwError "aesop: tactic builder: expected '{input.term}' to be a tactic"
+    let tac := .tacticStx tacticSeq
+    return .global $ .base $ phase.toRule name .tactic .global tac imode none
 
-end Aesop
+def tactic : RuleBuilder := λ input => do
+  let opts := input.options
+  let t ←
+    if input.term.raw.isIdent then
+      .inl <$> elabGlobalRuleIdent .tactic input.term
+    else if let some stx := matchByTactic? input.term then
+      pure $ .inr stx
+    else
+      throwError "aesop: tactic builder: expected '{input.term}' to be a tactic"
+  tacticCore t opts.indexingMode? input.phase
+
+end Aesop.RuleBuilder

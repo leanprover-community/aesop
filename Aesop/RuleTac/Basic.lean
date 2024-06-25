@@ -135,14 +135,14 @@ inductive CasesTarget
   | patterns (patterns : Array CasesPattern)
   deriving Inhabited
 
+inductive RuleTerm
+  | const (decl : Name)
+  | term (term : Term)
+
 inductive RuleTacDescr
-  | applyConst (decl : Name) (md : TransparencyMode) (pat? : Option RulePattern)
-  | applyTerm (term : Term) (md : TransparencyMode) (pat? : Option RulePattern)
+  | apply (term : RuleTerm) (md : TransparencyMode) (pat? : Option RulePattern)
   | constructors (constructorNames : Array Name) (md : TransparencyMode)
-  | forwardConst (decl : Name) (pat? : Option RulePattern)
-      (immediate : UnorderedArraySet Nat) (isDestruct : Bool)
-      (md : TransparencyMode)
-  | forwardTerm (term : Term) (pat? : Option RulePattern)
+  | forward (term : RuleTerm) (pat? : Option RulePattern)
       (immediate : UnorderedArraySet Nat) (isDestruct : Bool)
       (md : TransparencyMode)
   | cases (target : CasesTarget) (md : TransparencyMode)

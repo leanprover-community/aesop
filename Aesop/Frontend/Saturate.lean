@@ -34,11 +34,11 @@ def elabGlobalRuleSets (rsNames : Array Ident) :
 def elabForwardRule (term : Term) : ElabM LocalRuleSetMember := do
   let builderInput := {
     options := ∅
-    extra := .safe 1 .safe
+    phase := .safe { penalty := 1, safety := .safe }
     term
   }
   let ctx := { parsePriorities := true, goal := (← read).goal }
-  RuleBuilder.forward builderInput |>.run ctx
+  RuleBuilder.forward (isDestruct := false) builderInput |>.run ctx
 
 def mkHypForwardRule (fvarId : FVarId) : ElabM LocalRuleSetMember := do
   elabForwardRule (← delab $ .fvar fvarId)

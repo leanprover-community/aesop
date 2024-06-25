@@ -22,7 +22,7 @@ namespace Aesop
 -- intended to add a simp lemma.
 
 def RuleBuilder.default : RuleBuilder := λ input =>
-  match input.phase with
+  match input.phase.phase with
   | .safe =>
     constructors input <|>
     tactic input <|>

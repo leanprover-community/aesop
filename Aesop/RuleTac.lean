@@ -15,14 +15,11 @@ open Lean
 
 namespace Aesop.RuleTacDescr
 
-protected def run : RuleTacDescr → RuleTacInput → MetaM RuleTacOutput
-  | applyConst decl md pat? => RuleTac.applyConst decl pat? md
-  | applyTerm stx md pat? => RuleTac.applyTerm stx pat? md
+protected def run : RuleTacDescr → RuleTac
+  | apply t md pat? => RuleTac.apply t pat? md
   | constructors cs md => RuleTac.applyConsts cs md
-  | forwardConst decl pat? immediate clear md =>
-    RuleTac.forwardConst decl pat? immediate clear md
-  | forwardTerm stx pat? immediate clear md =>
-    RuleTac.forwardTerm stx pat? immediate clear md
+  | forward t pat? immediate clear md =>
+    RuleTac.forward t pat? immediate clear md
   | cases target md isRecursiveType ctorNames =>
     RuleTac.cases target md isRecursiveType ctorNames
   | tacticM decl => RuleTac.tacticM decl

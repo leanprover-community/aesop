@@ -451,13 +451,18 @@ def Name.ofComponents (cs : List Name) : Name :=
     | result, .anonymous => result
 
 @[macro_inline]
-def withExceptionPrefix [Monad m] [MonadError m] (pre : MessageData) (x : m α) :
-    m α := do
+def withExceptionTransform [Monad m] [MonadError m]
+    (f : MessageData → MessageData) (x : m α) : m α := do
   try
     x
   catch e =>
     match e with
     | .internal _ _ => throw e
-    | .error ref msg => throw $ .error ref (pre ++ msg)
+    | .error ref msg => throw $ .error ref (f msg)
+
+@[macro_inline]
+def withExceptionPrefix [Monad m] [MonadError m] (pre : MessageData) :
+    m α → m α :=
+  withExceptionTransform (λ msg => pre ++ msg)
 
 end Aesop
