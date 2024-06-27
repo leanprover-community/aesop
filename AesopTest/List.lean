@@ -855,7 +855,7 @@ theorem map_reverse_core (f : α → β) (l₁ l₂ : List α) :
 
 attribute [-simp] mem_reverse
 @[simp] theorem X.mem_reverse {a : α} {l : List α} : a ∈ reverse l ↔ a ∈ l := by
-  induction l <;> set_option aesop.check.script false in aesop -- TODO
+  induction l <;> aesop
 
 @[simp] theorem reverse_replicate (a : α) (n) : reverse (replicate n a) = replicate n a :=
   ADMIT -- Several missing lemmas.
