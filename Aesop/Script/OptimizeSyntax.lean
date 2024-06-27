@@ -78,11 +78,9 @@ end SyntaxRewriteMap
 
 partial def optimizeSyntaxWith (rws : SyntaxRewriteMap) (stx : Syntax) :
     CoreM Syntax := do
-  trace[debug] "rewrite keys: {rws.toPHashMap.toArray.map (·.1)}"
   go stx
 where
   go (stx : Syntax) : CoreM Syntax := withIncRecDepth do
-    trace[debug] "stx:{indentD stx}"
     match stx with
     | .missing => return .missing
     | .node info kind args =>
@@ -95,11 +93,9 @@ where
     while true do
       let some rws := rws.findStx? stx
         | return stx
-      trace[debug] "found {rws.length} rewrites"
       let some stx' ← rws.findSomeM? (·.run stx)
         | return stx
       stx := stx'
-      trace[debug] "rewrite successful:{indentD stx}"
     return stx
 
 def SyntaxRewrite.focusRenameI : SyntaxRewrite where
