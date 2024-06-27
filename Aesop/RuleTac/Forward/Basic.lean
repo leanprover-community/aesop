@@ -99,4 +99,28 @@ def getForwardHypData : MetaM ForwardHypData := do
         depths := depths.insert ldecl.fvarId depth
   return { types, depths }
 
+/--
+Mark hypotheses that, according to their name, are forward implementation detail
+hypotheses, as implementation details. This is a hack that works around the
+fact that certain tactics (particularly anything based on the revert-intro
+pattern can turn implementation detail hyps into regular hyps).
+-/
+def hideForwardImplDetailHyps (goal : MVarId) : MetaM MVarId :=
+  goal.withContext do
+    let mut lctx ← getLCtx
+    let mut localInsts ← getLocalInstances
+    let mut anyChange := false
+    for ldecl in ← getLCtx do
+      if ! ldecl.isImplementationDetail &&
+         isForwardImplDetailHypName ldecl.userName then
+        lctx := lctx.setKind ldecl.fvarId .implDetail
+        localInsts := localInsts.erase ldecl.fvarId
+        anyChange := true
+    if ! anyChange then
+      return goal
+    let goal' ← mkFreshExprMVarAt lctx localInsts (← goal.getType)
+    goal.assign goal'
+    return goal'.mvarId!
+
+
 end Aesop

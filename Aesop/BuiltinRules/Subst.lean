@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Frontend.Attribute
+import Aesop.RuleTac.Forward.Basic
 
 open Lean Lean.Meta Aesop.Script
 
@@ -53,12 +54,13 @@ def getSubstitutableEqs (goal : MVarId) (fvarIds : Array FVarId) :
   return (goal, eqs)
 
 def substFVars (goal : MVarId) (fvarIds : Array FVarId) :
-    ScriptM MVarId := do
+    ScriptM (Option MVarId) := do
   let (goal, eqs) ← getSubstitutableEqs goal fvarIds
   let preGoal := goal
   let mut goal := goal
   let mut substitutedFVarIds := Array.mkEmpty fvarIds.size
   let mut fvarSubst : FVarSubst := {}
+  let mut anySuccess := false
   let preState ← show MetaM _ from saveState
   for eq in eqs do
     let (.fvar fvarId) := fvarSubst.get eq.fvarId | throwError
@@ -68,6 +70,10 @@ def substFVars (goal : MVarId) (fvarIds : Array FVarId) :
       goal := goal'
       fvarSubst := fvarSubst'
       substitutedFVarIds := substitutedFVarIds.push eq.fvarId
+      anySuccess := true
+  if ! anySuccess then
+    return none
+  goal ← hideForwardImplDetailHyps goal -- HACK
   let postState ← show MetaM _ from saveState
   recordScriptStep {
     postGoals := #[goal]
@@ -82,9 +88,8 @@ def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
     let hyps ← input.indexMatchLocations.toArray.mapM λ
       | .hyp ldecl => pure ldecl.fvarId
       | _ => throwError "unexpected index match location"
-    let (goal, steps) ← substFVars input.goal hyps |>.run
-    if goal == input.goal then
-      throwError "no suitable hypothesis found"
+    let (some goal, steps) ← substFVars input.goal hyps |>.run
+      | throwError "no suitable hypothesis found"
     return (#[goal], steps, none)
 
 end Aesop.BuiltinRules

@@ -36,11 +36,6 @@ def matchGoals (postState₁ postState₂ : Meta.SavedState)
   let (equal, s) ←
     tacticStatesEqualUpToIds' none postState₁.meta.mctx
       postState₂.meta.mctx goals₁ goals₂ (allowAssignmentDiff := true)
-        (ignoreFVar := λ ldecl => isForwardImplDetailHypName ldecl.userName)
-      -- HACK ignoreFVar excludes the _fwd hypotheses added by forward rules.
-      -- These are supposed to be `implDetail` hypotheses, which are ignored,
-      -- but tactics using the revert/intro pattern, such as `subst`, can remove
-      -- the `implDetail` attribute from these hypotheses.
   if ! equal then
     return none
   else
