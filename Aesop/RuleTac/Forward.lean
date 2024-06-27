@@ -16,42 +16,6 @@ open Lean.Meta
 
 namespace Aesop.RuleTac
 
-def isForwardImplDetailHyp (ldecl : LocalDecl) : Bool :=
-  ldecl.isImplementationDetail && isForwardImplDetailHypName ldecl.userName
-
-def getForwardImplDetailHyps : MetaM (Array LocalDecl) := do
- let mut result := #[]
- for ldecl in ← getLCtx do
-    if isForwardImplDetailHyp ldecl then
-      result := result.push ldecl
-  return result
-
-def _root_.Aesop.clearForwardImplDetailHyps (goal : MVarId) : MetaM MVarId :=
-  goal.withContext do
-    let hyps ← getForwardImplDetailHyps
-    goal.tryClearMany $ hyps.map (·.fvarId)
-
-structure ForwardHypData where
-  /--
-  Types of the hypotheses that have already been added by forward reasoning.
-  -/
-  types : HashSet Expr
-  /--
-  Depths of the hypotheses that have already been added by forward reasoning.
-  -/
-  depths : HashMap FVarId Nat
-
-def getForwardHypData : MetaM ForwardHypData := do
-  let ldecls ← getForwardImplDetailHyps
-  let mut types := ∅
-  let mut depths := ∅
-  for ldecl in ldecls do
-    types := types.insert (← instantiateMVars ldecl.type)
-    if let some (depth, name) := matchForwardImplDetailHypName ldecl.userName then
-      if let some ldecl := (← getLCtx).findFromUserName? name then
-        depths := depths.insert ldecl.fvarId depth
-  return { types, depths }
-
 partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
     (patInst : RulePatternInstantiation) (immediate : UnorderedArraySet Nat)
     (maxDepth? : Option Nat) (forwardHypData : ForwardHypData) :
