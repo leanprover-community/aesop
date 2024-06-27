@@ -8,61 +8,155 @@ import Aesop
 
 set_option aesop.check.all true
 set_option aesop.smallErrorMessages true
+set_option pp.mvars false
 
 open Aesop Lean Lean.Meta Lean.Elab.Tactic
 
 /-! # Unit tests for the MetaM tactic that implements forward rules -/
 
-syntax (name := forward) "forward " ident (" [" ident* "]")? : tactic
-syntax (name := elim)    "elim "    ident (" [" ident* "]")? : tactic
+syntax (name := forward) "t_forward " ident (" [" ident* "]")? : tactic
+syntax (name := elim)    "t_elim "    ident (" [" ident* "]")? : tactic
 
 def forwardTac (goal : MVarId) (id : Ident) (immediate : Option (Array Syntax))
     (clear : Bool) (md : TransparencyMode) : MetaM (List MVarId) := do
   let userName := id.getId
   let ldecl ← getLocalDeclFromUserName userName
-  let immediate ← RuleBuilder.getImmediatePremises id ldecl.type
-    none md (immediate.map (·.map (·.getId)))
+  let immediate ← RuleBuilder.getImmediatePremises ldecl.type none md
+    (immediate.map (·.map (·.getId)))
   let (goal, _) ←
     RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) none ∅ immediate clear
-      md |>.run
+      md (maxDepth? := none) |>.run
   return [goal]
 
 @[tactic forward]
 def evalForward : Tactic
-  | `(tactic| forward $t:ident $[[ $immediate:ident* ]]?) =>
+  | `(tactic| t_forward $t:ident $[[ $immediate:ident* ]]?) =>
     liftMetaTactic (forwardTac · t immediate (clear := false) .default)
   | _ => unreachable!
 
 @[tactic elim]
 def evalElim : Tactic
-  | `(tactic| elim $t:ident $[[ $immediate:ident* ]]?) =>
+  | `(tactic| t_elim $t:ident $[[ $immediate:ident* ]]?) =>
     liftMetaTactic (forwardTac · t immediate (clear := true) .default)
   | _ => unreachable!
 
 example (rule : (a : α) → (b : β) → γ) (h₁ : α) (h₂ : β) : γ := by
-  forward rule [a b]
+  t_forward rule [a b]
   assumption
 
 example {P Q R : α → Type} (rule : ∀ a (p : P a) (q : Q a), R a)
     (h₁ : P a) (h₁' : P a) (h₂ : Q a) (h₃ : P b) (h₄ : Q c) : R a := by
-  forward rule [p q]
+  t_forward rule [p q]
   assumption
 
 example {P Q R : α → Type} (rule : ∀ a (p : P a) (q : Q a), R a)
     (h₁ : P a) (h₁' : P a) (h₂ : Q a) (h₃ : P b) (h₄ : Q c) : R a := by
-  forward rule
+  t_forward rule
   assumption
 
 example {P Q R : α → Type} (rule : ∀ a (p : P a) (q : Q a), R a)
     (h₁ : P a) (h₂ : P b) : (Q a → R a) × (Q b → R b) := by
-  forward rule [p]
+  t_forward rule [p]
   exact (by assumption, by assumption)
 
 example (rule : ∀ α β, α ∧ β → α) (h : P ∧ Q ∧ R) : P := by
-  elim rule
+  t_elim rule
   assumption
 
-/-! # End-to-end tests -/
+/-! # Tests for the `forward` and `saturate` tactics -/
+
+example (rule : ∀ α β, α ∧ β → α) (h : P ∧ Q ∧ R) : P := by
+  forward [*]
+  guard_hyp fwd : P
+  assumption
+
+example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
+    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+  saturate [*]
+  guard_hyp fwd : γ₁ ∧ γ₂
+  guard_hyp fwd_1 : δ₁ ∧ δ₂
+  aesop
+
+example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
+  saturate [*]
+  guard_hyp fwd : β
+  guard_hyp fwd_1 : γ
+  assumption
+
+/--
+error: unsolved goals
+α β γ : Prop
+h₁ : α → β
+h₂ : β → γ
+h₃ : α
+fwd : β
+⊢ γ
+-/
+#guard_msgs in
+example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
+  forward [*]
+
+/--
+error: unsolved goals
+α β γ : Prop
+h₁ : α → β
+h₂ : β → γ
+h₃ : α
+fwd : β
+⊢ γ
+-/
+#guard_msgs in
+example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
+  saturate 1 [*]
+
+/--
+error: unsolved goals
+α β γ δ : Prop
+h₁ : α → β
+h₂ : β → γ
+h₃ : γ → δ
+h₄ : α
+fwd : β
+fwd_1 : γ
+⊢ δ
+-/
+#guard_msgs in
+example {α β γ δ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : γ → δ) (h₄ : α) : δ := by
+  saturate 2 [*]
+
+/--
+error: unsolved goals
+α β γ δ : Prop
+h₁ : α → β
+h₂ : α → γ
+h₃ : β → γ → δ
+h₄ : α
+fwd : β
+fwd_1 : γ
+⊢ δ
+-/
+#guard_msgs in
+example {α β γ δ : Prop} (h₁ : α → β) (h₂ : α → γ) (h₃ : β → γ → δ) (h₄ : α) : δ := by
+  saturate 1 [*]
+
+axiom A : Type
+axiom B : Type
+axiom C : Type
+
+@[aesop safe forward]
+axiom ab : A → B
+
+@[aesop norm forward]
+axiom bc : B → C
+
+noncomputable example : A → C := by
+  intro a
+  saturate
+  guard_hyp fwd : B
+  guard_hyp fwd_1 : C
+  exact fwd_1
+
+/-! # Tests for Aesop's forward rules -/
 
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by

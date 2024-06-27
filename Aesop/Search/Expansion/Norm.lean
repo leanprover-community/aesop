@@ -73,7 +73,7 @@ def withNormTraceNode (ruleName : DisplayRuleName)
 def runNormRuleTac (rule : NormRule) (input : RuleTacInput) :
     MetaM (Option NormRuleResult) := do
   let preMetaState ← saveState
-  let result? ← runRuleTac input.options rule.tac.run rule.name preMetaState input
+  let result? ← runRuleTac rule.tac.run rule.name preMetaState input
   match result? with
   | Sum.inl e =>
     aesop_trace[steps] e.toMessageData

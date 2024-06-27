@@ -444,4 +444,25 @@ where
   dummyLDecl (name : Name) : LocalDecl :=
     .cdecl 0 ⟨`_⟩ name (.sort levelZero) .default .default
 
+def Name.ofComponents (cs : List Name) : Name :=
+  cs.foldl (init := .anonymous) λ
+    | result, .str _ s => .str result s
+    | result, .num _ n => .num result n
+    | result, .anonymous => result
+
+@[macro_inline]
+def withExceptionTransform [Monad m] [MonadError m]
+    (f : MessageData → MessageData) (x : m α) : m α := do
+  try
+    x
+  catch e =>
+    match e with
+    | .internal _ _ => throw e
+    | .error ref msg => throw $ .error ref (f msg)
+
+@[macro_inline]
+def withExceptionPrefix [Monad m] [MonadError m] (pre : MessageData) :
+    m α → m α :=
+  withExceptionTransform (λ msg => pre ++ msg)
+
 end Aesop

@@ -140,8 +140,8 @@ def toRuleBuilder : DBuilderName → RuleBuilder
   | .regular .apply => RuleBuilder.apply
   | .regular .cases => RuleBuilder.cases
   | .regular .constructors => RuleBuilder.constructors
-  | .regular .destruct => RuleBuilder.destruct
-  | .regular .forward => RuleBuilder.forward
+  | .regular .destruct => RuleBuilder.forward (isDestruct := true)
+  | .regular .forward => RuleBuilder.forward (isDestruct := false)
   | .regular .simp => RuleBuilder.simp
   | .regular .tactic => RuleBuilder.tactic
   | .regular .unfold => RuleBuilder.unfold
@@ -441,20 +441,20 @@ def getBuilder (c : RuleConfig) : m DBuilderName := do
     "missing rule builder (apply, forward, simp, ...)"
   return builder
 
-def getExtraRuleBuilderInput (c : RuleConfig) : m ExtraRuleBuilderInput := do
+def getPhaseSpec (c : RuleConfig) : m PhaseSpec := do
   match ← c.getPhase with
   | .safe =>
-    return .safe (← c.getPenalty .safe) .safe
+    return .safe { penalty := ← c.getPenalty .safe, safety := .safe }
   | .unsafe =>
-    return .unsafe (← c.getSuccessProbability)
+    return .unsafe { successProbability := ← c.getSuccessProbability }
   | .norm =>
-    return .norm (← c.getPenalty .norm)
+    return .norm { penalty := ← c.getPenalty .norm }
 
 def getRuleBuilderInput (c : RuleConfig) : TermElabM RuleBuilderInput := do
   let term ← c.getTerm
-  let extra ← c.getExtraRuleBuilderInput
+  let phase ← c.getPhaseSpec
   let options := c.builderOptions
-  return { term, options, extra }
+  return { term, options, phase }
 
 def buildRule (c : RuleConfig) :
     ElabM (LocalRuleSetMember × Array RuleSetName) := do

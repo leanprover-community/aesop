@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.ElabM
+import Aesop.Rule.Name
 import Aesop.RuleSet.Member
 import Aesop.RuleTac.ElabRuleTerm
 
@@ -35,56 +36,64 @@ protected def default : RuleBuilderOptions :=
 instance : EmptyCollection RuleBuilderOptions :=
   ⟨.default⟩
 
-def getIndexingModeM [Monad m] (dflt : m IndexingMode)
-    (opts : RuleBuilderOptions) : m IndexingMode :=
-  match opts.indexingMode? with
-  | none => dflt
-  | some imode => return imode
-
 end RuleBuilderOptions
 
+structure CoreRuleBuilderOutput where
+  ruleExprName : Name
+  builderName : BuilderName
+  scopeName : ScopeName
+  tac : RuleTacDescr
+  indexingMode : IndexingMode
+  pattern? : Option RulePattern
 
-inductive ExtraRuleBuilderInput
-  | safe (penalty : Int) (safety : Safety)
-  | norm (penalty : Int)
-  | «unsafe» (successProbability : Percent)
+inductive PhaseSpec
+  | safe (info : SafeRuleInfo)
+  | norm (info : NormRuleInfo)
+  | «unsafe» (info : UnsafeRuleInfo)
   deriving Inhabited
 
-def ExtraRuleBuilderInput.phase : ExtraRuleBuilderInput → PhaseName
+namespace PhaseSpec
+
+def phase : PhaseSpec → PhaseName
   | safe .. => .safe
   | «unsafe» .. => .unsafe
   | norm .. => .norm
+
+def toRule (phase : PhaseSpec) (ruleExprName : Name) (builder : BuilderName)
+    (scope : ScopeName) (tac : RuleTacDescr) (indexingMode : IndexingMode)
+    (pattern? : Option RulePattern) : BaseRuleSetMember :=
+  let name := {
+    name := ruleExprName
+    phase := phase.phase
+    builder, scope
+  }
+  match phase with
+  | .safe info => .safeRule {
+      extra := info
+      name, indexingMode, pattern?, tac
+    }
+  | .unsafe info => .unsafeRule {
+      extra := info
+      name, indexingMode, pattern?, tac
+    }
+  | .norm info => .normRule {
+      extra := info
+      name, indexingMode, pattern?, tac
+    }
+
+end PhaseSpec
 
 
 structure RuleBuilderInput where
   term : Term
   options : RuleBuilderOptions
-  extra : ExtraRuleBuilderInput
+  phase : PhaseSpec
   deriving Inhabited
 
 namespace RuleBuilderInput
 
-def phase (input : RuleBuilderInput) : PhaseName :=
-  input.extra.phase
-
-def toRule (builder : BuilderName) (name : Name) (scope : ScopeName)
-    (tac : RuleTacDescr) (indexingMode : IndexingMode)
-    (pattern? : Option RulePattern) (input : RuleBuilderInput) :
-    BaseRuleSetMember :=
-  let name := { name, builder, scope, phase := input.phase }
-  match input.extra with
-  | .safe penalty safety => .safeRule {
-      extra := { penalty, safety }
-      name, indexingMode, tac, pattern?
-    }
-  | .unsafe successProbability => .unsafeRule {
-      extra := { successProbability }
-      name, indexingMode, tac, pattern?
-    }
-  | .norm penalty => .normRule {
-      extra := { penalty }
-      name, indexingMode, tac, pattern?
-    }
+def phaseName (input : RuleBuilderInput) : PhaseName :=
+  input.phase.phase
 
 end RuleBuilderInput
 
@@ -106,4 +115,32 @@ def elabInductiveRuleIdent (builderName : BuilderName) (term : Term) :
   else
     throwError "aesop: {builderName} builder: expected '{term}' to be an inductive type or structure"
 
-end Aesop
+inductive ElabRuleTerm
+  | const (decl : Name)
+  | term (term : Term) (expr : Expr)
+
+namespace ElabRuleTerm
+
+def expr : ElabRuleTerm → MetaM Expr
+  | const decl => mkConstWithFreshMVarLevels decl
+  | term _ e => return e
+
+def scope : ElabRuleTerm → ScopeName
+  | const .. => .global
+  | term .. => .local
+
+def name : ElabRuleTerm → MetaM Name
+  | const decl => return decl
+  | term _ e => getRuleNameForExpr e
+
+def toRuleTerm : ElabRuleTerm → RuleTerm
+  | const decl => .const decl
+  | term t _ => .term t
+
+def ofElaboratedTerm (tm : Term) (expr : Expr) : ElabRuleTerm :=
+  if let some decl := expr.constName? then
+    .const decl
+  else
+    .term tm expr
+
+end Aesop.ElabRuleTerm

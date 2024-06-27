@@ -38,42 +38,46 @@ def casesIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
 def casesPatterns (opts : RuleBuilderOptions) : Array CasesPattern :=
   opts.casesPatterns?.getD #[]
 
-def casesIndexingMode (decl : Name) (opts : RuleBuilderOptions) :
-    MetaM IndexingMode :=
-  opts.getIndexingModeM do
-    if opts.casesIndexTransparency != .reducible then
-      return .unindexed
-    let casesPatterns := opts.casesPatterns
-    if casesPatterns.isEmpty then
-      IndexingMode.hypsMatchingConst decl
-    else
-      .or <$> casesPatterns.mapM (·.toIndexingMode)
+end RuleBuilderOptions
 
-def casesTarget (decl : Name) (opts : RuleBuilderOptions) : CasesTarget :=
-  let casesPatterns := opts.casesPatterns
-  if opts.casesPatterns.isEmpty then
+namespace RuleBuilder
+
+def mkCasesTarget (decl : Name) (casesPatterns : Array CasesPattern) :
+    CasesTarget :=
+  if casesPatterns.isEmpty then
     .decl decl
   else
     .patterns casesPatterns
 
-end RuleBuilderOptions
+def getCasesIndexingMode (decl : Name) (indexMd : TransparencyMode)
+    (casesPatterns : Array CasesPattern) : MetaM IndexingMode := do
+  if indexMd != .reducible then
+    return .unindexed
+  if casesPatterns.isEmpty then
+    IndexingMode.hypsMatchingConst decl
+  else
+    .or <$> casesPatterns.mapM (·.toIndexingMode)
 
+def casesCore (info : InductiveVal) (pats : Array CasesPattern)
+    (imode? : Option IndexingMode) (md indexMd : TransparencyMode)
+    (phase : PhaseSpec) : MetaM LocalRuleSetMember := do
+  let decl := info.name
+  pats.forM (·.check decl)
+  let imode ← imode?.getDM $ getCasesIndexingMode decl indexMd pats
+  let target := mkCasesTarget decl pats
+  let ctorNames ← mkCtorNames info
+  let tac := .cases target md info.isRec ctorNames
+  return .global $ .base $ phase.toRule decl .cases .global tac imode none
 
-def RuleBuilder.cases : RuleBuilder := λ input => do
-    if input.phase == .norm then throwError
-      "cases builder cannot currently be used for norm rules."
-      -- TODO `Meta.cases` may assign and introduce metavariables.
-      -- (Specifically, it can *replace* existing metavariables, which Aesop
-      -- counts as an assignment and an introduction.)
-    let inductiveInfo ← elabInductiveRuleIdent .cases input.term
-    let decl := inductiveInfo.name
-    let opts := input.options
-    opts.casesPatterns.forM (·.check decl)
-    let imode ← opts.casesIndexingMode decl
-    let target := opts.casesTarget decl
-    let ctorNames ← mkCtorNames inductiveInfo
-    let tac :=
-      .cases target opts.casesTransparency inductiveInfo.isRec ctorNames
-    return .global $ .base $ input.toRule .cases decl .global tac imode none
+def cases : RuleBuilder := λ input => do
+  let opts := input.options
+  if input.phase.phase == .norm then throwError
+    "aesop: cases builder cannot currently be used for norm rules."
+    -- TODO `Meta.cases` may assign and introduce metavariables.
+    -- (Specifically, it can *replace* existing metavariables, which Aesop
+    -- counts as an assignment and an introduction.)
+  let info ← elabInductiveRuleIdent .cases input.term
+  casesCore info opts.casesPatterns opts.indexingMode? opts.casesTransparency
+    opts.casesIndexTransparency input.phase
 
-end Aesop
+end Aesop.RuleBuilder

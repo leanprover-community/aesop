@@ -11,13 +11,13 @@ open Lean.Meta
 
 namespace Aesop
 
-def runRuleTac (options : Options') (tac : RuleTac) (ruleName : RuleName)
+def runRuleTac (tac : RuleTac) (ruleName : RuleName)
     (preState : Meta.SavedState) (input : RuleTacInput) :
     MetaM (Sum Exception RuleTacOutput) := do
   let result ←
     try
       Sum.inr <$> preState.runMetaM' do
-        withMaxHeartbeats options.maxRuleHeartbeats do
+        withMaxHeartbeats input.options.maxRuleHeartbeats do
           tac input
     catch e =>
       return Sum.inl e

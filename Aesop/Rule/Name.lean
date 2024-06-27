@@ -129,6 +129,11 @@ instance : ToString RuleName where
 
 end RuleName
 
+def getRuleNameForExpr : Expr → MetaM Name
+  | .const decl _ => return decl
+  | .fvar fvarId => return (← fvarId.getDecl).userName
+  | _ => mkFreshId
+
 
 inductive DisplayRuleName
   | ruleName (n : RuleName)
