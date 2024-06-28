@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Util.EqualUpToIds
 import Aesop.Script.Tactic
 import Aesop.Script.TacticState
+import Aesop.Script.Util
 import Batteries.Tactic.PermuteGoals
 
 open Lean Lean.Meta
@@ -93,17 +94,41 @@ end Step
 structure LazyStep where
   preState : Meta.SavedState
   preGoal : MVarId
-  tacticBuilder : TacticBuilder
+  /--
+  A nonempty list of tactic builders. During script generation, Aesop tries to
+  execute the builders from left to right. It then uses the first builder that
+  succceds (in the sense that when run in `preState` on `preGoal` it produces
+  the `postState` and `postGoals`). The last builder must succeed and is used
+  unconditionally.
+  -/
+  tacticBuilders : Array TacticBuilder
+  tacticBuilders_ne : 0 < tacticBuilders.size := by simp
   postState : Meta.SavedState
   postGoals : Array MVarId
 
 namespace LazyStep
 
+def runFirstSuccessfulTacticBuilder (s : LazyStep) : MetaM Tactic := do
+  let initialState ← saveState
+  for b in s.tacticBuilders[:s.tacticBuilders.size - 1] do
+    let tactic ← b
+    let tacticResult ← observing? do
+      runTacticCapturingPostState tactic.uTactic s.preState [s.preGoal]
+    if let some (actualPostState, actualPostGoals) := tacticResult then
+      let actualPostGoals := actualPostGoals.toArray
+      let matchResult? ←
+        matchGoals s.postState actualPostState s.postGoals actualPostGoals
+      if matchResult?.isSome then
+        return tactic
+    initialState.restore
+  have := s.tacticBuilders_ne
+  s.tacticBuilders[s.tacticBuilders.size - 1]
+
 def toStep (s : LazyStep) : MetaM Step :=
   s.postState.runMetaM' do
     return {
       s with
-      tactic := ← s.tacticBuilder
+      tactic := ← runFirstSuccessfulTacticBuilder s
       postGoals := ← s.postGoals.mapM GoalWithMVars.ofMVarId
     }
 
@@ -118,7 +143,7 @@ def build (preGoal : MVarId) (i : BuildInput α) : MetaM (LazyStep × α) := do
   let a ← i.tac
   let postState ← saveState
   let step := {
-    tacticBuilder := i.tacticBuilder a
+    tacticBuilders := #[i.tacticBuilder a]
     postGoals := i.postGoals a
     preGoal, preState, postState
   }

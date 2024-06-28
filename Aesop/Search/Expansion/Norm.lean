@@ -127,7 +127,8 @@ def mkNormSimpScriptStep
       ctx.configStx? usedTheorems
   return {
     postGoals := postGoal?.toArray
-    preGoal, preState, postState, tacticBuilder
+    tacticBuilders := #[tacticBuilder]
+    preGoal, preState, postState
   }
 
 def SimpResult.toNormRuleResult (originalGoal : MVarId)

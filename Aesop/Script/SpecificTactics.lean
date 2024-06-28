@@ -243,7 +243,7 @@ def unfoldManyStarS (goal : MVarId) (unfold? : Name → Option (Option Name))  :
   let postState ← show MetaM _ from saveState
   let step := {
     preGoal := goal
-    tacticBuilder := TacticBuilder.aesopUnfold usedDecls
+    tacticBuilders := #[TacticBuilder.aesopUnfold usedDecls]
     postGoals := #[postGoal]
     preState, postState
   }
@@ -287,7 +287,7 @@ def tryExactFVarS (goal : MVarId) (fvarId : FVarId) (md : TransparencyMode) :
   let step := {
     preGoal := goal
     postGoals := #[]
-    tacticBuilder := TacticBuilder.exactFVar goal fvarId md
+    tacticBuilders := #[TacticBuilder.exactFVar goal fvarId md]
     preState, postState
   }
   recordScriptStep step

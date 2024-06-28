@@ -39,7 +39,7 @@ def withScriptStep (preGoal : MVarId) (postGoals : α → Array MVarId)
   if success a then
     let postState ← show MetaM _ from saveState
     recordScriptStep {
-      tacticBuilder := tacticBuilder a
+      tacticBuilders := #[tacticBuilder a]
       postGoals := postGoals a
       preGoal, preState, postState
     }
@@ -53,7 +53,7 @@ def withOptScriptStep (preGoal : MVarId) (postGoals : α → Array MVarId)
     | return none
   let postState ← show MetaM _ from saveState
   recordScriptStep {
-    tacticBuilder := tacticBuilder a
+    tacticBuilders := #[tacticBuilder a]
     postGoals := postGoals a
     preGoal, preState, postState
   }

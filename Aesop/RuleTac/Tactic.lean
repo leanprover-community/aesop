@@ -62,7 +62,8 @@ def tacticStx (stx : Syntax) : RuleTac :=
         throwError "expected either a single tactic or a sequence of tactics"
     let step := {
       preGoal := input.goal
-      preState, tacticBuilder, postState, postGoals
+      tacticBuilders := #[tacticBuilder]
+      preState, postState, postGoals
     }
     return (postGoals, some #[step], none)
 
@@ -90,7 +91,7 @@ unsafe def tacGenImpl (decl : Name) : RuleTac := λ input => do
       let step := {
         preState := initialState
         preGoal := input.goal
-        tacticBuilder := return .unstructured ⟨stx⟩
+        tacticBuilders := #[return .unstructured ⟨stx⟩]
         postState, postGoals
       }
       apps := apps.push $ .ofLazyScriptStep step successProbability

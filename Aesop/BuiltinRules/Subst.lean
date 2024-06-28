@@ -77,7 +77,7 @@ def substFVars (goal : MVarId) (fvarIds : Array FVarId) :
   let postState ← show MetaM _ from saveState
   recordScriptStep {
     postGoals := #[goal]
-    tacticBuilder := TacticBuilder.substFVars preGoal substitutedFVarIds
+    tacticBuilders := #[TacticBuilder.substFVars preGoal substitutedFVarIds]
     preGoal, preState, postState
   }
   return goal
