@@ -96,3 +96,17 @@ error: unknown identifier 'tt'
 #guard_msgs in
 @[aesop safe forward (pattern := tt)]
 axiom falso₁ : T
+
+-- We support dependencies in patterns. E.g. in the following pattern, only the
+-- premise `x` occurs syntactically, but the type of `x` depends on `a` and `p`,
+-- so these premises are also determined by the pattern instantiation.
+-- (Thanks to Son Ho for this test case.)
+
+@[aesop safe forward (pattern := x)]
+theorem get_prop {a : Type} {p : a → Prop} (x : Subtype p) : p x.val :=
+  x.property
+
+example {a : Type} {p : a → Prop} (x : Subtype p × Subtype p)
+    (h : x.1.val = x.2.val) : p x.1.val ∧ p x.2.val := by
+  saturate
+  apply And.intro <;> assumption

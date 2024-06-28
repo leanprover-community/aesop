@@ -106,6 +106,7 @@ def forwardCore (t : ElabRuleTerm) (immediate? : Option (Array Name))
   let immediate ← getImmediatePremises type pat? md immediate?
   aesop_trace[debug] "immediate premises: {immediate}"
   let imode ← imode?.getDM $ getForwardIndexingMode type immediate md indexMd
+  aesop_trace[debug] "imode: {imode}"
   let tac := .forward t.toRuleTerm pat? immediate isDestruct md
   return .global $ .base $
     phase.toRule (← t.name) builderName t.scope tac imode pat?
