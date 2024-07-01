@@ -10,25 +10,6 @@ open Lean Lean.Meta Lean.Elab.Tactic
 
 namespace Aesop
 
-inductive UnfoldResult (α : Type)
-  | unchanged
-  | changed (new : α) (usedDecls : HashSet Name)
-
-namespace UnfoldResult
-
-def new? : UnfoldResult α → Option α
-  | unchanged => none
-  | changed x _ => some x
-
-def usedDecls? : UnfoldResult α → Option (HashSet Name)
-  | unchanged => none
-  | changed _ usedDecls => some usedDecls
-
-def usedDecls (r : UnfoldResult α) : HashSet Name :=
-  r.usedDecls?.getD {}
-
-end UnfoldResult
-
 -- Inspired by Lean.Meta.unfold, Lean.Meta.unfoldTarget,
 -- Lean.Meta.unfoldLocalDecl.
 
@@ -42,7 +23,7 @@ def mkUnfoldSimpContext : MetaM Simp.Context := do
 
 @[inline]
 def unfoldManyCore (ctx : Simp.Context) (unfold? : Name → Option (Option Name))
-    (e : Expr) : StateRefT (HashSet Name) MetaM Simp.Result :=
+    (e : Expr) : StateRefT (Array Name) MetaM Simp.Result :=
   λ usedDeclsRef =>
     (·.fst) <$> Simp.main e ctx (methods := { pre := (pre · usedDeclsRef) })
 where
@@ -57,7 +38,7 @@ where
   --
   -- Aesop calls `unfold` multiple times anyway, so the current implementation
   -- is slow but correct.
-  pre (e : Expr) : StateRefT (HashSet Name) SimpM Simp.Step := do
+  pre (e : Expr) : StateRefT (Array Name) SimpM Simp.Step := do
     let some decl := e.getAppFn'.constName?
       | return .continue
     match unfold? decl with
@@ -65,7 +46,7 @@ where
       return .continue
     | some none =>
       if let some e' ← delta? e (λ n => n == decl) then
-        modify (·.insert decl)
+        modify (·.push decl)
         return .done { expr := e' }
       else
         return .continue
@@ -78,59 +59,84 @@ where
       match result? with
       | none   => return .continue
       | some r =>
-        modify (·.insert decl)
+        modify (·.push decl)
         match (← reduceMatcher? r.expr) with
         | .reduced e' => return .done { r with expr := e' }
         | _ => return .done r
 
 def unfoldMany (unfold? : Name → Option (Option Name)) (e : Expr) :
-    MetaM (UnfoldResult Expr) := do
+    MetaM (Option (Expr × Array Name)) := do
   let e ← instantiateMVars e
   let (r, usedDecls) ← unfoldManyCore (← mkUnfoldSimpContext) unfold? e |>.run {}
   if (← instantiateMVars r.expr) == e then
-    return .unchanged
+    return none
   else
-    return .changed r.expr usedDecls
+    return some (r.expr, usedDecls)
 
-def unfoldManyStar (goal : MVarId)
-    (unfold? : Name → Option (Option Name)) : MetaM (UnfoldResult MVarId) :=
+def unfoldManyTarget (unfold? : Name → Option (Option Name)) (goal : MVarId) :
+    MetaM (Option (MVarId × Array Name)) := do
+  let tgt ← instantiateMVars $ ← goal.getType
+  let (result, usedDecls) ←
+    unfoldManyCore (← mkUnfoldSimpContext) unfold? tgt |>.run #[]
+  if result.expr == tgt then
+    return none
+  let goal ← applySimpResultToTarget goal tgt result
+  return some (goal, usedDecls)
+
+def unfoldManyAt (unfold? : Name → Option (Option Name)) (goal : MVarId)
+    (fvarId : FVarId) : MetaM (Option (MVarId × Array Name)) :=
+  goal.withContext do
+    let type ← instantiateMVars $ ← fvarId.getType
+    let (result, usedDecls) ←
+      unfoldManyCore (← mkUnfoldSimpContext) unfold? type |>.run #[]
+    if result.expr == type then
+      return none
+    let some (_, goal) ←
+        applySimpResultToLocalDecl goal fvarId result (mayCloseGoal := false)
+      | throwTacticEx `aesop_unfold goal "internal error: unexpected result of applySimpResultToLocalDecl"
+    return some (goal, usedDecls)
+
+def unfoldManyStar (unfold? : Name → Option (Option Name)) (goal : MVarId) :
+    MetaM (Option MVarId) :=
   goal.withContext do
     let initialGoal := goal
     let mut goal := goal
-    let usedDeclsRef ← IO.mkRef {}
-    let ctx ← mkUnfoldSimpContext
-
-    let target ← instantiateMVars (← goal.getType)
-    let r ← unfoldManyCore ctx unfold? target usedDeclsRef
-    if (← instantiateMVars r.expr) != target then
-      goal ← applySimpResultToTarget goal target r
-
+    if let some (goal', _) ← unfoldManyTarget unfold? goal then
+      goal := goal'
     for ldecl in (← goal.getDecl).lctx do
       if ldecl.isImplementationDetail then
         continue
-      let r ←
-        unfoldManyCore ctx unfold? (← instantiateMVars ldecl.type) usedDeclsRef
-      if (← instantiateMVars r.expr) != ldecl.type then
-        let some (_, goal') ←
-          applySimpResultToLocalDecl goal ldecl.fvarId r (mayCloseGoal := false)
-          | throwTacticEx `aesop_unfold goal "internal error: unexpected result of applySimpResultToLocalDecl"
+      if let some (goal', _) ← unfoldManyAt unfold? goal ldecl.fvarId then
         goal := goal'
-
     if goal == initialGoal then
-      return .unchanged
+      return none
     else
-      return .changed goal (← usedDeclsRef.get)
+      return some goal
 
-elab "aesop_unfold " "[" ids:ident,+ "]" : tactic => do
+private def mkToUnfold (ids : Array Ident) :
+    MetaM (HashMap Name (Option Name)) := do
   let mut toUnfold : HashMap Name (Option Name) := {}
   for id in (ids : Array Ident) do
     let decl ← resolveGlobalConstNoOverload id
     toUnfold := toUnfold.insert decl (← getUnfoldEqnFor? decl)
+  return toUnfold
 
+elab "aesop_unfold " ids:ident+ : tactic => do
+  let toUnfold ← mkToUnfold ids
   liftMetaTactic λ goal => do
-    match ← unfoldManyStar goal (toUnfold.find? ·) with
-    | .unchanged =>
-      throwTacticEx `aesop_unfold goal "could not unfold any of the given constants"
-    | .changed goal _ => return [goal]
+    match ← unfoldManyTarget (toUnfold.find? ·) goal with
+    | none => throwTacticEx `aesop_unfold goal "could not unfold any of the given constants"
+    | some (goal, _) => return [goal]
+
+elab "aesop_unfold " ids:ident+ " at " hyps:ident+ : tactic => do
+  let toUnfold ← mkToUnfold ids
+  liftMetaTactic λ goal => do
+    let mut goal := goal
+    for hypId in hyps do
+      let fvarId := (← getLocalDeclFromUserName hypId.getId).fvarId
+      match ← unfoldManyAt (toUnfold.find? ·) goal fvarId with
+      | none => throwTacticEx `aesop_unfold goal m!"could not unfold any of the given constants at hypothesis '{hypId}'"
+      | some (goal', _) => goal := goal'
+    return [goal]
 
 end Aesop

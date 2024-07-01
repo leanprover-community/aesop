@@ -96,11 +96,25 @@ def renameInaccessibleFVars (postGoal : MVarId) (renamedFVars : Array FVarId) :
         `(binderIdent| $userName:ident)
       return .unstructured $ ← `(tactic| rename_i $ids:binderIdent*)
 
-def aesopUnfold (usedDecls : HashSet Name) : TacticBuilder := do
-  if usedDecls.isEmpty then
-    return .skip
-  else do
-    let tac ← `(tactic| aesop_unfold [$(usedDecls.toArray.map mkIdent):ident,*])
+def unfold (usedDecls : Array Name) (aesopUnfold : Bool) : TacticBuilder := do
+  let usedDecls := usedDecls.map mkIdent
+  let tac ←
+  if aesopUnfold then
+    `(tactic | aesop_unfold $usedDecls:ident*)
+  else
+    `(tactic | unfold $usedDecls:ident*)
+  return .unstructured tac
+
+def unfoldAt (goal : MVarId) (fvarId : FVarId) (usedDecls : Array Name)
+    (aesopUnfold : Bool) : TacticBuilder :=
+  goal.withContext do
+    let hypIdent := mkIdent (← goal.withContext $ fvarId.getUserName)
+    let usedDecls := usedDecls.map mkIdent
+    let tac ←
+    if aesopUnfold then
+      `(tactic| aesop_unfold $usedDecls:ident* at $hypIdent:ident)
+    else
+      `(tactic| unfold $usedDecls:ident* at $hypIdent:ident)
     return .unstructured tac
 
 open Lean.Parser.Tactic in
@@ -235,20 +249,54 @@ where
   tacticBuilder := λ (goal, renamedFVars) =>
     TacticBuilder.renameInaccessibleFVars goal renamedFVars
 
-def unfoldManyStarS (goal : MVarId) (unfold? : Name → Option (Option Name))  :
-    ScriptM (UnfoldResult MVarId) := do
+def unfoldManyTargetS (unfold? : Name → Option (Option Name)) (goal : MVarId) :
+    ScriptM (Option (MVarId × Array Name)) := do
   let preState ← show MetaM _ from saveState
-  let .changed postGoal usedDecls ← unfoldManyStar goal unfold?
-    | return .unchanged
+  let some (postGoal, usedDecls) ← unfoldManyTarget unfold? goal
+    | return none
   let postState ← show MetaM _ from saveState
-  let step := {
+  recordScriptStep {
     preGoal := goal
-    tacticBuilders := #[TacticBuilder.aesopUnfold usedDecls]
+    tacticBuilders :=
+      #[TacticBuilder.unfold usedDecls (aesopUnfold := false),
+        TacticBuilder.unfold usedDecls (aesopUnfold := true)]
     postGoals := #[postGoal]
     preState, postState
   }
-  recordScriptStep step
-  return .changed postGoal usedDecls
+  return some (postGoal, usedDecls)
+
+def unfoldManyAtS (unfold? : Name → Option (Option Name)) (goal : MVarId)
+    (fvarId : FVarId) : ScriptM (Option (MVarId × Array Name)) := do
+  let preState ← show MetaM _ from saveState
+  let some (postGoal, usedDecls) ← unfoldManyAt unfold? goal fvarId
+    | return none
+  let postState ← show MetaM _ from saveState
+  recordScriptStep {
+    preGoal := goal
+    tacticBuilders :=
+      #[TacticBuilder.unfoldAt goal fvarId usedDecls (aesopUnfold := false),
+        TacticBuilder.unfoldAt goal fvarId usedDecls (aesopUnfold := true)]
+    postGoals := #[postGoal]
+    preState, postState
+  }
+  return some (postGoal, usedDecls)
+
+def unfoldManyStarS (goal : MVarId) (unfold? : Name → Option (Option Name))  :
+    ScriptM (Option MVarId) :=
+  goal.withContext do
+    let initialGoal := goal
+    let mut goal := goal
+    if let some (goal', _) ← unfoldManyTargetS unfold? goal then
+      goal := goal'
+    for ldecl in (← goal.getDecl).lctx do
+      if ldecl.isImplementationDetail then
+        continue
+      if let some (goal', _) ← unfoldManyAtS unfold? goal ldecl.fvarId then
+        goal := goal'
+    if goal == initialGoal then
+      return none
+    else
+      return some goal
 
 def introsS (goal : MVarId) : ScriptM (MVarId × Array FVarId) :=
   withScriptStep goal (#[·.fst]) (! ·.2.isEmpty) tacticBuilder do

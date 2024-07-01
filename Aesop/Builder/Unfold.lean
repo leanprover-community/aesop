@@ -26,9 +26,9 @@ def checkUnfoldableConst (decl : Name) : MetaM (Option Name) :=
       let unfoldResult ←
         unfoldMany (if · == decl then some unfoldThm? else none) testExpr
       match unfoldResult with
-      | .unchanged =>
+      | none =>
         throwError "Declaration '{decl}' cannot be unfolded."
-      | .changed e' _ =>
+      | some (e', _) =>
         if hasConst decl e' then
           throwError "Recursive definition '{decl}' cannot be used as an unfold rule (it would be unfolded infinitely often). Try adding a simp rule for it."
     return unfoldThm?

@@ -230,10 +230,10 @@ def normUnfoldCore (goal : MVarId) : NormM (Option NormRuleResult) := do
   let unfoldRules := (← read).ruleSet.unfoldRules
   let (result, steps) ← unfoldManyStarS goal (unfoldRules.find? ·) |>.run
   match result with
-  | .unchanged =>
+  | none =>
     aesop_trace[steps] "nothing to unfold"
     return none
-  | .changed newGoal _ =>
+  | some newGoal =>
     return some $ .succeeded newGoal steps
 
 def normUnfold (goal : MVarId) : NormM (Option NormRuleResult) := do
