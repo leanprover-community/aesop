@@ -88,10 +88,6 @@ def foldM [Monad m] (ri : Index α) (f : σ → Rule α → m σ) (init : σ) : 
 def fold (ri : Index α) (f : σ → Rule α → σ) (init : σ) : σ :=
   Id.run $ ri.foldM (init := init) f
 
-def size : Index α → Nat
-  | { byHyp, byTarget, unindexed } =>
-    byHyp.size + byTarget.size + unindexed.size
-
 -- May return duplicate `IndexMatchLocation`s.
 @[inline]
 private def applicableByTargetRules (ri : Index α) (goal : MVarId)
@@ -127,7 +123,7 @@ private def applicableByHypRules (ri : Index α) (goal : MVarId)
 private def applicableUnindexedRules (ri : Index α) (include? : Rule α → Bool) :
     Array (Rule α × Array IndexMatchLocation) :=
   -- Assumption: include? is true for most rules.
-  ri.unindexed.fold (init := Array.mkEmpty ri.unindexed.size) λ acc r =>
+  ri.unindexed.fold (init := #[]) λ acc r =>
     if include? r then
       acc.push (r, #[.none])
     else

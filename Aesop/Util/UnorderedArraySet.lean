@@ -57,7 +57,7 @@ protected def ofHashSet [Hashable α] (xs : HashSet α) : UnorderedArraySet α :
   ⟨xs.toArray⟩
 
 protected def ofPersistentHashSet [Hashable α] (xs : PersistentHashSet α) : UnorderedArraySet α :=
-  ⟨xs.fold (init := Array.mkEmpty xs.size) λ as a => as.push a⟩
+  ⟨xs.fold (init := #[]) λ as a => as.push a⟩
 
 protected def toArray (s : UnorderedArraySet α) : Array α :=
   s.rep

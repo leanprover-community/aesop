@@ -55,11 +55,8 @@ private def getNewConsts (oldEnv newEnv : Environment) :
     HashMap Name ConstantInfo := Id.run do
   let oldMap₂ := oldEnv.constants.map₂
   let newMap₂ := newEnv.constants.map₂
-  if oldMap₂.size == newMap₂.size then
-    HashMap.empty
-  else
-    newMap₂.foldl (init := HashMap.empty) λ cs n c =>
-      if oldMap₂.contains n then cs else cs.insert n c
+  newMap₂.foldl (init := HashMap.empty) λ cs n c =>
+    if oldMap₂.contains n then cs else cs.insert n c
 
 -- For each declaration `d` that appears in `newState` but not in
 -- `oldState`, add `d` to the environment. We assume that the environment in
@@ -77,10 +74,9 @@ open Match in
 private def copyMatchEqnsExtState (oldEnv newEnv : Environment) : CoreM Unit := do
   let oldState := matchEqnsExt.getState oldEnv
   let newState := matchEqnsExt.getState newEnv
-  if newState.map.size > oldState.map.size then
-    for (n, eqns) in newState.map do
-      if !oldState.map.contains n then
-        registerMatchEqns n eqns
+  for (n, eqns) in newState.map do
+    if !oldState.map.contains n then
+      registerMatchEqns n eqns
 
 private def copyEnvModifications (oldEnv newEnv : Environment) : CoreM Unit := do
   copyNewDeclarations oldEnv newEnv
