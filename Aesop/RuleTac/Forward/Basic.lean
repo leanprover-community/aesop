@@ -63,4 +63,64 @@ prefix.
 def isForwardImplDetailHypName (n : Name) : Bool :=
   (`__aesop.fwd).isPrefixOf n
 
+def isForwardImplDetailHyp (ldecl : LocalDecl) : Bool :=
+  ldecl.isImplementationDetail && isForwardImplDetailHypName ldecl.userName
+
+def getForwardImplDetailHyps : MetaM (Array LocalDecl) := do
+ let mut result := #[]
+ for ldecl in ← getLCtx do
+    if isForwardImplDetailHyp ldecl then
+      result := result.push ldecl
+  return result
+
+def _root_.Aesop.clearForwardImplDetailHyps (goal : MVarId) : MetaM MVarId :=
+  goal.withContext do
+    let hyps ← getForwardImplDetailHyps
+    goal.tryClearMany $ hyps.map (·.fvarId)
+
+structure ForwardHypData where
+  /--
+  Types of the hypotheses that have already been added by forward reasoning.
+  -/
+  types : HashSet Expr
+  /--
+  Depths of the hypotheses that have already been added by forward reasoning.
+  -/
+  depths : HashMap FVarId Nat
+
+def getForwardHypData : MetaM ForwardHypData := do
+  let ldecls ← getForwardImplDetailHyps
+  let mut types := ∅
+  let mut depths := ∅
+  for ldecl in ldecls do
+    types := types.insert (← instantiateMVars ldecl.type)
+    if let some (depth, name) := matchForwardImplDetailHypName ldecl.userName then
+      if let some ldecl := (← getLCtx).findFromUserName? name then
+        depths := depths.insert ldecl.fvarId depth
+  return { types, depths }
+
+/--
+Mark hypotheses that, according to their name, are forward implementation detail
+hypotheses, as implementation details. This is a hack that works around the
+fact that certain tactics (particularly anything based on the revert-intro
+pattern can turn implementation detail hyps into regular hyps).
+-/
+def hideForwardImplDetailHyps (goal : MVarId) : MetaM MVarId :=
+  goal.withContext do
+    let mut lctx ← getLCtx
+    let mut localInsts ← getLocalInstances
+    let mut anyChange := false
+    for ldecl in ← getLCtx do
+      if ! ldecl.isImplementationDetail &&
+         isForwardImplDetailHypName ldecl.userName then
+        lctx := lctx.setKind ldecl.fvarId .implDetail
+        localInsts := localInsts.erase ldecl.fvarId
+        anyChange := true
+    if ! anyChange then
+      return goal
+    let goal' ← mkFreshExprMVarAt lctx localInsts (← goal.getType)
+    goal.assign goal'
+    return goal'.mvarId!
+
+
 end Aesop

@@ -309,7 +309,6 @@ theorem mem_map_of_injective {f : α → β} (H : Injective f) {a : α} {l : Lis
 @[simp] theorem _root_.function.involutive.exists_mem_and_apply_eq_iff {f : α → α}
   (hf : Involutive f) (x : α) (l : List α) :
   (∃ (y : α), y ∈ l ∧ f y = x) ↔ f x ∈ l := by
-  set_option aesop.check.script false in -- TODO caused by issue #108
   aesop
 
 theorem mem_map_of_involutive {f : α → α} (hf : Involutive f) {a : α} {l : List α} :
@@ -855,7 +854,7 @@ theorem map_reverse_core (f : α → β) (l₁ l₂ : List α) :
 
 attribute [-simp] mem_reverse
 @[simp] theorem X.mem_reverse {a : α} {l : List α} : a ∈ reverse l ↔ a ∈ l := by
-  induction l <;> set_option aesop.check.script false in aesop -- TODO
+  induction l <;> aesop
 
 @[simp] theorem reverse_replicate' (a : α) (n) : reverse (replicate n a) = replicate n a :=
   ADMIT -- Several missing lemmas.

@@ -91,6 +91,6 @@ def scripts : StatsReport := λ statsArray => Id.run do
      - Statically  structured: {staticallyStructured}\n" ++
   f!"  - perfectly:            {perfectlyStaticallyStructured}\n\
      - Dynamically structured: {dynamicallyStructured}\n" ++
-  f!"  - perfectly:            {perfectlyStaticallyStructured}"
+  f!"  - perfectly:            {perfectlyDynamicallyStructured}"
 
 end Aesop.StatsReport

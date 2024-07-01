@@ -14,7 +14,7 @@ namespace Aesop
 /--
 A rule pattern. For a rule of type `∀ (x₀ : T₀) ... (xₙ : Tₙ), U`, a valid rule
 pattern is an expression `p` such that `x₀ : T₁, ..., xₙ : Tₙ ⊢ p : P`. Let
-`y₀, ..., yₖ` be those variables `xᵢ` that occur in `p`. When `p` matches an
+`y₀, ..., yₖ` be those variables `xᵢ` on which `p` depends. When `p` matches an
 expression `e`, this means that `e` is defeq to `p` (where each `yᵢ` is replaced
 with a metavariable) and we obtain a substitution
 
@@ -176,8 +176,8 @@ where
     return (e, mvars.map (·.mvarId!))
 
   setMVarUserNamesToUniqueNames (e : Expr) : MetaM Unit := do
-    e.forEachWhere (·.isMVar) λ e =>
-      let mvarId := e.mvarId!
+    let mvarIds ← getMVarDependencies e
+    for mvarId in mvarIds do
       mvarId.setUserName mvarId.name
 
   -- Largely copy-pasta of `abstractMVars`.

@@ -207,6 +207,12 @@ def updateSimpEntryPriority (priority : Nat) (e : SimpEntry) : SimpEntry :=
   | .thm t => .thm { t with priority }
   | .toUnfoldThms .. | .toUnfold .. => e
 
+def getMVarDependencies (e : Expr) : MetaM (HashSet MVarId) := do
+  let (_, deps) ←
+    Lean.MVarId.getMVarDependencies.addMVars (includeDelayed := true) e
+    |>.run {}
+  return deps
+
 partial def hasSorry [Monad m] [MonadMCtx m] (e : Expr) : m Bool :=
   return go (← getMCtx) e
 where
