@@ -11,6 +11,7 @@ open Lean Lean.Meta
 namespace Aesop.SyntaxMap
 
 inductive Key where
+  | missing
   | node (kind : SyntaxNodeKind)
   | atom (val : String)
   | ident (val : Name) -- TODO what about macro scopes in val?
@@ -20,12 +21,13 @@ namespace Key
 
 instance : ToString Key where
   toString
+    | missing => "missing"
     | node kind => s!"node {kind}"
     | atom val => s!"atom {val}"
     | ident val => s!"ident {val}"
 
-def ofSyntax : Syntax → Option Key
-  | .missing => none
+def ofSyntax : Syntax → Key
+  | .missing => .missing
   | .node (kind := kind) .. => node kind
   | .atom (val := val) .. => atom val
   | .ident (val := val) .. => ident val.eraseMacroScopes
@@ -52,9 +54,8 @@ instance : EmptyCollection (SyntaxMap α) :=
 def find? (key : Key) (m : SyntaxMap α) : Option α :=
   m.toPHashMap.find? key
 
-def findStx? (stx : Syntax) (m : SyntaxMap α) : Option α := do
-  let key ← Key.ofSyntax stx
-  m.find? key
+def findStx? (stx : Syntax) (m : SyntaxMap α) : Option α :=
+  m.find? $ Key.ofSyntax stx
 
 def insert (key : Key) (val : α) (m : SyntaxMap α) : SyntaxMap α :=
   ⟨m.toPHashMap.insert key val⟩
@@ -101,8 +102,7 @@ where
 def SyntaxRewrite.focusRenameI : SyntaxRewrite where
   keys :=
     let keyStxs := #[`(tactic| · simp), `(tactic| · { })] -- HACK
-    keyStxs.map λ stx =>
-      SyntaxMap.Key.ofSyntax (Unhygienic.run stx |>.raw) |>.get!
+    keyStxs.map λ stx => .ofSyntax (Unhygienic.run stx |>.raw)
   run
     | `(tactic| · $tacs:tactic*)
     | `(tactic| · { $tacs:tactic* }) => do
