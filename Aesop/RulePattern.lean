@@ -90,7 +90,14 @@ def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
   withNewMCtxDepth do -- TODO use (allowLevelAssignments := true)?
     let openPats ← pats.mapM λ (name, pat) => return (name, ← pat.open)
     let initialState ← show MetaM _ from saveState
-    forEachExprInGoal mvarId λ e => do
+    forEachExprInGoal' mvarId λ e => do
+      if e.hasLooseBVars then
+        -- We don't visit subexpressions with loose bvars. Instantiations
+        -- derived from such subexpressions would not be valid in the goal's
+        -- context. E.g. if a rule `(x : T) → P x` has pattern `x` and we
+        -- have the expression `λ (y : T), y` in the goal, then it makes no
+        -- sense to match `y` and generate `P y`.
+        return false
       for (name, mvarIds, p) in openPats do
         initialState.restore
         -- The many `isDefEq` checks here are quite expensive. Perhaps a better
@@ -111,6 +118,7 @@ def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
               m.insert name (instanceSet.insert instances)
             else
               m.insert name (.empty |>.insert instances)
+      return true
 
 def matchRulePatterns (pats : Array (RuleName × RulePattern))
     (mvarId : MVarId) :
