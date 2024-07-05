@@ -97,8 +97,10 @@ def equalCommonMVars? (mvarId₁ mvarId₂ : MVarId) :
       return none
 
 structure GoalContext where
-  mdecl₁ : MetavarDecl
-  mdecl₂ : MetavarDecl
+  lctx₁ : LocalContext
+  localInstances₁ : LocalInstances
+  lctx₂ : LocalContext
+  localInstances₂ : LocalInstances
   equalFVarIds : HashMap FVarId FVarId := {}
 
 inductive MVarValue where
@@ -153,7 +155,7 @@ namespace Unsafe
 mutual
   unsafe def exprsEqualUpToIdsCore (e₁ e₂ : Expr) :
       ReaderT GoalContext EqualUpToIdsM Bool := do
-    withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing exprs {← printExpr (← readMCtx₁) (← read).mdecl₁ e₁}, {← printExpr (← readMCtx₂) (← read).mdecl₂ e₂}") do
+    withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing exprs {← printExpr (← readMCtx₁) (← read).lctx₁ (← read).localInstances₁ e₁}, {← printExpr (← readMCtx₂) (← read).lctx₂ (← read).localInstances₂ e₂}") do
       if ptrEq e₁ e₂ then
         return true
       else
@@ -163,11 +165,11 @@ mutual
     instMVars (mctx : MetavarContext) (e : Expr) : MetaM Expr :=
       withMCtx mctx (instantiateMVars e)
 
-    printExpr (mctx : MetavarContext) (mdecl : MetavarDecl) (e : Expr) :
-        MetaM MessageData :=
+    printExpr (mctx : MetavarContext) (lctx : LocalContext)
+        (localInstances : LocalInstances) (e : Expr) : MetaM MessageData :=
       withMCtx mctx do
-        withLCtx mdecl.lctx mdecl.localInstances do
-          addMessageContext m!"{e}"
+      withLCtx lctx localInstances do
+        addMessageContext m!"{e}"
 
   unsafe def exprsEqualUpToIdsCore' :
       Expr → Expr → ReaderT GoalContext EqualUpToIdsM Bool
@@ -271,12 +273,13 @@ mutual
       exprsEqualUpToIdsCore v₁ v₂
     | _, _ => return false
 
-  unsafe def localContextsEqualUpToIdsCore (mdecl₁ mdecl₂ : MetavarDecl) :
+  unsafe def localContextsEqualUpToIdsCore (lctx₁ lctx₂ : LocalContext)
+      (localInstances₁ localInstances₂ : LocalInstances) :
       EqualUpToIdsM (Option GoalContext) := do
-    let decls₁ ← lctxDecls mdecl₁.lctx
-    let decls₂ ← lctxDecls mdecl₂.lctx
+    let decls₁ ← lctxDecls lctx₁
+    let decls₂ ← lctxDecls lctx₂
     if h : decls₁.size = decls₂.size then
-      go decls₁ decls₂ h 0 { mdecl₁, mdecl₂ }
+      go decls₁ decls₂ h 0 { lctx₁, lctx₂, localInstances₁, localInstances₂ }
     else
       trace[Aesop.Util.EqualUpToIds] "number of hyps differs"
       return none
@@ -315,7 +318,10 @@ mutual
           "unknown metavariable '?{mvarId₁.name}'"
         let (some mdecl₂) := ctx.mctx₂.decls.find? mvarId₂ | throwError
           "unknown metavariable '?{mvarId₂.name}'"
-          if let some gctx ← localContextsEqualUpToIdsCore mdecl₁ mdecl₂ then
+          let gctx? ←
+            localContextsEqualUpToIdsCore mdecl₁.lctx mdecl₂.lctx
+              mdecl₂.localInstances mdecl₂.localInstances
+          if let some gctx := gctx? then
           withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing targets") do
             if ← exprsEqualUpToIdsCore mdecl₁.type mdecl₂.type |>.run gctx then
               modify λ s =>
@@ -328,6 +334,9 @@ mutual
 end
 
 end Unsafe
+
+@[implemented_by Unsafe.exprsEqualUpToIdsCore]
+opaque exprsEqualUpToIdsCore (e₁ e₂ : Expr) : ReaderT GoalContext EqualUpToIdsM Bool
 
 @[implemented_by Unsafe.unassignedMVarsEqualUpToIdsCore]
 opaque unassignedMVarsEqualUpToIdsCore (mvarId₁ mvarId₂ : MVarId) :
@@ -343,6 +352,22 @@ def tacticStatesEqualUpToIdsCore (goals₁ goals₂ : Array MVarId) :
   return true
 
 end EqualUpToIds
+
+def exprsEqualUpToIds (mctx₁ mctx₂ : MetavarContext)
+    (lctx₁ lctx₂ : LocalContext)
+    (localInstances₁ localInstances₂ : LocalInstances) (e₁ e₂ : Expr)
+    (allowAssignmentDiff := false) : MetaM Bool := do
+  EqualUpToIds.exprsEqualUpToIdsCore e₁ e₂
+    |>.run { lctx₁, lctx₂, localInstances₁, localInstances₂ }
+    |>.run (commonMCtx? := none) mctx₁ mctx₂ allowAssignmentDiff
+
+def exprsEqualUpToIds' (e₁ e₂ : Expr) (allowAssignmentDiff := false) :
+    MetaM Bool := do
+  let mctx ← getMCtx
+  let lctx ← getLCtx
+  let localInstances ← getLocalInstances
+  exprsEqualUpToIds mctx mctx lctx lctx localInstances localInstances e₁ e₂
+    allowAssignmentDiff
 
 def unassignedMVarsEqualUptoIds (commonMCtx? : Option MetavarContext)
     (mctx₁ mctx₂ : MetavarContext) (mvarId₁ mvarId₂ : MVarId)
