@@ -76,7 +76,10 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
             instMVar.assign inst
         let proof := (← abstractMVars app).expr
         let type ← instantiateMVars (← inferType proof)
-        if proofTypesAcc.contains type || forwardHypData.types.contains type then
+        let redundant ←
+          pure (proofTypesAcc.contains type) <||>
+          forwardHypData.containsTypeUpToIds type
+        if redundant then
           return (proofsAcc, usedHypsAcc, proofTypesAcc)
         else
           let depth := currentMaxHypDepth + 1

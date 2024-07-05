@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Batteries.Lean.Meta.Basic
 import Aesop.Util.Basic
+import Aesop.Util.EqualUpToIds
 
 namespace Aesop
 
@@ -82,7 +82,7 @@ structure ForwardHypData where
   /--
   Types of the hypotheses that have already been added by forward reasoning.
   -/
-  types : HashSet Expr
+  types : Array Expr
   /--
   Depths of the hypotheses that have already been added by forward reasoning.
   -/
@@ -93,17 +93,25 @@ def getForwardHypData : MetaM ForwardHypData := do
   let mut types := ∅
   let mut depths := ∅
   for ldecl in ldecls do
-    types := types.insert (← instantiateMVars ldecl.type)
+    types := types.push (← instantiateMVars ldecl.type)
     if let some (depth, name) := matchForwardImplDetailHypName ldecl.userName then
       if let some ldecl := (← getLCtx).findFromUserName? name then
         depths := depths.insert ldecl.fvarId depth
   return { types, depths }
 
+namespace ForwardHypData
+
+def containsTypeUpToIds (data : ForwardHypData) (type : Expr) : MetaM Bool :=
+  data.types.anyM λ knownType =>
+    exprsEqualUpToIds' type knownType (allowAssignmentDiff := true)
+
+end ForwardHypData
+
 /--
 Mark hypotheses that, according to their name, are forward implementation detail
 hypotheses, as implementation details. This is a hack that works around the
 fact that certain tactics (particularly anything based on the revert-intro
-pattern can turn implementation detail hyps into regular hyps).
+pattern) can turn implementation detail hyps into regular hyps.
 -/
 def hideForwardImplDetailHyps (goal : MVarId) : MetaM MVarId :=
   goal.withContext do
@@ -121,6 +129,5 @@ def hideForwardImplDetailHyps (goal : MVarId) : MetaM MVarId :=
     let goal' ← mkFreshExprMVarAt lctx localInsts (← goal.getType)
     goal.assign goal'
     return goal'.mvarId!
-
 
 end Aesop
