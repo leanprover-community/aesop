@@ -59,7 +59,7 @@ To use Aesop in a Lean 4 project, first add this package as a dependency. In
 your `lakefile.lean`, add
 
 ```lean
-require aesop from git "https://github.com/JLimperg/aesop"
+require aesop from git "https://github.com/leanprover-community/aesop"
 ```
 
 You also need to make sure that your `lean-toolchain` file contains the same
