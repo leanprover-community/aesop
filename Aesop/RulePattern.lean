@@ -145,24 +145,29 @@ def openRuleType (pat : RulePattern) (inst : RulePatternInstantiation)
   for h : i in [:mvars.size] do
     if let some inst ← pat.getInstantiation inst i then
       let mvarId := mvars[i]'h.2 |>.mvarId!
-      mvarId.assign inst
-      assigned := assigned.insert mvarId
+      -- We use `checkedAssign`, rather than `assign`, to make sure that
+      -- universe metavariables occurring in `mvars` are assigned.
+      if ← mvarId.checkedAssign inst then
+        assigned := assigned.insert mvarId
+      else
+        throwError "openRuleType: type-incorrect pattern instantiation: argument has type '{← mvarId.getType}' but pattern instantiation '{inst}' has type '{← inferType inst}'"
   return (mvars, binfos, body, assigned)
 
 def specializeRule (pat : RulePattern) (inst : RulePatternInstantiation)
     (rule : Expr) : MetaM Expr :=
   withNewMCtxDepth do
     forallTelescopeReducing (← inferType rule) λ fvarIds _ => do
-      let mut e := rule
+      let mut args := Array.mkEmpty fvarIds.size
       let mut remainingFVarIds := Array.mkEmpty fvarIds.size
       for h : i in [:fvarIds.size] do
         if let some inst ← pat.getInstantiation inst i then
-          e := e.app inst
+          args := args.push $ some inst
         else
           let fvarId := fvarIds[i]'h.2
-          e := e.app fvarId
+          args := args.push $ some fvarId
           remainingFVarIds := remainingFVarIds.push fvarId
-      mkLambdaFVars remainingFVarIds e
+      let result ← mkLambdaFVars remainingFVarIds (← mkAppOptM' rule args)
+      return result
 
 open Lean.Elab Lean.Elab.Term
 
