@@ -76,7 +76,7 @@ instance : Ord IndexMatchLocation where
     | none, hyp .. => .lt
     | hyp .., target => .gt
     | hyp .., none => .gt
-    | hyp ldecl₁, hyp ldecl₂ => ldecl₁.fvarId.name.quickCmp ldecl₂.fvarId.name
+    | hyp ldecl₁, hyp ldecl₂ => ldecl₁.fvarId.name.cmp ldecl₂.fvarId.name
 
 instance : Hashable IndexMatchLocation where
   hash
