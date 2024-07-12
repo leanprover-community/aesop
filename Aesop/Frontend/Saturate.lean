@@ -23,8 +23,9 @@ def _root_.Aesop.ElabM.runForwardElab (goal : MVarId) (x : ElabM α) :
     TermElabM α :=
   x |>.run { parsePriorities := true, goal }
 
-def elabForwardOptions (maxDepth? : Option Nat) : CoreM Options' :=
-  ({} : Aesop.Options).toOptions' maxDepth?
+def mkForwardOptions (maxDepth? : Option Nat) (traceScript : Bool) :
+    CoreM Options' :=
+  ({ traceScript } : Aesop.Options).toOptions' maxDepth?
 
 def elabGlobalRuleSets (rsNames : Array Ident) :
     CoreM (Array (GlobalRuleSet × Name × Name)) := do
@@ -101,14 +102,26 @@ def elabForwardRuleSet (rsNames? : Option (TSyntax ``usingRuleSets))
 
 open Lean.Elab.Tactic
 
-elab "saturate " depth?:(num)? ppSpace rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic => do
+def evalSaturate (depth? : Option (TSyntax `num))
+    (rules? : Option (TSyntax ``additionalRules))
+    (rs? : Option (TSyntax ``usingRuleSets)) (traceScript : Bool) :
+    TacticM Unit := do
   let depth? := depth?.map (·.getNat)
-  let options ← elabForwardOptions depth?
+  let options ← mkForwardOptions depth? traceScript
   let rs ← elabForwardRuleSet rs? rules? options
     |>.runForwardElab (← getMainGoal)
-  liftMetaTactic1 (saturate rs · |>.run { options })
+  liftMetaTactic1 (saturate rs · options)
+
+elab "saturate " depth?:(num)? ppSpace rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic => do
+  evalSaturate depth? rules? rs? (traceScript := false)
+
+elab "saturate? " depth?:(num)? ppSpace rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic => do
+  evalSaturate depth? rules? rs? (traceScript := true)
 
 macro "forward " rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic =>
   `(tactic| saturate 1 $[$rules?]? $[$rs?]?)
+
+macro "forward? " rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic =>
+  `(tactic| saturate? 1 $[$rules?]? $[$rs?]?)
 
 end Aesop.Frontend

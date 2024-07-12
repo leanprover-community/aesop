@@ -65,25 +65,45 @@ example (rule : ∀ α β, α ∧ β → α) (h : P ∧ Q ∧ R) : P := by
 
 /-! # Tests for the `forward` and `saturate` tactics -/
 
+/--
+info: Try this:
+have fwd : P := rule P (Q ∧ R) h
+-/
+#guard_msgs in
 example (rule : ∀ α β, α ∧ β → α) (h : P ∧ Q ∧ R) : P := by
-  forward [*]
+  forward? [*]
   guard_hyp fwd : P
   assumption
 
+/--
+info: Try this:
+  have fwd : γ₁ ∧ γ₂ := r₁ a b
+  have fwd_1 : δ₁ ∧ δ₂ := r₂ a
+-/
+#guard_msgs in
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
-  saturate [*]
+  saturate? [*]
   guard_hyp fwd : γ₁ ∧ γ₂
   guard_hyp fwd_1 : δ₁ ∧ δ₂
   aesop
 
+/--
+info: Try this:
+  have fwd : β := h₁ h₃
+  have fwd_1 : γ := h₂ fwd
+-/
+#guard_msgs in
 example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
-  saturate [*]
+  saturate? [*]
   guard_hyp fwd : β
   guard_hyp fwd_1 : γ
   assumption
 
 /--
+info: Try this:
+have fwd : β := h₁ h₃
+---
 error: unsolved goals
 α β γ : Prop
 h₁ : α → β
@@ -94,9 +114,12 @@ fwd : β
 -/
 #guard_msgs in
 example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
-  forward [*]
+  forward? [*]
 
 /--
+info: Try this:
+have fwd : β := h₁ h₃
+---
 error: unsolved goals
 α β γ : Prop
 h₁ : α → β
@@ -107,9 +130,13 @@ fwd : β
 -/
 #guard_msgs in
 example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
-  saturate 1 [*]
+  saturate? 1 [*]
 
 /--
+info: Try this:
+  have fwd : β := h₁ h₄
+  have fwd_1 : γ := h₂ fwd
+---
 error: unsolved goals
 α β γ δ : Prop
 h₁ : α → β
@@ -122,9 +149,13 @@ fwd_1 : γ
 -/
 #guard_msgs in
 example {α β γ δ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : γ → δ) (h₄ : α) : δ := by
-  saturate 2 [*]
+  saturate? 2 [*]
 
 /--
+info: Try this:
+  have fwd : β := h₁ h₄
+  have fwd_1 : γ := h₂ h₄
+---
 error: unsolved goals
 α β γ δ : Prop
 h₁ : α → β
@@ -137,7 +168,7 @@ fwd_1 : γ
 -/
 #guard_msgs in
 example {α β γ δ : Prop} (h₁ : α → β) (h₂ : α → γ) (h₃ : β → γ → δ) (h₄ : α) : δ := by
-  saturate 1 [*]
+  saturate? 1 [*]
 
 axiom A : Type
 axiom B : Type
@@ -149,9 +180,15 @@ axiom ab : A → B
 @[aesop norm forward]
 axiom bc : B → C
 
+/--
+info: Try this:
+  have fwd : B := ab a
+  have fwd_1 : C := bc fwd
+-/
+#guard_msgs in
 noncomputable example : A → C := by
   intro a
-  saturate
+  saturate?
   guard_hyp fwd : B
   guard_hyp fwd_1 : C
   exact fwd_1

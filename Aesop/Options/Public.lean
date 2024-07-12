@@ -1,6 +1,6 @@
-import Lean.Meta.TransparencyMode
+import Lean
 
-open Lean.Meta (TransparencyMode)
+open Lean Lean.Meta
 
 namespace Aesop
 
@@ -156,5 +156,13 @@ structure Options where
   -/
   enableUnfold := true
   deriving Inhabited, BEq, Repr
+
+/--
+(aesop) Only for use by Aesop developers. Enables dynamic script structuring.
+-/
+register_option aesop.dev.dynamicStructuring : Bool := {
+  descr := "(aesop) Only for use by Aesop developers. Enables dynamic script structuring."
+  defValue := false
+}
 
 end Aesop

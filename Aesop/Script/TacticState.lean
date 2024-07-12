@@ -20,6 +20,12 @@ structure TacticState where
 
 namespace TacticState
 
+def mkInitial (goal : MVarId) : MetaM TacticState :=
+  return {
+    visibleGoals := #[⟨goal, ← goal.getMVarDependencies⟩]
+    invisibleGoals := ∅
+  }
+
 private def throwUnknownGoalError (goal : MVarId) (pre : MessageData) : m α :=
   throwError "internal error: {pre}: unknown goal '?{goal.name}'"
 

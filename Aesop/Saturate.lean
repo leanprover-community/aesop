@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Builder.Forward
 import Aesop.RuleSet
 import Aesop.RuleTac
+import Aesop.Script.Main
 import Aesop.Search.Expansion.Basic
 
 open Lean Lean.Meta
@@ -19,27 +20,27 @@ def isForwardOrDestructRuleName (n : RuleName) : Bool :=
 structure SaturateM.Context where
   options : Aesop.Options'
 
-abbrev SaturateM := ReaderT SaturateM.Context MetaM
+abbrev SaturateM := ReaderT SaturateM.Context ScriptM
 
 def getSingleGoal [Monad m] [MonadError m] (o : RuleTacOutput) :
-    m (MVarId × Meta.SavedState) := do
+    m (MVarId × Meta.SavedState × Option (Array Script.LazyStep)) := do
   let #[app] := o.applications
     | throwError "rule produced more than one rule application"
   let #[goal] := app.goals
     | throwError "rule did not produce exactly one subgoal"
-  return (goal, app.postState)
+  return (goal, app.postState, app.scriptSteps?)
 
 initialize
   registerTraceClass `saturate
 
-partial def saturate (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId :=
+partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId :=
   withExceptionPrefix "saturate: internal error: " do
   goal.checkNotAssigned `saturate
   go goal
 where
   go (goal : MVarId) : SaturateM MVarId :=
     withIncRecDepth do
-    trace[saturate] "goal:{indentD goal}"
+    trace[saturate] "goal {goal.name}:{indentD goal}"
     let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
     let preState ← show MetaM _ from saveState
     let normMatchResults ← rs.applicableNormalizationRulesWith goal
@@ -56,7 +57,7 @@ where
 
   runRule {α} (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       (preState : Meta.SavedState) (matchResult : IndexMatchResult (Rule α)) :
-      SaturateM (Option MVarId) := do
+      SaturateM (Option (MVarId × Option (Array Script.LazyStep))) := do
     trace[saturate] "running rule {matchResult.rule.name}"
     let input := {
       indexMatchLocations := matchResult.locations
@@ -71,17 +72,38 @@ where
       trace[saturate] "rule failed:{indentD exc.toMessageData}"
       return none
     | .inr output =>
-      let (goal, postState) ← getSingleGoal output
+      let (goal, postState, scriptSteps?) ← getSingleGoal output
       postState.restore
-      return goal
+      return (goal, scriptSteps?)
 
   runFirstRule {α} (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       (preState : Meta.SavedState)
       (matchResults : Array (IndexMatchResult (Rule α))) :
       SaturateM (Option MVarId) := do
     for matchResult in matchResults do
-      if let some goal ← runRule goal mvars preState matchResult then
+      if let some (goal, scriptSteps?) ← runRule goal mvars preState matchResult then
+        if (← read).options.generateScript then
+          let some scriptSteps := scriptSteps?
+            | throwError "rule '{matchResult.rule.name}' does not support script generation (saturate?)"
+          recordScriptSteps scriptSteps
         return some goal
     return none
+
+def saturate (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') :
+    MetaM MVarId := do
+  if ! options.generateScript then
+    (·.fst) <$> (saturateCore rs goal |>.run { options } |>.run)
+  else
+    let preState ← saveState
+    let tacticState ← Script.TacticState.mkInitial goal
+    let preGoal := goal
+    let (goal, steps) ← saturateCore rs goal |>.run { options } |>.run
+    let uscript : Script.UScript ← steps.mapM (·.toStep)
+    let tacticSeq ← `(tacticSeq| $(← uscript.render tacticState):tactic*)
+    checkRenderedScriptIfEnabled tacticSeq preState preGoal
+      (expectCompleteProof := false)
+    if options.traceScript then
+      addTryThisTacticSeqSuggestion (← getRef) tacticSeq
+    return goal
 
 end Aesop

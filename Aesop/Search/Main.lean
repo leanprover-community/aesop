@@ -8,9 +8,8 @@ import Aesop.Check
 import Aesop.Frontend.Attribute
 import Aesop.Options
 import Aesop.RuleSet
-import Aesop.Script.OptimizeSyntax
-import Aesop.Script.StructureStatic
-import Aesop.Script.StructureDynamic
+import Aesop.Script.Check
+import Aesop.Script.Main
 import Aesop.Search.Expansion
 import Aesop.Search.ExpandSafePrefix
 import Aesop.Search.Queue
@@ -126,54 +125,16 @@ def finalizeProof : SearchM Q Unit := do
     withPPAnalyze do
       aesop_trace[proof] "Final proof:{indentExpr proof}"
 
-open Lean.Elab.Tactic in
-def checkRenderedScript (completeProof : Bool) (script : TSyntax ``tacticSeq) :
-    SearchM Q Unit := do
-  let initialState ← getRootMetaState
-  let rootGoal ← getRootMVarId
-  let go : TacticM Unit := do
-    setGoals [rootGoal]
-    evalTactic script
-    if completeProof && ! (← getUnsolvedGoals).isEmpty then
-      throwError "script executed successfully but did not solve the main goal"
-  try
-    show MetaM Unit from withoutModifyingState do
-      initialState.restore
-      go.run { elaborator := .anonymous, recover := false }
-        |>.run' { goals := [rootGoal] }
-        |>.run'
-  catch e => throwError
-    "{Check.script.name}: error while executing generated script:{indentD e.toMessageData}"
-
-def checkScriptSteps (script : Script.UScript) : SearchM Q Unit := do
-  unless ← Check.script.steps.isEnabled do
-    return
-  try
-    script.validate
-  catch e =>
-    throwError "{Check.script.steps.name}: {e.toMessageData}"
-
-register_option aesop.dev.dynamicStructuring : Bool := {
-  descr := "(aesop) Only for use by Aesop developers. Enables dynamic script structuring."
-  defValue := false
-}
-
-def structureScript (uscript : Script.UScript) (rootState : Meta.SavedState)
-    (rootGoal : MVarId) : SearchM Q (Option Script.SScript) := do
-  if aesop.dev.dynamicStructuring.get (← getOptions) then
-    let some (script, perfect) ← uscript.toSScriptDynamic rootState rootGoal
-      | return none
+def optimizeScript (uscript : Script.UScript) (rootState : Meta.SavedState)
+    (rootGoal : MVarId) : SearchM Q (Option (TSyntax ``tacticSeq)) := do
+  let dynamic := aesop.dev.dynamicStructuring.get (← getOptions)
+  let some (script, perfect) ← uscript.optimize rootState rootGoal
+    | return none
+  if dynamic then
     recordScriptGenerated $ .dynamicallyStructured perfect
-    return some script
   else
-    let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
-    let tacticState := {
-      visibleGoals := #[⟨rootGoal, rootGoalMVars⟩]
-      invisibleGoals := ∅
-    }
-    let (script, perfect) ← uscript.toSScriptStatic tacticState
     recordScriptGenerated $ .staticallyStructured perfect
-    return some script
+  return some script
 
 def traceScript (completeProof : Bool) : SearchM Q Unit :=
   profiling (λ stats _ elapsed => { stats with script := elapsed }) do
@@ -181,29 +142,12 @@ def traceScript (completeProof : Bool) : SearchM Q Unit :=
   if ! options.generateScript then
     return
   let uscript ← if completeProof then extractScript else extractSafePrefixScript
-  checkScriptSteps uscript
+  uscript.checkIfEnabled
   let rootGoal ← getRootMVarId
   let rootState ← getRootMetaState
-  let structuredScript? ← structureScript uscript rootState rootGoal
-  if let some structuredScript := structuredScript? then
-    let script ← structuredScript.render
-    let script ← `(tacticSeq| $script*)
-    let script ← optimizeSyntax script
-    if options.traceScript then
-      addTryThisTacticSeqSuggestion (← getRef) script
-    if ← Check.script.isEnabled then
-      checkRenderedScript completeProof script
-  else
-    let rootGoalMVars ← rootState.runMetaM' rootGoal.getMVarDependencies
-    let tacticState :=
-      { visibleGoals := #[⟨rootGoal, rootGoalMVars⟩], invisibleGoals := ∅ }
-    let uscript ← `(tacticSeq| $(← uscript.render tacticState):tactic*)
-    if options.traceScript then
-      addTryThisTacticSeqSuggestion (← getRef) uscript
-    if ← Check.script.isEnabled then
-      throwError "{Check.script.name}: structuring the script failed"
-    else
-      logWarning m!"aesop: structuring the script failed. Reporting unstructured script."
+  let sscript? ← optimizeScript uscript rootState rootGoal
+  checkAndTraceScript uscript sscript? rootState rootGoal options
+    (expectCompleteProof := completeProof) "aesop"
 
 def traceTree : SearchM Q Unit := do
   (← (← getRootGoal).get).traceTree .tree

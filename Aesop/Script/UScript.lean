@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Script.Step
 
 open Lean Lean.Meta
+open Lean.Parser.Tactic (tacticSeq)
 
 namespace Aesop.Script
 
@@ -24,6 +25,11 @@ def render (tacticState : TacticState) (s : UScript) :
     script := script'
     tacticState := tacticState'
   return script
+
+def renderTacticSeq (uscript : UScript) (preState : Meta.SavedState)
+    (goal : MVarId) : MetaM (TSyntax ``tacticSeq) := do
+  let tacticState ← preState.runMetaM' $ Script.TacticState.mkInitial goal
+  `(tacticSeq| $(← uscript.render tacticState):tactic*)
 
 def validate (s : UScript) : MetaM Unit :=
   s.forM (·.validate)
