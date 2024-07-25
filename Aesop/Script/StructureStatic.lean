@@ -55,11 +55,12 @@ where
     if mainGoal.mvars.isEmpty then
       if let some (_, step) := steps[mainGoal.goal] then
         return step
-    modify ({· with perfect := false })
     let firstStep? :=
       findFirstStep? tacticState.visibleGoals (steps[·.goal]) (·.fst)
     let some (_, _, _, firstStep) := firstStep?
       | throwError "aesop: internal error while structuring script: no script step found for any of the goals {tacticState.visibleGoals.map (·.goal.name)}"
+    if firstStep.preGoal != mainGoal.goal then
+      modify ({ · with perfect := false })
     return firstStep
 
 def UScript.toSScriptStatic (tacticState : TacticState) (uscript : UScript) :
