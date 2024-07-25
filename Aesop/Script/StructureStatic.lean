@@ -53,8 +53,9 @@ where
       StaticStructureM Step := do
     let steps := (← read).steps
     if mainGoal.mvars.isEmpty then
-      if let some (_, step) := steps[mainGoal.goal] then
-        return step
+      let some (_, step) := steps[mainGoal.goal]
+        | throwError "aesop: internal error while structuring script: no script step for main goal {mainGoal.goal.name}"
+      return step
     let firstStep? :=
       findFirstStep? tacticState.visibleGoals (steps[·.goal]) (·.fst)
     let some (_, _, _, firstStep) := firstStep?
