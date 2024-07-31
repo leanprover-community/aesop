@@ -176,6 +176,14 @@ def normSimpCore (goal : MVarId) (goalMVars : HashSet MVarId) :
             trace[debug] "assumed goal mvars: {goalMVars.toArray.map (·.name)}"
             let actualGoalMVars ← goal.getMVarDependencies
             trace[debug] "actual goal mvars:  {actualGoalMVars.toArray.map (·.name)}"
+            if ! (← getMVars (← goal.getType)).isEmpty then
+              trace[debug] "mvar in goal type"
+            for ldecl in (← goal.getDecl).lctx do
+              if ! (← getMVars ldecl.type).isEmpty then
+                trace[debug] "mvar in type of hyp {ldecl.userName}"
+              if let some val := ldecl.value? then
+                if ! (← getMVars val).isEmpty then
+                  trace[debug] "mvar in value of hyp {ldecl.userName}"
             restoreState preState
             anyUnassigned := true
             break
