@@ -167,14 +167,15 @@ def normSimpCore (goal : MVarId) (goalMVars : HashSet MVarId) :
     let result ← do
       match result with
       | .solved .. =>
-        trace[debug] "assumed goal mvars: {goalMVars.toArray.map (·.name)}"
-        let actualGoalMVars ← goal.getMVarDependencies
-        trace[debug] "actual goal mvars:  {actualGoalMVars.toArray.map (·.name)}"
         let mut anyUnassigned := false
         for mvar in goalMVars do
           if ! (← mvar.isAssignedOrDelayedAssigned) then
             aesop_trace[steps] "Normalisation simp solved the goal but dropped some metavariables. Skipping normalisation simp."
             trace[debug] "unassigned mvar: {mvar.name}"
+            trace[debug] "goal:{indentD goal}"
+            trace[debug] "assumed goal mvars: {goalMVars.toArray.map (·.name)}"
+            let actualGoalMVars ← goal.getMVarDependencies
+            trace[debug] "actual goal mvars:  {actualGoalMVars.toArray.map (·.name)}"
             restoreState preState
             anyUnassigned := true
             break
