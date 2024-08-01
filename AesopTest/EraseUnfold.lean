@@ -19,7 +19,7 @@ error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : foo = 37 := by
-  aesop (config := { terminal := true })
+  aesop (config := { terminal := true }) (erase Aesop.BuiltinRules.rfl)
 
 example : foo = 37 := by
   unfold foo
@@ -27,7 +27,7 @@ example : foo = 37 := by
 
 attribute [aesop norm unfold] foo
 
-example : foo = 37 := by aesop
+example : foo = 37 := by aesop (erase Aesop.BuiltinRules.rfl)
 
 attribute [-aesop] foo
 
@@ -36,7 +36,7 @@ error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : foo = 37 := by
-  aesop (config := { terminal := true })
+  aesop (config := { terminal := true }) (erase Aesop.BuiltinRules.rfl)
 
 example : foo = 37 := by
   unfold foo

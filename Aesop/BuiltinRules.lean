@@ -11,9 +11,10 @@ import Aesop.BuiltinRules.ApplyHyps
 import Aesop.BuiltinRules.DestructProducts
 import Aesop.BuiltinRules.Ext
 import Aesop.BuiltinRules.Intros
+import Aesop.BuiltinRules.Rfl
 import Aesop.BuiltinRules.Split
 import Aesop.BuiltinRules.Subst
-import Aesop.Frontend
+import Aesop.Frontend.Attribute
 
 namespace Aesop.BuiltinRules
 
@@ -48,8 +49,6 @@ theorem empty_false (h : Empty) : False := nomatch h
 
 @[aesop (rule_sets := [builtin]) norm destruct]
 theorem pEmpty_false (h : PEmpty) : False := nomatch h
-
-attribute [aesop (rule_sets := [builtin]) safe 0] Eq.refl HEq.refl
 
 attribute [aesop (rule_sets := [builtin]) norm constructors] ULift
 

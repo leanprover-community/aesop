@@ -113,6 +113,20 @@ def SingleRuleTac.toRuleTac (t : SingleRuleTac) : RuleTac := λ input => do
 @[inline]
 def RuleTac.ofSingleRuleTac := SingleRuleTac.toRuleTac
 
+def RuleTac.ofTacticSyntax (t : RuleTacInput → MetaM Syntax.Tactic) : RuleTac :=
+  RuleTac.ofSingleRuleTac λ input => do
+    let stx ← t input
+    let preState ← saveState
+    let postGoals ← Lean.Elab.Tactic.run input.goal (evalTactic stx) |>.run'
+    let postState ← saveState
+    let postGoals := postGoals.toArray
+    let step := {
+      preGoal := input.goal
+      tacticBuilders := #[return .unstructured stx]
+      preState, postState, postGoals
+    }
+    return (postGoals, some #[step], none)
+
 /--
 A tactic generator is a special sort of rule tactic, intended for use with
 generative machine learning methods. It generates zero or more tactics
