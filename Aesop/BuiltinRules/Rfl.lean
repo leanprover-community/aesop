@@ -12,6 +12,7 @@ namespace Aesop.BuiltinRules
 
 @[aesop safe 0 (rule_sets := [builtin])]
 def rfl : RuleTac :=
-  RuleTac.ofTacticSyntax λ _ => `(tactic| rfl)
+  RuleTac.ofTacticSyntax (λ _ => `(tactic| with_reducible rfl))
+    (scriptSyntax? := some λ _ => `(tactic| rfl))
 
 end Aesop.BuiltinRules

@@ -113,16 +113,22 @@ def SingleRuleTac.toRuleTac (t : SingleRuleTac) : RuleTac := λ input => do
 @[inline]
 def RuleTac.ofSingleRuleTac := SingleRuleTac.toRuleTac
 
-def RuleTac.ofTacticSyntax (t : RuleTacInput → MetaM Syntax.Tactic) : RuleTac :=
+def RuleTac.ofTacticSyntax (t : RuleTacInput → MetaM Syntax.Tactic)
+    (scriptSyntax? : Option (RuleTacInput → MetaM Syntax.Tactic) := none) :
+    RuleTac :=
   RuleTac.ofSingleRuleTac λ input => do
     let stx ← t input
     let preState ← saveState
     let postGoals ← Lean.Elab.Tactic.run input.goal (evalTactic stx) |>.run'
     let postState ← saveState
     let postGoals := postGoals.toArray
+    let stepStx ←
+      match scriptSyntax? with
+      | none => pure stx
+      | some stxGen => stxGen input
     let step := {
       preGoal := input.goal
-      tacticBuilders := #[return .unstructured stx]
+      tacticBuilders := #[return .unstructured stepStx]
       preState, postState, postGoals
     }
     return (postGoals, some #[step], none)

@@ -16,6 +16,11 @@ set_option aesop.check.script true
 -- use `sorry` because it generates lots of warnings.
 axiom ADMIT : ∀ {α : Sort _}, α
 
+-- Aesop's builtin `rfl` rule works up to reducible transparency. For this file,
+-- we want a more aggressive version that works up to default transparency.
+erase_aesop_rules [Aesop.BuiltinRules.rfl]
+local add_aesop_rules safe 0 (by rfl)
+
 class IsEmpty (α : Sort _) where
   false : α → False
 
