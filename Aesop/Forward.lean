@@ -432,8 +432,16 @@ def ForwardState.RemoveHypothesis (h : FVarId) (forwardState : ForwardState) :
     MetaM ForwardState := do sorry -- Are we removing the hyps associated with h?
 
 /-- Returns the queue of safe rules. -/
+def ForwardState.GetFirstNormRules (forwardState : ForwardState) :
+    (BinomialHeap (QueueEntry) (QueueEntry.le)) := forwardState.normQueue
+
+/-- Returns the queue of safe rules. -/
 def ForwardState.GetSafeRules (forwardState : ForwardState) :
-    (BinomialHeap (QueueEntry) (QueueEntry.le)) := sorry
+    (BinomialHeap (QueueEntry) (QueueEntry.le)) := forwardState.safeQueue
+
+/-- Returns the queue of safe rules. -/
+def ForwardState.GetUnsafeRules (forwardState : ForwardState) :
+    (BinomialHeap (QueueEntry) (QueueEntry.le)) := forwardState.unsafeQueue
 
 end ForwardState
 
