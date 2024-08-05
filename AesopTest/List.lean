@@ -386,7 +386,7 @@ theorem X.exists_mem_of_length_pos : ∀ {l : List α}, 0 < length l → ∃ a, 
 theorem X.length_pos_iff_exists_mem {l : List α} : 0 < length l ↔ ∃ a, a ∈ l := by
   aesop (add unsafe [length_pos_of_mem, exists_mem_of_length_pos])
 
-theorem ne_nil_of_length_pos {l : List α} : 0 < length l → l ≠ [] := by
+theorem ne_nil_of_length_pos' {l : List α} : 0 < length l → l ≠ [] := by
   aesop (add 1% cases List)
 
 theorem length_pos_of_ne_nil {l : List α} : l ≠ [] → 0 < length l := by
@@ -722,7 +722,7 @@ instance : Bind List where
 @[simp] theorem bind_eq_bind {α β} (f : α → List β) (l : List α) :
     l >>= f = l.bind f := rfl
 
-theorem bind_append (f : α → List β) (l₁ l₂ : List α) :
+theorem bind_append' (f : α → List β) (l₁ l₂ : List α) :
   (l₁ ++ l₂).bind f = l₁.bind f ++ l₂.bind f := by
   induction l₁ <;> aesop
 
@@ -830,7 +830,7 @@ attribute [-simp] reverse_reverse
 @[simp] theorem reverse_inj {l₁ l₂ : List α} : reverse l₁ = reverse l₂ ↔ l₁ = l₂ := by
   aesop (add safe forward reverse_injective)
 
-theorem reverse_eq_iff {l l' : List α} :
+theorem reverse_eq_iff' {l l' : List α} :
   l.reverse = l' ↔ l = l'.reverse := by
   aesop
 
@@ -880,11 +880,11 @@ theorem empty_iff_eq_nil {l : List α} : Empty l ↔ l = [] := by
   aesop (add 1% cases List)
 
 @[simp] theorem last_append_singleton {a : α} (l : List α) :
-  last (l ++ [a]) (append_ne_nil_of_ne_nil_right l _ (cons_ne_nil a _)) = a := by
+  last (l ++ [a]) (append_ne_nil_of_right_ne_nil l (cons_ne_nil a _)) = a := by
   induction l <;> aesop
 
 theorem last_append (l₁ l₂ : List α) (h : l₂ ≠ []) :
-  last (l₁ ++ l₂) (append_ne_nil_of_ne_nil_right l₁ l₂ h) = last l₂ h := by
+  last (l₁ ++ l₂) (append_ne_nil_of_right_ne_nil l₁ h) = last l₂ h := by
   induction l₁ <;> aesop
 
 theorem last_concat {a : α} (l : List α) : last (concat l a) (concat_ne_nil a l) = a := by
@@ -1022,7 +1022,7 @@ attribute [-simp] tail_cons
 @[simp] theorem X.tail_cons (a : α) (l : List α) : tail (a::l) = l := rfl
 
 -- attribute [-simp] ihead_append
-@[simp] theorem head_append [Inhabited α] (t : List α) {s : List α} (h : s ≠ []) :
+@[simp] theorem head_append' [Inhabited α] (t : List α) {s : List α} (h : s ≠ []) :
   ihead (s ++ t) = ihead s := by
   aesop (add 1% cases List)
 

@@ -23,7 +23,7 @@ def falso : TacticM Unit := do
     type := mkConst ``False
     isUnsafe := false
   }
-  closeMainGoal (mkConst `someaxiom)
+  closeMainGoal `falso (mkConst `someaxiom)
 
 example : False := by
   aesop (add safe falso)
@@ -45,7 +45,7 @@ def falso₂ : TacticM Unit := do
     hints := .regular 0
     safety := .safe
   }
-  closeMainGoal (mkConst `fromsomeaxiom₂)
+  closeMainGoal `falso₂ (mkConst `fromsomeaxiom₂)
 
 example : False := by
   aesop (add safe falso₂)
