@@ -386,7 +386,8 @@ theorem X.exists_mem_of_length_pos : ∀ {l : List α}, 0 < length l → ∃ a, 
 theorem X.length_pos_iff_exists_mem {l : List α} : 0 < length l ↔ ∃ a, a ∈ l := by
   aesop (add unsafe [length_pos_of_mem, exists_mem_of_length_pos])
 
-theorem ne_nil_of_length_pos' {l : List α} : 0 < length l → l ≠ [] := by
+-- attribute [-simp] ne_nil_of_length_pos
+theorem X.ne_nil_of_length_pos {l : List α} : 0 < length l → l ≠ [] := by
   aesop (add 1% cases List)
 
 theorem length_pos_of_ne_nil {l : List α} : l ≠ [] → 0 < length l := by
@@ -722,7 +723,8 @@ instance : Bind List where
 @[simp] theorem bind_eq_bind {α β} (f : α → List β) (l : List α) :
     l >>= f = l.bind f := rfl
 
-theorem bind_append' (f : α → List β) (l₁ l₂ : List α) :
+attribute [-simp] bind_append
+theorem X.bind_append (f : α → List β) (l₁ l₂ : List α) :
   (l₁ ++ l₂).bind f = l₁.bind f ++ l₂.bind f := by
   induction l₁ <;> aesop
 
@@ -830,7 +832,8 @@ attribute [-simp] reverse_reverse
 @[simp] theorem reverse_inj {l₁ l₂ : List α} : reverse l₁ = reverse l₂ ↔ l₁ = l₂ := by
   aesop (add safe forward reverse_injective)
 
-theorem reverse_eq_iff' {l l' : List α} :
+-- attribute [-simp] reverse_eq_iff
+theorem X.reverse_eq_iff {l l' : List α} :
   l.reverse = l' ↔ l = l'.reverse := by
   aesop
 
@@ -1021,8 +1024,8 @@ attribute [-simp] tail_nil
 attribute [-simp] tail_cons
 @[simp] theorem X.tail_cons (a : α) (l : List α) : tail (a::l) = l := rfl
 
--- attribute [-simp] ihead_append
-@[simp] theorem head_append' [Inhabited α] (t : List α) {s : List α} (h : s ≠ []) :
+-- attribute [-simp] head_append
+@[simp] theorem X.head_append [Inhabited α] (t : List α) {s : List α} (h : s ≠ []) :
   ihead (s ++ t) = ihead s := by
   aesop (add 1% cases List)
 
