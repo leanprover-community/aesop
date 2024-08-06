@@ -145,9 +145,9 @@ def openRuleType (pat : RulePattern) (inst : RulePatternInstantiation)
   for h : i in [:mvars.size] do
     if let some inst ← pat.getInstantiation inst i then
       let mvarId := mvars[i]'h.2 |>.mvarId!
-      -- We use `checkedAssign`, rather than `assign`, to make sure that
-      -- universe metavariables occurring in `mvars` are assigned.
-      if ← mvarId.checkedAssign inst then
+      -- We use `isDefEq` to make sure that universe metavariables occurring in
+      -- the type of `mvarId` are assigned.
+      if ← isDefEq (.mvar mvarId) inst then
         assigned := assigned.insert mvarId
       else
         throwError "openRuleType: type-incorrect pattern instantiation: argument has type '{← mvarId.getType}' but pattern instantiation '{inst}' has type '{← inferType inst}'"
