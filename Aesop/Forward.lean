@@ -392,13 +392,13 @@ structure ForwardState where
 
 /- Index can also give the `Expr` of which rule it thinks we should look at
 and the slot `i` associated to the hypothesis.-/
-def ForwardState.AddHypothesis (h : Expr) (forwardState : ForwardState) : MetaM ForwardState := do
+def ForwardState.AddHypothesis (h : FVarId) (forwardState : ForwardState) : MetaM ForwardState := do
   let mut forwardState := forwardState
-  for (r, s) in ← forwardState.index.get h do
+  for (r, s) in ← forwardState.index.get (← h.getType) do
     let RS ← match forwardState.ruleStates.find? r.name with
       | some n => pure n
       | none => RuleState.ofExpr r.expr
-    let (RS, Arr) ← RS.AddHypothesis s sorry --h
+    let (RS, Arr) ← RS.AddHypothesis s h
     forwardState := {
       forwardState with
       ruleStates := forwardState.ruleStates.insert r.name RS
@@ -425,13 +425,12 @@ def ForwardState.AddHypothesis (h : Expr) (forwardState : ForwardState) : MetaM 
   /- Return updated map-/
   return forwardState
 
-
 -- Are we removing the hyps associated with h?
 def ForwardState.RemoveHypothesis (h : FVarId) (forwardState : ForwardState) :
     MetaM ForwardState := do sorry
 
 /-- Returns the queue of safe rules. -/
-def ForwardState.GetFirstNormRules (forwardState : ForwardState) :
+def ForwardState.GetNormRules (forwardState : ForwardState) :
     (BinomialHeap (QueueEntry) (QueueEntry.le)) := forwardState.normQueue
 
 /-- Returns the queue of safe rules. -/
@@ -441,6 +440,28 @@ def ForwardState.GetSafeRules (forwardState : ForwardState) :
 /-- Returns the queue of safe rules. -/
 def ForwardState.GetUnsafeRules (forwardState : ForwardState) :
     (BinomialHeap (QueueEntry) (QueueEntry.le)) := forwardState.unsafeQueue
+
+/-- Returns the queue of safe rules. -/
+def ForwardState.PopNormRules (forwardState : ForwardState) :
+    Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
+  match forwardState.normQueue.deleteMin with
+  | none => none
+  | some (q, bh) => (q.expr, bh)
+
+/-- Returns the queue of safe rules. -/
+def ForwardState.PopSafeRules (forwardState : ForwardState) :
+    Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
+  match forwardState.safeQueue.deleteMin with
+  | none => none
+  | some (q, bh) => (q.expr, bh)
+
+/-- Returns the queue of safe rules. -/
+def ForwardState.PopUnsafeRules (forwardState : ForwardState) :
+    Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
+  match forwardState.unsafeQueue.deleteMin with
+  | none => none
+  | some (q, bh) => (q.expr, bh)
+
 
 end ForwardState
 
