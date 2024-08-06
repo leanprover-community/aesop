@@ -6,15 +6,15 @@ Authors: Xavier Généreux, Jannis Limperg
 
 import Lean
 import Aesop
-import Std.Lean.HashMap
-import Std.Data.BinomialHeap.Basic
--- Batteries
+import Batteries.Lean.HashMap
+import Batteries.Data.BinomialHeap.Basic
+--
 import Aesop.Index.Basic
 
 
 
 open Lean Meta
-open Std (BinomialHeap)
+open Batteries (BinomialHeap)
 
 /- Building data stucture for partial matches. -/
 /- TODO, figure out how to make sure we don't have duplicate matches.-/
@@ -425,11 +425,10 @@ def ForwardState.AddHypothesis (h : Expr) (forwardState : ForwardState) : MetaM 
   /- Return updated map-/
   return forwardState
 
-/- J'aimerais que initialement la map envoie toutes les Expr à des RS vides.
-Je ne sais pas comment initaliser tout ca.-/
 
+-- Are we removing the hyps associated with h?
 def ForwardState.RemoveHypothesis (h : FVarId) (forwardState : ForwardState) :
-    MetaM ForwardState := do sorry -- Are we removing the hyps associated with h?
+    MetaM ForwardState := do sorry
 
 /-- Returns the queue of safe rules. -/
 def ForwardState.GetFirstNormRules (forwardState : ForwardState) :
