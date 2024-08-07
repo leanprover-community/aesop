@@ -162,7 +162,7 @@ structure Options where
 -/
 register_option aesop.dev.dynamicStructuring : Bool := {
   descr := "(aesop) Only for use by Aesop developers. Enables dynamic script structuring."
-  defValue := false
+  defValue := true
 }
 
 end Aesop
