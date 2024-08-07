@@ -79,7 +79,10 @@ instance VariableAtlas.instEmptyCollection : EmptyCollection VariableAtlas := �
 structure RuleState where
   /-- Expression of the associated theorem. -/
   expr : Expr
-  /-- Number of input hypotheses of the rule. -/
+  /--
+  Number of input hypotheses of the rule.
+
+  (** At the moment is number of i̶n̶p̶u̶t̶ hypotheses? **) -/
   len : Nat
   /-- Slots representing each of the maximal input hypotheses. For each index `i` of `slots`,
   `slots[i].slot = i`. -/
@@ -97,20 +100,22 @@ def RuleState.ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
   let e ← inferType thm
   let ⟨args, _, conclusion⟩ ← forallMetaTelescope e
   let metaState ← saveState
-  let args ← args.mapM fun exp : Expr => do
-    let type ← exp.mvarId!.getType
+  let args ← args.mapM fun expr : Expr => do
+    let type ← expr.mvarId!.getType -- X: What does this do?
     let deps ← getMVars type
-    return (exp.mvarId!, HashSet.ofArray deps)
+    return (expr.mvarId!, HashSet.ofArray deps)
   let mut slots : Array Slot := Array.mkEmpty args.size
   let mut previousDeps := HashSet.empty
   for h : i in [:args.size] do
     let (mvarId, deps) := args[i]'h.2
     let commonDeps := HashSet.inter previousDeps deps
-    -- We will update `slot = 0` with correct position in the final Array later
+    /- We update `slot = 0` with correct ordering later (see **) -/
     slots := slots.push ⟨mvarId, 0, deps, commonDeps, i⟩
     previousDeps := previousDeps.insertMany deps
   let len := slots.size
+  /- Filtering out non-input hypetheses-/
   slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
+  /- (**) Assigns ordering of slots -/
   slots := slots.mapIdx fun slot current => {current with slot}
   let mut atlas : VariableAtlas := ∅
   return {expr := thm, len, slots, metaState, conclusion, atlas}
@@ -336,25 +341,40 @@ and the `i`-th argument of the type of `r.expr` (counting from zero) likely
 unifies with `T`.
 -/
 structure ForwardIndex where
-  tree : DiscrTree (ForwardRule × Slot)
+  tree : DiscrTree (ForwardRule × Nat)
 
 namespace ForwardIndex
 
+/-
+let args ← args.mapM fun expr : Expr => do
+    let type ← expr.mvarId!.getType -- X: What does this do?
+    let deps ← getMVars type
+    return (expr, HashSet.ofArray deps)
+let mut previousDeps := HashSet.empty
+let (mvarId, deps) := args[i]'h.2
+previousDeps := previousDeps.insertMany deps
+slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
+-/
+
+/- Insert the input hypotheses (and only the input hypotheses) of the rule in the index. -/
 def insert (r : ForwardRule) (idx : ForwardIndex) : MetaM ForwardIndex := do
   let type ← inferType r.expr
   withReducible do
     forallTelescopeReducing type λ args _ => do
-      let args' ← args.mapM fun exp : Expr => do
-        let type ← exp.mvarId!.getType
+      let args ← args.mapM fun expr : Expr => do
+        let type ← expr.mvarId!.getType
         let deps ← getMVars type
-        return (exp.mvarId!, HashSet.ofArray deps)
+        return (expr, HashSet.ofArray deps)
       let mut tree := idx.tree
+      let mut previousDeps : HashSet MVarId := HashSet.empty
       for h : i in [:args.size] do
-        let arg := args[i]!
-        tree ← sorry -- tree.insert arg (r, i) discrTreeConfig
+        let (arg, deps) := args[i]
+        previousDeps := previousDeps.insertMany deps
+        if ! previousDeps.contains arg.mvarId! then do
+          tree ← tree.insert arg (r, i) discrTreeConfig
       return ⟨tree⟩
 
-def get (idx : ForwardIndex) (e : Expr) : MetaM (Array (ForwardRule × Slot)) :=
+def get (idx : ForwardIndex) (e : Expr) : MetaM (Array (ForwardRule × Nat)) :=
   idx.tree.getUnify e discrTreeConfig
 
 end ForwardIndex
@@ -394,11 +414,16 @@ structure ForwardState where
 and the slot `i` associated to the hypothesis.-/
 def ForwardState.AddHypothesis (h : FVarId) (forwardState : ForwardState) : MetaM ForwardState := do
   let mut forwardState := forwardState
-  for (r, s) in ← forwardState.index.get (← h.getType) do
+  for (r, i) in ← forwardState.index.get (← h.getType) do
     let RS ← match forwardState.ruleStates.find? r.name with
       | some n => pure n
       | none => RuleState.ofExpr r.expr
-    let (RS, Arr) ← RS.AddHypothesis s h
+    let slot := match RS.slots.find? (fun s => s.position = i) with
+    | none => sorry
+    /- This should not happen as we should have the invariant that the positions
+    given by the index match exactly to the ones in the slot. -/
+    | some slot => slot
+    let (RS, Arr) ← RS.AddHypothesis slot h
     forwardState := {
       forwardState with
       ruleStates := forwardState.ruleStates.insert r.name RS
