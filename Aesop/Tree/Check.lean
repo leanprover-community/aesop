@@ -167,7 +167,7 @@ def checkMVars (root : MVarClusterRef) (rootMetaState : Meta.SavedState) :
       checkNormMVars g
       let actualPreNormMVars ← g.runMetaMInParentState'
         g.preNormGoal.getMVarDependencies
-      let expectedMVars := Std.HashSet.ofList g.mvars.toArray.toList -- HACK!
+      let expectedMVars := Std.HashSet.ofArray g.mvars.toArray
       unless actualPreNormMVars == expectedMVars do throwError
         "{Check.tree.name}: goal {g.id} reports incorrect unassigned mvars.\n  reported: {g.mvars.toArray.map (·.name)}\n  actual: {actualPreNormMVars.toArray.map (·.name)}"
 
