@@ -7,7 +7,7 @@ import Batteries.Data.Array.Basic
 import Batteries.Data.Array.Merge
 import Lean.Message
 
-open Lean
+open Lean Std
 
 namespace Aesop
 

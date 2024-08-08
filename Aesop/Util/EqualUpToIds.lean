@@ -6,7 +6,7 @@ Authors: Jannis Limperg
 import Lean.Elab.Tactic.Basic
 import Batteries.Lean.Meta.SavedState
 
-open Lean Lean.Meta
+open Lean Std Lean.Meta
 
 namespace Aesop
 
@@ -133,7 +133,7 @@ mutual
     | .mvar m₁, .mvar m₂ => do
       if let some result ← equalCommonLMVars? m₁ m₂ then
         return result
-      else if let some m₂' := (← get).equalLMVarIds.find? m₁ then
+      else if let some m₂' := (← get).equalLMVarIds[m₁]? then
         return m₂' == m₂
       else
         modify λ s => { s with equalLMVarIds := s.equalLMVarIds.insert m₁ m₂ }
@@ -175,7 +175,7 @@ mutual
       Expr → Expr → ReaderT GoalContext EqualUpToIdsM Bool
     | .bvar i, .bvar j => return i == j
     | .fvar fvarId₁, .fvar fvarId₂ =>
-      return (← read).equalFVarIds.find? fvarId₁ == some fvarId₂
+      return (← read).equalFVarIds[fvarId₁]? == some fvarId₂
     | .sort u, .sort v => levelsEqualUpToIdsCore u v
     | .const decl₁ lvls₁, .const decl₂ lvls₂ => do
       if decl₁ == decl₂ && lvls₁.length == lvls₂.length then
@@ -236,7 +236,7 @@ mutual
         if ! (← readAllowAssignmentDiff) then
           return false
         let map := (← get).leftUnassignedMVarValues
-        if let some e₁ := map.find? m₁ then
+        if let some e₁ := map[m₁]? then
           exprsEqualUpToIdsCore e₁ e₂
         else
           modify λ s => {
@@ -248,7 +248,7 @@ mutual
         if ! (← readAllowAssignmentDiff) then
           return false
         let map := (← get).rightUnassignedMVarValues
-        if let some e₂ := map.find? m₂ then
+        if let some e₂ := map[m₂]? then
           exprsEqualUpToIdsCore e₁ e₂
         else
           modify λ s => {
@@ -305,7 +305,7 @@ mutual
       if let some result ← equalCommonMVars? mvarId₁ mvarId₂ then
         trace[Aesop.Util.EqualUpToIds] "common mvars are {if result then "identical" else "different"}"
         return result
-      else if let some m₂ := (← get).equalMVarIds.find? mvarId₁ then
+      else if let some m₂ := (← get).equalMVarIds[mvarId₁]? then
         if mvarId₂ == m₂ then
           trace[Aesop.Util.EqualUpToIds] "mvars already known to be equal"
           return true
