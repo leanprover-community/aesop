@@ -144,7 +144,7 @@ def SimpResult.toNormRuleResult (originalGoal : MVarId)
       mkNormSimpScriptStep originalGoal newGoal preState postState usedTheorems
     return some $ .succeeded newGoal #[step]
 
-def normSimpCore (goal : MVarId) (goalMVars : HashSet MVarId) :
+def normSimpCore (goal : MVarId) (goalMVars : Std.HashSet MVarId) :
     NormM (Option NormRuleResult) := do
   let ctx := (← read).normSimpContext
   goal.withContext do
@@ -215,7 +215,7 @@ def checkSimp (name : String) (mayCloseGoal : Bool) (goal : MVarId)
         throwError "{Check.rules.name}: {name} solved the goal"
     return result?
 
-def normSimp (goal : MVarId) (goalMVars : HashSet MVarId) :
+def normSimp (goal : MVarId) (goalMVars : Std.HashSet MVarId) :
     NormM (Option NormRuleResult) := do
   profilingRule .normSimp (wasSuccessful := λ _ => true) do
     checkSimp "norm simp" (mayCloseGoal := true) goal do
@@ -320,7 +320,7 @@ def NormStep.unfold : NormStep
     let r := (← normUnfold goal).map (.normUnfold, ·)
     return optNormRuleResultToNormSeqResult r
 
-def NormStep.simp (mvars : HashSet MVarId) : NormStep
+def NormStep.simp (mvars : Std.HashSet MVarId) : NormStep
   | goal, _, _ => do
     if ! (← readThe NormM.Context).normSimpContext.enabled then
       aesop_trace[steps] "norm simp is disabled (simp_options := \{ ..., enabled := false })"
