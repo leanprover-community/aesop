@@ -54,7 +54,7 @@ initialize
 def getGlobalRuleSetData (rsName : RuleSetName) :
     m (RuleSetExtension × Name × SimpExtension × Name × Simp.SimprocExtension) := do
   let (some (ext, simpExtName, simprocExtName)) :=
-    (← getDeclaredRuleSets).find? rsName
+    (← getDeclaredRuleSets)[rsName]?
     | throwError "no such rule set: '{rsName}'\n  (Use 'declare_aesop_rule_set' to declare rule sets.\n   Declared rule sets are not visible in the current file; they only become visible once you import the declaring file.)"
   let some simpExt ← getSimpExtension? simpExtName
     | throwError "internal error: expected '{simpExtName}' to be a declared simp extension"
