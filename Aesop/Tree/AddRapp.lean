@@ -20,10 +20,10 @@ structure AddRapp extends RuleApplication where
 
 private def clusterGoals (goals : Array Goal) : Array (Array Goal) := Id.run do
   let mut clusters := UnionFind.ofArray goals
-  let mut mvarOccs : HashMap MVarId (Array Goal) := {}
+  let mut mvarOccs : Std.HashMap MVarId (Array Goal) := {}
   for g in goals do
     for m in g.mvars do
-      match mvarOccs.find? m with
+      match mvarOccs[m]? with
       | some otherOccs =>
         for g' in otherOccs do
           clusters := clusters.merge g g'
@@ -33,12 +33,12 @@ private def clusterGoals (goals : Array Goal) : Array (Array Goal) := Id.run do
   return clusters.sets.fst
 
 private def findPathForAssignedMVars (assignedMVars : UnorderedArraySet MVarId)
-    (start : GoalRef) : TreeM (Array RappRef × HashSet GoalId) := do
+    (start : GoalRef) : TreeM (Array RappRef × Std.HashSet GoalId) := do
   if assignedMVars.isEmpty then
     return (#[], {})
   let unseen : IO.Ref (UnorderedArraySet MVarId) ← IO.mkRef assignedMVars
   let pathRapps : IO.Ref (Array RappRef) ← IO.mkRef #[]
-  let pathGoals : IO.Ref (HashSet GoalId) ← IO.mkRef {}
+  let pathGoals : IO.Ref (Std.HashSet GoalId) ← IO.mkRef {}
   preTraverseUp
     (λ gref => do
       let id := (← gref.get).originalGoalId
@@ -68,7 +68,7 @@ private def getGoalsToCopy (assignedMVars : UnorderedArraySet MVarId)
     (start : GoalRef) : TreeM (Array GoalRef) := do
   let (pathRapps, pathGoals) ← findPathForAssignedMVars assignedMVars start
   let mut toCopy := #[]
-  let mut toCopyIds := HashSet.empty
+  let mut toCopyIds := Std.HashSet.empty
   for rref in pathRapps do
     for cref in (← rref.get).children do
       for gref in (← cref.get).goals do
@@ -159,7 +159,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   let (originalSubgoalMVars, assignedMVars, assignedOrDroppedMVars) ←
     r.postState.runMetaM' do
       -- Get mvars which the original subgoals depend on.
-      let originalSubgoalMVars : HashSet MVarId ←
+      let originalSubgoalMVars : Std.HashSet MVarId ←
         originalSubgoals.foldlM (init := ∅) λ acc mvarId =>
           return acc.insertMany (← mvarId.getMVarDependencies)
 

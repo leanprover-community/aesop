@@ -53,7 +53,7 @@ protected def ofArray [ord : Ord α] [Inhabited α] (xs : Array α) :
 protected def ofArraySlow (xs : Array α) : UnorderedArraySet α :=
   xs.foldl (init := {}) λ s x => s.insert x
 
-protected def ofHashSet [Hashable α] (xs : HashSet α) : UnorderedArraySet α :=
+protected def ofHashSet [Hashable α] (xs : Std.HashSet α) : UnorderedArraySet α :=
   ⟨xs.toArray⟩
 
 protected def ofPersistentHashSet [Hashable α] (xs : PersistentHashSet α) : UnorderedArraySet α :=

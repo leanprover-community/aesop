@@ -116,10 +116,10 @@ end RuleStatsTotals
 namespace Stats
 
 def ruleStatsTotals (p : Stats)
-    (init : HashMap DisplayRuleName RuleStatsTotals := ∅) :
-    HashMap DisplayRuleName RuleStatsTotals :=
+    (init : Std.HashMap DisplayRuleName RuleStatsTotals := ∅) :
+    Std.HashMap DisplayRuleName RuleStatsTotals :=
   p.ruleStats.foldl (init := init) λ m rp => Id.run do
-    let mut stats := m.findD rp.rule ∅
+    let mut stats := m.getD rp.rule ∅
     if rp.successful then
       stats := { stats with
         numSuccessful := stats.numSuccessful + 1

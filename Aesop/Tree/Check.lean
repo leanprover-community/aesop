@@ -198,7 +198,7 @@ def checkMVars (root : MVarClusterRef) (rootMetaState : Meta.SavedState) :
 -- state or has an introducing rapp.
 def checkIntroducedMVars (root : MVarClusterRef)
     (rootMetaState : Meta.SavedState) : MetaM Unit := do
-  let declaredAtRoot : HashSet MVarId :=
+  let declaredAtRoot : Std.HashSet MVarId :=
     rootMetaState.meta.mctx.decls.foldl (init := ∅) λ acc mvarId _ =>
       acc.insert mvarId
   let introducedMVarsRef ← IO.mkRef declaredAtRoot

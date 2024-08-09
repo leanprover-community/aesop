@@ -28,16 +28,16 @@ structure Context where
   allowAssignmentDiff : Bool
 
 structure State where
-  equalMVarIds : HashMap MVarId MVarId := {}
-  equalLMVarIds : HashMap LMVarId LMVarId := {}
+  equalMVarIds : Std.HashMap MVarId MVarId := {}
+  equalLMVarIds : Std.HashMap LMVarId LMVarId := {}
   /-- A map from metavariables which are unassigned in the left goal
   to their corresponding expression in the right goal. Only used when
   `allowAssignmentDiff = true`. -/
-  leftUnassignedMVarValues : HashMap MVarId Expr := {}
+  leftUnassignedMVarValues : Std.HashMap MVarId Expr := {}
   /-- A map from metavariables which are unassigned in the right goal
   to their corresponding expression in the left goal. Only used when
   `allowAssignmentDiff = true`. -/
-  rightUnassignedMVarValues : HashMap MVarId Expr := {}
+  rightUnassignedMVarValues : Std.HashMap MVarId Expr := {}
 
 end EqualUpToIdsM
 
@@ -101,7 +101,7 @@ structure GoalContext where
   localInstances₁ : LocalInstances
   lctx₂ : LocalContext
   localInstances₂ : LocalInstances
-  equalFVarIds : HashMap FVarId FVarId := {}
+  equalFVarIds : Std.HashMap FVarId FVarId := {}
 
 inductive MVarValue where
   | mvarId (mvarId : MVarId)
