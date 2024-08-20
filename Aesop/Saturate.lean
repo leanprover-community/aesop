@@ -43,22 +43,35 @@ where
     trace[saturate] "goal {goal.name}:{indentD goal}"
     let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
     let preState ← show MetaM _ from saveState
-    let normMatchResults ← rs.applicableNormalizationRulesWith goal
-      (include? := (isForwardOrDestructRuleName ·.name))
-    if let some goal ← runFirstRule goal mvars preState normMatchResults then
+    if let some goal ← tryNormRules goal mvars preState then
+      return ← go goal
+    else if let some goal ← trySafeRules goal mvars preState then
       return ← go goal
     else
-      let safeMatchResults ← rs.applicableSafeRulesWith goal
-        (include? := (isForwardOrDestructRuleName ·.name))
-      if let some goal ← runFirstRule goal mvars preState safeMatchResults then
-        return ← go goal
-      else
-        clearForwardImplDetailHyps goal
+      clearForwardImplDetailHyps goal
+
+  tryNormRules (goal : MVarId) (mvars : UnorderedArraySet MVarId)
+      (preState : Meta.SavedState) : SaturateM (Option MVarId) :=
+    withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying normalisation rules") do
+      let matchResults ←
+        withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting normalisation rules") do
+        rs.applicableNormalizationRulesWith goal
+          (include? := (isForwardOrDestructRuleName ·.name))
+      runFirstRule goal mvars preState matchResults
+
+  trySafeRules (goal : MVarId) (mvars : UnorderedArraySet MVarId)
+      (preState : Meta.SavedState) : SaturateM (Option MVarId) :=
+    withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying safe rules") do
+      let matchResults ←
+        withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting safe rules") do
+        rs.applicableSafeRulesWith goal
+          (include? := (isForwardOrDestructRuleName ·.name))
+      runFirstRule goal mvars preState matchResults
 
   runRule {α} (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       (preState : Meta.SavedState) (matchResult : IndexMatchResult (Rule α)) :
       SaturateM (Option (MVarId × Option (Array Script.LazyStep))) := do
-    trace[saturate] "running rule {matchResult.rule.name}"
+    withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} running rule {matchResult.rule.name}") do
     let input := {
       indexMatchLocations := matchResult.locations
       patternInstantiations := matchResult.patternInstantiations
@@ -69,7 +82,7 @@ where
       runRuleTac matchResult.rule.tac.run matchResult.rule.name preState input
     match tacResult with
     | .inl exc =>
-      trace[saturate] "rule failed:{indentD exc.toMessageData}"
+      trace[saturate] exc.toMessageData
       return none
     | .inr output =>
       let (goal, postState, scriptSteps?) ← getSingleGoal output
