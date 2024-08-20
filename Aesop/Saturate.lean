@@ -98,12 +98,14 @@ def saturate (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') :
     let tacticState ← Script.TacticState.mkInitial goal
     let preGoal := goal
     let (goal, steps) ← saturateCore rs goal |>.run { options } |>.run
-    let uscript : Script.UScript ← steps.mapM (·.toStep)
-    let tacticSeq ← `(tacticSeq| $(← uscript.render tacticState):tactic*)
-    checkRenderedScriptIfEnabled tacticSeq preState preGoal
-      (expectCompleteProof := false)
-    if options.traceScript then
-      addTryThisTacticSeqSuggestion (← getRef) tacticSeq
+    let options ← options.toOptions'
+    if options.generateScript then
+      let uscript : Script.UScript ← steps.mapM (·.toStep)
+      let tacticSeq ← `(tacticSeq| $(← uscript.render tacticState):tactic*)
+      checkRenderedScriptIfEnabled tacticSeq preState preGoal
+        (expectCompleteProof := false)
+      if options.traceScript then
+        addTryThisTacticSeqSuggestion (← getRef) tacticSeq
     return goal
 
 end Aesop
