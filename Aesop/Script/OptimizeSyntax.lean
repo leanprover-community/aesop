@@ -6,7 +6,9 @@ Authors: Jannis Limperg
 
 import Lean
 
-open Lean Lean.Meta
+namespace Aesop
+
+open Lean Lean.Meta Lean.Parser.Tactic
 
 variable [Monad m] [MonadQuotation m]
 
@@ -26,7 +28,50 @@ partial def optimizeFocusRenameI : Syntax → m Syntax
       | _ => return stx
     | _ => return stx
 
-def optimizeSyntax (stx : TSyntax kind) : m (TSyntax kind) :=
-  return ⟨← optimizeFocusRenameI stx.raw⟩
+private partial def addIdents (acc : HashSet Name) : Syntax → HashSet Name
+  | .missing | .atom .. => acc
+  | .ident (val := val) .. => acc.insert val
+  | .node _ _ args =>
+    args.foldl (init := acc) λ acc stx => addIdents acc stx
+
+def optimizeInitialRenameI : Syntax → m Syntax
+  | stx@`(tacticSeq| $tacs:tactic*) => do
+    let tacs := tacs.getElems
+    let some (tac : TSyntax `tactic) := tacs[0]?
+      | return stx
+    match tac with
+    | `(tactic| rename_i $[$ns:ident]*) =>
+      let usedNames := tacs[1:].foldl (init := ∅) λ usedNames stx =>
+        addIdents usedNames stx.raw
+      let mut dropUntil := 0
+      for n in ns do
+        if usedNames.contains n.getId then
+          break
+        else
+          dropUntil := dropUntil + 1
+      if dropUntil == 0 then
+        return stx
+      else if dropUntil == ns.size then
+        tacsToTacticSeq tacs[1:]
+      else
+        let ns : TSyntaxArray `ident := ns[dropUntil:].toArray
+        let tac ← `(tactic| rename_i $[$ns:ident]*)
+        let mut result : Array (TSyntax `tactic) := Array.mkEmpty tacs.size
+        result := result.push tac
+        result := result ++ tacs[1:]
+        tacsToTacticSeq result
+    | _ => return stx
+  | stx => return stx
+where
+  -- Inlining this helper function triggers a code gen issue:
+  -- https://github.com/leanprover/lean4/issues/4548
+  tacsToTacticSeq (tacs : Array (TSyntax `tactic)) : m (TSyntax ``tacticSeq) :=
+    `(tacticSeq| $tacs:tactic*)
+
+def optimizeSyntax (stx : TSyntax kind) : m (TSyntax kind) := do
+  let mut stx := stx.raw
+  stx ← optimizeFocusRenameI stx
+  stx ← optimizeInitialRenameI stx
+  return ⟨stx⟩
 
 end Aesop
