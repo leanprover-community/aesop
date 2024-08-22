@@ -1,6 +1,8 @@
 name = "aesop"
 defaultTargets = ["Aesop"]
 testDriver = "AesopTest"
+lintDriver = "batteries/runLinter"
+lintDriverArgs = ["Aesop"]
 precompileModules = false # We would like to turn this on, but it breaks the Mathlib cache.
 
 [[require]]
