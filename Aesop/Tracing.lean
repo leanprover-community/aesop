@@ -62,6 +62,10 @@ initialize debug : TraceOption ←
   registerTraceOption `debug
     "(aesop) Print various debugging information."
 
+initialize script : TraceOption ←
+  registerTraceOption `script
+    "(aesop) Print a trace of script generation."
+
 end TraceOption
 
 section
