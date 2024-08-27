@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Lean
+import Std
 
 namespace Aesop
 
@@ -28,7 +29,8 @@ partial def optimizeFocusRenameI : Syntax → m Syntax
       | _ => return stx
     | _ => return stx
 
-private partial def addIdents (acc : HashSet Name) : Syntax → HashSet Name
+private partial def addIdents (acc : Std.HashSet Name) :
+    Syntax → Std.HashSet Name
   | .missing | .atom .. => acc
   | .ident (val := val) .. => acc.insert val
   | .node _ _ args =>
