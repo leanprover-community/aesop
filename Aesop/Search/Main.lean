@@ -145,6 +145,7 @@ def traceScript (completeProof : Bool) : SearchM Q Unit :=
   uscript.checkIfEnabled
   let rootGoal ← getRootMVarId
   let rootState ← getRootMetaState
+  aesop_trace[script] "Unstructured script:{indentD $ toMessageData $ ← uscript.renderTacticSeq rootState rootGoal}"
   let sscript? ← optimizeScript uscript rootState rootGoal
   checkAndTraceScript uscript sscript? rootState rootGoal options
     (expectCompleteProof := completeProof) "aesop"

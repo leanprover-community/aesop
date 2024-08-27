@@ -122,12 +122,21 @@ def mkNormSimpScriptStep
     (preState postState : Meta.SavedState) (usedTheorems : Simp.UsedSimps) :
     NormM Script.LazyStep := do
   let ctx := (← read).normSimpContext
-  let tacticBuilder :=
+  let simpBuilder :=
+    TacticBuilder.simpAllOrSimpAtStar (simpAll := ctx.useHyps) preGoal
+      ctx.configStx? usedTheorems
+  let simpOnlyBuilder :=
     TacticBuilder.simpAllOrSimpAtStarOnly (simpAll := ctx.useHyps) preGoal
       ctx.configStx? usedTheorems
+  let tacticBuilders :=
+    if (← read).options.useDefaultSimpSet then
+      #[simpOnlyBuilder, simpBuilder]
+    else
+      #[simpOnlyBuilder]
   return {
     postGoals := postGoal?.toArray
-    tacticBuilders := #[tacticBuilder]
+    tacticBuilders
+    tacticBuilders_ne := by simp only [tacticBuilders]; split <;> simp
     preGoal, preState, postState
   }
 
