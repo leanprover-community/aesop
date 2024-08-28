@@ -45,7 +45,7 @@ protected def ofSortedArray (xs : Array α) : UnorderedArraySet α :=
 
 set_option linter.unusedVariables false in
 /-- O(n*log(n)) -/
-protected def ofArray [ord : Ord α] [Inhabited α] (xs : Array α) :
+protected def ofArray [ord : Ord α] (xs : Array α) :
     UnorderedArraySet α :=
   ⟨xs.sortDedup⟩
 
@@ -91,7 +91,7 @@ def foldM [Monad m] (f : σ → α → m σ) (init : σ) (s : UnorderedArraySet 
     m σ :=
   s.rep.foldlM f init
 
-instance [Monad m] : ForIn m (UnorderedArraySet α) α where
+instance : ForIn m (UnorderedArraySet α) α where
   forIn s := s.rep.forIn
 
 /-- O(n) -/

@@ -139,20 +139,61 @@ where
   mkPat (fvarId : FVarId) : MetaM (TSyntax `rintroPat) := do
     `(rintroPat| $(mkIdent $ ← fvarId.getUserName):ident)
 
-def simpAllOrSimpAtStarOnly (simpAll : Bool) (inGoal : MVarId)
+private def simpAllOrSimpAtStarStx [Monad m] [MonadQuotation m] (simpAll : Bool)
+    (configStx? : Option Term) : m (Syntax.Tactic) :=
+  if simpAll then
+    match configStx? with
+    | none => `(tactic| simp_all)
+    | some cfg => `(tactic| simp_all (config := $cfg))
+  else
+    match configStx? with
+    | none => `(tactic| simp at *)
+    | some cfg => `(tactic| simp (config := $cfg) at *)
+
+private def simpAllOrSimpAtStarOnlyStx (simpAll : Bool) (inGoal : MVarId)
     (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
-    TacticBuilder := do
-  let originalStx ←
-    if simpAll then
-      match configStx? with
-      | none => `(tactic| simp_all)
-      | some cfg => `(tactic| simp_all (config := $cfg))
-    else
-      match configStx? with
-      | none => `(tactic| simp at *)
-      | some cfg => `(tactic| simp (config := $cfg) at *)
+    MetaM Syntax.Tactic := do
+  let originalStx ← simpAllOrSimpAtStarStx simpAll configStx?
   let stx ← inGoal.withContext do
     Elab.Tactic.mkSimpOnly originalStx usedTheorems
+  return ⟨stx⟩
+
+def simpAllOrSimpAtStarOnly (simpAll : Bool) (inGoal : MVarId)
+    (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
+    TacticBuilder :=
+  .unstructured <$>
+    simpAllOrSimpAtStarOnlyStx simpAll inGoal configStx? usedTheorems
+
+private def isGlobalSimpTheorem (thms : SimpTheorems) (simprocs : Simprocs) : Origin → Bool
+  | origin@(.decl decl) =>
+    simprocs.simprocNames.contains decl ||
+    thms.lemmaNames.contains origin ||
+    thms.toUnfold.contains decl ||
+    thms.toUnfoldThms.contains decl
+  | _ => false
+
+def simpAllOrSimpAtStar (simpAll : Bool) (inGoal : MVarId)
+    (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
+    TacticBuilder := do
+  let simpTheorems ← getSimpTheorems
+  let simprocs ← Simp.getSimprocs
+  let (map, size) ←
+    usedTheorems.map.foldlM (init := ({}, 0)) λ (map, size) origin thm => do
+      if isGlobalSimpTheorem simpTheorems simprocs origin then
+        return (map, size)
+      else
+        return (map.insert origin thm, size + 1)
+  let stx ←
+    match ← simpAllOrSimpAtStarOnlyStx simpAll inGoal configStx? { map, size } with
+    | `(tactic| simp_all $[$cfg:config]? only [$lems,*]) =>
+      `(tactic| simp_all $[$cfg]? [$lems,*])
+    | `(tactic| simp $[$cfg:config]? only [$lems,*] at *) =>
+      `(tactic| simp $[$cfg]? [$lems,*] at *)
+    | `(tactic| simp_all $[$cfg:config]? only) =>
+      `(tactic| simp_all $[$cfg]?)
+    | `(tactic| simp $[$cfg:config]? only at *) =>
+      `(tactic| simp $[$cfg]? at *)
+    | stx => throwError "simp tactic builder: unexpected syntax:{indentD stx}"
   return .unstructured ⟨stx⟩
 
 def intros (postGoal : MVarId) (newFVarIds : Array FVarId)
