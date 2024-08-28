@@ -48,8 +48,8 @@ def isSuccessfulOrPostponed
 end SafeRuleResult
 
 def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
-    (indexMatchLocations : HashSet IndexMatchLocation)
-    (patternInstantiations : HashSet RulePatternInstantiation)
+    (indexMatchLocations : Std.HashSet IndexMatchLocation)
+    (patternInstantiations : Std.HashSet RulePatternInstantiation)
     (options : Options') :
     MetaM (Sum Exception RuleTacOutput) := do
   let some (postNormGoal, postNormState) := goal.postNormGoalAndMetaState? | throwError
@@ -108,8 +108,8 @@ def withRuleTraceNode (ruleName : RuleName)
       return m!"{emoji} {ruleName}{suffix}"
 
 def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
-    (indexMatchLocations : HashSet IndexMatchLocation)
-    (patternInstantiations : HashSet RulePatternInstantiation) :
+    (indexMatchLocations : Std.HashSet IndexMatchLocation)
+    (patternInstantiations : Std.HashSet RulePatternInstantiation) :
     SearchM Q (Option RuleTacOutput) := do
   let parent ← parentRef.get
   let ruleOutput? ←

@@ -13,7 +13,7 @@ namespace Aesop
 structure UnionFind (α) [BEq α] [Hashable α] where
   parents : Array USize
   sizes : Array USize
-  toRep : HashMap α USize
+  toRep : Std.HashMap α USize
   -- Invariant: `toRep` contains exactly the indices of `parents` as values
   deriving Inhabited
 
@@ -54,7 +54,7 @@ private unsafe def findRepUnsafe (i : USize) (u : UnionFind α) :
 private opaque findRep : USize → UnionFind α → USize × UnionFind α
 
 partial def find? (x : α) (u : UnionFind α) : Option USize × UnionFind α :=
-  match u.toRep.find? x with
+  match u.toRep[x]? with
   | none => (none, u)
   | some rep =>
     let (rep, u) := u.findRep rep
@@ -86,10 +86,10 @@ private unsafe def mergeUnsafe (x y : α) (u : UnionFind α) :
 opaque merge (x y : α) : UnionFind α → UnionFind α
 
 def sets {α : Type v} [BEq α] [Hashable α] (u : UnionFind α) : Array (Array α) × UnionFind α :=
-  let (sets, u) := u.toRep.fold (init := (HashMap.empty, u)) λ ((sets : HashMap USize _), u) x rep =>
+  let (sets, u) := u.toRep.fold (init := (Std.HashMap.empty, u)) λ ((sets : Std.HashMap USize _), u) x rep =>
     let (rep, u) := u.findRep rep
     let sets :=
-      match sets.find? rep with
+      match sets[rep]? with
       | some set => sets.insert rep (set.push x)
       | none => sets.insert rep #[x]
     (sets, u)

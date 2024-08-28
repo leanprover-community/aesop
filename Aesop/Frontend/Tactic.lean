@@ -80,7 +80,7 @@ def elabSimpConfigCtx : Syntax → TermElabM Simp.ConfigCtx :=
 structure TacticConfig where
   additionalRules : Array RuleExpr
   erasedRules : Array RuleExpr
-  enabledRuleSets : HashSet RuleSetName
+  enabledRuleSets : Std.HashSet RuleSetName
   options : Aesop.Options
   simpConfig : Simp.Config
   simpConfigSyntax? : Option Term
