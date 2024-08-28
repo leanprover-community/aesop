@@ -20,6 +20,7 @@ structure Options' extends Options where
 def Options.toOptions' [Monad m] [MonadOptions m] (opts : Options)
     (forwardMaxDepth? : Option Nat := none) : m Options' := do
   let generateScript ←
+    pure (aesop.dev.generateScript.get (← getOptions)) <||>
     pure opts.traceScript <||>
     Check.script.isEnabled <||>
     Check.script.steps.isEnabled

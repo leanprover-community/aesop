@@ -165,4 +165,12 @@ register_option aesop.dev.dynamicStructuring : Bool := {
   defValue := true
 }
 
+/--
+(aesop) Only for use by Aesop developers. Generates a script even if none was requested.
+-/
+register_option aesop.dev.generateScript : Bool := {
+  descr := "(aesop) Only for use by Aesop developers. Generates a script even if none was requested."
+  defValue := false
+}
+
 end Aesop
