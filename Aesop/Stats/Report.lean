@@ -4,11 +4,28 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Percent
 import Aesop.Stats.Extension
 
 open Lean
 
 namespace Aesop
+
+namespace StatsArray
+
+def filterPercentile [Ord α] (f : Stats → α) (percentile : Percent)
+    (stats : StatsArray) : StatsArray :=
+  let stats := stats.qsort λ s₁ s₂ => compare (f s₁.stats) (f s₂.stats) |>.isLT
+  let n := stats.usize.toUInt64.toFloat * percentile.toFloat |>.toUInt64.toNat
+  stats.shrink n
+
+def filterOptPercentile [Ord α] (f : Stats → α) (percentile? : Option Percent)
+    (stats : StatsArray) : StatsArray :=
+  match percentile? with
+  | none => stats
+  | some percentile => stats.filterPercentile f percentile
+
+end StatsArray
 
 abbrev StatsReport := StatsArray → Format
 
@@ -61,7 +78,10 @@ where
           {"  "}failed:     {fmtSection totals.elapsedFailed totals.numFailed}\n"
     return fmt
 
-def scripts : StatsReport := λ statsArray => Id.run do
+def scriptsCore (percentile? : Option Percent := none) :
+    StatsReport := λ statsArray => Id.run do
+  let statsArray := statsArray.filterOptPercentile (·.script) percentile?
+  let mut totalTime := 0
   let mut scriptTime := 0
   let mut generated := 0
   let mut staticallyStructured := 0
@@ -70,6 +90,7 @@ def scripts : StatsReport := λ statsArray => Id.run do
   let mut perfectlyDynamicallyStructured := 0
   for stats in statsArray do
     let stats := stats.stats
+    totalTime := totalTime + stats.total
     scriptTime := scriptTime + stats.script
     match stats.scriptGenerated with
     | .none => pure ()
@@ -84,13 +105,23 @@ def scripts : StatsReport := λ statsArray => Id.run do
       if perfect then
         perfectlyDynamicallyStructured := perfectlyDynamicallyStructured + 1
   let samples := statsArray.size
-  f!"Statistics for {statsArray.size} Aesop calls in current and imported modules\n\
+  let pctStr :=
+    if let some pct := percentile? then
+      s!" (percentile by script generation time: {pct})"
+    else
+      ""
+  f!"Statistics for {statsArray.size} Aesop calls in current and imported modules{pctStr}\n\
      Durations are given as totals and [averages] in milliseconds\n\
+     Total time:               {fmtTime totalTime samples}\n\
      Script generation time:   {fmtTime scriptTime samples}\n\
      Scripts generated:        {generated}\n\
      - Statically  structured: {staticallyStructured}\n" ++
   f!"  - perfectly:            {perfectlyStaticallyStructured}\n\
      - Dynamically structured: {dynamicallyStructured}\n" ++
   f!"  - perfectly:            {perfectlyDynamicallyStructured}"
+
+def scripts   := scriptsCore
+def scripts99 := scriptsCore (percentile? := some ⟨0.99⟩)
+def scripts95 := scriptsCore (percentile? := some ⟨0.95⟩)
 
 end Aesop.StatsReport
