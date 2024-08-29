@@ -16,18 +16,13 @@ namespace Aesop
 
 open Script
 
-structure ExtractScriptM.Context where
-  completeProof : Bool
-
 structure ExtractScriptM.State where
   script : UScript := #[]
 
-abbrev ExtractScriptM :=
-  ReaderT ExtractScriptM.Context $ StateRefT ExtractScriptM.State TreeM
+abbrev ExtractScriptM := StateRefT ExtractScriptM.State TreeM
 
-def ExtractScriptM.run (completeProof : Bool) (x : ExtractScriptM α) :
-    TreeM UScript :=
-  (·.2.script) <$> (ReaderT.run x { completeProof } |>.run {})
+def ExtractScriptM.run (x : ExtractScriptM α) : TreeM UScript :=
+  (·.2.script) <$> StateRefT'.run x {}
 
 namespace ExtractScript
 
@@ -49,9 +44,13 @@ def recordStep (step : Script.Step) : ExtractScriptM Unit := do
 def recordLazySteps (ruleName : DisplayRuleName)
     (steps? : Option (Array Script.LazyStep)) : ExtractScriptM Unit := do
   let steps ← lazyStepsToSteps ruleName steps?
+  aesop_trace[script] do
+    for step in steps do
+      aesop_trace![script] "step {step.uTactic}"
   modify λ s => { s with script := s.script ++ steps }
 
 def visitGoal (g : Goal) : ExtractScriptM Unit := do
+  aesop_trace[script] "visit goal {g.id}"
   match g.normalizationState with
   | .notNormal => throwError "expected goal {g.id} to be normalised"
   | .normal (script := script) ..
@@ -60,13 +59,8 @@ def visitGoal (g : Goal) : ExtractScriptM Unit := do
       recordLazySteps ruleName script?
 
 def visitRapp (r : Rapp) : ExtractScriptM Unit := do
+  aesop_trace[script] "visit rapp {r.id}"
   recordLazySteps r.appliedRule.name r.scriptSteps?
-  -- The safe prefix can't assign mvars because any safe rule that assigns mvars
-  -- is downgraded to an unsafe rule. So we add `sorry` steps for all introduced
-  -- mvars.
-  if ! (← read).completeProof then
-    for mvarId in r.introducedMVars do
-      recordStep $ ← Step.mkSorry mvarId r.metaState
 
 end ExtractScript
 
@@ -96,8 +90,9 @@ mutual
 end
 
 @[inline]
-def extractScript : TreeM UScript := do
-  (← getRootGoal).extractScriptCore.run (completeProof := true)
+def extractScript : TreeM UScript :=
+  withAesopTraceNode .script (λ r => return m!"{exceptEmoji r} Extract script") do
+    (← getRootGoal).extractScriptCore.run
 
 mutual
   partial def MVarClusterRef.extractSafePrefixScriptCore
@@ -116,17 +111,23 @@ mutual
         rref.extractSafePrefixScriptCore
       else
         let some (postNormGoal, postNormState) := g.postNormGoalAndMetaState?
-          | throwError "aesop: internal error at extractSafePrefixScript"
+          | throwError "aesop: internal error at extractSafePrefixScript: goal {g.id} is not normalised"
         recordStep $ ← Step.mkSorry postNormGoal postNormState
 
   partial def RappRef.extractSafePrefixScriptCore (rref : RappRef) :
       ExtractScriptM Unit := do
     let r ← rref.get
     visitRapp r
+    -- The safe prefix can't assign mvars because any safe rule that assigns
+    -- mvars is downgraded to an unsafe rule. So we add `sorry` steps for all
+    -- introduced mvars.
+    for mvarId in r.introducedMVars do
+      recordStep $ ← Step.mkSorry mvarId r.metaState
     r.forSubgoalsM (·.extractSafePrefixScriptCore)
 end
 
 def extractSafePrefixScript : TreeM UScript := do
-  (← getRootGoal).extractSafePrefixScriptCore.run (completeProof := false)
+  withAesopTraceNode .script (λ r => return m!"{exceptEmoji r} Extract safe prefix script") do
+    (← getRootGoal).extractSafePrefixScriptCore.run
 
 end Aesop
