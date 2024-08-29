@@ -49,7 +49,7 @@ def checkAndTraceScript (uscript : UScript)
       addTryThisTacticSeqSuggestion (← getRef) tacticSeq
     if ← Check.script.isEnabled then
       throwError "{Check.script.name}: structuring the script failed"
-    else
+    else if options.traceScript then
       logWarning m!"{tacticName}: structuring the script failed. Reporting unstructured script."
 
 end Aesop
