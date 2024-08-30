@@ -11,7 +11,7 @@ open Lean Lean.Meta
 namespace Aesop
 
 structure FVarIdSubst where
-  map : HashMap FVarId FVarId
+  map : Std.HashMap FVarId FVarId
   deriving Inhabited
 
 namespace FVarIdSubst
@@ -23,7 +23,7 @@ def contains (s : FVarIdSubst) (fvarId : FVarId) : Bool :=
   s.map.contains fvarId
 
 def find? (s : FVarIdSubst) (fvarId : FVarId) : Option FVarId :=
-  s.map.find? fvarId
+  s.map[fvarId]?
 
 def get (s : FVarIdSubst) (fvarId : FVarId) : FVarId :=
   s.find? fvarId |>.getD fvarId
@@ -40,10 +40,10 @@ def applyToLocalDecl (s : FVarIdSubst) : LocalDecl → LocalDecl
   | .cdecl i id n t bi k   => .cdecl i id n (s.apply t) bi k
   | .ldecl i id n t v nd k => .ldecl i id n (s.apply t) (s.apply v) nd k
 
-def domain (s : FVarIdSubst) : HashSet FVarId :=
+def domain (s : FVarIdSubst) : Std.HashSet FVarId :=
   s.map.fold (init := ∅) λ r k _ => r.insert k
 
-def codomain (s : FVarIdSubst) : HashSet FVarId :=
+def codomain (s : FVarIdSubst) : Std.HashSet FVarId :=
   s.map.fold (init := ∅) λ r _ v => r.insert v
 
 protected def empty : FVarIdSubst :=
@@ -53,7 +53,7 @@ instance : EmptyCollection FVarIdSubst :=
   ⟨.empty⟩
 
 def insert (s : FVarIdSubst) (old new : FVarId) : FVarIdSubst :=
-  let map : HashMap _ _ := s.map.fold (init := ∅) λ map k v =>
+  let map : Std.HashMap _ _ := s.map.fold (init := ∅) λ map k v =>
     map.insert k $ if v == old then new else v
   ⟨map.insert old new⟩
 
@@ -61,7 +61,7 @@ def erase (s : FVarIdSubst) (fvarId : FVarId) : FVarIdSubst :=
   ⟨s.map.erase fvarId⟩
 
 def append (s t : FVarIdSubst) : FVarIdSubst :=
-  let map : HashMap _ _ := s.map.fold (init := ∅) λ map k v =>
+  let map : Std.HashMap _ _ := s.map.fold (init := ∅) λ map k v =>
     map.insert k $ t.get v
   ⟨t.map.fold (init := map) λ s k v => s.insert k v⟩
 

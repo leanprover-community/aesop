@@ -114,8 +114,8 @@ def unfoldManyStar (unfold? : Name → Option (Option Name)) (goal : MVarId) :
       return some goal
 
 private def mkToUnfold (ids : Array Ident) :
-    MetaM (HashMap Name (Option Name)) := do
-  let mut toUnfold : HashMap Name (Option Name) := {}
+    MetaM (Std.HashMap Name (Option Name)) := do
+  let mut toUnfold : Std.HashMap Name (Option Name) := {}
   for id in (ids : Array Ident) do
     let decl ← resolveGlobalConstNoOverload id
     toUnfold := toUnfold.insert decl (← getUnfoldEqnFor? decl)
@@ -124,7 +124,7 @@ private def mkToUnfold (ids : Array Ident) :
 elab "aesop_unfold " ids:ident+ : tactic => do
   let toUnfold ← mkToUnfold ids
   liftMetaTactic λ goal => do
-    match ← unfoldManyTarget (toUnfold.find? ·) goal with
+    match ← unfoldManyTarget (toUnfold[·]?) goal with
     | none => throwTacticEx `aesop_unfold goal "could not unfold any of the given constants"
     | some (goal, _) => return [goal]
 
@@ -134,7 +134,7 @@ elab "aesop_unfold " ids:ident+ " at " hyps:ident+ : tactic => do
     let mut goal := goal
     for hypId in hyps do
       let fvarId := (← getLocalDeclFromUserName hypId.getId).fvarId
-      match ← unfoldManyAt (toUnfold.find? ·) goal fvarId with
+      match ← unfoldManyAt (toUnfold[·]?) goal fvarId with
       | none => throwTacticEx `aesop_unfold goal m!"could not unfold any of the given constants at hypothesis '{hypId}'"
       | some (goal', _) => goal := goal'
     return [goal]

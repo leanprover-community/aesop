@@ -15,7 +15,7 @@ variable [Monad m] [MonadError m]
 
 structure TacticState where
   visibleGoals : Array GoalWithMVars
-  invisibleGoals : HashSet MVarId
+  invisibleGoals : Std.HashSet MVarId
   deriving Inhabited
 
 namespace TacticState
@@ -63,7 +63,7 @@ def eraseSolvedGoals (ts : TacticState) (preMCtx postMCtx : MetavarContext) :
     TacticState := {
   ts with
   visibleGoals := ts.visibleGoals.filter (! mvarWasSolved ·.goal)
-  invisibleGoals := HashSet.filter ts.invisibleGoals (! mvarWasSolved ·)
+  invisibleGoals := ts.invisibleGoals.filter (! mvarWasSolved ·)
 }
 where
   mvarWasSolved (mvarId : MVarId) : Bool :=

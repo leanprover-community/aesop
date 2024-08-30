@@ -48,15 +48,15 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
     loop (app : Expr) (instMVars : Array MVarId) (immediateMVars : Array MVarId)
         (i : Nat) (proofsAcc : Array (Expr × Nat)) (currentMaxHypDepth : Nat)
         (currentUsedHyps : Array FVarId) (usedHypsAcc : Array FVarId)
-        (proofTypesAcc : HashSet Expr) :
-        MetaM (Array (Expr × Nat) × Array FVarId × HashSet Expr) := do
+        (proofTypesAcc : Std.HashSet Expr) :
+        MetaM (Array (Expr × Nat) × Array FVarId × Std.HashSet Expr) := do
       if h : i < immediateMVars.size then
         let mvarId := immediateMVars.get ⟨i, h⟩
         let type ← mvarId.getType
         (← getLCtx).foldlM (init := (proofsAcc, usedHypsAcc, proofTypesAcc)) λ s@(proofsAcc, usedHypsAcc, proofTypesAcc) ldecl => do
           if ldecl.isImplementationDetail then
             return s
-          let hypDepth := forwardHypData.depths.findD ldecl.fvarId 0
+          let hypDepth := forwardHypData.depths.getD ldecl.fvarId 0
           let currentMaxHypDepth := max currentMaxHypDepth hypDepth
           if let some maxDepth := maxDepth? then
             if currentMaxHypDepth + 1 > maxDepth then
@@ -110,7 +110,7 @@ where
   tacticBuilder _ := Script.TacticBuilder.assertHypothesis goal hyp md
 
 def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
-    (patInsts : HashSet RulePatternInstantiation)
+    (patInsts : Std.HashSet RulePatternInstantiation)
     (immediate : UnorderedArraySet Nat) (clear : Bool)
     (md : TransparencyMode) (maxDepth? : Option Nat) : ScriptM Subgoal :=
   withTransparency md $ goal.withContext do

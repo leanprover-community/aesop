@@ -86,7 +86,7 @@ structure ForwardHypData where
   /--
   Depths of the hypotheses that have already been added by forward reasoning.
   -/
-  depths : HashMap FVarId Nat
+  depths : Std.HashMap FVarId Nat
 
 def getForwardHypData : MetaM ForwardHypData := do
   let ldecls ← getForwardImplDetailHyps
