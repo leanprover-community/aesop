@@ -18,11 +18,13 @@ open Script
 
 structure ExtractScriptM.State where
   script : UScript := #[]
+  proofHasMVar : Bool := false
 
 abbrev ExtractScriptM := StateRefT ExtractScriptM.State TreeM
 
-def ExtractScriptM.run (x : ExtractScriptM α) : TreeM UScript :=
-  (·.2.script) <$> StateRefT'.run x {}
+def ExtractScriptM.run (x : ExtractScriptM α) : TreeM (UScript × Bool) := do
+  let (_, r) ← StateRefT'.run x {}
+  return (r.script, r.proofHasMVar)
 
 namespace ExtractScript
 
@@ -51,6 +53,8 @@ def recordLazySteps (ruleName : DisplayRuleName)
 
 def visitGoal (g : Goal) : ExtractScriptM Unit := do
   aesop_trace[script] "visit goal {g.id}"
+  if ! g.mvars.isEmpty then
+    modify λ s => { s with proofHasMVar := true }
   match g.normalizationState with
   | .notNormal => throwError "expected goal {g.id} to be normalised"
   | .normal (script := script) ..
@@ -90,7 +94,7 @@ mutual
 end
 
 @[inline]
-def extractScript : TreeM UScript :=
+def extractScript : TreeM (UScript × Bool) :=
   withAesopTraceNode .script (λ r => return m!"{exceptEmoji r} Extract script") do
     (← getRootGoal).extractScriptCore.run
 
@@ -126,7 +130,7 @@ mutual
     r.forSubgoalsM (·.extractSafePrefixScriptCore)
 end
 
-def extractSafePrefixScript : TreeM UScript := do
+def extractSafePrefixScript : TreeM (UScript × Bool) := do
   withAesopTraceNode .script (λ r => return m!"{exceptEmoji r} Extract safe prefix script") do
     (← getRootGoal).extractSafePrefixScriptCore.run
 

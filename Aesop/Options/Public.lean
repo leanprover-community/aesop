@@ -166,6 +166,15 @@ register_option aesop.dev.dynamicStructuring : Bool := {
 }
 
 /--
+(aesop) Only for use by Aesop developers. Uses static structuring instead of
+dynamic structuring if no metavariables appear in the proof.
+-/
+register_option aesop.dev.optimizedDynamicStructuring : Bool := {
+  descr := "(aesop) Only for use by Aesop developers. Uses static structuring instead of dynamic structuring if no metavariables appear in the proof."
+  defValue := true
+}
+
+/--
 (aesop) Only for use by Aesop developers. Generates a script even if none was requested.
 -/
 register_option aesop.dev.generateScript : Bool := {
