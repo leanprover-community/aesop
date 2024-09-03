@@ -125,28 +125,18 @@ def finalizeProof : SearchM Q Unit := do
     withPPAnalyze do
       aesop_trace[proof] "Final proof:{indentExpr proof}"
 
-def optimizeScript (uscript : Script.UScript) (rootState : Meta.SavedState)
-    (rootGoal : MVarId) : SearchM Q (Option (TSyntax ``tacticSeq)) := do
-  let dynamic := aesop.dev.dynamicStructuring.get (← getOptions)
-  let some (script, perfect) ← uscript.optimize rootState rootGoal
-    | return none
-  if dynamic then
-    recordScriptGenerated $ .dynamicallyStructured perfect
-  else
-    recordScriptGenerated $ .staticallyStructured perfect
-  return some script
-
 def traceScript (completeProof : Bool) : SearchM Q Unit :=
   profiling (λ stats _ elapsed => { stats with script := elapsed }) do
   let options := (← read).options
   if ! options.generateScript then
     return
-  let uscript ← if completeProof then extractScript else extractSafePrefixScript
+  let (uscript, proofHasMVars) ←
+    if completeProof then extractScript else extractSafePrefixScript
   uscript.checkIfEnabled
   let rootGoal ← getRootMVarId
   let rootState ← getRootMetaState
   aesop_trace[script] "Unstructured script:{indentD $ toMessageData $ ← uscript.renderTacticSeq rootState rootGoal}"
-  let sscript? ← optimizeScript uscript rootState rootGoal
+  let sscript? ← uscript.optimize proofHasMVars rootState rootGoal
   checkAndTraceScript uscript sscript? rootState rootGoal options
     (expectCompleteProof := completeProof) "aesop"
 
