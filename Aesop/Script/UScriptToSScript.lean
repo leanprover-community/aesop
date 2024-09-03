@@ -106,10 +106,10 @@ where
       return (.empty, tacticState)
     if let some step := uscript[start]? then
       aesop_trace[script] "applying step:{indentD $ toMessageData step}"
-      let some siblings := numSiblings[step.preGoal]
+      let some siblings := numSiblings[step.preGoal]?
         | throwError "aesop: internal error while structuring script: unknown sibling count for goal {step.preGoal.name}"
       aesop_trace[script] "siblings: {siblings}"
-      let innerStop? := focusable[step.preGoal]
+      let innerStop? := focusable[step.preGoal]?
       aesop_trace[script] "focusable: {innerStop?.isSome}"
       aesop_trace[script] "visible goals: {tacticState.visibleGoals.map (·.goal.name)}"
       let some goalPos := tacticState.getVisibleGoalIndex? step.preGoal
