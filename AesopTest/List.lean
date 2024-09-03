@@ -306,14 +306,20 @@ theorem mem_map_of_injective {f : α → β} (H : Injective f) {a : α} {l : Lis
   f a ∈ map f l ↔ a ∈ l := by
   aesop
 
-@[simp] theorem _root_.function.involutive.exists_mem_and_apply_eq_iff {f : α → α}
-  (hf : Involutive f) (x : α) (l : List α) :
-  (∃ (y : α), y ∈ l ∧ f y = x) ↔ f x ∈ l := by
-  aesop
+/-
+This example is broken as of v4.12.0-rc1.
+-/
+-- @[simp] theorem _root_.function.involutive.exists_mem_and_apply_eq_iff {f : α → α}
+--   (hf : Involutive f) (x : α) (l : List α) :
+--   (∃ (y : α), y ∈ l ∧ f y = x) ↔ f x ∈ l := by
+--   aesop
 
-theorem mem_map_of_involutive {f : α → α} (hf : Involutive f) {a : α} {l : List α} :
-  a ∈ map f l ↔ f a ∈ l := by
-  aesop
+/-
+This example is broken as of v4.12.0-rc1.
+-/
+-- theorem mem_map_of_involutive {f : α → α} (hf : Involutive f) {a : α} {l : List α} :
+--   a ∈ map f l ↔ f a ∈ l := by
+--   aesop
 
 -- attribute [-simp] forall_mem_map_iff
 theorem X.forall_mem_map_iff {f : α → β} {l : List α} {P : β → Prop} :
