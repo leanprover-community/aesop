@@ -23,8 +23,5 @@ axiom RingId (R : Ring) : RingHom R R
 @[aesop 99%]
 axiom ZZ : Ring
 
-/-
-This example is broken as of v4.12.0-rc1.
--/
--- example : ∃ (R : Ring) (_ : RingHom R R), True := by
---   aesop
+example : ∃ (R : Ring) (_ : RingHom R R), True := by
+  aesop (add safe True.intro) (config := { enableSimp := false })
