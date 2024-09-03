@@ -44,7 +44,7 @@ def default : StatsReport := λ statsArray => Id.run do
   let mut search := 0
   let mut ruleSelection := 0
   let mut script := 0
-  let mut ruleStats : HashMap DisplayRuleName RuleStatsTotals := ∅
+  let mut ruleStats : Std.HashMap DisplayRuleName RuleStatsTotals := ∅
   for stats in statsArray do
     let stats := stats.stats
     total := total + stats.total

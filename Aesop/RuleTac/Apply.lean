@@ -34,7 +34,7 @@ def applyExpr' (goal : MVarId) (e : Expr) (eStx : Term)
     }
 
 def applyExpr (goal : MVarId) (e : Expr) (eStx : Term)
-    (pat? : Option RulePattern) (patInsts : HashSet RulePatternInstantiation)
+    (pat? : Option RulePattern) (patInsts : Std.HashSet RulePatternInstantiation)
     (md : TransparencyMode) : MetaM RuleTacOutput := do
   if pat?.isSome then
     let mut rapps := Array.mkEmpty patInsts.size

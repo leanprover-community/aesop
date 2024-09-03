@@ -33,7 +33,7 @@ instance : ToMessageData StepTree :=
   ⟨StepTree.toMessageData⟩
 
 partial def UScript.toStepTree (s : UScript) : StepTree := Id.run do
-  let mut preGoalMap : HashMap MVarId (Nat × Step) := ∅
+  let mut preGoalMap : Std.HashMap MVarId (Nat × Step) := ∅
   for h : i in [:s.size] do
     preGoalMap := preGoalMap.insert s[i].preGoal (i, s[i])
   if h : 0 < s.size then
@@ -41,8 +41,8 @@ partial def UScript.toStepTree (s : UScript) : StepTree := Id.run do
   else
     return .empty
 where
-  go (m : HashMap MVarId (Nat × Step)) (goal : MVarId) : StepTree :=
-    if let some (i, step) := m.find? goal then
+  go (m : Std.HashMap MVarId (Nat × Step)) (goal : MVarId) : StepTree :=
+    if let some (i, step) := m[goal]? then
       .node step i (step.postGoals.map (go m ·.goal))
     else
       .empty
@@ -63,10 +63,10 @@ def isConsecutiveSequence (ns : Array Nat) : Bool := Id.run do
 
 namespace StepTree
 
-partial def focusableGoals (t : StepTree) : HashMap MVarId Nat :=
+partial def focusableGoals (t : StepTree) : Std.HashMap MVarId Nat :=
   runST (λ _ => go t |>.run ∅) |>.2
 where
-  go {σ} : StepTree → StateRefT (HashMap MVarId Nat) (ST σ) (Array Nat)
+  go {σ} : StepTree → StateRefT (Std.HashMap MVarId Nat) (ST σ) (Array Nat)
     | .empty => return #[]
     | .node step i children => do
       let childIndexes := sortDedupArrays $ ← children.mapM go
@@ -77,11 +77,11 @@ where
         modify (·.insert step.preGoal lastIndex)
       return indexes
 
-partial def numSiblings (t : StepTree) : HashMap MVarId Nat :=
+partial def numSiblings (t : StepTree) : Std.HashMap MVarId Nat :=
   runST (λ _ => go 0 t |>.run ∅) |>.2
 where
   go {σ} (parentNumGoals : Nat) :
-      StepTree → StateRefT (HashMap MVarId Nat) (ST σ) Unit
+      StepTree → StateRefT (Std.HashMap MVarId Nat) (ST σ) Unit
     | .empty => return
     | .node step _ children => do
       modify (·.insert step.preGoal (parentNumGoals - 1))
@@ -99,17 +99,17 @@ partial def orderedUScriptToSScript (uscript : UScript) (tacticState : TacticSta
   aesop_trace[script] "focusable goals: {focusable.toArray.map λ (mvarId, n) => (mvarId.name, n)}"
   (·.fst) <$> go focusable numSiblings 0 (uscript.size - 1) tacticState
 where
-  go (focusable : HashMap MVarId Nat) (numSiblings : HashMap MVarId Nat)
+  go (focusable : Std.HashMap MVarId Nat) (numSiblings : Std.HashMap MVarId Nat)
       (start stop : Nat) (tacticState : TacticState) :
       CoreM (SScript × TacticState) := do
     if start > stop then
       return (.empty, tacticState)
     if let some step := uscript[start]? then
       aesop_trace[script] "applying step:{indentD $ toMessageData step}"
-      let some siblings := numSiblings[step.preGoal]
+      let some siblings := numSiblings[step.preGoal]?
         | throwError "aesop: internal error while structuring script: unknown sibling count for goal {step.preGoal.name}"
       aesop_trace[script] "siblings: {siblings}"
-      let innerStop? := focusable[step.preGoal]
+      let innerStop? := focusable[step.preGoal]?
       aesop_trace[script] "focusable: {innerStop?.isSome}"
       aesop_trace[script] "visible goals: {tacticState.visibleGoals.map (·.goal.name)}"
       let some goalPos := tacticState.getVisibleGoalIndex? step.preGoal

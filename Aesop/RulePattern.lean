@@ -86,7 +86,7 @@ end
 
 def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
     (mvarId : MVarId) :
-    StateRefT (HashMap RuleName (HashSet RulePatternInstantiation)) MetaM Unit :=
+    StateRefT (Std.HashMap RuleName (Std.HashSet RulePatternInstantiation)) MetaM Unit :=
   withNewMCtxDepth do -- TODO use (allowLevelAssignments := true)?
     let openPats ← pats.mapM λ (name, pat) => return (name, ← pat.open)
     let initialState ← show MetaM _ from saveState
@@ -114,14 +114,14 @@ def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
             pure result
           modify λ m =>
             -- TODO loss of linearity?
-            if let some instanceSet := m.find? name then
+            if let some instanceSet := m[name]? then
               m.insert name (instanceSet.insert instances)
             else
               m.insert name (.empty |>.insert instances)
 
 def matchRulePatterns (pats : Array (RuleName × RulePattern))
     (mvarId : MVarId) :
-    MetaM (HashMap RuleName (HashSet RulePatternInstantiation)) :=
+    MetaM (Std.HashMap RuleName (Std.HashSet RulePatternInstantiation)) :=
   (·.snd) <$> (matchRulePatternsCore pats mvarId |>.run ∅)
 
 namespace RulePattern
@@ -139,7 +139,7 @@ def getInstantiation [Monad m] [MonadError m] (pat : RulePattern)
 
 def openRuleType (pat : RulePattern) (inst : RulePatternInstantiation)
     (type : Expr) :
-    MetaM (Array Expr × Array BinderInfo × Expr × HashSet MVarId) := do
+    MetaM (Array Expr × Array BinderInfo × Expr × Std.HashSet MVarId) := do
   let (mvars, binfos, body) ← forallMetaTelescopeReducing type
   let mut assigned := ∅
   for h : i in [:mvars.size] do
@@ -177,7 +177,7 @@ def «elab» (stx : Term) (ruleType : Expr) : TermElabM RulePattern :=
       let pat := (← elabPattern stx).consumeMData
       let (pat, mvarIds) ← fvarsToMVars fvars pat
       let (pat, mvarIdToPatternPos) ← abstractMVars' pat
-      let argMap := mvarIds.map (mvarIdToPatternPos[·])
+      let argMap := mvarIds.map (mvarIdToPatternPos[·]?)
       aesop_trace[debug] "pattern '{stx}' elaborated into '{pat.expr}'"
       return { pattern := pat, argMap }
 where
@@ -194,7 +194,7 @@ where
 
   -- Largely copy-pasta of `abstractMVars`.
   abstractMVars' (e : Expr) :
-      MetaM (AbstractMVarsResult × HashMap MVarId Nat) := do
+      MetaM (AbstractMVarsResult × Std.HashMap MVarId Nat) := do
     let e ← instantiateMVars e
     setMVarUserNamesToUniqueNames e
     let (e, s) := AbstractMVars.abstractExprMVars e

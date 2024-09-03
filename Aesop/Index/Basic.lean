@@ -89,8 +89,8 @@ end IndexMatchLocation
 
 structure IndexMatchResult (α : Type) where
   rule : α
-  locations : HashSet IndexMatchLocation
-  patternInstantiations : HashSet RulePatternInstantiation
+  locations : Std.HashSet IndexMatchLocation
+  patternInstantiations : Std.HashSet RulePatternInstantiation
   deriving Inhabited
 
 namespace IndexMatchResult

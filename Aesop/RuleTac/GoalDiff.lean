@@ -49,11 +49,11 @@ structure GoalDiff where
   /--
   `FVarId`s that appear in the new goal, but not in the old goal.
   -/
-  addedFVars : HashSet FVarId
+  addedFVars : Std.HashSet FVarId
   /--
   `FVarId`s that appear in the old goal, but not in the new goal.
   -/
-  removedFVars : HashSet FVarId
+  removedFVars : Std.HashSet FVarId
   /--
   An `FVarId` substitution that tracks hypotheses which have been renamed (but
   have not otherwise been modified).
@@ -69,7 +69,7 @@ protected def GoalDiff.empty : GoalDiff where
 instance : EmptyCollection GoalDiff :=
   ⟨.empty⟩
 
-def getNewFVars (oldLCtx newLCtx : LocalContext) : HashSet FVarId :=
+def getNewFVars (oldLCtx newLCtx : LocalContext) : Std.HashSet FVarId :=
   newLCtx.foldl (init := ∅) λ newFVars ldecl =>
     if ! ldecl.isImplementationDetail && ! oldLCtx.contains ldecl.fvarId then
       newFVars.insert ldecl.fvarId

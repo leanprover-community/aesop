@@ -42,7 +42,7 @@ Given a bijective map `map` from new `MVarId`s to old `MVarId`s, update the
 is replaced with an entry whose key is the corresponding new `MVarId`
 `map⁻¹ m`.
 -/
-def Context.updateMVarIds (c : Context) (map : HashMap MVarId MVarId) :
+def Context.updateMVarIds (c : Context) (map : Std.HashMap MVarId MVarId) :
     Context :=
   let steps := map.fold (init := c.steps) λ steps newMVarId oldMVarId =>
     if let (some step) := steps.find? oldMVarId then
