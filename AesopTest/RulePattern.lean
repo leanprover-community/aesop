@@ -18,28 +18,22 @@ macro "falso" : tactic => `(tactic| exact falso)
 @[aesop norm -100 forward (pattern := (↑n : Int))]
 axiom nat_pos (n : Nat) : 0 ≤ (↑n : Int)
 
-/-
-This example is broken as of v4.12.0-rc1.
--/
--- example (m n : Nat) : (↑m : Int) < 0 ∧ (↑n : Int) > 0 := by
---   set_option aesop.check.script.steps false in -- TODO lean4#4315
---   set_option aesop.check.script false in
---   aesop!
---   all_goals
---     guard_hyp fwd_1 : 0 ≤ (m : Int)
---     guard_hyp fwd_2 : 0 ≤ (n : Int)
---     falso
+example (m n : Nat) : (↑m : Int) < 0 ∧ (↑n : Int) > 0 := by
+  set_option aesop.check.script.steps false in -- TODO lean4#4315
+  set_option aesop.check.script false in
+  aesop!
+  all_goals
+    guard_hyp fwd_1 : 0 ≤ (m : Int)
+    guard_hyp fwd_2 : 0 ≤ (n : Int)
+    falso
 
 @[aesop safe forward (pattern := min x y)]
 axiom foo : ∀ {x y : Nat} (_ : 0 < x) (_ : 0 < y), 0 < min x y
 
-/-
-This example is broken as of v4.12.0-rc1.
--/
--- example (hx : 0 < x) (hy : 0 < y) (_ : min x y < z): False := by
---   aesop!
---   guard_hyp fwd : 0 < min x y
---   falso
+example (hx : 0 < x) (hy : 0 < y) (_ : min x y < z): False := by
+  aesop!
+  guard_hyp fwd : 0 < min x y
+  falso
 
 axiom abs (n : Int) : Nat
 
@@ -48,14 +42,11 @@ notation "|" t "|" => abs t
 @[aesop safe forward (pattern := |a + b|)]
 axiom triangle (a b : Int) : |a + b| ≤ |a| + |b|
 
-/--
-This example is broken as of v4.12.0-rc1.
--/
--- example : |a + b| ≤ |c + d| := by
---   aesop!
---   guard_hyp fwd   : |c + d| ≤ |c| + |d|
---   guard_hyp fwd_1 : |a + b| ≤ |a| + |b|
---   falso
+example : |a + b| ≤ |c + d| := by
+  aesop!
+  guard_hyp fwd   : |c + d| ≤ |c| + |d|
+  guard_hyp fwd_1 : |a + b| ≤ |a| + |b|
+  falso
 
 @[aesop safe apply (pattern := (0 : Nat))]
 axiom falso' : True → False

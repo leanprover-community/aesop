@@ -175,7 +175,8 @@ mutual
       Expr → Expr → ReaderT GoalContext EqualUpToIdsM Bool
     | .bvar i, .bvar j => return i == j
     | .fvar fvarId₁, .fvar fvarId₂ =>
-      return (← read).equalFVarIds[fvarId₁]? == some fvarId₂
+      return fvarId₁ == fvarId₂ ||
+             (← read).equalFVarIds[fvarId₁]? == some fvarId₂
     | .sort u, .sort v => levelsEqualUpToIdsCore u v
     | .const decl₁ lvls₁, .const decl₂ lvls₂ => do
       if decl₁ == decl₂ && lvls₁.length == lvls₂.length then
