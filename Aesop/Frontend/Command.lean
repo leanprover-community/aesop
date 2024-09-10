@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Frontend.Attribute
 import Aesop.Frontend.Basic
 import Aesop.Stats.Report
+import Batteries.Linter.UnreachableTactic
 
 open Lean Lean.Elab Lean.Elab.Command
 
@@ -39,6 +40,8 @@ elab (name := addRules)
   for (rule, rsNames) in rules do
     for rsName in rsNames do
       addGlobalRule rsName rule attrKind (checkNotExists := true)
+
+initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addRules
 
 elab (name := eraseRules)
     "erase_aesop_rules " "[" es:Aesop.rule_expr,* "]" : command => do

@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Frontend.Attribute
 import Aesop.Frontend.RuleExpr
 import Aesop.Options
+import Batteries.Linter.UnreachableTactic
 
 open Lean
 open Lean.Meta
@@ -56,6 +57,10 @@ syntax (name := aesopTactic)  "aesop"  Aesop.tactic_clause* : tactic
 
 @[inherit_doc aesopTactic]
 syntax (name := aesopTactic?) "aesop?" Aesop.tactic_clause* : tactic
+
+initialize do
+  Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``aesopTactic
+  Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``aesopTactic?
 
 end Parser
 
