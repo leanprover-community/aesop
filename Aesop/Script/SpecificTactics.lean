@@ -218,6 +218,11 @@ def substFVars (goal : MVarId) (fvarIds : Array FVarId) : TacticBuilder := do
   let tac ← `(tactic| subst $names:ident*)
   return .unstructured tac
 
+def substFVars' (fvarUserNames : Array Name) : TacticBuilder := do
+  let fvarUserNames := fvarUserNames.map mkIdent
+  let tac ← `(tactic| subst $fvarUserNames:ident*)
+  return .unstructured tac
+
 end Script.TacticBuilder
 
 open Script
@@ -241,10 +246,9 @@ where
       | some eStx => TacticBuilder.applyStx eStx md
 
 def replaceFVarS (goal : MVarId) (fvarId : FVarId) (type : Expr) (proof : Expr) :
-    ScriptM (MVarId × FVarId) :=
+    ScriptM (MVarId × FVarId × Bool) :=
   withScriptStep goal (#[·.1]) (λ _ => true) tacticBuilder do
-    let (postGoal, newFVarId, _) ← replaceFVar goal fvarId type proof
-    return (postGoal, newFVarId)
+    replaceFVar goal fvarId type proof
 where
   tacticBuilder := (TacticBuilder.replace goal ·.1 fvarId type proof)
 
