@@ -18,3 +18,4 @@ jobs:
       - uses: leanprover/lean-action@v1
         with:
           check-reservoir-eligibility: true
+          build-args: "--wfail"
