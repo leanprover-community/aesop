@@ -12,11 +12,11 @@ open Lean Lean.Elab Lean.Elab.Command
 
 namespace Aesop.Frontend.Parser
 
-syntax (name := declareAesopRuleSets)
+syntax (name := declareRuleSets)
   "declare_aesop_rule_sets " "[" ident,+,? "]"
   ("(" &"default" " := " Aesop.bool_lit ")")? : command
 
-@[command_elab declareAesopRuleSets]
+@[command_elab declareRuleSets]
 def elabDeclareAesopRuleSets : CommandElab
   | `(command| declare_aesop_rule_sets [ $ids:ident,* ]
                $[(default := $dflt?:Aesop.bool_lit)]?) => do
@@ -26,7 +26,8 @@ def elabDeclareAesopRuleSets : CommandElab
     elabCommand $ ← `(initialize ($(quote rsNames).forM $ declareRuleSetUnchecked (isDefault := $(quote dflt))))
   | _ => throwUnsupportedSyntax
 
-elab attrKind:attrKind "add_aesop_rules " e:Aesop.rule_expr : command => do
+elab (name := addRules)
+    attrKind:attrKind "add_aesop_rules " e:Aesop.rule_expr : command => do
   let attrKind :=
     match attrKind with
     | `(Lean.Parser.Term.attrKind| local) => .local
@@ -39,7 +40,8 @@ elab attrKind:attrKind "add_aesop_rules " e:Aesop.rule_expr : command => do
     for rsName in rsNames do
       addGlobalRule rsName rule attrKind (checkNotExists := true)
 
-elab "erase_aesop_rules " "[" es:Aesop.rule_expr,* "]" : command => do
+elab (name := eraseRules)
+    "erase_aesop_rules " "[" es:Aesop.rule_expr,* "]" : command => do
   let filters ← Elab.Command.liftTermElabM do
     let ctx ← ElabM.Context.forGlobalErasing
     (es : Array _).mapM λ e => do
@@ -49,7 +51,7 @@ elab "erase_aesop_rules " "[" es:Aesop.rule_expr,* "]" : command => do
     for (rsFilter, rFilter) in fs do
       eraseGlobalRules rsFilter rFilter (checkExists := true)
 
-elab "#aesop_rules" : command => do
+elab (name := showRules) "#aesop_rules" : command => do
   liftTermElabM do
     let lt := λ (n₁, _) (n₂, _) => n₁.cmp n₂ |>.isLT
     let rss := (← getDeclaredGlobalRuleSets).qsort lt
@@ -64,7 +66,7 @@ def evalStatsReport? (name : Name) : CoreM (Option StatsReport) := do
   catch _ =>
     return none
 
-elab "#aesop_stats" report?:(ident)? : command => do
+elab (name := showStats) "#aesop_stats" report?:(ident)? : command => do
   let resolveReport : Option Ident → CommandElabM StatsReport
     | none => pure StatsReport.default
     | some id => do
