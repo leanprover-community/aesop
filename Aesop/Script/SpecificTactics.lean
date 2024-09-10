@@ -128,12 +128,8 @@ def extN (r : ExtResult) : TacticBuilder := do
     for (g, fvarIds) in r.goals do
       let pats' ← g.withContext do fvarIds.mapM mkPat
       pats := pats ++ pats'
-  let tac ←
-    if r.depth == 1 then
-      `(tactic| ext1 $pats:rintroPat*)
-    else
-      let depth := Syntax.mkNumLit $ toString r.depth
-      `(tactic| ext $pats:rintroPat* : $depth)
+  let depthStx := Syntax.mkNumLit $ toString r.depth
+  let tac ← `(tactic| ext $pats:rintroPat* : $depthStx)
   return .unstructured tac
 where
   mkPat (fvarId : FVarId) : MetaM (TSyntax `rintroPat) := do
