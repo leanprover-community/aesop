@@ -78,7 +78,7 @@ where
           {"  "}failed:     {fmtSection totals.elapsedFailed totals.numFailed}\n"
     return fmt
 
-def scriptsCore (percentile? : Option Percent := none) :
+def scriptsCore (percentile? : Option Percent := none) (nSlowest := 30) :
     StatsReport := λ statsArray => Id.run do
   let statsArray := statsArray.filterOptPercentile (·.script) percentile?
   let mut totalTime := 0
@@ -104,7 +104,18 @@ def scriptsCore (percentile? : Option Percent := none) :
       dynamicallyStructured := dynamicallyStructured + 1
       if perfect then
         perfectlyDynamicallyStructured := perfectlyDynamicallyStructured + 1
+
   let samples := statsArray.size
+  let slowest := statsArray.qsort (λ s₁ s₂ => s₁.stats.script > s₂.stats.script)
+  let slowest := slowest[:nSlowest].toArray
+  let nSlowest := min slowest.size nSlowest
+  let slowestFmt := slowest.map λ e =>
+    let pos :=
+      match e.position? with
+      | some pos => f!"{pos.line}:{pos.column}"
+      | none => f!"?:?"
+    f!"{e.fileName}:{pos}: script {e.stats.script}, total {e.stats.total}, type {fmtScriptGenerated e.stats.scriptGenerated}"
+
   let pctStr :=
     if let some pct := percentile? then
       s!" (percentile by script generation time: {pct})"
@@ -118,7 +129,15 @@ def scriptsCore (percentile? : Option Percent := none) :
      - Statically  structured: {staticallyStructured}\n" ++
   f!"  - perfectly:            {perfectlyStaticallyStructured}\n\
      - Dynamically structured: {dynamicallyStructured}\n" ++
-  f!"  - perfectly:            {perfectlyDynamicallyStructured}"
+  f!"  - perfectly:            {perfectlyDynamicallyStructured}\n\
+     \n\
+     {nSlowest} Aesop calls with slowest script generation:\n\
+     {Format.joinSep slowestFmt.toList "\n"}"
+where
+  fmtScriptGenerated : ScriptGenerated → Format
+    | .none => "<none>"
+    | .staticallyStructured perfect => f!"static (perfect: {perfect})"
+    | .dynamicallyStructured perfect => f!"dynamic (perfect: {perfect})"
 
 def scripts   := scriptsCore
 def scripts99 := scriptsCore (percentile? := some ⟨0.99⟩)

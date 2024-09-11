@@ -36,7 +36,7 @@ def evalAesop : Tactic := λ stx => do
         replaceMainGoal goals.toList
         statsRef.set stats
     let stats ← statsRef.get
-    recordStatsIfEnabled { aesopStx := stx, stats }
+    recordStatsForCurrentFileIfEnabled stx stats
     stats.trace .stats
 
 end Aesop
