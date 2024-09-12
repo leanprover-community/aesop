@@ -46,13 +46,10 @@ def recordStep (step : Script.Step) : ExtractScriptM Unit := do
 def recordLazySteps (ruleName : DisplayRuleName)
     (steps? : Option (Array Script.LazyStep)) : ExtractScriptM Unit := do
   let steps ← lazyStepsToSteps ruleName steps?
-  aesop_trace[script] do
-    for step in steps do
-      aesop_trace![script] "step {step.uTactic}"
   modify λ s => { s with script := s.script ++ steps }
 
 def visitGoal (g : Goal) : ExtractScriptM Unit := do
-  aesop_trace[script] "visit goal {g.id}"
+  withConstAesopTraceNode .script (return m!"goal {g.id}") do
   if ! g.mvars.isEmpty then
     modify λ s => { s with proofHasMVar := true }
   match g.normalizationState with
@@ -63,7 +60,7 @@ def visitGoal (g : Goal) : ExtractScriptM Unit := do
       recordLazySteps ruleName script?
 
 def visitRapp (r : Rapp) : ExtractScriptM Unit := do
-  aesop_trace[script] "visit rapp {r.id}"
+  withConstAesopTraceNode .script (return m!"rapp {r.id}") do
   recordLazySteps r.appliedRule.name r.scriptSteps?
 
 end ExtractScript
