@@ -10,8 +10,6 @@ open Lean Std Lean.Meta
 
 namespace Aesop
 
--- TODO caching -- but maybe the ptrEq optimisation is enough
-
 initialize registerTraceClass `Aesop.Util.EqualUpToIds
 
 namespace EqualUpToIdsM
@@ -153,25 +151,28 @@ private def lctxDecls (lctx : LocalContext) : EqualUpToIdsM (Array LocalDecl) :=
 namespace Unsafe
 
 mutual
-  unsafe def exprsEqualUpToIdsCore (e₁ e₂ : Expr) :
+  unsafe def exprsEqualUpToIdsCore₁ (e₁ e₂ : Expr) :
       ReaderT GoalContext EqualUpToIdsM Bool := do
-    withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing exprs {← printExpr (← readMCtx₁) (← read).lctx₁ (← read).localInstances₁ e₁}, {← printExpr (← readMCtx₂) (← read).lctx₂ (← read).localInstances₂ e₂}") do
+    let e₁ ← withMCtx (← readMCtx₁) (instantiateMVars e₁)
+    let e₂ ← withMCtx (← readMCtx₂) (instantiateMVars e₂)
+    exprsEqualUpToIdsCore₂ e₁ e₂
+
+  unsafe def exprsEqualUpToIdsCore₂ (e₁ e₂ : Expr) :
+      ReaderT GoalContext EqualUpToIdsM Bool :=
+    withIncRecDepth do
+    withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"{← printExpr (← readMCtx₁) (← read).lctx₁ (← read).localInstances₁ e₁} ≟ {← printExpr (← readMCtx₂) (← read).lctx₂ (← read).localInstances₂ e₂}") do
       if ptrEq e₁ e₂ then
         return true
       else
-        exprsEqualUpToIdsCore' (← instMVars (← readMCtx₁) e₁)
-          (← instMVars (← readMCtx₂) e₂)
+        exprsEqualUpToIdsCore₃ e₁ e₂
   where
-    instMVars (mctx : MetavarContext) (e : Expr) : MetaM Expr :=
-      withMCtx mctx (instantiateMVars e)
-
     printExpr (mctx : MetavarContext) (lctx : LocalContext)
         (localInstances : LocalInstances) (e : Expr) : MetaM MessageData :=
       withMCtx mctx do
       withLCtx lctx localInstances do
         addMessageContext m!"{e}"
 
-  unsafe def exprsEqualUpToIdsCore' :
+  unsafe def exprsEqualUpToIdsCore₃ :
       Expr → Expr → ReaderT GoalContext EqualUpToIdsM Bool
     | .bvar i, .bvar j => return i == j
     | .fvar fvarId₁, .fvar fvarId₂ =>
@@ -187,25 +188,25 @@ mutual
       else
         return false
     | .app f₁ x₁, .app f₂ x₂ =>
-      exprsEqualUpToIdsCore f₁ f₂ <&&> exprsEqualUpToIdsCore x₁ x₂
+      exprsEqualUpToIdsCore₂ f₁ f₂ <&&> exprsEqualUpToIdsCore₂ x₁ x₂
     | .lam n₁ t₁ e₁ bi₁, .lam n₂ t₂ e₂ bi₂ =>
       pure (namesEqualUpToMacroScopes n₁ n₂ && bi₁ == bi₂) <&&>
-      exprsEqualUpToIdsCore t₁ t₂ <&&>
-      exprsEqualUpToIdsCore e₁ e₂
+      exprsEqualUpToIdsCore₂ t₁ t₂ <&&>
+      exprsEqualUpToIdsCore₂ e₁ e₂
     | .forallE n₁ t₁ e₁ bi₁, .forallE n₂ t₂ e₂ bi₂ =>
       pure (namesEqualUpToMacroScopes n₁ n₂ && bi₁ == bi₂) <&&>
-      exprsEqualUpToIdsCore t₁ t₂ <&&>
-      exprsEqualUpToIdsCore e₁ e₂
+      exprsEqualUpToIdsCore₂ t₁ t₂ <&&>
+      exprsEqualUpToIdsCore₂ e₁ e₂
     | .letE n₁ t₁ v₁ e₁ _, .letE n₂ t₂ v₂ e₂ _ =>
       pure (namesEqualUpToMacroScopes n₁ n₂) <&&>
-      exprsEqualUpToIdsCore t₁ t₂ <&&>
-      exprsEqualUpToIdsCore v₁ v₂ <&&>
-      exprsEqualUpToIdsCore e₁ e₂
+      exprsEqualUpToIdsCore₂ t₁ t₂ <&&>
+      exprsEqualUpToIdsCore₂ v₁ v₂ <&&>
+      exprsEqualUpToIdsCore₂ e₁ e₂
     | .lit l₁, .lit l₂ => return l₁ == l₂
-    | .mdata _ e₁, e₂ => exprsEqualUpToIdsCore e₁ e₂
-    | e₁, .mdata _ e₂ => exprsEqualUpToIdsCore e₁ e₂
+    | .mdata _ e₁, e₂ => exprsEqualUpToIdsCore₂ e₁ e₂
+    | e₁, .mdata _ e₂ => exprsEqualUpToIdsCore₂ e₁ e₂
     | .proj n₁ i₁ e₁, .proj n₂ i₂ e₂ =>
-      pure (n₁ == n₂ && i₁ == i₂) <&&> exprsEqualUpToIdsCore e₁ e₂
+      pure (n₁ == n₂ && i₁ == i₂) <&&> exprsEqualUpToIdsCore₂ e₁ e₂
     | .mvar m₁, .mvar m₂ => do
       let v₁ ← normalizeMVar (← readMCtx₁) m₁
       let v₂ ← normalizeMVar (← readMCtx₂) m₂
@@ -227,7 +228,7 @@ mutual
 
     compareMVarValues :
         (v₁ v₂ : MVarValue) → ReaderT GoalContext EqualUpToIdsM Bool
-      | .expr e₁, .expr e₂ => exprsEqualUpToIdsCore e₁ e₂
+      | .expr _, .expr _ => unreachable!
       | .mvarId m₁, .mvarId m₂ => unassignedMVarsEqualUpToIdsCore m₁ m₂
       | .delayedAssignment dAss₁, .delayedAssignment dAss₂ =>
         unassignedMVarsEqualUpToIdsCore dAss₁.mvarIdPending dAss₂.mvarIdPending
@@ -238,7 +239,7 @@ mutual
           return false
         let map := (← get).leftUnassignedMVarValues
         if let some e₁ := map[m₁]? then
-          exprsEqualUpToIdsCore e₁ e₂
+          exprsEqualUpToIdsCore₂ e₁ e₂
         else
           modify λ s => {
             s with
@@ -250,7 +251,7 @@ mutual
           return false
         let map := (← get).rightUnassignedMVarValues
         if let some e₂ := map[m₂]? then
-          exprsEqualUpToIdsCore e₁ e₂
+          exprsEqualUpToIdsCore₂ e₁ e₂
         else
           modify λ s => {
             s with
@@ -265,13 +266,13 @@ mutual
       .cdecl _ _ userName₂ type₂ bi₂ kind₂ =>
       pure (namesEqualUpToMacroScopes userName₁ userName₂ && bi₁ == bi₂ &&
             kind₁ == kind₂) <&&>
-      exprsEqualUpToIdsCore type₁ type₂
+      exprsEqualUpToIdsCore₁ type₁ type₂
     | .ldecl _ _ userName₁ type₁ v₁ _ kind₁,
       .ldecl _ _ userName₂ type₂ v₂ _ kind₂ =>
       pure (namesEqualUpToMacroScopes userName₁ userName₂ &&
             kind₁ == kind₂) <&&>
-      exprsEqualUpToIdsCore type₁ type₂ <&&>
-      exprsEqualUpToIdsCore v₁ v₂
+      exprsEqualUpToIdsCore₁ type₁ type₂ <&&>
+      exprsEqualUpToIdsCore₁ v₁ v₂
     | _, _ => return false
 
   unsafe def localContextsEqualUpToIdsCore (lctx₁ lctx₂ : LocalContext)
@@ -319,24 +320,23 @@ mutual
           "unknown metavariable '?{mvarId₁.name}'"
         let (some mdecl₂) := ctx.mctx₂.decls.find? mvarId₂ | throwError
           "unknown metavariable '?{mvarId₂.name}'"
-          let gctx? ←
-            localContextsEqualUpToIdsCore mdecl₁.lctx mdecl₂.lctx
-              mdecl₂.localInstances mdecl₂.localInstances
-          if let some gctx := gctx? then
-          withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing targets") do
-            if ← exprsEqualUpToIdsCore mdecl₁.type mdecl₂.type |>.run gctx then
-              modify λ s =>
-                { s with equalMVarIds := s.equalMVarIds.insert mvarId₁ mvarId₂ }
-              return true
-            else
-              return false
-        else
-          return false
+        let gctx? ←
+          localContextsEqualUpToIdsCore mdecl₁.lctx mdecl₂.lctx
+            mdecl₂.localInstances mdecl₂.localInstances
+        let some gctx := gctx?
+          | return false
+        withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing targets") do
+          if ← exprsEqualUpToIdsCore₁ mdecl₁.type mdecl₂.type |>.run gctx then
+            modify λ s =>
+              { s with equalMVarIds := s.equalMVarIds.insert mvarId₁ mvarId₂ }
+            return true
+          else
+            return false
 end
 
 end Unsafe
 
-@[implemented_by Unsafe.exprsEqualUpToIdsCore]
+@[implemented_by Unsafe.exprsEqualUpToIdsCore₁]
 opaque exprsEqualUpToIdsCore (e₁ e₂ : Expr) : ReaderT GoalContext EqualUpToIdsM Bool
 
 @[implemented_by Unsafe.unassignedMVarsEqualUpToIdsCore]
