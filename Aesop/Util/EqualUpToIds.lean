@@ -148,6 +148,10 @@ private def lctxDecls (lctx : LocalContext) : EqualUpToIdsM (Array LocalDecl) :=
   return lctx.foldl (init := Array.mkEmpty lctx.numIndices) λ decls d =>
     if d.isImplementationDetail then decls else decls.push d
 
+abbrev ExprsEqualUpToIdsM :=
+  MonadCacheT (ExprStructEq × ExprStructEq) Bool $
+  ReaderT GoalContext EqualUpToIdsM
+
 namespace Unsafe
 
 mutual
@@ -155,16 +159,16 @@ mutual
       ReaderT GoalContext EqualUpToIdsM Bool := do
     let e₁ ← withMCtx (← readMCtx₁) (instantiateMVars e₁)
     let e₂ ← withMCtx (← readMCtx₂) (instantiateMVars e₂)
-    exprsEqualUpToIdsCore₂ e₁ e₂
+    exprsEqualUpToIdsCore₂ e₁ e₂ |>.run
 
-  unsafe def exprsEqualUpToIdsCore₂ (e₁ e₂ : Expr) :
-      ReaderT GoalContext EqualUpToIdsM Bool :=
+  unsafe def exprsEqualUpToIdsCore₂ (e₁ e₂ : Expr) : ExprsEqualUpToIdsM Bool :=
     withIncRecDepth do
     withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"{← printExpr (← readMCtx₁) (← read).lctx₁ (← read).localInstances₁ e₁} ≟ {← printExpr (← readMCtx₂) (← read).lctx₂ (← read).localInstances₂ e₂}") do
       if ptrEq e₁ e₂ then
         return true
       else
-        exprsEqualUpToIdsCore₃ e₁ e₂
+        checkCache ((e₁ : ExprStructEq), (e₂ : ExprStructEq)) λ _ => do
+          exprsEqualUpToIdsCore₃ e₁ e₂
   where
     printExpr (mctx : MetavarContext) (lctx : LocalContext)
         (localInstances : LocalInstances) (e : Expr) : MetaM MessageData :=
@@ -172,8 +176,7 @@ mutual
       withLCtx lctx localInstances do
         addMessageContext m!"{e}"
 
-  unsafe def exprsEqualUpToIdsCore₃ :
-      Expr → Expr → ReaderT GoalContext EqualUpToIdsM Bool
+  unsafe def exprsEqualUpToIdsCore₃ : Expr → Expr → ExprsEqualUpToIdsM Bool
     | .bvar i, .bvar j => return i == j
     | .fvar fvarId₁, .fvar fvarId₂ =>
       return fvarId₁ == fvarId₂ ||
@@ -226,8 +229,7 @@ mutual
         else
           return .mvarId m
 
-    compareMVarValues :
-        (v₁ v₂ : MVarValue) → ReaderT GoalContext EqualUpToIdsM Bool
+    compareMVarValues : MVarValue → MVarValue → ExprsEqualUpToIdsM Bool
       | .expr _, .expr _ => unreachable!
       | .mvarId m₁, .mvarId m₂ => unassignedMVarsEqualUpToIdsCore m₁ m₂
       | .delayedAssignment dAss₁, .delayedAssignment dAss₂ =>
