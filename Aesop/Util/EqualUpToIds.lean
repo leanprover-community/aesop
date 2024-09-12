@@ -62,18 +62,23 @@ protected def EqualUpToIdsM.run (x : EqualUpToIdsM α)
 
 namespace EqualUpToIds
 
+@[inline]
 def readCommonMCtx? : EqualUpToIdsM (Option MetavarContext) :=
   return (← read).commonMCtx?
 
+@[inline]
 def readMCtx₁ : EqualUpToIdsM MetavarContext :=
   return (← read).mctx₁
 
+@[inline]
 def readMCtx₂ : EqualUpToIdsM MetavarContext :=
   return (← read).mctx₂
 
+@[inline]
 def readAllowAssignmentDiff : EqualUpToIdsM Bool :=
   return (← read).allowAssignmentDiff
 
+@[specialize]
 def equalCommonLMVars? (lmvarId₁ lmvarId₂ : LMVarId) :
     EqualUpToIdsM (Option Bool) := do
   match ← readCommonMCtx? with
@@ -84,6 +89,7 @@ def equalCommonLMVars? (lmvarId₁ lmvarId₂ : LMVarId) :
     else
       return none
 
+@[specialize]
 def equalCommonMVars? (mvarId₁ mvarId₂ : MVarId) :
     EqualUpToIdsM (Option Bool) := do
   match ← readCommonMCtx? with
@@ -108,17 +114,20 @@ inductive MVarValue where
 
 namespace Unsafe
 
+@[inline]
 private def namesEqualUpToMacroScopes (n₁ n₂ : Name) : Bool :=
   n₁.hasMacroScopes == n₂.hasMacroScopes &&
   n₁.eraseMacroScopes == n₂.eraseMacroScopes
 
 mutual
+  @[specialize]
   unsafe def levelsEqualUpToIdsCore (l₁ l₂ : Level) : EqualUpToIdsM Bool :=
     if ptrEq l₁ l₂ then
       return true
     else
       levelsEqualUpToIdsCore' l₁ l₂
 
+  @[specialize]
   unsafe def levelsEqualUpToIdsCore' : Level → Level → EqualUpToIdsM Bool
     | .zero, .zero => return true
     | .succ l₁, .succ l₂ => levelsEqualUpToIdsCore l₁ l₂
@@ -144,6 +153,7 @@ end Unsafe
 @[implemented_by Unsafe.levelsEqualUpToIdsCore]
 opaque levelsEqualUpToIdsCore (l₁ l₂ : Level) : EqualUpToIdsM Bool
 
+@[inline]
 private def lctxDecls (lctx : LocalContext) : EqualUpToIdsM (Array LocalDecl) := do
   return lctx.foldl (init := Array.mkEmpty lctx.numIndices) λ decls d =>
     if d.isImplementationDetail then decls else decls.push d
@@ -155,12 +165,14 @@ abbrev ExprsEqualUpToIdsM :=
 namespace Unsafe
 
 mutual
+  @[specialize]
   unsafe def exprsEqualUpToIdsCore₁ (e₁ e₂ : Expr) :
       ReaderT GoalContext EqualUpToIdsM Bool := do
     let e₁ ← withMCtx (← readMCtx₁) (instantiateMVars e₁)
     let e₂ ← withMCtx (← readMCtx₂) (instantiateMVars e₂)
     exprsEqualUpToIdsCore₂ e₁ e₂ |>.run
 
+  @[specialize]
   unsafe def exprsEqualUpToIdsCore₂ (e₁ e₂ : Expr) : ExprsEqualUpToIdsM Bool :=
     withIncRecDepth do
     withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"{← printExpr (← readMCtx₁) (← read).lctx₁ (← read).localInstances₁ e₁} ≟ {← printExpr (← readMCtx₂) (← read).lctx₂ (← read).localInstances₂ e₂}") do
@@ -182,6 +194,7 @@ mutual
       withLCtx lctx localInstances do
         addMessageContext m!"{e}"
 
+  @[specialize]
   unsafe def exprsEqualUpToIdsCore₃ : Expr → Expr → ExprsEqualUpToIdsM Bool
     | .bvar i, .bvar j => return i == j
     | .fvar fvarId₁, .fvar fvarId₂ =>
@@ -268,6 +281,7 @@ mutual
           return true
       | _, _ => return false
 
+  @[specialize]
   unsafe def localDeclsEqualUpToIdsCore :
       LocalDecl → LocalDecl → ReaderT GoalContext EqualUpToIdsM Bool
     | .cdecl _ _ userName₁ type₁ bi₁ kind₁,
@@ -283,6 +297,7 @@ mutual
       exprsEqualUpToIdsCore₁ v₁ v₂
     | _, _ => return false
 
+  @[specialize]
   unsafe def localContextsEqualUpToIdsCore (lctx₁ lctx₂ : LocalContext)
       (localInstances₁ localInstances₂ : LocalInstances) :
       EqualUpToIdsM (Option GoalContext) := do
@@ -309,6 +324,7 @@ mutual
       else
         return some gctx
 
+  @[specialize]
   unsafe def unassignedMVarsEqualUpToIdsCore (mvarId₁ mvarId₂ : MVarId) :
       EqualUpToIdsM Bool :=
     withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing mvars {mvarId₁.name}, {mvarId₂.name}") do
@@ -351,6 +367,7 @@ opaque exprsEqualUpToIdsCore (e₁ e₂ : Expr) : ReaderT GoalContext EqualUpToI
 opaque unassignedMVarsEqualUpToIdsCore (mvarId₁ mvarId₂ : MVarId) :
     EqualUpToIdsM Bool
 
+@[specialize]
 def tacticStatesEqualUpToIdsCore (goals₁ goals₂ : Array MVarId) :
     EqualUpToIdsM Bool := do
   if goals₁.size != goals₂.size then
