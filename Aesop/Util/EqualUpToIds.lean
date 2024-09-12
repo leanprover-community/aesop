@@ -165,7 +165,13 @@ mutual
     withIncRecDepth do
     withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"{← printExpr (← readMCtx₁) (← read).lctx₁ (← read).localInstances₁ e₁} ≟ {← printExpr (← readMCtx₂) (← read).lctx₂ (← read).localInstances₂ e₂}") do
       if ptrEq e₁ e₂ then
+        trace[Aesop.Util.EqualUpToIds] "pointer-equal"
         return true
+      else if ! e₁.hasMVar && ! e₂.hasMVar && e₁.equal e₂ then
+        trace[Aesop.Util.EqualUpToIds] "structurally equal"
+        return true
+        -- If e₁ and e₂ don't contain mvars and are not structurally equal, they
+        -- may still be equal up to IDs because we ignore macro scopes on names.
       else
         checkCache ((e₁ : ExprStructEq), (e₂ : ExprStructEq)) λ _ => do
           exprsEqualUpToIdsCore₃ e₁ e₂
