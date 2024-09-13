@@ -303,6 +303,12 @@ Yet another alternative would be to check `ρ` only when we get a complete match
 This implies that we may do unnecessary work on partial matches that will never become viable because one of their components has vanished.
 Whether this tradeoff is worth it needs to be investigated empirically.
 
+An alternative would be to save a map `FVarId → RuleName, slot, instantiation` that would in principle give the information of where the hyp is currently saved in the VariableMaps. The problem is that the hyp can be saved into images of a `VariableMap` where the `inst` is unrelated to `hyp`'s instantiation. To combat this, we would need to update the map every time we make progress on a partial match the remember the instantiations that map to partial matches containing the hyp.
+
+Because of the problem described in the last paragraph, we have no other choice than to check over the possible image (Which are the ones that have level greater or equal to the hyp's). One solution could be one the the lazy remove mentioned in the 1rst or 3rd paragraph of this section.
+
+Might be worth a revisit during optimisation.
+
 #### FVar Substitution
 
 To implement `ApplyFVarSubst`, we add an fvar substitution `τ` to the forward state.
