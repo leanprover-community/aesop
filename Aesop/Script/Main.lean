@@ -35,12 +35,16 @@ where
   structureStatic : MetaM (Option (SScript × ScriptGenerated)) := do
     let tacticState ← preState.runMetaM' $ TacticState.mkInitial goal
     let (sscript, perfect) ← uscript.toSScriptStatic tacticState
-    pure $ some (sscript, .staticallyStructured perfect)
+    let gen :=
+      .staticallyStructured (perfect := perfect) (hasMVar := proofHasMVar)
+    pure $ some (sscript, gen)
 
   structureDynamic : MetaM (Option (SScript × ScriptGenerated)) := do
     let some (script, perfect) ← uscript.toSScriptDynamic preState goal
       | return none
-    return some (script, .dynamicallyStructured perfect)
+    let gen :=
+      .dynamicallyStructured (perfect := perfect) (hasMVar := proofHasMVar)
+    return some (script, gen)
 
 end Script
 
