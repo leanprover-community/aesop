@@ -7,8 +7,8 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Aesop.Nanos
 import Aesop.Util.UnorderedArraySet
 import Batteries.Lean.Expr
-import Lean
 import Batteries.Data.String.Basic
+import Lean
 
 open Lean
 open Lean.Meta Lean.Elab.Tactic

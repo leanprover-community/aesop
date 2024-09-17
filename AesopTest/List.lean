@@ -3,8 +3,6 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
--- import Std
-import Batteries.Data.List.Lemmas
 -- Ported from mathlib3, file src/data/list/basic.lean,
 -- commit a945b3769cb82bc238ee004b4327201a6864e7e0
 
