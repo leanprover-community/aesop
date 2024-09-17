@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Check
 import Aesop.Tree.Traversal
 import Aesop.Tree.TreeM
+import Aesop.Util.UnionFind
 
 open Lean
 open Lean.Meta

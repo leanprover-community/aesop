@@ -9,7 +9,6 @@ import Aesop.Script.Tactic
 import Aesop.Script.TacticState
 import Aesop.Script.Util
 import Aesop.Tracing
-import Batteries.Tactic.PermuteGoals
 
 open Lean Lean.Meta
 

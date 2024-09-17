@@ -10,6 +10,8 @@ import Aesop.Search.Expansion.Basic
 import Aesop.Search.Expansion.Simp
 import Aesop.Search.RuleSelection
 import Aesop.Search.SearchM
+import Aesop.Tree.State
+import Batteries.Lean.HashSet
 
 open Lean Lean.Meta Aesop.Script
 

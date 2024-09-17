@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleSet.Filter
+import Aesop.RuleSet.Member
 
 open Lean Lean.Meta
 

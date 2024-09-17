@@ -4,12 +4,12 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Options
 import Aesop.Script.Check
 import Aesop.Script.StructureDynamic
 import Aesop.Script.StructureStatic
 import Aesop.Script.OptimizeSyntax
 import Aesop.Stats.Basic
+import Aesop.Options.Internal
 
 open Lean
 open Lean.Parser.Tactic (tacticSeq)

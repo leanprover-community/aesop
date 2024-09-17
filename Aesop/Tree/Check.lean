@@ -9,6 +9,7 @@ import Aesop.Tree.State
 import Aesop.Tree.Traversal
 import Aesop.Tree.TreeM
 import Batteries.Lean.HashSet
+import Aesop.Tree.RunMetaM
 
 open Lean
 open Lean.Meta

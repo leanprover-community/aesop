@@ -4,7 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Frontend.Attribute
+import Aesop.RuleTac.Basic
+import Aesop.Script.SpecificTactics
 
 namespace Aesop.BuiltinRules
 

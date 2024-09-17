@@ -4,10 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Frontend.Attribute
 import Aesop.Frontend.RuleExpr
 import Aesop.Options
 import Batteries.Linter.UnreachableTactic
+import Aesop.Frontend.Extension
 
 open Lean
 open Lean.Meta
