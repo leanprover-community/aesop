@@ -24,7 +24,7 @@ end RuleBuilderOptions
 namespace RuleBuilder
 
 private def forwardIndexingModeCore (type : Expr)
-    (immediate : UnorderedArraySet Nat) (md : TransparencyMode) :
+    (immediate : Std.HashSet Nat) (md : TransparencyMode) :
     MetaM IndexingMode := do
   let immediate := immediate.toArray
   match immediate.max? with
@@ -40,7 +40,7 @@ private def forwardIndexingModeCore (type : Expr)
         "aesop: internal error: immediate arg for forward rule is out of range"
   | none => return .unindexed
 
-def getForwardIndexingMode (type : Expr) (immediate : UnorderedArraySet Nat)
+def getForwardIndexingMode (type : Expr) (immediate : Std.HashSet Nat)
     (md indexMd : TransparencyMode) : MetaM IndexingMode := do
   if indexMd != .reducible then
     return .unindexed
@@ -50,13 +50,13 @@ def getForwardIndexingMode (type : Expr) (immediate : UnorderedArraySet Nat)
 
 def getImmediatePremises  (type : Expr) (pat? : Option RulePattern)
     (md : TransparencyMode) :
-    Option (Array Name) → MetaM (UnorderedArraySet Nat)
+    Option (Array Name) → MetaM (Std.HashSet Nat)
   | none =>
     -- If no immediate names are given, every argument becomes immediate,
     -- except instance args, dependent args and args determined by a rule
     -- pattern.
     withTransparency md $ forallTelescopeReducing type λ args _ => do
-      let mut result := #[]
+      let mut result := []
       for h : i in [:args.size] do
         if isPatternInstantiated i then
           continue
@@ -67,25 +67,25 @@ def getImmediatePremises  (type : Expr) (pat? : Option RulePattern)
             let type ← instantiateMVars (← arg.fvarId!.getDecl).type
             return ! type.containsFVar fvarId
         if ← pure ! ldecl.binderInfo.isInstImplicit <&&> isNondep then
-          result := result.push i
-      return UnorderedArraySet.ofDeduplicatedArray result
+          result := i :: result
+      return .ofList result
   | some immediate =>
     -- If immediate names are given, we check that corresponding arguments
     -- exists and record these arguments' positions.
     withTransparency md $ forallTelescopeReducing type λ args _ => do
       let mut unseen := immediate.sortDedup (ord := ⟨Name.quickCmp⟩)
-      let mut result := #[]
+      let mut result := []
       for h : i in [:args.size] do
         let argName := (← args[i].fvarId!.getDecl).userName
         if immediate.contains argName then
           if isPatternInstantiated i then
             throwError "{errPrefix}argument '{argName}' cannot be immediate since it is already determined by a pattern"
           else
-            result := result.push i
+            result := i :: result
             unseen := unseen.erase argName
       if ! unseen.isEmpty then throwError
         "{errPrefix}function does not have arguments with these names: '{unseen}'"
-      return UnorderedArraySet.ofDeduplicatedArray result
+      return .ofList result
 where
   isPatternInstantiated (i : Nat) : Bool :=
     let idx? : Option Nat := do ← (← pat?).argMap[i]?
@@ -104,7 +104,7 @@ def forwardCore (t : ElabRuleTerm) (immediate? : Option (Array Name))
   let type ← inferType (← t.expr)
   aesop_trace[debug] "decl type: {type}"
   let immediate ← getImmediatePremises type pat? md immediate?
-  aesop_trace[debug] "immediate premises: {immediate}"
+  aesop_trace[debug] "immediate premises: {immediate.toList}"
   let imode ← imode?.getDM $ getForwardIndexingMode type immediate md indexMd
   aesop_trace[debug] "imode: {imode}"
   let tac := .forward t.toRuleTerm pat? immediate isDestruct md

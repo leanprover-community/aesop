@@ -17,7 +17,7 @@ open Lean.Meta
 namespace Aesop.RuleTac
 
 partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
-    (patInst : RulePatternInstantiation) (immediate : UnorderedArraySet Nat)
+    (patInst : RulePatternInstantiation) (immediate : Std.HashSet Nat)
     (maxDepth? : Option Nat) (forwardHypData : ForwardHypData) :
     MetaM (Array (Expr × Nat) × Array FVarId) :=
   withNewMCtxDepth (allowLevelAssignments := true) do
@@ -111,7 +111,7 @@ where
 
 def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     (patInsts : Std.HashSet RulePatternInstantiation)
-    (immediate : UnorderedArraySet Nat) (clear : Bool)
+    (immediate : Std.HashSet Nat) (clear : Bool)
     (md : TransparencyMode) (maxDepth? : Option Nat) : ScriptM Subgoal :=
   withTransparency md $ goal.withContext do
     let forwardHypData ← getForwardHypData
@@ -161,7 +161,7 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
 
 @[inline]
 def forwardExpr (e : Expr) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
+    (immediate : Std.HashSet Nat) (clear : Bool) (md : TransparencyMode) :
     RuleTac :=
   SingleRuleTac.toRuleTac λ input => input.goal.withContext do
     let (goal, steps) ←
@@ -170,20 +170,20 @@ def forwardExpr (e : Expr) (pat? : Option RulePattern)
     return (#[goal], steps, none)
 
 def forwardConst (decl : Name) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
+    (immediate : Std.HashSet Nat) (clear : Bool) (md : TransparencyMode) :
     RuleTac := λ input => do
   let e ← mkConstWithFreshMVarLevels decl
   forwardExpr e pat? immediate (clear := clear) md input
 
 def forwardTerm (stx : Term) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
+    (immediate : Std.HashSet Nat) (clear : Bool) (md : TransparencyMode) :
     RuleTac := λ input =>
   input.goal.withContext do
     let e ← elabRuleTermForApplyLikeMetaM input.goal stx
     forwardExpr e pat? immediate (clear := clear) md input
 
 def forward (t : RuleTerm) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
+    (immediate : Std.HashSet Nat) (clear : Bool) (md : TransparencyMode) :
     RuleTac :=
   match t with
   | .const decl => forwardConst decl pat? immediate clear md
