@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 import Lean.Meta.Tactic.Simp.SimpAll
 
 open Lean Lean.Meta
-open Lean.Elab.Tactic (mkSimpOnly)
 open Simp (UsedSimps)
 
 namespace Aesop

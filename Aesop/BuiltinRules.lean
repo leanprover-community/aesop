@@ -6,6 +6,15 @@ Authors: Jannis Limperg
 
 -- The Aesop.BuiltinRules.* imports are needed to ensure that the tactics from
 -- these files are registered.
+import Aesop.BuiltinRules.Assumption
+import Aesop.BuiltinRules.ApplyHyps
+import Aesop.BuiltinRules.DestructProducts
+import Aesop.BuiltinRules.Ext
+import Aesop.BuiltinRules.Intros
+import Aesop.BuiltinRules.Rfl
+import Aesop.BuiltinRules.Split
+import Aesop.BuiltinRules.Subst
+import Aesop.Frontend.Attribute
 
 namespace Aesop.BuiltinRules
 

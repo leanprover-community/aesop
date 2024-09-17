@@ -4,8 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Sebastian Ullrich, Jannis Limperg
 -/
 
-import Aesop.RuleTac.Basic
-import Aesop.Script.SpecificTactics
+import Aesop.Frontend.Attribute
 
 open Lean
 open Lean.Meta
