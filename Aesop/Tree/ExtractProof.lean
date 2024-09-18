@@ -5,8 +5,8 @@ Authors: Jannis Limperg
 -/
 import Lean.Replay
 import Aesop.Tracing
-import Aesop.Tree.Tracing
 import Aesop.Tree.TreeM
+import Batteries.Lean.Meta.InstantiateMVars
 
 open Lean
 open Lean.Meta

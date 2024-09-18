@@ -4,11 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Builder.Forward
 import Aesop.RuleSet
 import Aesop.RuleTac
-import Aesop.Script.Main
 import Aesop.Search.Expansion.Basic
+import Aesop.Script.Check
 
 open Lean Lean.Meta
 

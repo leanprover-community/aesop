@@ -5,11 +5,13 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.ElabM
-import Aesop.Frontend.Basic
 import Aesop.Percent
 import Aesop.Rule.Name
-import Aesop.Builder
-import Aesop.RuleSet
+import Aesop.Builder.Cases
+import Aesop.Builder.Default
+import Aesop.Builder.Forward
+import Aesop.Builder.Unfold
+import Aesop.RuleSet.Filter
 
 open Lean
 open Lean.Meta

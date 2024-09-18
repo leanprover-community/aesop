@@ -5,12 +5,9 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Aesop.Nanos
-import Aesop.Util.UnionFind
 import Aesop.Util.UnorderedArraySet
-import Batteries.Data.String
 import Batteries.Lean.Expr
-import Batteries.Lean.Meta.DiscrTree
-import Batteries.Lean.PersistentHashSet
+import Batteries.Data.String.Basic
 import Lean
 
 open Lean

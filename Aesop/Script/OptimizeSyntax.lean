@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Lean
-import Std
 
 namespace Aesop
 

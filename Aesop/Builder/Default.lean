@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Builder.Constructors
 import Aesop.Builder.NormSimp
 import Aesop.Builder.Tactic
+import Aesop.Builder.Apply
 
 open Lean
 open Lean.Meta

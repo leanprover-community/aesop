@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Saturate
 import Aesop.Frontend.Extension
+import Aesop.Builder.Forward
 
 open Lean Lean.Meta Lean.Elab Lean.Elab.Term Lean.PrettyPrinter
 

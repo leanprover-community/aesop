@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Search.Main
-import Aesop.BuiltinRules -- ensures that the builtin rules are registered
 import Aesop.Frontend.Tactic
 import Aesop.Stats.Extension
 

@@ -1,6 +1,5 @@
 import Aesop.Script.UScriptToSScript
 import Aesop.Script.Util
-import Aesop.Stats.Basic
 
 open Lean Lean.Meta
 

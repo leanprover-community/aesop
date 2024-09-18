@@ -4,9 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.RuleTac.Forward.Basic
 import Aesop.Util.Basic
 import Aesop.Util.EqualUpToIds
+import Batteries.Lean.Meta.SavedState
 
 open Lean Std Lean.Meta
 

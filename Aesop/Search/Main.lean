@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Check
-import Aesop.Frontend.Attribute
 import Aesop.Options
 import Aesop.RuleSet
 import Aesop.Script.Check
@@ -14,6 +13,7 @@ import Aesop.Search.Expansion
 import Aesop.Search.ExpandSafePrefix
 import Aesop.Search.Queue
 import Aesop.Tree
+import Aesop.Frontend.Extension
 
 open Lean
 open Lean.Elab.Tactic (liftMetaTacticAux TacticM)
