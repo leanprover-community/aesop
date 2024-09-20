@@ -55,10 +55,15 @@ elab (name := eraseRules)
     for (rsFilter, rFilter) in fs do
       eraseGlobalRules rsFilter rFilter (checkExists := true)
 
-elab (name := showRules) "#aesop_rules" : command => do
+elab (name := showRules) "#aesop_rules " ns:ident* : command => do
   liftTermElabM do
     let lt := λ (n₁, _) (n₂, _) => n₁.cmp n₂ |>.isLT
-    let rss := (← getDeclaredGlobalRuleSets).qsort lt
+    let rss ←
+      if ns.isEmpty then
+        let rss ← getDeclaredGlobalRuleSets
+        pure $ rss.qsort lt
+      else
+        ns.mapM λ n => return (n.getId, ← getGlobalRuleSet n.getId)
     TraceOption.ruleSet.withEnabled do
       for (name, rs, _) in rss do
         withConstAesopTraceNode .ruleSet (return m!"Rule set '{name}'") do
