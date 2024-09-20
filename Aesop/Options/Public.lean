@@ -182,4 +182,12 @@ register_option aesop.dev.generateScript : Bool := {
   defValue := false
 }
 
+/--
+(aesop) Warn when apply builder is applied to a rule with conclusion of the form A ↔ B
+-/
+register_option aesop.warn.applyIff : Bool := {
+  descr := "(aesop) Warn when apply builder is applied to a rule with conclusion of the form A ↔ B"
+  defValue := true
+}
+
 end Aesop

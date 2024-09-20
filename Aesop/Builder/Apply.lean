@@ -30,6 +30,12 @@ def getApplyIndexingMode (indexMd : TransparencyMode) (type : Expr) :
   else
     IndexingMode.targetMatchingConclusion type
 
+def checkNoIff (type : Expr) : MetaM Unit := do
+  if aesop.warn.applyIff.get (← getOptions) then
+    forallTelescope type λ _ conclusion => do
+      if ← testHelper conclusion λ e => return e.isAppOf' ``Iff then
+        logWarning m!"Apply builder was used for a theorem with conclusion A ↔ B. You probably want to use the simp builder.\nUse `set_option aesop.warn.applyIff false` to disable this warning."
+
 def applyCore (t : ElabRuleTerm) (pat? : Option RulePattern)
     (imode? : Option IndexingMode) (md indexMd : TransparencyMode)
     (phase : PhaseSpec) : MetaM LocalRuleSetMember := do
@@ -44,6 +50,7 @@ def apply : RuleBuilder := λ input => do
   let e ← elabRuleTermForApplyLike input.term
   let t := ElabRuleTerm.ofElaboratedTerm input.term e
   let type ← inferType e
+  checkNoIff type
   let pat? ← opts.pattern?.mapM (RulePattern.elab · type)
   applyCore t pat? opts.indexingMode? opts.applyTransparency
     opts.applyIndexTransparency input.phase
