@@ -489,25 +489,19 @@ def removeHypothesis (h : FVarId) (forwardState : ForwardState) :
   /- Return updated map-/
   return forwardState
 
-/-- Returns the queue of safe rules. -/
-def popNormRule (forwardState : ForwardState) :
-    Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
-  match forwardState.normQueue.deleteMin with
+def popFirstNormMatch (fs : ForwardState) : Option (Expr × ForwardState) :=
+  match fs.normQueue.deleteMin with
   | none => none
-  | some (q, bh) => (q.expr, bh)
+  | some (entry, normQueue) => (entry.expr, { fs with normQueue })
 
-/-- Returns the queue of safe rules. -/
-def popSafeRule (forwardState : ForwardState) :
-    Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
-  match forwardState.safeQueue.deleteMin with
+def popFirstSafeMatch (fs : ForwardState) : Option (Expr × ForwardState) :=
+  match fs.safeQueue.deleteMin with
   | none => none
-  | some (q, bh) => (q.expr, bh)
+  | some (entry, safeQueue) => (entry.expr, { fs with safeQueue })
 
-/-- Returns the queue of safe rules. -/
-def popUnsafeRule (forwardState : ForwardState) :
-    Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
-  match forwardState.unsafeQueue.deleteMin with
+def popFirstUnsafeMatch (fs : ForwardState) : Option (Expr × ForwardState) :=
+  match fs.unsafeQueue.deleteMin with
   | none => none
-  | some (q, bh) => (q.expr, bh)
+  | some (entry, unsafeQueue) => (entry.expr, { fs with unsafeQueue })
 
 end Aesop.ForwardState
