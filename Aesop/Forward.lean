@@ -416,9 +416,6 @@ end QueueEntry
 structure ForwardState where
   /-- Map from the rule's `RuleName` to it's `RuleState`-/
   ruleStates : HashMap RuleName RuleState
-  /-- The index of Forward Rule to be unified against. -/
-  /- TODO: pull out of the ForwardState. -/
-  index : ForwardIndex
   /- Arrays of complete matches.-/
   normQueue : BinomialHeap QueueEntry QueueEntry.le
   safeQueue : BinomialHeap QueueEntry QueueEntry.le
@@ -429,65 +426,41 @@ structure ForwardState where
 
 namespace ForwardState
 
-/- Index can also give the `Expr` of which rule it thinks we should look at
-and the slot `i` associated to the hypothesis.-/
-def addHypothesis (h : FVarId) (forwardState : ForwardState) :
-    MetaM ForwardState := do
-  let mut forwardState := forwardState
-  for (r, i) in ← forwardState.index.get (← h.getType) do
-    let RS ← match forwardState.ruleStates.find? r.name with
-      | some n => pure n
-      | none => RuleState.ofExpr r.expr
-    let slot ← match RS.slots.find? (fun s => s.hypIndex = i) with
-    | none => throwError "Positions in index should match the slots' positions"
-    | some slot => pure slot
-    let (RS, Arr) ← RS.addHypothesis slot h
-    forwardState := {
-      forwardState with
-      ruleStates := forwardState.ruleStates.insert r.name RS
-    }
+def addHypothesis (h : FVarId) (ms : Array (ForwardRule × Nat))
+    (fs : ForwardState) : MetaM ForwardState := do
+  let mut fs := fs
+  for (r, i) in ms do
+    let rs ← fs.ruleStates.find? r.name |>.getDM (RuleState.ofExpr r.expr)
+    let some slot := rs.slots.find? (·.hypIndex == i)
+      | throwError "addHypothesis: internal error: no slot with hyp index {i} for rule {r.name}"
+    let (rs, fullMatches) ← rs.addHypothesis slot h
+    fs := { fs with ruleStates := fs.ruleStates.insert r.name rs }
+    for expr in fullMatches do
+      fs := addFullMatch expr r fs
+  return fs
+where
+  addFullMatch (expr : Expr) (r : ForwardRule) (fs : ForwardState) :
+      ForwardState :=
+    let queueEntry := { expr, prio := r.prio }
     match r.name.phase with
-    | .norm =>
-      for expr in Arr do
-        forwardState := {
-          forwardState with
-          normQueue := forwardState.normQueue.insert {expr, prio := r.prio}
-        }
-    | .safe =>
-      for expr in Arr do
-        forwardState := {
-          forwardState with
-          safeQueue := forwardState.safeQueue.insert {expr, prio := r.prio}
-        }
-    | .«unsafe» =>
-      for expr in Arr do
-        forwardState := {
-          forwardState with
-          unsafeQueue := forwardState.unsafeQueue.insert {expr, prio := r.prio}
-        }
-  /- Return updated map-/
-  return forwardState
+    | .norm   => { fs with normQueue := fs.normQueue.insert queueEntry }
+    | .safe   => { fs with safeQueue := fs.safeQueue.insert queueEntry }
+    | .unsafe => { fs with unsafeQueue := fs.unsafeQueue.insert queueEntry }
 
-/- Question : Do we need to update the queues?-/
-def removeHypothesis (h : FVarId) (forwardState : ForwardState) :
-    MetaM ForwardState := do
-  let mut forwardState := forwardState
-  for (r, i) in ← forwardState.index.get (← h.getType) do
-    let RS ← match forwardState.ruleStates.find? r.name with
-      | some n => pure n
-      | none => RuleState.ofExpr r.expr
-    /-Here `RS` is some `RuleState` that contains some hyp with the same type as `h`.
-    It should be associated to a slot via `i` and `hypIndex`.-/
-    /- `i` is associated to one of the slot's hypIndices. We want the slot.-/
-    let slot := RS.slots.foldl (fun n s ↦ if s.hypIndex == i then s.index else n) 0
-    /- We need to update the `atlas` of `RS`-/
-    let mut RS :=
-      { RS with variableMap := ← RS.variableMap.removeHypInMaps h slot }
-    forwardState := {
-      forwardState with
-      ruleStates := forwardState.ruleStates.insert r.name RS}
-  /- Return updated map-/
-  return forwardState
+/- TODO: also update the queues -/
+def removeHypothesis (h : FVarId) (ms : Array (ForwardRule × Nat))
+    (fs : ForwardState) : MetaM ForwardState := do
+  let mut fs := fs
+  for (r, i) in ms do
+    let some rs := fs.ruleStates.find? r.name
+      | continue
+    let some slot := rs.slots.find? (·.hypIndex == i)
+      | throwError "removeHypothesis: internal error: no slot with hyp index {i} for rule {r.name}"
+    let variableMap ← rs.variableMap.removeHypInMaps h slot.index
+    fs := { fs with
+      ruleStates := fs.ruleStates.insert r.name { rs with variableMap }
+    }
+  return fs
 
 def popFirstNormMatch (fs : ForwardState) : Option (Expr × ForwardState) :=
   match fs.normQueue.deleteMin with
