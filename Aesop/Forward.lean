@@ -125,7 +125,7 @@ def RuleState.slot! (r : RuleState) (slot : Nat) : Slot :=
 
 /-- `r.slot! slot` contains the information concerning the inputHypothesis. We match this
 with a given `hyp`.-/
-def RuleState.matchInputHypothesis (r : RuleState) (slot : Nat) (hyp : FVarId) :
+def RuleState.matchInputHypothesis? (r : RuleState) (slot : Nat) (hyp : FVarId) :
     MetaM (Option Substitution) := do
   let slot := r.slot! slot
   r.metaState.runMetaM' do
@@ -303,7 +303,7 @@ namespace RuleState
 /-- Precondition: The `slot` represents the maximal input hypothesis in `partialMatch`.
 This means that `m.level = slot.slot`.
 -/
-partial def AddMatch (r : RuleState) (slot : Slot) (m : PartialMatch) :
+partial def addMatch (r : RuleState) (slot : Slot) (m : PartialMatch) :
     MetaM (RuleState × Array Expr) := do
   let subst := m.subst
   let mut r := r
@@ -316,15 +316,15 @@ partial def AddMatch (r : RuleState) (slot : Slot) (m : PartialMatch) :
     let atlas := r.atlas.addMatchToMaps slot (r.slot! (slot.index + 1)) subst m
     r := { r with atlas }
     for hyp in r.atlas.findHypotheses slot subst do
-      let x ← r.AddMatch slot ⟨hyp :: m.hyps, subst, slot.index + 1⟩
+      let x ← r.addMatch slot ⟨hyp :: m.hyps, subst, slot.index + 1⟩
       r := x.1
       fullMatches := fullMatches.append x.2
     return ⟨r, fullMatches⟩
 
 /-- Precondition: The `slot` represents the input hypothesis corresponding to `hyp` -/
-def AddHypothesis (r : RuleState) (slot : Slot) (h : FVarId) :
+def addHypothesis (r : RuleState) (slot : Slot) (h : FVarId) :
     MetaM (RuleState × Array Expr) := do
-  match ← r.matchInputHypothesis slot.index h with
+  match ← r.matchInputHypothesis? slot.index h with
   | none => panic! "The rule should have a non-trivial substitution at every slot."
   | some subst =>
     let mut r := r
@@ -332,14 +332,14 @@ def AddHypothesis (r : RuleState) (slot : Slot) (h : FVarId) :
     let mut fullMatches : Array Expr := ∅
     r := { r with atlas }
     if slot.index == 0 then
-      return ← r.AddMatch slot ⟨[h], subst, 0⟩
+      return ← r.addMatch slot ⟨[h], subst, 0⟩
     else
       for pm in r.atlas.findPartialMatch slot subst do
         let subst := pm.subst.foldl (init := subst) λ subst k v =>
           assert! let r := subst.find? k; r == none || r == some v
           subst.insert k v
         /- We add `hyp` at the beginning, update relevant insts and the level. -/
-        let x ← r.AddMatch slot ⟨h :: pm.hyps, subst, slot.index⟩
+        let x ← r.addMatch slot ⟨h :: pm.hyps, subst, slot.index⟩
         r := x.1
         fullMatches := fullMatches.append x.2
       return ⟨r, fullMatches⟩
@@ -412,10 +412,10 @@ def QueueEntry.le
     | Prio.normsafe n =>
       match q₂.prio with
         | Prio.normsafe m => n ≤ m
-        | Prio.«unsafe» _ => false -- Should not happen as Queues are separated.
+        | Prio.«unsafe» _ => panic! "comparing QueueEntrys with different priority types"
     | Prio.«unsafe» p =>
       match q₂.prio with
-        | Prio.normsafe _ => false -- Should not happen as Queues are separated.
+        | Prio.normsafe _ => panic! "comparing QueueEntrys with different priority types"
         | Prio.«unsafe» q => p ≥ q
 
 structure ForwardState where
@@ -425,15 +425,16 @@ structure ForwardState where
   /- TODO: pull out of the ForwardState. -/
   index : ForwardIndex
   /- Arrays of complete matches.-/
-  normQueue : (BinomialHeap (QueueEntry) (QueueEntry.le))
-  safeQueue : (BinomialHeap (QueueEntry) (QueueEntry.le))
-  unsafeQueue : (BinomialHeap (QueueEntry) (QueueEntry.le))
+  normQueue : BinomialHeap QueueEntry QueueEntry.le
+  safeQueue : BinomialHeap QueueEntry QueueEntry.le
+  unsafeQueue : BinomialHeap QueueEntry QueueEntry.le
   /- Map from hypotheses to -/
 /-TODO? : FVarId → RuleName, slot, instantiation-/
 
 /- Index can also give the `Expr` of which rule it thinks we should look at
 and the slot `i` associated to the hypothesis.-/
-def ForwardState.AddHypothesis (h : FVarId) (forwardState : ForwardState) : MetaM ForwardState := do
+def ForwardState.addHypothesis (h : FVarId) (forwardState : ForwardState) :
+    MetaM ForwardState := do
   let mut forwardState := forwardState
   for (r, i) in ← forwardState.index.get (← h.getType) do
     let RS ← match forwardState.ruleStates.find? r.name with
@@ -442,25 +443,25 @@ def ForwardState.AddHypothesis (h : FVarId) (forwardState : ForwardState) : Meta
     let slot ← match RS.slots.find? (fun s => s.position = i) with
     | none => throwError "Positions in index should match the slots' positions"
     | some slot => pure slot
-    let (RS, Arr) ← RS.AddHypothesis slot h
+    let (RS, Arr) ← RS.addHypothesis slot h
     forwardState := {
       forwardState with
       ruleStates := forwardState.ruleStates.insert r.name RS
     }
     match r.name.phase with
-    | PhaseName.norm =>
+    | .norm =>
       for expr in Arr do
         forwardState := {
           forwardState with
           normQueue := forwardState.normQueue.insert {expr, prio := r.prio}
         }
-    | PhaseName.safe =>
+    | .safe =>
       for expr in Arr do
         forwardState := {
           forwardState with
           safeQueue := forwardState.safeQueue.insert {expr, prio := r.prio}
         }
-    | PhaseName.«unsafe» =>
+    | .«unsafe» =>
       for expr in Arr do
         forwardState := {
           forwardState with
@@ -470,7 +471,7 @@ def ForwardState.AddHypothesis (h : FVarId) (forwardState : ForwardState) : Meta
   return forwardState
 
 /- Question : Do we need to update the queues?-/
-def ForwardState.RemoveHypothesis (h : FVarId) (forwardState : ForwardState) :
+def ForwardState.removeHypothesis (h : FVarId) (forwardState : ForwardState) :
     MetaM ForwardState := do
   let mut forwardState := forwardState
   for (r, i) in ← forwardState.index.get (← h.getType) do
@@ -491,33 +492,21 @@ def ForwardState.RemoveHypothesis (h : FVarId) (forwardState : ForwardState) :
   return forwardState
 
 /-- Returns the queue of safe rules. -/
-def ForwardState.GetNormRules (forwardState : ForwardState) :
-    (BinomialHeap (QueueEntry) (QueueEntry.le)) := forwardState.normQueue
-
-/-- Returns the queue of safe rules. -/
-def ForwardState.GetSafeRules (forwardState : ForwardState) :
-    (BinomialHeap (QueueEntry) (QueueEntry.le)) := forwardState.safeQueue
-
-/-- Returns the queue of safe rules. -/
-def ForwardState.GetUnsafeRules (forwardState : ForwardState) :
-    (BinomialHeap (QueueEntry) (QueueEntry.le)) := forwardState.unsafeQueue
-
-/-- Returns the queue of safe rules. -/
-def ForwardState.PopNormRules (forwardState : ForwardState) :
+def ForwardState.popNormRule (forwardState : ForwardState) :
     Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
   match forwardState.normQueue.deleteMin with
   | none => none
   | some (q, bh) => (q.expr, bh)
 
 /-- Returns the queue of safe rules. -/
-def ForwardState.PopSafeRules (forwardState : ForwardState) :
+def ForwardState.popSafeRule (forwardState : ForwardState) :
     Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
   match forwardState.safeQueue.deleteMin with
   | none => none
   | some (q, bh) => (q.expr, bh)
 
 /-- Returns the queue of safe rules. -/
-def ForwardState.PopUnsafeRules (forwardState : ForwardState) :
+def ForwardState.popUnsafeRule (forwardState : ForwardState) :
     Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
   match forwardState.unsafeQueue.deleteMin with
   | none => none
