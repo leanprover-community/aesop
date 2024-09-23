@@ -36,13 +36,14 @@ def HashSet.inter [BEq α] [Hashable α] (s₁ : HashSet α) (s₂ : HashSet α)
 structure Slot where
   /-- Metavariable representing the input hypothesis of the rule -/
   mvarId : MVarId
-  /-- Ordering of the slots-/
-  slot : Nat
+  /-- Index of the slot. Slots are always part of a list of slots, and `index`
+  is the 0-based index of this slot in that list. -/
+  index : Nat
   /-- The metavariables this input hypothesis depends on -/
   deps : HashSet MVarId
   /-- Common variables shared between this slot and the previous slots -/
   common : HashSet MVarId
-  /-- Position of the input hypothesis in the rule type -/
+  /-- Position of the input hypothesis represented by this slot in the rule type -/
   position : Nat
   deriving Inhabited
 
@@ -84,7 +85,7 @@ structure RuleState where
   (** At the moment is number of i̶n̶p̶u̶t̶ hypotheses? **) -/
   len : Nat
   /-- Slots representing each of the maximal input hypotheses. For each index `i` of `slots`,
-  `slots[i].slot = i`. -/
+  `slots[i].index = i`. -/
   slots : Array Slot
   /-- The conclusion of the rule. (End point of the rule)-/
   conclusion : Expr
@@ -115,7 +116,7 @@ def RuleState.ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
   /- Filtering out non-input hypetheses-/
   slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
   /- (**) Assigns ordering of slots -/
-  slots := slots.mapIdx fun slot current => {current with slot}
+  slots := slots.mapIdx fun index current => {current with index}
   let mut atlas : VariableAtlas := ∅
   return {expr := thm, len, slots, metaState, conclusion, atlas}
 
@@ -248,7 +249,7 @@ def addHypToMaps (a : VariableAtlas) (slot : Slot) (subs : Substitution) (hyp : 
     VariableAtlas := Id.run do
   let mut a := a
   for var in slot.common do
-    a := a.modify var (·.insertHyp slot.slot (subs.find! var) hyp)
+    a := a.modify var (·.insertHyp slot.index (subs.find! var) hyp)
   return a
 
 /-- Function that adds a match to the relevent VariableMaps. If `lvl` is the level of the match,
@@ -257,7 +258,7 @@ def addMatchToMaps (a : VariableAtlas) (slot : Slot) (nextSlot : Slot)
     (subs : Substitution) (partialMatch : PartialMatch) : VariableAtlas := Id.run do
   let mut a := a
   for var in nextSlot.common do
-    a := a.modify var (fun m => m.insertPartialMatches (slot.slot) (subs.find! var) partialMatch)
+    a := a.modify var (fun m => m.insertPartialMatches slot.index (subs.find! var) partialMatch)
   return a
 
 def removeHypInMaps (a : VariableAtlas) (hyp : FVarId) (slot : Nat ) : MetaM VariableAtlas :=
@@ -270,11 +271,11 @@ def findPartialMatch (a : VariableAtlas) (slot : Slot) (subst : Substitution) :
   if h : 0 < common.size then
     let mut pms : HashSet PartialMatch :=
       /-TODO: extract-/
-      (a.find common[0]).findD (slot.slot - 1) (subst.find! common[0])
+      (a.find common[0]).findD (slot.index - 1) (subst.find! common[0])
         |>.1 |> PersistentHashSet.toHashSet
     for var in common[1:] do
       pms := HashSet.inter pms
-        <| PersistentHashSet.toHashSet ((a.find var).findD (slot.slot - 1) (subst.find! var) |>.1)
+        <| PersistentHashSet.toHashSet ((a.find var).findD (slot.index - 1) (subst.find! var) |>.1)
     return pms
   else
     panic! "findPartialMatch: common variable array is empty."
@@ -286,11 +287,11 @@ def findHypotheses (a : VariableAtlas) (slot : Slot) (subst : Substitution) : Ha
   if h : 0 < common.size then
     let mut hyps : HashSet FVarId :=
       /-TODO: extract-/
-      (a.find common[0]).findD (slot.slot + 1) (subst.find! common[0])
+      (a.find common[0]).findD (slot.index + 1) (subst.find! common[0])
         |>.2 |> PersistentHashSet.toHashSet
     for var in common[1:] do
       hyps := HashSet.inter hyps
-        <| PersistentHashSet.toHashSet ((a.find var).findD (slot.slot + 1) (subst.find! var) |>.2)
+        <| PersistentHashSet.toHashSet ((a.find var).findD (slot.index + 1) (subst.find! var) |>.2)
     return hyps
   else
     panic! "findHypotheses: common variable array is empty."
@@ -307,15 +308,15 @@ partial def AddMatch (r : RuleState) (slot : Slot) (m : PartialMatch) :
   let subst := m.subst
   let mut r := r
   let mut fullMatches : Array Expr := ∅
-  if r.slots.size == slot.slot then
+  if r.slots.size == slot.index then
     match ← r.reconstruct m with
     | none => panic! "Reconstruct failed to provide an expression"
     | some expr => return ⟨r, #[expr]⟩
   else
-    let atlas := r.atlas.addMatchToMaps slot (r.slot! (slot.slot + 1)) subst m
+    let atlas := r.atlas.addMatchToMaps slot (r.slot! (slot.index + 1)) subst m
     r := { r with atlas }
     for hyp in r.atlas.findHypotheses slot subst do
-      let x ← r.AddMatch slot ⟨hyp :: m.hyps, subst, slot.slot + 1⟩
+      let x ← r.AddMatch slot ⟨hyp :: m.hyps, subst, slot.index + 1⟩
       r := x.1
       fullMatches := fullMatches.append x.2
     return ⟨r, fullMatches⟩
@@ -323,14 +324,14 @@ partial def AddMatch (r : RuleState) (slot : Slot) (m : PartialMatch) :
 /-- Precondition: The `slot` represents the input hypothesis corresponding to `hyp` -/
 def AddHypothesis (r : RuleState) (slot : Slot) (h : FVarId) :
     MetaM (RuleState × Array Expr) := do
-  match ← r.matchInputHypothesis slot.slot h with
+  match ← r.matchInputHypothesis slot.index h with
   | none => panic! "The rule should have a non-trivial substitution at every slot."
   | some subst =>
     let mut r := r
     let atlas := r.atlas.addHypToMaps slot subst h
     let mut fullMatches : Array Expr := ∅
     r := { r with atlas }
-    if slot.slot == 0 then
+    if slot.index == 0 then
       return ← r.AddMatch slot ⟨[h], subst, 0⟩
     else
       for pm in r.atlas.findPartialMatch slot subst do
@@ -343,7 +344,7 @@ def AddHypothesis (r : RuleState) (slot : Slot) (h : FVarId) :
             let mut currInst' : Substitution :=
             subst.fold (fun (s : Substitution) k v => s.insert k v) pm.subst -/
         /- We add `hyp` at the beginning, update relevant insts and the level. -/
-        let x ← r.AddMatch slot ⟨h :: pm.hyps, currInst, slot.slot⟩
+        let x ← r.AddMatch slot ⟨h :: pm.hyps, currInst, slot.index⟩
         r := x.1
         fullMatches := fullMatches.append x.2
       return ⟨r, fullMatches⟩
@@ -484,7 +485,7 @@ def ForwardState.RemoveHypothesis (h : FVarId) (forwardState : ForwardState) :
     /-Here `RS` is some `RuleState` that contains some hyp with the same type as `h`.
     It should be associated to a slot via `i` and `position`.-/
     /- `i` is associated to one of the slot's position. We want the slot.-/
-    let slot := RS.slots.foldl (fun n s ↦ if s.position == i then s.slot else n) 0
+    let slot := RS.slots.foldl (fun n s ↦ if s.position == i then s.index else n) 0
     /- We need to update the `atlas` of `RS`-/
     let mut RS :=
       {RS with atlas := ← RS.atlas.removeHypInMaps h slot}
