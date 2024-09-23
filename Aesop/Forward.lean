@@ -40,7 +40,8 @@ structure Slot where
   deps : HashSet MVarId
   /-- Common variables shared between this slot and the previous slots. -/
   common : HashSet MVarId
-  /-- Position of the input hypothesis represented by this slot in the rule type. -/
+  /-- 0-based index of the input hypothesis represented by this slot in the rule
+  type. -/
   hypIndex : Nat
   deriving Inhabited
 
@@ -98,7 +99,7 @@ def insertHyp (imap : InstMap) (slot : Nat) (inst : Expr) (hyp : FVarId) :
   imap.modify slot inst fun ms hs ↦ (ms, hs.insert hyp)
 
 /-- The `slot` represents the maximal input hypothesis in `m`-/
-def insertMatches (imap : InstMap) (slot : Nat) (inst : Expr) (m : Match) :
+def insertMatch (imap : InstMap) (slot : Nat) (inst : Expr) (m : Match) :
     InstMap :=
   imap.modify slot inst fun ms hs ↦ (ms.insert m, hs)
 
@@ -163,7 +164,7 @@ def addMatchToMaps (vmap : VariableMap) (slot : Slot) (nextSlot : Slot)
   let mut vmap := vmap
   for var in nextSlot.common do
     vmap :=
-      vmap.modify var (·.insertMatches slot.index (m.subst.find? var |>.get!) m)
+      vmap.modify var (·.insertMatch slot.index (m.subst.find? var |>.get!) m)
   return vmap
 
 def removeHypInMaps (vmap : VariableMap) (hyp : FVarId) (slot : Nat ) :
