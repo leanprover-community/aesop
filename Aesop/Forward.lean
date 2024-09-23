@@ -4,16 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
 
-import Lean
-import Aesop
-import Batteries.Lean.HashMap
-import Batteries.Data.BinomialHeap.Basic
---
 import Aesop.Index.Basic
+import Aesop.Percent
+import Batteries.Data.BinomialHeap.Basic
+import Batteries.Lean.HashMap
+import Batteries.Lean.HashSet
+import Batteries.Lean.Meta.SavedState
 
-
-
-open Lean Meta
+open Lean Lean.Meta
 open Batteries (BinomialHeap)
 
 /- Building data stucture for partial matches. -/
@@ -512,10 +510,4 @@ def ForwardState.popUnsafeRule (forwardState : ForwardState) :
   | none => none
   | some (q, bh) => (q.expr, bh)
 
-
-end ForwardState
-
-
-
-
-end Aesop
+end Aesop.ForwardState
