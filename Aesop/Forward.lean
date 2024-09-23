@@ -328,7 +328,7 @@ def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
 /-- Function reconstructing a rule from a match. -/
 def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
   if rs.slots.size - 1 != m.level.toNat then
-    panic! "level of match is not maximal"
+    throwError "level of match is not maximal"
   else
     let sortedSlots :=
       rs.slots.qsort fun s₁ s₂ ↦ s₁.premiseIndex < s₂.premiseIndex
