@@ -167,7 +167,7 @@ def addMatchToMaps (vmap : VariableMap) (slot : Slot) (nextSlot : Slot)
       vmap.modify var (·.insertMatch slot.index (m.subst.find? var |>.get!) m)
   return vmap
 
-def removeHypInMaps (vmap : VariableMap) (hyp : FVarId) (slot : Nat ) :
+def removeHyp (vmap : VariableMap) (hyp : FVarId) (slot : Nat ) :
     VariableMap :=
   ⟨vmap.map.map (·.removeHyp hyp slot)⟩
 
@@ -454,7 +454,7 @@ def removeHypothesis (h : FVarId) (ms : Array (ForwardRule × Nat))
       | continue
     let some slot := rs.slots.find? (·.hypIndex == i)
       | panic! "no slot with hyp index {i} for rule {r.name}"
-    let variableMap := rs.variableMap.removeHypInMaps h slot.index
+    let variableMap := rs.variableMap.removeHyp h slot.index
     fs := { fs with
       ruleStates := fs.ruleStates.insert r.name { rs with variableMap }
     }
