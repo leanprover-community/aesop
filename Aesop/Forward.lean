@@ -32,17 +32,17 @@ def HashSet.inter [BEq α] [Hashable α] (s₁ : HashSet α) (s₂ : HashSet α)
     if s₂.contains k then result.insert k else result
 
 structure Slot where
-  /-- Metavariable representing the input hypothesis of the rule -/
+  /-- Metavariable representing the input hypothesis of this slot. -/
   mvarId : MVarId
   /-- Index of the slot. Slots are always part of a list of slots, and `index`
   is the 0-based index of this slot in that list. -/
   index : Nat
-  /-- The metavariables this input hypothesis depends on -/
+  /-- The previous input hypotheses that the input hypothesis of this slot depends on. -/
   deps : HashSet MVarId
-  /-- Common variables shared between this slot and the previous slots -/
+  /-- Common variables shared between this slot and the previous slots. -/
   common : HashSet MVarId
-  /-- Position of the input hypothesis represented by this slot in the rule type -/
-  position : Nat
+  /-- Position of the input hypothesis represented by this slot in the rule type. -/
+  hypIndex : Nat
   deriving Inhabited
 
 abbrev Substitution := AssocList MVarId Expr
@@ -56,7 +56,6 @@ structure PartialMatch where
 instance : BEq PartialMatch where
   beq m₁ m₂ := m₁.hyps == m₂.hyps
 
-/-- TODO: optimise hash in structure-/
 instance : Hashable PartialMatch where
   hash m := hash m.hyps
 
@@ -157,7 +156,7 @@ def RuleState.reconstruct (r : RuleState) (m : PartialMatch) :
   if r.slots.size != m.level then
     panic! "Level of match is not maximal"
   else
-    let sortedSlots := r.slots.qsort (fun s₁ s₂ ↦ s₁.position < s₂.position)
+    let sortedSlots := r.slots.qsort (fun s₁ s₂ ↦ s₁.hypIndex < s₂.hypIndex)
     let mut arr := Array.mkArray r.len none
     let mut hyps := m.hyps
     for slot in sortedSlots do
@@ -165,7 +164,7 @@ def RuleState.reconstruct (r : RuleState) (m : PartialMatch) :
         | [] => panic! "hyps.len = slots.len so we should not run out."
         | x :: _ => x
       hyps := hyps.drop 1
-      arr := arr.set! slot.position (some <| .fvar hyp)
+      arr := arr.set! slot.hypIndex (some <| .fvar hyp)
     mkAppOptM' r.expr arr
 
 namespace VariableMap
@@ -447,7 +446,7 @@ def ForwardState.addHypothesis (h : FVarId) (forwardState : ForwardState) :
     let RS ← match forwardState.ruleStates.find? r.name with
       | some n => pure n
       | none => RuleState.ofExpr r.expr
-    let slot ← match RS.slots.find? (fun s => s.position = i) with
+    let slot ← match RS.slots.find? (fun s => s.hypIndex = i) with
     | none => throwError "Positions in index should match the slots' positions"
     | some slot => pure slot
     let (RS, Arr) ← RS.addHypothesis slot h
@@ -486,9 +485,9 @@ def ForwardState.removeHypothesis (h : FVarId) (forwardState : ForwardState) :
       | some n => pure n
       | none => RuleState.ofExpr r.expr
     /-Here `RS` is some `RuleState` that contains some hyp with the same type as `h`.
-    It should be associated to a slot via `i` and `position`.-/
-    /- `i` is associated to one of the slot's position. We want the slot.-/
-    let slot := RS.slots.foldl (fun n s ↦ if s.position == i then s.index else n) 0
+    It should be associated to a slot via `i` and `hypIndex`.-/
+    /- `i` is associated to one of the slot's hypIndices. We want the slot.-/
+    let slot := RS.slots.foldl (fun n s ↦ if s.hypIndex == i then s.index else n) 0
     /- We need to update the `atlas` of `RS`-/
     let mut RS :=
       {RS with atlas := ← RS.atlas.removeHypInMaps h slot}
