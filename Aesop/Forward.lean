@@ -46,25 +46,23 @@ structure Slot where
 
 abbrev Substitution := AssocList MVarId Expr
 
-structure PartialMatch where
+structure Match where
   hyps : List FVarId
   subst : Substitution
   level : Nat
   deriving Inhabited
 
-instance : BEq PartialMatch where
+instance : BEq Match where
   beq m₁ m₂ := m₁.hyps == m₂.hyps
 
-instance : Hashable PartialMatch where
+instance : Hashable Match where
   hash m := hash m.hyps
 
 /-- Partial matches associated with a particular slot instantiation. An entry
 `s ↦ i ↦ (ms, hs)` indicates that for the instantiation `i` of slot `s`, we have
 partial matches `ms` containing hypotheses `hs`. -/
 structure InstMap where
-  map :
-    PHashMap Nat
-      (PHashMap Expr (PHashSet PartialMatch × PHashSet FVarId))
+  map : PHashMap Nat (PHashMap Expr (PHashSet Match × PHashSet FVarId))
   deriving Inhabited
 
 namespace InstMap
@@ -73,12 +71,12 @@ instance : EmptyCollection InstMap := ⟨⟨.empty⟩⟩
 
 @[inline]
 def find? (m : InstMap) (slot : Nat) (inst : Expr) :
-    Option (PHashSet PartialMatch × PHashSet FVarId) :=
+    Option (PHashSet Match × PHashSet FVarId) :=
   m.map.find? slot |>.bind λ map => map.find? inst
 
 @[inline]
 def findD (m : InstMap) (slot : Nat) (inst : Expr) :
-    PHashSet PartialMatch × PHashSet FVarId :=
+    PHashSet Match × PHashSet FVarId :=
   m.find? slot inst |>.getD (∅, ∅)
 
 /-
@@ -86,7 +84,7 @@ Applies a transfomation to a specified image of `slot` and `inst`.
 If the image is not yet defined, applies the transformation to `(∅, ∅)`.
 -/
 def modify (m : InstMap) (slot : Nat) (inst : Expr)
-    (f : (PHashSet PartialMatch × PHashSet FVarId) → PHashSet PartialMatch × PHashSet FVarId) :
+    (f : (PHashSet Match × PHashSet FVarId) → PHashSet Match × PHashSet FVarId) :
     InstMap :=
   { map := m.map.insert slot
      ((m.map.findD slot .empty).insert inst (f (m.findD slot inst))) }
@@ -97,12 +95,13 @@ def modify (m : InstMap) (slot : Nat) (inst : Expr)
 def insertHyp (m : InstMap) (slot : Nat) (inst : Expr) (hyp : FVarId) : InstMap :=
   m.modify slot inst (fun (ms, hs) ↦ (ms, hs.insert hyp))
 
-/-- The `slot` represents the maximal input hypothesis in `partialMatch`-/
-def insertPartialMatches (m : InstMap) (slot : Nat) (inst : Expr)
-    (partialMatch : PartialMatch) : InstMap :=
-  if partialMatch.level == slot then
-    m.modify slot inst (fun (ms, hs) ↦ (ms.insert partialMatch, hs))
-  else panic! "Level of match is not maximal"
+/-- The `slot` represents the maximal input hypothesis in `m`-/
+def insertMatches (instMap : InstMap) (slot : Nat) (inst : Expr) (m : Match) :
+    InstMap :=
+  if m.level == slot then
+    instMap.modify slot inst (fun (ms, hs) ↦ (ms.insert m, hs))
+  else
+    panic! "Level of match is not maximal"
 
 /- Note :
 The for-loop in this function could probably be converted into a fold, but I think this would make
@@ -112,7 +111,7 @@ the code really hard to read. it would probably make it faster so worth a revisi
 Remove a hyp from a `InstMap`.
 Process is:
 1. removes `hyp` at `hyp`'s associated slot,
-2. removes all `PartialMatches` that contain `hyp` for all slot GE the associated slot.
+2. removes all `Matches` that contain `hyp` for all slot GE the associated slot.
 -/
 def removeHyp (m : InstMap) (hyp : FVarId) (slot : Nat) : MetaM InstMap := do
   let mut imaps := m.map
@@ -165,22 +164,23 @@ def addHypToMaps (a : VariableMap) (slot : Slot) (subs : Substitution) (hyp : FV
 
 /-- Function that adds a match to the relevent InstMaps. If `lvl` is the level of the match,
 then `slot.slot = lvl + 1` so the relevent `vars` are the common of the next slot. -/
-def addMatchToMaps (a : VariableMap) (slot : Slot) (nextSlot : Slot)
-    (partialMatch : PartialMatch) : VariableMap := Id.run do
-  let mut a := a
+def addMatchToMaps (vmap : VariableMap) (slot : Slot) (nextSlot : Slot)
+    (m : Match) : VariableMap := Id.run do
+  let mut vmap := vmap
   for var in nextSlot.common do
-    a := a.modify var (fun m => m.insertPartialMatches slot.index (partialMatch.subst.find? var |>.get!) partialMatch)
-  return a
+    vmap := vmap.modify var fun imap =>
+      imap.insertMatches slot.index (m.subst.find? var |>.get!) m
+  return vmap
 
 def removeHypInMaps (a : VariableMap) (hyp : FVarId) (slot : Nat ) : MetaM VariableMap :=
   return ⟨← a.map.mapM (fun vm ↦ vm.removeHyp hyp slot)⟩
 
 /-- `slot` should not be the first slot. -/
-def findPartialMatch (a : VariableMap) (slot : Slot) (subst : Substitution) :
-    HashSet PartialMatch := Id.run do
+def findMatch (a : VariableMap) (slot : Slot) (subst : Substitution) :
+    HashSet Match := Id.run do
   let common := slot.common.toArray
   if h : 0 < common.size then
-    let mut pms : HashSet PartialMatch :=
+    let mut pms :=
       /-TODO: extract-/
       (a.find common[0]).findD (slot.index - 1) (subst.find? common[0] |>.get!)
         |>.1 |> PHashSet.toHashSet
@@ -189,11 +189,11 @@ def findPartialMatch (a : VariableMap) (slot : Slot) (subst : Substitution) :
         <| PHashSet.toHashSet ((a.find var).findD (slot.index - 1) (subst.find? var |>.get!) |>.1)
     return pms
   else
-    panic! "findPartialMatch: common variable array is empty."
+    panic! "findMatch: common variable array is empty."
 
 /-- Precondition: slot is not the last slot. -/
-def findHypotheses (a : VariableMap) (slot : Slot) (subst : Substitution) : HashSet FVarId :=
-  Id.run do
+def findHypotheses (a : VariableMap) (slot : Slot) (subst : Substitution) :
+    HashSet FVarId := Id.run do
   let common := slot.common.toArray
   if h : 0 < common.size then
     let mut hyps : HashSet FVarId :=
@@ -279,8 +279,8 @@ def matchInputHypothesis? (r : RuleState) (slot : Nat) (hyp : FVarId) :
 
 /- Use `Lean.Meta.mkAppOptM` to reconstruct conclusion. Need ordering of mVar
 (notetoself: these include inputHyps and the variables.)-/
-/-- Function reconstructing a rule from a partial match. (We assume `lvl` is the level of `m`.)-/
-def reconstruct (r : RuleState) (m : PartialMatch) : MetaM Expr := do
+/-- Function reconstructing a rule from a match. -/
+def reconstruct (r : RuleState) (m : Match) : MetaM Expr := do
   if r.slots.size != m.level then -- FIXME off by one?
     panic! "Level of match is not maximal"
   else
@@ -295,10 +295,10 @@ def reconstruct (r : RuleState) (m : PartialMatch) : MetaM Expr := do
       arr := arr.set! slot.hypIndex (some <| .fvar hyp)
     mkAppOptM' r.expr arr
 
-/-- Precondition: The `slot` represents the maximal input hypothesis in `partialMatch`.
+/-- Precondition: The `slot` represents the maximal input hypothesis in `m`.
 This means that `m.level = slot.slot`.
 -/
-partial def addMatch (rs : RuleState) (slot : Slot) (m : PartialMatch) :
+partial def addMatch (rs : RuleState) (slot : Slot) (m : Match) :
     MetaM (RuleState × Array Expr) := do
   let mut rs := rs
   let mut fullMatches : Array Expr := ∅
@@ -310,7 +310,8 @@ partial def addMatch (rs : RuleState) (slot : Slot) (m : PartialMatch) :
         rs.variableMap.addMatchToMaps slot (rs.slot! (slot.index + 1)) m
     }
     for hyp in rs.variableMap.findHypotheses slot m.subst do
-      let (newRs, newFullMatches) ← rs.addMatch slot ⟨hyp :: m.hyps, m.subst, slot.index + 1⟩
+      let (newRs, newFullMatches) ←
+        rs.addMatch slot ⟨hyp :: m.hyps, m.subst, slot.index + 1⟩
       rs := newRs
       fullMatches := fullMatches ++ newFullMatches
     return ⟨rs, fullMatches⟩
@@ -327,7 +328,7 @@ def addHypothesis (r : RuleState) (slot : Slot) (h : FVarId) :
     if slot.index == 0 then
       return ← r.addMatch slot ⟨[h], subst, 0⟩
     else
-      for pm in r.variableMap.findPartialMatch slot subst do
+      for pm in r.variableMap.findMatch slot subst do
         let subst := pm.subst.foldl (init := subst) λ subst k v =>
           assert! let r := subst.find? k; r == none || r == some v
           subst.insert k v
