@@ -20,8 +20,7 @@ open Batteries (BinomialHeap)
 namespace Aesop
 
 -- TODO move to Util
-def PersistentHashSet.toHashSet [BEq α] [Hashable α]
-    (p : PersistentHashSet α) : HashSet α :=
+def PHashSet.toHashSet [BEq α] [Hashable α] (p : PHashSet α) : HashSet α :=
   p.fold (init := ∅) fun result a ↦ result.insert a
 
 -- TODO move to Util
@@ -171,13 +170,13 @@ namespace InstMap
 instance : EmptyCollection InstMap := ⟨⟨.empty⟩⟩
 
 def find? (m : InstMap) (slot : Nat) (inst : Expr) :
-    Option (PersistentHashSet PartialMatch × PersistentHashSet FVarId) :=
+    Option (PHashSet PartialMatch × PHashSet FVarId) :=
   match (m.map.find? slot) with
   | none => none
   | some map => map.find? inst
 
 def findD (m : InstMap) (slot : Nat) (inst : Expr) :
-    PersistentHashSet PartialMatch × PersistentHashSet FVarId :=
+    PHashSet PartialMatch × PHashSet FVarId :=
   m.find? slot inst |>.getD (∅, ∅)
 
 /-
@@ -187,8 +186,8 @@ If the image is not yet defined, applies the transformation to `(∅, ∅)`.
 def modify (m : InstMap) (slot : Nat) (inst : Expr)
     (f : (PHashSet PartialMatch × PHashSet FVarId) → PHashSet PartialMatch × PHashSet FVarId) :
     InstMap :=
-  {map := m.map.insert slot ((m.map.findD slot Lean.PersistentHashMap.empty).insert
-    inst (f (m.findD slot inst)))}
+  { map := m.map.insert slot
+     ((m.map.findD slot .empty).insert inst (f (m.findD slot inst))) }
 
 /-TODO: Do we need to connect `inst` with `MetaM (Option Substitution)`?.-/
 
@@ -272,10 +271,10 @@ def findPartialMatch (a : VariableMap) (slot : Slot) (subst : Substitution) :
     let mut pms : HashSet PartialMatch :=
       /-TODO: extract-/
       (a.find common[0]).findD (slot.index - 1) (subst.find? common[0] |>.get!)
-        |>.1 |> PersistentHashSet.toHashSet
+        |>.1 |> PHashSet.toHashSet
     for var in common[1:] do
       pms := HashSet.inter pms
-        <| PersistentHashSet.toHashSet ((a.find var).findD (slot.index - 1) (subst.find? var |>.get!) |>.1)
+        <| PHashSet.toHashSet ((a.find var).findD (slot.index - 1) (subst.find? var |>.get!) |>.1)
     return pms
   else
     panic! "findPartialMatch: common variable array is empty."
@@ -288,10 +287,10 @@ def findHypotheses (a : VariableMap) (slot : Slot) (subst : Substitution) : Hash
     let mut hyps : HashSet FVarId :=
       /-TODO: extract-/
       (a.find common[0]).findD (slot.index + 1) (subst.find? common[0] |>.get!)
-        |>.2 |> PersistentHashSet.toHashSet
+        |>.2 |> PHashSet.toHashSet
     for var in common[1:] do
       hyps := HashSet.inter hyps
-        <| PersistentHashSet.toHashSet ((a.find var).findD (slot.index + 1) (subst.find? var |>.get!) |>.2)
+        <| PHashSet.toHashSet ((a.find var).findD (slot.index + 1) (subst.find? var |>.get!) |>.2)
     return hyps
   else
     panic! "findHypotheses: common variable array is empty."
