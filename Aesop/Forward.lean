@@ -47,7 +47,7 @@ structure Slot where
   position : Nat
   deriving Inhabited
 
-abbrev Substitution := HashMap MVarId Expr
+abbrev Substitution := AssocList MVarId Expr
 
 structure PartialMatch where
   hyps : List FVarId
@@ -249,7 +249,7 @@ def addHypToMaps (a : VariableAtlas) (slot : Slot) (subs : Substitution) (hyp : 
     VariableAtlas := Id.run do
   let mut a := a
   for var in slot.common do
-    a := a.modify var (·.insertHyp slot.index (subs.find! var) hyp)
+    a := a.modify var (·.insertHyp slot.index (subs.find? var |>.get!) hyp)
   return a
 
 /-- Function that adds a match to the relevent VariableMaps. If `lvl` is the level of the match,
@@ -258,7 +258,7 @@ def addMatchToMaps (a : VariableAtlas) (slot : Slot) (nextSlot : Slot)
     (subs : Substitution) (partialMatch : PartialMatch) : VariableAtlas := Id.run do
   let mut a := a
   for var in nextSlot.common do
-    a := a.modify var (fun m => m.insertPartialMatches slot.index (subs.find! var) partialMatch)
+    a := a.modify var (fun m => m.insertPartialMatches slot.index (subs.find? var |>.get!) partialMatch)
   return a
 
 def removeHypInMaps (a : VariableAtlas) (hyp : FVarId) (slot : Nat ) : MetaM VariableAtlas :=
@@ -271,11 +271,11 @@ def findPartialMatch (a : VariableAtlas) (slot : Slot) (subst : Substitution) :
   if h : 0 < common.size then
     let mut pms : HashSet PartialMatch :=
       /-TODO: extract-/
-      (a.find common[0]).findD (slot.index - 1) (subst.find! common[0])
+      (a.find common[0]).findD (slot.index - 1) (subst.find? common[0] |>.get!)
         |>.1 |> PersistentHashSet.toHashSet
     for var in common[1:] do
       pms := HashSet.inter pms
-        <| PersistentHashSet.toHashSet ((a.find var).findD (slot.index - 1) (subst.find! var) |>.1)
+        <| PersistentHashSet.toHashSet ((a.find var).findD (slot.index - 1) (subst.find? var |>.get!) |>.1)
     return pms
   else
     panic! "findPartialMatch: common variable array is empty."
@@ -287,11 +287,11 @@ def findHypotheses (a : VariableAtlas) (slot : Slot) (subst : Substitution) : Ha
   if h : 0 < common.size then
     let mut hyps : HashSet FVarId :=
       /-TODO: extract-/
-      (a.find common[0]).findD (slot.index + 1) (subst.find! common[0])
+      (a.find common[0]).findD (slot.index + 1) (subst.find? common[0] |>.get!)
         |>.2 |> PersistentHashSet.toHashSet
     for var in common[1:] do
       hyps := HashSet.inter hyps
-        <| PersistentHashSet.toHashSet ((a.find var).findD (slot.index + 1) (subst.find! var) |>.2)
+        <| PersistentHashSet.toHashSet ((a.find var).findD (slot.index + 1) (subst.find? var |>.get!) |>.2)
     return hyps
   else
     panic! "findHypotheses: common variable array is empty."
@@ -335,16 +335,11 @@ def AddHypothesis (r : RuleState) (slot : Slot) (h : FVarId) :
       return ← r.AddMatch slot ⟨[h], subst, 0⟩
     else
       for pm in r.atlas.findPartialMatch slot subst do
-        /- TODO: Add a check that we are not overwriting substitutions?
-        Indeed, the when we have the same key, we should have same value.
-        (Maybe test when possible.)-/
-        let mut currInst : Substitution :=
-          Lean.HashMap.mergeWith (fun _ _ v₂ ↦ v₂) subst pm.subst
-        /- Note Prob faster to do this ourselves with fold:
-            let mut currInst' : Substitution :=
-            subst.fold (fun (s : Substitution) k v => s.insert k v) pm.subst -/
+        let subst := pm.subst.foldl (init := subst) λ subst k v =>
+          assert! let r := subst.find? k; r == none || r == some v
+          subst.insert k v
         /- We add `hyp` at the beginning, update relevant insts and the level. -/
-        let x ← r.AddMatch slot ⟨h :: pm.hyps, currInst, slot.index⟩
+        let x ← r.AddMatch slot ⟨h :: pm.hyps, subst, slot.index⟩
         r := x.1
         fullMatches := fullMatches.append x.2
       return ⟨r, fullMatches⟩
