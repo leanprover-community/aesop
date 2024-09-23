@@ -30,12 +30,38 @@ def HashSet.inter [BEq α] [Hashable α] (s₁ : HashSet α) (s₂ : HashSet α)
   s₁.fold (init := ∅) λ result k =>
     if s₂.contains k then result.insert k else result
 
+structure SlotIndex where
+  toNat : Nat
+  deriving Inhabited, BEq, Hashable, DecidableEq
+
+namespace SlotIndex
+
+instance : LT SlotIndex where
+  lt i j := i.toNat < j.toNat
+
+instance : DecidableRel (α := SlotIndex) (· < ·) :=
+  λ i j => inferInstanceAs $ Decidable (i.toNat < j.toNat)
+
+instance : LE SlotIndex where
+  le i j := i.toNat ≤ j.toNat
+
+instance : DecidableRel (α := SlotIndex) (· ≤ ·) :=
+  λ i j => inferInstanceAs $ Decidable (i.toNat ≤ j.toNat)
+
+instance : HAdd SlotIndex Nat SlotIndex where
+  hAdd i j := ⟨i.toNat + j⟩
+
+instance : HSub SlotIndex Nat SlotIndex where
+  hSub i j := ⟨i.toNat - j⟩
+
+end SlotIndex
+
 structure Slot where
   /-- Metavariable representing the input hypothesis of this slot. -/
   mvarId : MVarId
   /-- Index of the slot. Slots are always part of a list of slots, and `index`
   is the 0-based index of this slot in that list. -/
-  index : Nat
+  index : SlotIndex
   /-- The previous input hypotheses that the input hypothesis of this slot depends on. -/
   deps : HashSet MVarId
   /-- Common variables shared between this slot and the previous slots. -/
@@ -50,7 +76,7 @@ abbrev Substitution := AssocList MVarId Expr
 structure Match where
   hyps : List FVarId
   subst : Substitution
-  level : Nat
+  level : SlotIndex
   deriving Inhabited
 
 instance : BEq Match where
@@ -63,7 +89,7 @@ instance : Hashable Match where
 `s ↦ i ↦ (ms, hs)` indicates that for the instantiation `i` of slot `s`, we have
 partial matches `ms` containing hypotheses `hs`. -/
 structure InstMap where
-  map : PHashMap Nat (PHashMap Expr (PHashSet Match × PHashSet FVarId))
+  map : PHashMap SlotIndex (PHashMap Expr (PHashSet Match × PHashSet FVarId))
   deriving Inhabited
 
 namespace InstMap
@@ -71,12 +97,12 @@ namespace InstMap
 instance : EmptyCollection InstMap := ⟨⟨.empty⟩⟩
 
 @[inline]
-def find? (imap : InstMap) (slot : Nat) (inst : Expr) :
+def find? (imap : InstMap) (slot : SlotIndex) (inst : Expr) :
     Option (PHashSet Match × PHashSet FVarId) :=
   imap.map.find? slot |>.bind λ slotMap => slotMap.find? inst
 
 @[inline]
-def findD (imap : InstMap) (slot : Nat) (inst : Expr) :
+def findD (imap : InstMap) (slot : SlotIndex) (inst : Expr) :
     PHashSet Match × PHashSet FVarId :=
   imap.find? slot inst |>.getD (∅, ∅)
 
@@ -84,7 +110,7 @@ def findD (imap : InstMap) (slot : Nat) (inst : Expr) :
 Applies a transfomation to a specified image of `slot` and `inst`.
 If the image is not yet defined, applies the transformation to `(∅, ∅)`.
 -/
-def modify (imap : InstMap) (slot : Nat) (inst : Expr)
+def modify (imap : InstMap) (slot : SlotIndex) (inst : Expr)
     (f : PHashSet Match → PHashSet FVarId → PHashSet Match × PHashSet FVarId) :
     InstMap :=
   let (ms, hyps) := imap.findD slot inst
@@ -94,12 +120,12 @@ def modify (imap : InstMap) (slot : Nat) (inst : Expr)
 /-TODO: Do we need to connect `inst` with `MetaM (Option Substitution)`?.-/
 
 /-- The `slot` represents the input hypothesis corresponding to `hyp`-/
-def insertHyp (imap : InstMap) (slot : Nat) (inst : Expr) (hyp : FVarId) :
+def insertHyp (imap : InstMap) (slot : SlotIndex) (inst : Expr) (hyp : FVarId) :
     InstMap :=
   imap.modify slot inst fun ms hs ↦ (ms, hs.insert hyp)
 
 /-- The `slot` represents the maximal input hypothesis in `m`-/
-def insertMatch (imap : InstMap) (slot : Nat) (inst : Expr) (m : Match) :
+def insertMatch (imap : InstMap) (slot : SlotIndex) (inst : Expr) (m : Match) :
     InstMap :=
   imap.modify slot inst fun ms hs ↦ (ms.insert m, hs)
 
@@ -109,10 +135,13 @@ Process is:
 1. removes `hyp` at `hyp`'s associated slot,
 2. removes all `Matches` that contain `hyp` for all slot GE the associated slot.
 -/
-def removeHyp (imap : InstMap) (hyp : FVarId) (slot : Nat) : InstMap := Id.run do
+def removeHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id.run do
   let mut imaps := imap.map
   /- The fold here outputs the list of keys of `m.map`.-/
-  for i in (imap.map.foldl (fun (acc : List Nat) k _ => k :: acc) []).filter (slot ≤ ·) do
+  let previousSlots : List SlotIndex :=
+    imap.map.foldl (init := []) λ acc slot' _ =>
+      if slot.toNat ≤ slot'.toNat then slot' :: acc else acc
+  for i in previousSlots do
     /- We use `find!` since `i` comes from a subset of the keys of `m.map`. -/
     let mut maps := imap.map.find! i
     /- We execute `hs.erase hyp` only when `i == slot`. -/
@@ -167,7 +196,7 @@ def addMatchToMaps (vmap : VariableMap) (slot : Slot) (nextSlot : Slot)
       vmap.modify var (·.insertMatch slot.index (m.subst.find? var |>.get!) m)
   return vmap
 
-def removeHyp (vmap : VariableMap) (hyp : FVarId) (slot : Nat ) :
+def removeHyp (vmap : VariableMap) (hyp : FVarId) (slot : SlotIndex) :
     VariableMap :=
   ⟨vmap.map.map (·.removeHyp hyp slot)⟩
 
@@ -239,22 +268,22 @@ def ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
     let (mvarId, deps) := args[i]'h.2
     let commonDeps := HashSet.inter previousDeps deps
     /- We update `slot = 0` with correct ordering later (see **) -/
-    slots := slots.push ⟨mvarId, 0, deps, commonDeps, i⟩
+    slots := slots.push ⟨mvarId, ⟨0⟩, deps, commonDeps, i⟩
     previousDeps := previousDeps.insertMany deps
   let len := slots.size
   /- Filtering out non-input hypetheses-/
   slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
   /- (**) Assigns ordering of slots -/
-  slots := slots.mapIdx fun index current => {current with index}
+  slots := slots.mapIdx fun index current => {current with index := ⟨index⟩}
   return {expr := thm, variableMap := ∅, len, slots, metaState, conclusion }
 
 @[macro_inline]
-def slot! (rs : RuleState) (slot : Nat) : Slot :=
-  rs.slots[slot]!
+def slot! (rs : RuleState) (slot : SlotIndex) : Slot :=
+  rs.slots[slot.toNat]!
 
 /-- `r.slot! slot` contains the information concerning the inputHypothesis. We match this
 with a given `hyp`.-/
-def matchInputHypothesis? (rs : RuleState) (slot : Nat) (hyp : FVarId) :
+def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
     MetaM (Option Substitution) := do
   let slot := rs.slot! slot
   rs.metaState.runMetaM' do
@@ -280,7 +309,7 @@ def matchInputHypothesis? (rs : RuleState) (slot : Nat) (hyp : FVarId) :
 (notetoself: these include inputHyps and the variables.)-/
 /-- Function reconstructing a rule from a match. -/
 def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
-  if rs.slots.size != m.level then -- FIXME off by one?
+  if rs.slots.size != m.level.toNat then -- FIXME off by one?
     panic! "Level of match is not maximal"
   else
     let sortedSlots := rs.slots.qsort (fun s₁ s₂ ↦ s₁.hypIndex < s₂.hypIndex)
@@ -295,13 +324,13 @@ def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
     mkAppOptM' rs.expr arr
 
 /-- Precondition: The `slot` represents the maximal input hypothesis in `m`.
-This means that `m.level = slot.slot`.
+This means that `m.level = slot.index`.
 -/
 partial def addMatch (rs : RuleState) (slot : Slot) (m : Match) :
     MetaM (RuleState × Array Expr) := do
   let mut rs := rs
   let mut fullMatches : Array Expr := ∅
-  if slot.index == rs.slots.size - 1 then
+  if slot.index.toNat == rs.slots.size - 1 then
     return ⟨rs, #[← rs.reconstruct m]⟩
   else
     rs := { rs with
@@ -324,8 +353,8 @@ def addHypothesis (rs : RuleState) (slot : Slot) (h : FVarId) :
     let mut r :=
       { rs with variableMap := rs.variableMap.addHypToMaps slot subst h }
     let mut fullMatches : Array Expr := ∅
-    if slot.index == 0 then
-      return ← r.addMatch slot ⟨[h], subst, 0⟩
+    if slot.index.toNat == 0 then
+      return ← r.addMatch slot ⟨[h], subst, ⟨0⟩⟩
     else
       for pm in r.variableMap.findMatch slot subst do
         let subst := pm.subst.foldl (init := subst) λ subst k v =>
