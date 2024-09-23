@@ -327,19 +327,16 @@ def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
 (notetoself: these include inputHyps and the variables.)-/
 /-- Function reconstructing a rule from a match. -/
 def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
-  if rs.slots.size != m.level.toNat then -- FIXME off by one?
-    panic! "Level of match is not maximal"
+  if rs.slots.size - 1 != m.level.toNat then
+    panic! "level of match is not maximal"
   else
     let sortedSlots :=
       rs.slots.qsort fun s₁ s₂ ↦ s₁.premiseIndex < s₂.premiseIndex
     let mut arr := Array.mkArray rs.numPremises none
     let mut hyps := m.hyps
     for slot in sortedSlots do
-      let hyp := match hyps with
-        | [] => panic! "hyps.len = slots.len so we should not run out."
-        | x :: _ => x
       hyps := hyps.drop 1
-      arr := arr.set! slot.premiseIndex.toNat (some <| .fvar hyp)
+      arr := arr.set! slot.premiseIndex.toNat (some <| .fvar hyps.head!)
     mkAppOptM' rs.expr arr
 
 /-- Precondition: The `slot` represents the maximal input hypothesis in `m`.
