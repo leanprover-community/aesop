@@ -21,18 +21,17 @@ open Batteries (BinomialHeap)
 
 namespace Aesop
 
+-- TODO move to Util
 def PersistentHashSet.toHashSet [BEq α] [Hashable α]
     (p : PersistentHashSet α) : HashSet α :=
   p.fold (init := ∅) fun result a ↦ result.insert a
 
-def HashSet.inter [BEq α] [Hashable α] (vars1 : HashSet α) (vars2 : HashSet α) :
-    HashSet α := Id.run do
-  let mut vars : HashSet _ := HashSet.empty
-  for el in vars1 do
-    match vars2.find? el with
-    | none => continue
-    | some el => vars := vars.insert el
-  return vars
+-- TODO move to Util
+def HashSet.inter [BEq α] [Hashable α] (s₁ : HashSet α) (s₂ : HashSet α) :
+    HashSet α :=
+  let (s₁, s₂) := if s₁.size < s₂.size then (s₁, s₂) else (s₂, s₁)
+  s₁.fold (init := ∅) λ result k =>
+    if s₂.contains k then result.insert k else result
 
 structure Slot where
   /-- Metavariable representing the input hypothesis of the rule -/
