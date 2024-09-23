@@ -67,104 +67,6 @@ structure InstMap where
       (PHashMap Expr (PHashSet PartialMatch × PHashSet FVarId))
   deriving Inhabited
 
-instance : EmptyCollection InstMap :=
-  ⟨⟨.empty⟩⟩
-
-/-- Map from variables to the partial matches of slots whose types contain the
-variables. -/
-structure VariableMap where
-  map : PHashMap MVarId InstMap
-  deriving Inhabited
-
-instance : EmptyCollection VariableMap :=
-  ⟨⟨.empty⟩⟩
-
-structure RuleState where
-  /-- Expression of the associated theorem. -/
-  expr : Expr
-  /-- Number of input hypotheses of the rule. -/
-  len : Nat
-  /-- Slots representing each of the maximal input hypotheses. For each index
-  `i` of `slots`, `slots[i].index = i`. -/
-  slots : Array Slot
-  /-- The conclusion of the rule. -/
-  conclusion : Expr
-  /-- MetaState in which slots and conclusion are valid-/
-  metaState : Meta.SavedState
-  /-- Variable map. -/
-  variableMap : VariableMap
-  deriving Nonempty
-
-
-def RuleState.ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
-  let e ← inferType thm
-  let ⟨args, _, conclusion⟩ ← forallMetaTelescope e
-  let metaState ← saveState
-  let args ← args.mapM fun expr : Expr => do
-    let type ← expr.mvarId!.getType -- X: What does this do?
-    let deps ← getMVars type
-    return (expr.mvarId!, HashSet.ofArray deps)
-  let mut slots : Array Slot := Array.mkEmpty args.size
-  let mut previousDeps := HashSet.empty
-  for h : i in [:args.size] do
-    let (mvarId, deps) := args[i]'h.2
-    let commonDeps := HashSet.inter previousDeps deps
-    /- We update `slot = 0` with correct ordering later (see **) -/
-    slots := slots.push ⟨mvarId, 0, deps, commonDeps, i⟩
-    previousDeps := previousDeps.insertMany deps
-  let len := slots.size
-  /- Filtering out non-input hypetheses-/
-  slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
-  /- (**) Assigns ordering of slots -/
-  slots := slots.mapIdx fun index current => {current with index}
-  return {expr := thm, variableMap := ∅, len, slots, metaState, conclusion }
-
-def RuleState.slot! (r : RuleState) (slot : Nat) : Slot :=
-  r.slots[slot]!
-
-/-- `r.slot! slot` contains the information concerning the inputHypothesis. We match this
-with a given `hyp`.-/
-def RuleState.matchInputHypothesis? (r : RuleState) (slot : Nat) (hyp : FVarId) :
-    MetaM (Option Substitution) := do
-  let slot := r.slot! slot
-  r.metaState.runMetaM' do
-    let inputHypType ← slot.mvarId.getType
-    let hypType ← hyp.getType
-    if ← isDefEq inputHypType hypType then
-      /- Substitution of metavariables. -/
-      /- Note: This was over `slot.common` and not `slot.deps`. We need `slot.deps`
-      because, among other issues, `slot.common` is empty in the first slot. Even though
-      we don't have dependencies, we still need to keep track of the subs of hyp.
-      Otherwise, we would trigger the first panic in `AddHypothesis`.-/
-      let mut inst : Substitution := ∅
-      for var in slot.deps do
-        let assignment ← instantiateMVars (.mvar var)
-        if assignment.isMVar then
-          throwError "Assigned variable can not be an MVar"
-        inst := inst.insert var assignment
-      return inst
-    else
-      return none
-
-/- Use `Lean.Meta.mkAppOptM` to reconstruct conclusion. Need ordering of mVar
-(notetoself: these include inputHyps and the variables.)-/
-/-- Function reconstructing a rule from a partial match. (We assume `lvl` is the level of `m`.)-/
-def RuleState.reconstruct (r : RuleState) (m : PartialMatch) :
-    MetaM (Option Expr) := do
-  if r.slots.size != m.level then
-    panic! "Level of match is not maximal"
-  else
-    let sortedSlots := r.slots.qsort (fun s₁ s₂ ↦ s₁.hypIndex < s₂.hypIndex)
-    let mut arr := Array.mkArray r.len none
-    let mut hyps := m.hyps
-    for slot in sortedSlots do
-      let hyp := match hyps with
-        | [] => panic! "hyps.len = slots.len so we should not run out."
-        | x :: _ => x
-      hyps := hyps.drop 1
-      arr := arr.set! slot.hypIndex (some <| .fvar hyp)
-    mkAppOptM' r.expr arr
-
 namespace InstMap
 
 instance : EmptyCollection InstMap := ⟨⟨.empty⟩⟩
@@ -229,9 +131,19 @@ def removeHyp (m : InstMap) (hyp : FVarId) (slot : Nat) : MetaM InstMap := do
         maps
     imaps := imaps.insert i maps
   return {map := imaps}
+
 end InstMap
 
+/-- Map from variables to the partial matches of slots whose types contain the
+variables. -/
+structure VariableMap where
+  map : PHashMap MVarId InstMap
+  deriving Inhabited
+
 namespace VariableMap
+
+instance : EmptyCollection VariableMap :=
+  ⟨⟨.empty⟩⟩
 
 def find (a : VariableMap) (var : MVarId) : InstMap :=
   a.map.find? var |>.getD ∅
@@ -297,7 +209,91 @@ def findHypotheses (a : VariableMap) (slot : Slot) (subst : Substitution) : Hash
 
 end VariableMap
 
+structure RuleState where
+  /-- Expression of the associated theorem. -/
+  expr : Expr
+  /-- Number of input hypotheses of the rule. -/
+  len : Nat
+  /-- Slots representing each of the maximal input hypotheses. For each index
+  `i` of `slots`, `slots[i].index = i`. -/
+  slots : Array Slot
+  /-- The conclusion of the rule. -/
+  conclusion : Expr
+  /-- MetaState in which slots and conclusion are valid-/
+  metaState : Meta.SavedState
+  /-- Variable map. -/
+  variableMap : VariableMap
+  deriving Nonempty
+
 namespace RuleState
+
+def ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
+  let e ← inferType thm
+  let ⟨args, _, conclusion⟩ ← forallMetaTelescope e
+  let metaState ← saveState
+  let args ← args.mapM fun expr : Expr => do
+    let type ← expr.mvarId!.getType -- X: What does this do?
+    let deps ← getMVars type
+    return (expr.mvarId!, HashSet.ofArray deps)
+  let mut slots : Array Slot := Array.mkEmpty args.size
+  let mut previousDeps := HashSet.empty
+  for h : i in [:args.size] do
+    let (mvarId, deps) := args[i]'h.2
+    let commonDeps := HashSet.inter previousDeps deps
+    /- We update `slot = 0` with correct ordering later (see **) -/
+    slots := slots.push ⟨mvarId, 0, deps, commonDeps, i⟩
+    previousDeps := previousDeps.insertMany deps
+  let len := slots.size
+  /- Filtering out non-input hypetheses-/
+  slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
+  /- (**) Assigns ordering of slots -/
+  slots := slots.mapIdx fun index current => {current with index}
+  return {expr := thm, variableMap := ∅, len, slots, metaState, conclusion }
+
+def slot! (r : RuleState) (slot : Nat) : Slot :=
+  r.slots[slot]!
+
+/-- `r.slot! slot` contains the information concerning the inputHypothesis. We match this
+with a given `hyp`.-/
+def matchInputHypothesis? (r : RuleState) (slot : Nat) (hyp : FVarId) :
+    MetaM (Option Substitution) := do
+  let slot := r.slot! slot
+  r.metaState.runMetaM' do
+    let inputHypType ← slot.mvarId.getType
+    let hypType ← hyp.getType
+    if ← isDefEq inputHypType hypType then
+      /- Substitution of metavariables. -/
+      /- Note: This was over `slot.common` and not `slot.deps`. We need `slot.deps`
+      because, among other issues, `slot.common` is empty in the first slot. Even though
+      we don't have dependencies, we still need to keep track of the subs of hyp.
+      Otherwise, we would trigger the first panic in `AddHypothesis`.-/
+      let mut inst : Substitution := ∅
+      for var in slot.deps do
+        let assignment ← instantiateMVars (.mvar var)
+        if assignment.isMVar then
+          throwError "Assigned variable can not be an MVar"
+        inst := inst.insert var assignment
+      return inst
+    else
+      return none
+
+/- Use `Lean.Meta.mkAppOptM` to reconstruct conclusion. Need ordering of mVar
+(notetoself: these include inputHyps and the variables.)-/
+/-- Function reconstructing a rule from a partial match. (We assume `lvl` is the level of `m`.)-/
+def reconstruct (r : RuleState) (m : PartialMatch) : MetaM (Option Expr) := do
+  if r.slots.size != m.level then
+    panic! "Level of match is not maximal"
+  else
+    let sortedSlots := r.slots.qsort (fun s₁ s₂ ↦ s₁.hypIndex < s₂.hypIndex)
+    let mut arr := Array.mkArray r.len none
+    let mut hyps := m.hyps
+    for slot in sortedSlots do
+      let hyp := match hyps with
+        | [] => panic! "hyps.len = slots.len so we should not run out."
+        | x :: _ => x
+      hyps := hyps.drop 1
+      arr := arr.set! slot.hypIndex (some <| .fvar hyp)
+    mkAppOptM' r.expr arr
 
 /-- Precondition: The `slot` represents the maximal input hypothesis in `partialMatch`.
 This means that `m.level = slot.slot`.
@@ -345,8 +341,6 @@ def addHypothesis (r : RuleState) (slot : Slot) (h : FVarId) :
       return ⟨r, fullMatches⟩
 
 end RuleState
-
-open Lean Lean.Meta
 
 inductive Prio : Type where
   | normsafe (n : Int) : Prio
@@ -402,20 +396,22 @@ def get (idx : ForwardIndex) (e : Expr) : MetaM (Array (ForwardRule × Nat)) :=
 
 end ForwardIndex
 
-section ForwardState
-
 structure QueueEntry where
   expr : Expr
   prio : Prio
   deriving Inhabited
 
+namespace QueueEntry
+
 /- Int with higher number is worse-/
 /- Percentage with higher number is better-/
-def QueueEntry.le (q₁ q₂ : QueueEntry) : Bool :=
+protected def le (q₁ q₂ : QueueEntry) : Bool :=
   match q₁.prio, q₂.prio with
   | .normsafe x, .normsafe y => x ≤ y
   | .unsafe x, .unsafe y => x ≥ y
   | _, _ => panic! "comparing QueueEntries with different priority types"
+
+end QueueEntry
 
 structure ForwardState where
   /-- Map from the rule's `RuleName` to it's `RuleState`-/
@@ -431,9 +427,11 @@ structure ForwardState where
 /-TODO? : FVarId → RuleName, slot, instantiation-/
  deriving Inhabited
 
+namespace ForwardState
+
 /- Index can also give the `Expr` of which rule it thinks we should look at
 and the slot `i` associated to the hypothesis.-/
-def ForwardState.addHypothesis (h : FVarId) (forwardState : ForwardState) :
+def addHypothesis (h : FVarId) (forwardState : ForwardState) :
     MetaM ForwardState := do
   let mut forwardState := forwardState
   for (r, i) in ← forwardState.index.get (← h.getType) do
@@ -471,7 +469,7 @@ def ForwardState.addHypothesis (h : FVarId) (forwardState : ForwardState) :
   return forwardState
 
 /- Question : Do we need to update the queues?-/
-def ForwardState.removeHypothesis (h : FVarId) (forwardState : ForwardState) :
+def removeHypothesis (h : FVarId) (forwardState : ForwardState) :
     MetaM ForwardState := do
   let mut forwardState := forwardState
   for (r, i) in ← forwardState.index.get (← h.getType) do
@@ -492,21 +490,21 @@ def ForwardState.removeHypothesis (h : FVarId) (forwardState : ForwardState) :
   return forwardState
 
 /-- Returns the queue of safe rules. -/
-def ForwardState.popNormRule (forwardState : ForwardState) :
+def popNormRule (forwardState : ForwardState) :
     Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
   match forwardState.normQueue.deleteMin with
   | none => none
   | some (q, bh) => (q.expr, bh)
 
 /-- Returns the queue of safe rules. -/
-def ForwardState.popSafeRule (forwardState : ForwardState) :
+def popSafeRule (forwardState : ForwardState) :
     Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
   match forwardState.safeQueue.deleteMin with
   | none => none
   | some (q, bh) => (q.expr, bh)
 
 /-- Returns the queue of safe rules. -/
-def ForwardState.popUnsafeRule (forwardState : ForwardState) :
+def popUnsafeRule (forwardState : ForwardState) :
     Option (Expr × BinomialHeap QueueEntry QueueEntry.le) :=
   match forwardState.unsafeQueue.deleteMin with
   | none => none
