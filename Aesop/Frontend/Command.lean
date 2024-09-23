@@ -18,15 +18,13 @@ syntax (name := declareRuleSets)
   "declare_aesop_rule_sets " "[" ident,+,? "]"
   ("(" &"default" " := " Aesop.bool_lit ")")? : command
 
-@[command_elab declareRuleSets]
-def elabDeclareAesopRuleSets : CommandElab
-  | `(command| declare_aesop_rule_sets [ $ids:ident,* ]
-               $[(default := $dflt?:Aesop.bool_lit)]?) => do
+elab_rules : command
+  | `(declare_aesop_rule_sets [ $ids:ident,* ]
+       $[(default := $dflt?:Aesop.bool_lit)]?) => do
     let rsNames := (ids : Array Ident).map (·.getId)
     let dflt := (← dflt?.mapM (elabBoolLit ·)).getD false
     rsNames.forM checkRuleSetNotDeclared
     elabCommand $ ← `(initialize ($(quote rsNames).forM $ declareRuleSetUnchecked (isDefault := $(quote dflt))))
-  | _ => throwUnsupportedSyntax
 
 elab (name := addRules)
     attrKind:attrKind "add_aesop_rules " e:Aesop.rule_expr : command => do
@@ -55,19 +53,23 @@ elab (name := eraseRules)
     for (rsFilter, rFilter) in fs do
       eraseGlobalRules rsFilter rFilter (checkExists := true)
 
-elab (name := showRules) "#aesop_rules " ns:ident* : command => do
-  liftTermElabM do
-    let lt := λ (n₁, _) (n₂, _) => n₁.cmp n₂ |>.isLT
-    let rss ←
-      if ns.isEmpty then
-        let rss ← getDeclaredGlobalRuleSets
-        pure $ rss.qsort lt
-      else
-        ns.mapM λ n => return (n.getId, ← getGlobalRuleSet n.getId)
-    TraceOption.ruleSet.withEnabled do
-      for (name, rs, _) in rss do
-        withConstAesopTraceNode .ruleSet (return m!"Rule set '{name}'") do
-          rs.trace .ruleSet
+syntax (name := showRules)
+  withPosition("#aesop_rules" (colGt ppSpace ident)*) : command
+
+elab_rules : command
+  | `(#aesop_rules $ns:ident*) => do
+    liftTermElabM do
+      let lt := λ (n₁, _) (n₂, _) => n₁.cmp n₂ |>.isLT
+      let rss ←
+        if ns.isEmpty then
+          let rss ← getDeclaredGlobalRuleSets
+          pure $ rss.qsort lt
+        else
+          ns.mapM λ n => return (n.getId, ← getGlobalRuleSet n.getId)
+      TraceOption.ruleSet.withEnabled do
+        for (name, rs, _) in rss do
+          withConstAesopTraceNode .ruleSet (return m!"Rule set '{name}'") do
+            rs.trace .ruleSet
 
 def evalStatsReport? (name : Name) : CoreM (Option StatsReport) := do
   try
@@ -75,19 +77,20 @@ def evalStatsReport? (name : Name) : CoreM (Option StatsReport) := do
   catch _ =>
     return none
 
-elab (name := showStats) "#aesop_stats" report?:(ident)? : command => do
-  let resolveReport : Option Ident → CommandElabM StatsReport
-    | none => pure StatsReport.default
-    | some id => do
-      let openDecl := OpenDecl.simple ``Aesop.StatsReport []
-      withScope (λ s => { s with openDecls := openDecl :: s.openDecls }) do
-        let names ← resolveGlobalConst id
-        liftTermElabM do
-          for name in names do
-            if let some report ← evalStatsReport? name then
-              return report
-          throwError "'{id}' is not a constant of type 'Aesop.StatsReport'"
-  let report ← resolveReport report?
-  logInfo $ report $ ← getStatsArray
+syntax (name := showStats) withPosition("#aesop_stats " (colGt ident)?) : command
+
+elab_rules : command
+  | `(#aesop_stats) => do
+    logInfo $ StatsReport.default $ ← getStatsArray
+  | `(#aesop_stats $report:ident) => do
+    let openDecl := OpenDecl.simple ``Aesop.StatsReport []
+    withScope (λ s => { s with openDecls := openDecl :: s.openDecls }) do
+      let names ← resolveGlobalConst report
+      liftTermElabM do
+        for name in names do
+          if let some report ← evalStatsReport? name then
+            logInfo $ report $ ← getStatsArray
+            break
+        throwError "'{report}' is not a constant of type 'Aesop.StatsReport'"
 
 end Aesop.Frontend.Parser
