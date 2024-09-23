@@ -396,32 +396,33 @@ def get (idx : ForwardIndex) (e : Expr) : MetaM (Array (ForwardRule × Nat)) :=
 
 end ForwardIndex
 
-structure QueueEntry where
+structure ForwardStateQueueEntry where
   expr : Expr
   prio : Prio
   deriving Inhabited
 
-namespace QueueEntry
+namespace ForwardStateQueueEntry
 
 /- Int with higher number is worse-/
 /- Percentage with higher number is better-/
-protected def le (q₁ q₂ : QueueEntry) : Bool :=
+protected def le (q₁ q₂ : ForwardStateQueueEntry) : Bool :=
   match q₁.prio, q₂.prio with
   | .normsafe x, .normsafe y => x ≤ y
   | .unsafe x, .unsafe y => x ≥ y
   | _, _ => panic! "comparing QueueEntries with different priority types"
 
-end QueueEntry
+end ForwardStateQueueEntry
+
+abbrev ForwardStateQueue :=
+  BinomialHeap ForwardStateQueueEntry ForwardStateQueueEntry.le
 
 structure ForwardState where
   /-- Map from the rule's `RuleName` to it's `RuleState`-/
   ruleStates : HashMap RuleName RuleState
-  /- Arrays of complete matches.-/
-  normQueue : BinomialHeap QueueEntry QueueEntry.le
-  safeQueue : BinomialHeap QueueEntry QueueEntry.le
-  unsafeQueue : BinomialHeap QueueEntry QueueEntry.le
-  /- Map from hypotheses to -/
-/-TODO? : FVarId → RuleName, slot, instantiation-/
+  /-- Queues of complete matches. -/
+  normQueue : ForwardStateQueue
+  safeQueue : ForwardStateQueue
+  unsafeQueue : ForwardStateQueue
  deriving Inhabited
 
 namespace ForwardState
