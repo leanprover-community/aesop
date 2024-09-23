@@ -412,16 +412,11 @@ structure QueueEntry where
 
 /- Int with higher number is worse-/
 /- Percentage with higher number is better-/
-def QueueEntry.le
-    (q₁ q₂ : QueueEntry) : Bool := match q₁.prio with
-    | Prio.normsafe n =>
-      match q₂.prio with
-        | Prio.normsafe m => n ≤ m
-        | Prio.«unsafe» _ => panic! "comparing QueueEntrys with different priority types"
-    | Prio.«unsafe» p =>
-      match q₂.prio with
-        | Prio.normsafe _ => panic! "comparing QueueEntrys with different priority types"
-        | Prio.«unsafe» q => p ≥ q
+def QueueEntry.le (q₁ q₂ : QueueEntry) : Bool :=
+  match q₁.prio, q₂.prio with
+  | .normsafe x, .normsafe y => x ≤ y
+  | .unsafe x, .unsafe y => x ≥ y
+  | _, _ => panic! "comparing QueueEntries with different priority types"
 
 structure ForwardState where
   /-- Map from the rule's `RuleName` to it's `RuleState`-/
