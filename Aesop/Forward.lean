@@ -70,64 +70,57 @@ namespace InstMap
 instance : EmptyCollection InstMap := ⟨⟨.empty⟩⟩
 
 @[inline]
-def find? (m : InstMap) (slot : Nat) (inst : Expr) :
+def find? (imap : InstMap) (slot : Nat) (inst : Expr) :
     Option (PHashSet Match × PHashSet FVarId) :=
-  m.map.find? slot |>.bind λ map => map.find? inst
+  imap.map.find? slot |>.bind λ slotMap => slotMap.find? inst
 
 @[inline]
-def findD (m : InstMap) (slot : Nat) (inst : Expr) :
+def findD (imap : InstMap) (slot : Nat) (inst : Expr) :
     PHashSet Match × PHashSet FVarId :=
-  m.find? slot inst |>.getD (∅, ∅)
+  imap.find? slot inst |>.getD (∅, ∅)
 
 /-
 Applies a transfomation to a specified image of `slot` and `inst`.
 If the image is not yet defined, applies the transformation to `(∅, ∅)`.
 -/
-def modify (m : InstMap) (slot : Nat) (inst : Expr)
-    (f : (PHashSet Match × PHashSet FVarId) → PHashSet Match × PHashSet FVarId) :
+def modify (imap : InstMap) (slot : Nat) (inst : Expr)
+    (f : PHashSet Match → PHashSet FVarId → PHashSet Match × PHashSet FVarId) :
     InstMap :=
-  { map := m.map.insert slot
-     ((m.map.findD slot .empty).insert inst (f (m.findD slot inst))) }
+  let (ms, hyps) := imap.findD slot inst
+  let slotMap := imap.map.findD slot .empty |>.insert inst (f ms hyps)
+  ⟨imap.map.insert slot slotMap⟩
 
 /-TODO: Do we need to connect `inst` with `MetaM (Option Substitution)`?.-/
 
 /-- The `slot` represents the input hypothesis corresponding to `hyp`-/
-def insertHyp (m : InstMap) (slot : Nat) (inst : Expr) (hyp : FVarId) : InstMap :=
-  m.modify slot inst (fun (ms, hs) ↦ (ms, hs.insert hyp))
+def insertHyp (imap : InstMap) (slot : Nat) (inst : Expr) (hyp : FVarId) :
+    InstMap :=
+  imap.modify slot inst fun ms hs ↦ (ms, hs.insert hyp)
 
 /-- The `slot` represents the maximal input hypothesis in `m`-/
-def insertMatches (instMap : InstMap) (slot : Nat) (inst : Expr) (m : Match) :
+def insertMatches (imap : InstMap) (slot : Nat) (inst : Expr) (m : Match) :
     InstMap :=
-  if m.level == slot then
-    instMap.modify slot inst (fun (ms, hs) ↦ (ms.insert m, hs))
-  else
-    panic! "Level of match is not maximal"
+  imap.modify slot inst fun ms hs ↦ (ms.insert m, hs)
 
-/- Note :
-The for-loop in this function could probably be converted into a fold, but I think this would make
-the code really hard to read. it would probably make it faster so worth a revisit for optimisation.
--/
 /--
-Remove a hyp from a `InstMap`.
+Remove a hyp from an `InstMap`.
 Process is:
 1. removes `hyp` at `hyp`'s associated slot,
 2. removes all `Matches` that contain `hyp` for all slot GE the associated slot.
 -/
-def removeHyp (m : InstMap) (hyp : FVarId) (slot : Nat) : MetaM InstMap := do
-  let mut imaps := m.map
+def removeHyp (imap : InstMap) (hyp : FVarId) (slot : Nat) : InstMap := Id.run do
+  let mut imaps := imap.map
   /- The fold here outputs the list of keys of `m.map`.-/
-  for i in (m.map.foldl (fun (acc : List Nat) k _ => k :: acc) []).filter (slot ≤ ·) do
+  for i in (imap.map.foldl (fun (acc : List Nat) k _ => k :: acc) []).filter (slot ≤ ·) do
     /- We use `find!` since `i` comes from a subset of the keys of `m.map`. -/
-    let mut maps := (m.map.find! i)
+    let mut maps := imap.map.find! i
     /- We execute `hs.erase hyp` only when `i == slot`. -/
     if i == slot then
-      maps := maps.foldl (fun m e (ms, hs) => m.insert e
-        (ms.fold (fun ms m ↦ if m.hyps.contains hyp then ms.erase m else ms) ms, hs.erase hyp))
-        maps
+      maps := maps.foldl (init := maps) fun m e (ms, hs) => m.insert e
+        (ms.fold (fun ms m ↦ if m.hyps.contains hyp then ms.erase m else ms) ms, hs.erase hyp)
     else
-      maps := maps.foldl (fun m e (ms, hs) => m.insert e
-        (ms.fold (fun ms m ↦ if m.hyps.contains hyp then ms.erase m else ms) ms, hs))
-        maps
+      maps := maps.foldl (init := maps) fun m e (ms, hs) => m.insert e
+        (ms.fold (fun ms m ↦ if m.hyps.contains hyp then ms.erase m else ms) ms, hs)
     imaps := imaps.insert i maps
   return {map := imaps}
 
@@ -144,23 +137,24 @@ namespace VariableMap
 instance : EmptyCollection VariableMap :=
   ⟨⟨.empty⟩⟩
 
-def find (a : VariableMap) (var : MVarId) : InstMap :=
-  a.map.find? var |>.getD ∅
+def find (vmap : VariableMap) (var : MVarId) : InstMap :=
+  vmap.map.find? var |>.getD ∅
 
-def modify (a : VariableMap) (var : MVarId) (f : InstMap → InstMap) : VariableMap :=
-  match a.map.find? var with
-  | none => ∅
-  | some m => ⟨a.map.insert var (f m)⟩
+def modify (vmap : VariableMap) (var : MVarId) (f : InstMap → InstMap) :
+    VariableMap :=
+  match vmap.map.find? var with
+  | none => vmap
+  | some m => ⟨vmap.map.insert var (f m)⟩
 
 /-- Function that adds a hypothesis to the relevent InstMaps. These are the variables
 found in `slot.common` where the input hypothesis associated to `slot` matches `hyp`.
 This means that we can unify `slot.MVarId` to `hyp`. -/
-def addHypToMaps (a : VariableMap) (slot : Slot) (subs : Substitution) (hyp : FVarId) :
-    VariableMap := Id.run do
-  let mut a := a
+def addHypToMaps (vmap : VariableMap) (slot : Slot) (subs : Substitution)
+    (hyp : FVarId) : VariableMap := Id.run do
+  let mut vmap := vmap
   for var in slot.common do
-    a := a.modify var (·.insertHyp slot.index (subs.find? var |>.get!) hyp)
-  return a
+    vmap := vmap.modify var (·.insertHyp slot.index (subs.find? var |>.get!) hyp)
+  return vmap
 
 /-- Function that adds a match to the relevent InstMaps. If `lvl` is the level of the match,
 then `slot.slot = lvl + 1` so the relevent `vars` are the common of the next slot. -/
@@ -168,41 +162,44 @@ def addMatchToMaps (vmap : VariableMap) (slot : Slot) (nextSlot : Slot)
     (m : Match) : VariableMap := Id.run do
   let mut vmap := vmap
   for var in nextSlot.common do
-    vmap := vmap.modify var fun imap =>
-      imap.insertMatches slot.index (m.subst.find? var |>.get!) m
+    vmap :=
+      vmap.modify var (·.insertMatches slot.index (m.subst.find? var |>.get!) m)
   return vmap
 
-def removeHypInMaps (a : VariableMap) (hyp : FVarId) (slot : Nat ) : MetaM VariableMap :=
-  return ⟨← a.map.mapM (fun vm ↦ vm.removeHyp hyp slot)⟩
+def removeHypInMaps (vmap : VariableMap) (hyp : FVarId) (slot : Nat ) :
+    VariableMap :=
+  ⟨vmap.map.map (·.removeHyp hyp slot)⟩
 
 /-- `slot` should not be the first slot. -/
-def findMatch (a : VariableMap) (slot : Slot) (subst : Substitution) :
+def findMatch (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
     HashSet Match := Id.run do
   let common := slot.common.toArray
   if h : 0 < common.size then
     let mut pms :=
       /-TODO: extract-/
-      (a.find common[0]).findD (slot.index - 1) (subst.find? common[0] |>.get!)
+      vmap.find common[0]
+        |>.findD (slot.index - 1) (subst.find? common[0] |>.get!)
         |>.1 |> PHashSet.toHashSet
     for var in common[1:] do
       pms := HashSet.inter pms
-        <| PHashSet.toHashSet ((a.find var).findD (slot.index - 1) (subst.find? var |>.get!) |>.1)
+        <| PHashSet.toHashSet (vmap.find var |>.findD (slot.index - 1) (subst.find? var |>.get!) |>.1)
     return pms
   else
     panic! "findMatch: common variable array is empty."
 
 /-- Precondition: slot is not the last slot. -/
-def findHypotheses (a : VariableMap) (slot : Slot) (subst : Substitution) :
+def findHypotheses (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
     HashSet FVarId := Id.run do
   let common := slot.common.toArray
   if h : 0 < common.size then
     let mut hyps : HashSet FVarId :=
       /-TODO: extract-/
-      (a.find common[0]).findD (slot.index + 1) (subst.find? common[0] |>.get!)
+      vmap.find common[0]
+        |>.findD (slot.index + 1) (subst.find? common[0] |>.get!)
         |>.2 |> PHashSet.toHashSet
     for var in common[1:] do
       hyps := HashSet.inter hyps
-        <| PHashSet.toHashSet ((a.find var).findD (slot.index + 1) (subst.find? var |>.get!) |>.2)
+        <| PHashSet.toHashSet (vmap.find var |>.findD (slot.index + 1) (subst.find? var |>.get!) |>.2)
     return hyps
   else
     panic! "findHypotheses: common variable array is empty."
@@ -232,7 +229,7 @@ def ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
   let ⟨args, _, conclusion⟩ ← forallMetaTelescope e
   let metaState ← saveState
   let args ← args.mapM fun expr : Expr => do
-    let type ← expr.mvarId!.getType -- X: What does this do?
+    let type ← expr.mvarId!.getType
     let deps ← getMVars type
     return (expr.mvarId!, HashSet.ofArray deps)
   let mut slots : Array Slot := Array.mkEmpty args.size
@@ -250,15 +247,16 @@ def ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
   slots := slots.mapIdx fun index current => {current with index}
   return {expr := thm, variableMap := ∅, len, slots, metaState, conclusion }
 
-def slot! (r : RuleState) (slot : Nat) : Slot :=
-  r.slots[slot]!
+@[macro_inline]
+def slot! (rs : RuleState) (slot : Nat) : Slot :=
+  rs.slots[slot]!
 
 /-- `r.slot! slot` contains the information concerning the inputHypothesis. We match this
 with a given `hyp`.-/
-def matchInputHypothesis? (r : RuleState) (slot : Nat) (hyp : FVarId) :
+def matchInputHypothesis? (rs : RuleState) (slot : Nat) (hyp : FVarId) :
     MetaM (Option Substitution) := do
-  let slot := r.slot! slot
-  r.metaState.runMetaM' do
+  let slot := rs.slot! slot
+  rs.metaState.runMetaM' do
     let inputHypType ← slot.mvarId.getType
     let hypType ← hyp.getType
     if ← isDefEq inputHypType hypType then
@@ -280,12 +278,12 @@ def matchInputHypothesis? (r : RuleState) (slot : Nat) (hyp : FVarId) :
 /- Use `Lean.Meta.mkAppOptM` to reconstruct conclusion. Need ordering of mVar
 (notetoself: these include inputHyps and the variables.)-/
 /-- Function reconstructing a rule from a match. -/
-def reconstruct (r : RuleState) (m : Match) : MetaM Expr := do
-  if r.slots.size != m.level then -- FIXME off by one?
+def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
+  if rs.slots.size != m.level then -- FIXME off by one?
     panic! "Level of match is not maximal"
   else
-    let sortedSlots := r.slots.qsort (fun s₁ s₂ ↦ s₁.hypIndex < s₂.hypIndex)
-    let mut arr := Array.mkArray r.len none
+    let sortedSlots := rs.slots.qsort (fun s₁ s₂ ↦ s₁.hypIndex < s₂.hypIndex)
+    let mut arr := Array.mkArray rs.len none
     let mut hyps := m.hyps
     for slot in sortedSlots do
       let hyp := match hyps with
@@ -293,7 +291,7 @@ def reconstruct (r : RuleState) (m : Match) : MetaM Expr := do
         | x :: _ => x
       hyps := hyps.drop 1
       arr := arr.set! slot.hypIndex (some <| .fvar hyp)
-    mkAppOptM' r.expr arr
+    mkAppOptM' rs.expr arr
 
 /-- Precondition: The `slot` represents the maximal input hypothesis in `m`.
 This means that `m.level = slot.slot`.
@@ -317,13 +315,13 @@ partial def addMatch (rs : RuleState) (slot : Slot) (m : Match) :
     return ⟨rs, fullMatches⟩
 
 /-- Precondition: The `slot` represents the input hypothesis corresponding to `h` -/
-def addHypothesis (r : RuleState) (slot : Slot) (h : FVarId) :
+def addHypothesis (rs : RuleState) (slot : Slot) (h : FVarId) :
     MetaM (RuleState × Array Expr) := do
-  match ← r.matchInputHypothesis? slot.index h with
+  match ← rs.matchInputHypothesis? slot.index h with
   | none => panic! "The rule should have a non-trivial substitution at every slot."
   | some subst =>
     let mut r :=
-      { r with variableMap := r.variableMap.addHypToMaps slot subst h }
+      { rs with variableMap := rs.variableMap.addHypToMaps slot subst h }
     let mut fullMatches : Array Expr := ∅
     if slot.index == 0 then
       return ← r.addMatch slot ⟨[h], subst, 0⟩
@@ -341,7 +339,7 @@ def addHypothesis (r : RuleState) (slot : Slot) (h : FVarId) :
 end RuleState
 
 inductive Prio : Type where
-  | normsafe (n : Int) : Prio
+  | normSafe (n : Int) : Prio
   | «unsafe» (p : Percent) : Prio
   deriving Inhabited
 
@@ -405,7 +403,7 @@ namespace ForwardStateQueueEntry
 /- Percentage with higher number is better-/
 protected def le (q₁ q₂ : ForwardStateQueueEntry) : Bool :=
   match q₁.prio, q₂.prio with
-  | .normsafe x, .normsafe y => x ≤ y
+  | .normSafe x, .normSafe y => x ≤ y
   | .unsafe x, .unsafe y => x ≥ y
   | _, _ => panic! "comparing QueueEntries with different priority types"
 
@@ -448,14 +446,14 @@ where
 
 /- TODO: also update the queues -/
 def removeHypothesis (h : FVarId) (ms : Array (ForwardRule × Nat))
-    (fs : ForwardState) : MetaM ForwardState := do
+    (fs : ForwardState) : ForwardState := Id.run do
   let mut fs := fs
   for (r, i) in ms do
     let some rs := fs.ruleStates.find? r.name
       | continue
     let some slot := rs.slots.find? (·.hypIndex == i)
-      | throwError "removeHypothesis: internal error: no slot with hyp index {i} for rule {r.name}"
-    let variableMap ← rs.variableMap.removeHypInMaps h slot.index
+      | panic! "no slot with hyp index {i} for rule {r.name}"
+    let variableMap := rs.variableMap.removeHypInMaps h slot.index
     fs := { fs with
       ruleStates := fs.ruleStates.insert r.name { rs with variableMap }
     }
