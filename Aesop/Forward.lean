@@ -71,12 +71,12 @@ namespace InstMap
 
 instance : EmptyCollection InstMap := ⟨⟨.empty⟩⟩
 
+@[inline]
 def find? (m : InstMap) (slot : Nat) (inst : Expr) :
     Option (PHashSet PartialMatch × PHashSet FVarId) :=
-  match (m.map.find? slot) with
-  | none => none
-  | some map => map.find? inst
+  m.map.find? slot |>.bind λ map => map.find? inst
 
+@[inline]
 def findD (m : InstMap) (slot : Nat) (inst : Expr) :
     PHashSet PartialMatch × PHashSet FVarId :=
   m.find? slot inst |>.getD (∅, ∅)
