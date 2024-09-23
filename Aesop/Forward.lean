@@ -166,10 +166,10 @@ def addHypToMaps (a : VariableMap) (slot : Slot) (subs : Substitution) (hyp : FV
 /-- Function that adds a match to the relevent InstMaps. If `lvl` is the level of the match,
 then `slot.slot = lvl + 1` so the relevent `vars` are the common of the next slot. -/
 def addMatchToMaps (a : VariableMap) (slot : Slot) (nextSlot : Slot)
-    (subs : Substitution) (partialMatch : PartialMatch) : VariableMap := Id.run do
+    (partialMatch : PartialMatch) : VariableMap := Id.run do
   let mut a := a
   for var in nextSlot.common do
-    a := a.modify var (fun m => m.insertPartialMatches slot.index (subs.find? var |>.get!) partialMatch)
+    a := a.modify var (fun m => m.insertPartialMatches slot.index (partialMatch.subst.find? var |>.get!) partialMatch)
   return a
 
 def removeHypInMaps (a : VariableMap) (hyp : FVarId) (slot : Nat ) : MetaM VariableMap :=
@@ -280,8 +280,8 @@ def matchInputHypothesis? (r : RuleState) (slot : Nat) (hyp : FVarId) :
 /- Use `Lean.Meta.mkAppOptM` to reconstruct conclusion. Need ordering of mVar
 (notetoself: these include inputHyps and the variables.)-/
 /-- Function reconstructing a rule from a partial match. (We assume `lvl` is the level of `m`.)-/
-def reconstruct (r : RuleState) (m : PartialMatch) : MetaM (Option Expr) := do
-  if r.slots.size != m.level then
+def reconstruct (r : RuleState) (m : PartialMatch) : MetaM Expr := do
+  if r.slots.size != m.level then -- FIXME off by one?
     panic! "Level of match is not maximal"
   else
     let sortedSlots := r.slots.qsort (fun s₁ s₂ ↦ s₁.hypIndex < s₂.hypIndex)
@@ -298,25 +298,22 @@ def reconstruct (r : RuleState) (m : PartialMatch) : MetaM (Option Expr) := do
 /-- Precondition: The `slot` represents the maximal input hypothesis in `partialMatch`.
 This means that `m.level = slot.slot`.
 -/
-partial def addMatch (r : RuleState) (slot : Slot) (m : PartialMatch) :
+partial def addMatch (rs : RuleState) (slot : Slot) (m : PartialMatch) :
     MetaM (RuleState × Array Expr) := do
-  let subst := m.subst
-  let mut r := r
+  let mut rs := rs
   let mut fullMatches : Array Expr := ∅
-  if r.slots.size == slot.index then
-    match ← r.reconstruct m with
-    | none => panic! "Reconstruct failed to provide an expression"
-    | some expr => return ⟨r, #[expr]⟩
+  if slot.index == rs.slots.size - 1 then
+    return ⟨rs, #[← rs.reconstruct m]⟩
   else
-    r := { r with
+    rs := { rs with
       variableMap :=
-        r.variableMap.addMatchToMaps slot (r.slot! (slot.index + 1)) subst m
+        rs.variableMap.addMatchToMaps slot (rs.slot! (slot.index + 1)) m
     }
-    for hyp in r.variableMap.findHypotheses slot subst do
-      let x ← r.addMatch slot ⟨hyp :: m.hyps, subst, slot.index + 1⟩
-      r := x.1
-      fullMatches := fullMatches.append x.2
-    return ⟨r, fullMatches⟩
+    for hyp in rs.variableMap.findHypotheses slot m.subst do
+      let (newRs, newFullMatches) ← rs.addMatch slot ⟨hyp :: m.hyps, m.subst, slot.index + 1⟩
+      rs := newRs
+      fullMatches := fullMatches ++ newFullMatches
+    return ⟨rs, fullMatches⟩
 
 /-- Precondition: The `slot` represents the input hypothesis corresponding to `h` -/
 def addHypothesis (r : RuleState) (slot : Slot) (h : FVarId) :
