@@ -51,6 +51,7 @@ structure PartialMatch where
   hyps : List FVarId
   subst : Substitution
   level : Nat
+  deriving Inhabited
 
 instance : BEq PartialMatch where
   beq m₁ m₂ := m₁.hyps == m₂.hyps
@@ -66,13 +67,16 @@ structure VariableMap where
     (PersistentHashSet PartialMatch × PersistentHashSet FVarId))
   deriving Inhabited
 
+instance : EmptyCollection VariableMap :=
+  ⟨⟨.empty⟩⟩
+
 /-- Collection of variableMaps-/
 structure VariableAtlas where
   atlas : PHashMap MVarId VariableMap
   deriving Inhabited
 
-instance VariableAtlas.instEmptyCollection : EmptyCollection VariableAtlas := ⟨⟨.empty⟩⟩
-
+instance : EmptyCollection VariableAtlas :=
+  ⟨⟨.empty⟩⟩
 
 structure RuleState where
   /-- Expression of the associated theorem. -/
@@ -349,11 +353,13 @@ open Lean Lean.Meta
 inductive Prio : Type where
   | normsafe (n : Int) : Prio
   | «unsafe» (p : Percent) : Prio
+  deriving Inhabited
 
 structure ForwardRule where
   name : RuleName
   expr : Expr
   prio : Prio
+  deriving Inhabited
 
 instance : BEq ForwardRule :=
   ⟨λ r₁ r₂ => r₁.name == r₂.name⟩
@@ -371,6 +377,7 @@ unifies with `T`.
 -/
 structure ForwardIndex where
   tree : DiscrTree (ForwardRule × Nat)
+  deriving Inhabited
 
 namespace ForwardIndex
 
@@ -402,6 +409,7 @@ section ForwardState
 structure QueueEntry where
   expr : Expr
   prio : Prio
+  deriving Inhabited
 
 /- Int with higher number is worse-/
 /- Percentage with higher number is better-/
@@ -428,6 +436,7 @@ structure ForwardState where
   unsafeQueue : BinomialHeap QueueEntry QueueEntry.le
   /- Map from hypotheses to -/
 /-TODO? : FVarId → RuleName, slot, instantiation-/
+ deriving Inhabited
 
 /- Index can also give the `Expr` of which rule it thinks we should look at
 and the slot `i` associated to the hypothesis.-/
