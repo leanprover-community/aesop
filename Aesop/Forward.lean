@@ -34,8 +34,6 @@ structure SlotIndex where
   toNat : Nat
   deriving Inhabited, BEq, Hashable, DecidableEq
 
-namespace SlotIndex
-
 instance : LT SlotIndex where
   lt i j := i.toNat < j.toNat
 
@@ -54,21 +52,37 @@ instance : HAdd SlotIndex Nat SlotIndex where
 instance : HSub SlotIndex Nat SlotIndex where
   hSub i j := ⟨i.toNat - j⟩
 
-end SlotIndex
+structure PremiseIndex where
+  toNat : Nat
+  deriving Inhabited, BEq, Hashable, DecidableEq
+
+instance : LT PremiseIndex where
+  lt i j := i.toNat < j.toNat
+
+instance : DecidableRel (α := PremiseIndex) (· < ·) :=
+  λ i j => inferInstanceAs $ Decidable (i.toNat < j.toNat)
+
+instance : LE PremiseIndex where
+  le i j := i.toNat ≤ j.toNat
+
+instance : DecidableRel (α := PremiseIndex) (· ≤ ·) :=
+  λ i j => inferInstanceAs $ Decidable (i.toNat ≤ j.toNat)
+
+instance : ToString PremiseIndex where
+  toString i := toString i.toNat
 
 structure Slot where
-  /-- Metavariable representing the input hypothesis of this slot. -/
+  /-- Metavariable representing the premise of this slot. -/
   mvarId : MVarId
   /-- Index of the slot. Slots are always part of a list of slots, and `index`
   is the 0-based index of this slot in that list. -/
   index : SlotIndex
-  /-- The previous input hypotheses that the input hypothesis of this slot depends on. -/
+  /-- The previous premises that the premise of this slot depends on. -/
   deps : HashSet MVarId
   /-- Common variables shared between this slot and the previous slots. -/
   common : HashSet MVarId
-  /-- 0-based index of the input hypothesis represented by this slot in the rule
-  type. -/
-  hypIndex : Nat
+  /-- 0-based index of the premise represented by this slot in the rule type. -/
+  premiseIndex : PremiseIndex
   deriving Inhabited
 
 abbrev Substitution := AssocList MVarId Expr
@@ -140,7 +154,7 @@ def removeHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id
   /- The fold here outputs the list of keys of `m.map`.-/
   let previousSlots : List SlotIndex :=
     imap.map.foldl (init := []) λ acc slot' _ =>
-      if slot.toNat ≤ slot'.toNat then slot' :: acc else acc
+      if slot ≤ slot' then slot' :: acc else acc
   for i in previousSlots do
     /- We use `find!` since `i` comes from a subset of the keys of `m.map`. -/
     let mut maps := imap.map.find! i
@@ -239,9 +253,9 @@ end VariableMap
 structure RuleState where
   /-- Expression of the associated theorem. -/
   expr : Expr
-  /-- Number of input hypotheses of the rule. -/
-  len : Nat
-  /-- Slots representing each of the maximal input hypotheses. For each index
+  /-- Number of premises of the rule. -/
+  numPremises : Nat
+  /-- Slots representing each of the maximal premises. For each index
   `i` of `slots`, `slots[i].index = i`. -/
   slots : Array Slot
   /-- The conclusion of the rule. -/
@@ -268,14 +282,18 @@ def ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
     let (mvarId, deps) := args[i]'h.2
     let commonDeps := HashSet.inter previousDeps deps
     /- We update `slot = 0` with correct ordering later (see **) -/
-    slots := slots.push ⟨mvarId, ⟨0⟩, deps, commonDeps, i⟩
+    slots := slots.push ⟨mvarId, ⟨0⟩, deps, commonDeps, ⟨i⟩⟩
     previousDeps := previousDeps.insertMany deps
-  let len := slots.size
+  let numPremises := slots.size
   /- Filtering out non-input hypetheses-/
   slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
   /- (**) Assigns ordering of slots -/
   slots := slots.mapIdx fun index current => {current with index := ⟨index⟩}
-  return {expr := thm, variableMap := ∅, len, slots, metaState, conclusion }
+  return {
+    expr := thm
+    variableMap := ∅
+    numPremises, slots, metaState, conclusion
+  }
 
 @[macro_inline]
 def slot! (rs : RuleState) (slot : SlotIndex) : Slot :=
@@ -312,15 +330,16 @@ def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
   if rs.slots.size != m.level.toNat then -- FIXME off by one?
     panic! "Level of match is not maximal"
   else
-    let sortedSlots := rs.slots.qsort (fun s₁ s₂ ↦ s₁.hypIndex < s₂.hypIndex)
-    let mut arr := Array.mkArray rs.len none
+    let sortedSlots :=
+      rs.slots.qsort fun s₁ s₂ ↦ s₁.premiseIndex < s₂.premiseIndex
+    let mut arr := Array.mkArray rs.numPremises none
     let mut hyps := m.hyps
     for slot in sortedSlots do
       let hyp := match hyps with
         | [] => panic! "hyps.len = slots.len so we should not run out."
         | x :: _ => x
       hyps := hyps.drop 1
-      arr := arr.set! slot.hypIndex (some <| .fvar hyp)
+      arr := arr.set! slot.premiseIndex.toNat (some <| .fvar hyp)
     mkAppOptM' rs.expr arr
 
 /-- Precondition: The `slot` represents the maximal input hypothesis in `m`.
@@ -389,12 +408,12 @@ instance : Ord ForwardRule :=
   ⟨λ r₁ r₂ => compare r₁.name r₂.name⟩
 
 /--
-Maps expressions `T` to all tuples `(r, i)` where `r : ForwardRule`, `i : Nat`
-and the `i`-th argument of the type of `r.expr` (counting from zero) likely
-unifies with `T`.
+Maps expressions `T` to all tuples `(r, i)` where `r : ForwardRule`,
+`i : PremiseIndex` and the `i`-th argument of the type of `r.expr` (counting
+from zero) likely unifies with `T`.
 -/
 structure ForwardIndex where
-  tree : DiscrTree (ForwardRule × Nat)
+  tree : DiscrTree (ForwardRule × PremiseIndex)
   deriving Inhabited
 
 namespace ForwardIndex
@@ -414,10 +433,11 @@ def insert (r : ForwardRule) (idx : ForwardIndex) : MetaM ForwardIndex := do
         let (arg, deps) := args[i]
         previousDeps := previousDeps.insertMany deps
         if ! previousDeps.contains arg.mvarId! then do
-          tree ← tree.insert arg (r, i) discrTreeConfig
+          tree ← tree.insert arg (r, ⟨i⟩) discrTreeConfig
       return ⟨tree⟩
 
-def get (idx : ForwardIndex) (e : Expr) : MetaM (Array (ForwardRule × Nat)) :=
+def get (idx : ForwardIndex) (e : Expr) :
+    MetaM (Array (ForwardRule × PremiseIndex)) :=
   idx.tree.getUnify e discrTreeConfig
 
 end ForwardIndex
@@ -453,12 +473,12 @@ structure ForwardState where
 
 namespace ForwardState
 
-def addHypothesis (h : FVarId) (ms : Array (ForwardRule × Nat))
+def addHypothesis (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : MetaM ForwardState := do
   let mut fs := fs
   for (r, i) in ms do
     let rs ← fs.ruleStates.find? r.name |>.getDM (RuleState.ofExpr r.expr)
-    let some slot := rs.slots.find? (·.hypIndex == i)
+    let some slot := rs.slots.find? (·.premiseIndex == i)
       | throwError "addHypothesis: internal error: no slot with hyp index {i} for rule {r.name}"
     let (rs, fullMatches) ← rs.addHypothesis slot h
     fs := { fs with ruleStates := fs.ruleStates.insert r.name rs }
@@ -475,13 +495,13 @@ where
     | .unsafe => { fs with unsafeQueue := fs.unsafeQueue.insert queueEntry }
 
 /- TODO: also update the queues -/
-def removeHypothesis (h : FVarId) (ms : Array (ForwardRule × Nat))
+def removeHypothesis (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : ForwardState := Id.run do
   let mut fs := fs
   for (r, i) in ms do
     let some rs := fs.ruleStates.find? r.name
       | continue
-    let some slot := rs.slots.find? (·.hypIndex == i)
+    let some slot := rs.slots.find? (·.premiseIndex == i)
       | panic! "no slot with hyp index {i} for rule {r.name}"
     let variableMap := rs.variableMap.removeHyp h slot.index
     fs := { fs with
