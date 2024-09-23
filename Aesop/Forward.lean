@@ -414,7 +414,7 @@ abbrev ForwardStateQueue :=
 
 structure ForwardState where
   /-- Map from the rule's `RuleName` to it's `RuleState`-/
-  ruleStates : HashMap RuleName RuleState
+  ruleStates : PHashMap RuleName RuleState
   /-- Queues of complete matches. -/
   normQueue : ForwardStateQueue
   safeQueue : ForwardStateQueue
