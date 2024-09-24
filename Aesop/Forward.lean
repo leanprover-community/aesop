@@ -92,10 +92,10 @@ structure Slot where
 abbrev Substitution := AssocList MVarId Expr
 
 structure Match where
-  /-- Hyps for each slot. The `i`th hyp in this list is the hyp associated with
-  the slot with index `i`. -/
-  hyps : List FVarId
-  hyps_ne : 0 < hyps.length := by simp
+  /-- Hyps for each slot, in reverse order. If there are `n` slots, the `i`th
+  hyp in `revHyps` is the hyp associated with the slot with index `n - i`. -/
+  revHyps : List FVarId
+  revHyps_ne : 0 < revHyps.length := by simp
   /-- The substitution induced by the assignment of the hyps in `hyps` to the
   rule's slots. -/
   subst : Substitution
@@ -103,20 +103,20 @@ structure Match where
 namespace Match
 
 instance : Inhabited Match :=
-  ⟨{ hyps := [default], subst := ∅ }⟩
+  ⟨{ revHyps := [default], subst := ∅ }⟩
 
 instance : BEq Match where
-  beq m₁ m₂ := m₁.hyps == m₂.hyps
+  beq m₁ m₂ := m₁.revHyps == m₂.revHyps
 
 instance : Hashable Match where
-  hash m := hash m.hyps
+  hash m := hash m.revHyps
 
 /--
 The level of a match `m` is the greatest slot index `i` such that `m` associates
 a hypothesis to slot `i`.
 -/
 def level (m : Match) : SlotIndex :=
-  ⟨m.hyps.length - 1⟩
+  ⟨m.revHyps.length - 1⟩
 
 end Match
 
@@ -187,7 +187,7 @@ def removeHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id
   for i in nextSlots do
     let maps := imap.map.find! i
     let maps := maps.foldl (init := maps) fun m e (ms, hs) =>
-      let ms := PHashSet.filter (·.hyps.contains hyp) ms
+      let ms := PHashSet.filter (·.revHyps.contains hyp) ms
       m.insert e (ms, hs.erase hyp)
     imaps := imaps.insert i maps
   return { map := imaps }
@@ -364,9 +364,9 @@ def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
 /-- Given a complete match `m` for `rs`, produce an application of the theorem
 `rs.expr` to the hypotheses from `m`. -/
 def reconstruct (rs : RuleState) (m : Match) : Expr := Id.run do
-  let hyps := m.hyps.toArray
+  let hyps := m.revHyps.toArray.reverse
   if hyps.size != rs.slots.size then
-    panic! s!"match is not complete; slots: {rs.slots.size}; match hyps: {m.hyps.length}"
+    panic! s!"match is not complete; slots: {rs.slots.size}; match hyps: {hyps.size}"
   let slots :=
     rs.slots.qsort (λ s₁ s₂ => s₁.premiseIndex < s₂.premiseIndex) |>.zip hyps
   let mut args := Array.mkEmpty rs.premises.size
@@ -399,7 +399,7 @@ unsafe def addMatchUnsafe (rs : RuleState) (m : Match) :
       variableMap := rs.variableMap.addMatch nextSlot m
     }
     for hyp in rs.variableMap.findHyps nextSlot m.subst do
-      let m := { hyps := hyp :: m.hyps, subst := m.subst }
+      let m := { revHyps := hyp :: m.revHyps, subst := m.subst }
       let (newRs, newFullMatches) ← rs.addMatchUnsafe m
       rs := newRs
       fullMatches := fullMatches ++ newFullMatches
@@ -416,14 +416,15 @@ def addHypCore (rs : RuleState) (slot : Slot) (h : FVarId)
   let mut rs :=
     { rs with variableMap := rs.variableMap.addHyp slot subst h }
   if slot.index.toNat == 0 then
-    return ← rs.addMatch { hyps := [h], subst }
+    return ← rs.addMatch { revHyps := [h], subst }
   else
     let mut fullMatches := #[]
     for pm in rs.variableMap.findMatches slot subst do
       let subst := pm.subst.foldl (init := subst) λ subst k v =>
         assert! let r := subst.find? k; r == none || r == some v
         subst.insert k v
-      let (newRs, newFullMatches) ← rs.addMatch { hyps := h :: pm.hyps, subst }
+      let m := { revHyps := h :: pm.revHyps, subst }
+      let (newRs, newFullMatches) ← rs.addMatch m
       rs := newRs
       fullMatches := fullMatches ++ newFullMatches
     return ⟨rs, fullMatches⟩
