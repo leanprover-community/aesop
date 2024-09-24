@@ -383,8 +383,11 @@ def reconstruct (rs : RuleState) (m : Match) : Expr := Id.run do
     args := args.push inst
   return mkAppN rs.expr args
 
-partial def addMatch (rs : RuleState) (m : Match) :
-    MetaM (RuleState × Array Expr) := do
+/-- Add a match to the rule state. -/
+-- This function is just `partial`, but Lean doesn't realise that the return
+-- type is inhabited.
+unsafe def addMatchUnsafe (rs : RuleState) (m : Match) :
+    RuleState × Array Expr := Id.run do
   let mut rs := rs
   let mut fullMatches : Array Expr := ∅
   let slotIdx := m.level
@@ -397,16 +400,19 @@ partial def addMatch (rs : RuleState) (m : Match) :
     }
     for hyp in rs.variableMap.findHyps nextSlot m.subst do
       let m := { hyps := hyp :: m.hyps, subst := m.subst }
-      let (newRs, newFullMatches) ← rs.addMatch m
+      let (newRs, newFullMatches) ← rs.addMatchUnsafe m
       rs := newRs
       fullMatches := fullMatches ++ newFullMatches
     return ⟨rs, fullMatches⟩
 
-/-- Precondition: The `slot` represents the input hypothesis corresponding to `h` -/
-def addHyp (rs : RuleState) (slot : Slot) (h : FVarId) :
-    MetaM (RuleState × Array Expr) := do
-  let some subst ← rs.matchInputHypothesis? slot.index h
-    | return (rs, #[])
+@[implemented_by addMatchUnsafe, inherit_doc addMatchUnsafe]
+opaque addMatch (rs : RuleState) (m : Match) : RuleState × Array Expr :=
+  (rs, default)
+
+/-- Add a hyp to the rule state. `subst` must be the substitution that results
+from applying `h` to `slot`. -/
+def addHypCore (rs : RuleState) (slot : Slot) (h : FVarId)
+    (subst : Substitution) : RuleState × Array Expr := Id.run do
   let mut rs :=
     { rs with variableMap := rs.variableMap.addHyp slot subst h }
   if slot.index.toNat == 0 then
@@ -421,6 +427,16 @@ def addHyp (rs : RuleState) (slot : Slot) (h : FVarId) :
       rs := newRs
       fullMatches := fullMatches ++ newFullMatches
     return ⟨rs, fullMatches⟩
+
+/-- Add a hypothesis to the rule state. If the hypothesis's type does not match
+the premise corresponding to `slot`, then the hypothesis is not added.
+Returns the new rule state and the proofs resulting from any matches that were
+completed by `h`. -/
+def addHyp (rs : RuleState) (slot : Slot) (h : FVarId) :
+    MetaM (RuleState × Array Expr) := do
+  let some subst ← rs.matchInputHypothesis? slot.index h
+    | return (rs, #[])
+  return addHypCore rs slot h subst
 
 end RuleState
 
