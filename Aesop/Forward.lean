@@ -287,15 +287,15 @@ end VariableMap
 structure RuleState where
   /-- Expression of the associated theorem. -/
   expr : Expr
-  /-- Number of premises of the rule. -/
-  numPremises : Nat
-  /-- Slots representing each of the maximal premises. For each index
-  `i` of `slots`, `slots[i].index = i`. -/
-  slots : Array Slot
-  /-- The conclusion of the rule. -/
-  conclusion : Expr
-  /-- Meta state in which slots and conclusion are valid-/
+  /-- Meta state in which slots, args and conclusion are valid-/
   metaState : Meta.SavedState
+  /-- Metavariables representing the theorem's premises. -/
+  premises : Array MVarId
+  /-- Conclusion of the theorem. -/
+  conclusion : Expr
+  /-- Slots representing each of the maximal premises. For each index `i` of
+  `slots`, `slots[i].index = i`. -/
+  slots : Array Slot
   /-- Variable map. -/
   variableMap : VariableMap
   deriving Nonempty
@@ -305,18 +305,22 @@ namespace RuleState
 /-- Construct a `RuleState` for the theorem `thm`. -/
 def ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
   let e ← inferType thm
-  let ⟨args, _, conclusion⟩ ← forallMetaTelescope e
+  let ⟨premises, _, conclusion⟩ ← forallMetaTelescope e
+  let premises := premises.map (·.mvarId!)
   let metaState ← saveState
-  let mut slots := Array.mkEmpty args.size
+  let mut slots := Array.mkEmpty premises.size
   let mut previousDeps := HashSet.empty
-  for h : i in [:args.size] do
-    let mvarId := args[i].mvarId!
+  for h : i in [:premises.size] do
+    let mvarId := premises[i]
     let deps := HashSet.ofArray (← getMVars (← inferType e))
-    let commonDeps := HashSet.filter deps (previousDeps.contains ·)
-    -- We update `slot = 0` with correct ordering later (see *)
-    slots := slots.push ⟨mvarId, ⟨0⟩, deps, commonDeps, ⟨i⟩⟩
+    let common := HashSet.filter deps (previousDeps.contains ·)
+    -- We update `index = 0` with correct ordering later (see *)
+    slots := slots.push {
+      index := ⟨0⟩
+      premiseIndex := ⟨i⟩
+      mvarId, deps, common
+    }
     previousDeps := previousDeps.insertMany deps
-  let numPremises := slots.size
   -- Slots are created only for premises which do not appear in any other
   -- premises.
   slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
@@ -325,7 +329,7 @@ def ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
   return {
     expr := thm
     variableMap := ∅
-    numPremises, slots, metaState, conclusion
+    premises, slots, metaState, conclusion
   }
 
 /-- Get the slot with the given index. Panic if the index is invalid. -/
@@ -359,18 +363,25 @@ def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
 
 /-- Given a complete match `m` for `rs`, produce an application of the theorem
 `rs.expr` to the hypotheses from `m`. -/
-def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
-  if m.level.toNat != rs.slots.size - 1 then
-    throwError "aesop: internal error: reconstruct: level of match is not maximal"
-  else
-    let sortedSlots :=
-      rs.slots.qsort fun s₁ s₂ ↦ s₁.premiseIndex < s₂.premiseIndex
-    let mut arr := Array.mkArray rs.numPremises none
-    let mut hyps := m.hyps
-    for slot in sortedSlots do
-      hyps := hyps.drop 1
-      arr := arr.set! slot.premiseIndex.toNat (some <| .fvar hyps.head!)
-    mkAppOptM' rs.expr arr
+def reconstruct (rs : RuleState) (m : Match) : Expr := Id.run do
+  let hyps := m.hyps.toArray
+  if hyps.size != rs.slots.size then
+    panic! s!"match is not complete; slots: {rs.slots.size}; match hyps: {m.hyps.length}"
+  let slots :=
+    rs.slots.qsort (λ s₁ s₂ => s₁.premiseIndex < s₂.premiseIndex) |>.zip hyps
+  let mut args := Array.mkEmpty rs.premises.size
+  let mut slotIdx := 0
+  for h : i in [:rs.premises.size] do
+    if let some (slot, hyp) := slots[slotIdx]? then
+      if slot.premiseIndex.toNat == i then
+        args := args.push (.fvar hyp)
+        slotIdx := slotIdx + 1
+        continue
+    let premise := rs.premises[i]
+    let some inst := m.subst.find? premise
+      | panic! s!"no hyp or instantiation for premise {premise.name}"
+    args := args.push inst
+  return mkAppN rs.expr args
 
 partial def addMatch (rs : RuleState) (m : Match) :
     MetaM (RuleState × Array Expr) := do
@@ -378,7 +389,7 @@ partial def addMatch (rs : RuleState) (m : Match) :
   let mut fullMatches : Array Expr := ∅
   let slotIdx := m.level
   if slotIdx.toNat == rs.slots.size - 1 then
-    return ⟨rs, #[← rs.reconstruct m]⟩
+    return ⟨rs, #[rs.reconstruct m]⟩
   else
     let nextSlot := rs.slot! $ slotIdx + 1
     rs := { rs with
