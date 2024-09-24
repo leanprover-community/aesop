@@ -18,16 +18,30 @@ open Batteries (BinomialHeap)
 
 namespace Aesop
 
--- TODO move to Util
-def PHashSet.toHashSet [BEq α] [Hashable α] (p : PHashSet α) : HashSet α :=
-  p.fold (init := ∅) fun result a ↦ result.insert a
+-- TODO move this section to Util
+section
 
--- TODO move to Util
-def HashSet.inter [BEq α] [Hashable α] (s₁ : HashSet α) (s₂ : HashSet α) :
-    HashSet α :=
+variable [BEq α] [Hashable α]
+
+namespace PHashSet
+
+def toHashSet (s : PHashSet α) : HashSet α :=
+  s.fold (init := ∅) fun result a ↦ result.insert a
+
+def filter (p : α → Bool) (s : PHashSet α) : PHashSet α :=
+  s.fold (init := s) λ s a => if p a then s else s.erase a
+
+end PHashSet
+
+namespace HashSet
+
+def inter (s₁ : HashSet α) (s₂ : HashSet α) : HashSet α :=
   let (s₁, s₂) := if s₁.size < s₂.size then (s₁, s₂) else (s₂, s₁)
   s₁.fold (init := ∅) λ result k =>
     if s₂.contains k then result.insert k else result
+
+end HashSet
+end
 
 structure SlotIndex where
   toNat : Nat
@@ -175,29 +189,22 @@ def insertMatch (imap : InstMap) (var : MVarId) (m : Match) :
   imap.insertMatchCore m.level inst m
 
 /--
-Remove a hyp from an `InstMap`.
-Process is:
-1. removes `hyp` at `hyp`'s associated slot,
-2. removes all `Matches` that contain `hyp` for all slot GE the associated slot.
+Remove `hyp` from slots starting at `slot`. For each mapping `s ↦ e ↦ (ms, hs)`
+in `imap`, if `s ≥ slot`, then `hyp` is removed from `hs` and any matches
+containing `hyp` are removed from `ms`.
 -/
 def removeHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id.run do
   let mut imaps := imap.map
-  /- The fold here outputs the list of keys of `m.map`.-/
-  let previousSlots : List SlotIndex :=
+  let nextSlots : List SlotIndex :=
     imap.map.foldl (init := []) λ acc slot' _ =>
       if slot ≤ slot' then slot' :: acc else acc
-  for i in previousSlots do
-    /- We use `find!` since `i` comes from a subset of the keys of `m.map`. -/
-    let mut maps := imap.map.find! i
-    /- We execute `hs.erase hyp` only when `i == slot`. -/
-    if i == slot then
-      maps := maps.foldl (init := maps) fun m e (ms, hs) => m.insert e
-        (ms.fold (fun ms m ↦ if m.hyps.contains hyp then ms.erase m else ms) ms, hs.erase hyp)
-    else
-      maps := maps.foldl (init := maps) fun m e (ms, hs) => m.insert e
-        (ms.fold (fun ms m ↦ if m.hyps.contains hyp then ms.erase m else ms) ms, hs)
+  for i in nextSlots do
+    let maps := imap.map.find! i
+    let maps := maps.foldl (init := maps) fun m e (ms, hs) =>
+      let ms := PHashSet.filter (·.hyps.contains hyp) ms
+      m.insert e (ms, hs.erase hyp)
     imaps := imaps.insert i maps
-  return {map := imaps}
+  return { map := imaps }
 
 end InstMap
 
