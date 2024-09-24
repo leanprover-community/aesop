@@ -80,14 +80,21 @@ structure Slot where
   deps : HashSet MVarId
   /-- Common variables shared between this slot and the previous slots. -/
   common : HashSet MVarId
-  /-- 0-based index of the premise represented by this slot in the rule type. -/
+  /-- 0-based index of the premise represented by this slot in the rule type.
+  Note that the slots array may use a different ordering than the original
+  order of premises, so it is *not* the case that `slotIndex ≤ premiseIndex`. -/
   premiseIndex : PremiseIndex
   deriving Inhabited
 
+/-- A substitution maps premise metavariables to assignments. -/
 abbrev Substitution := AssocList MVarId Expr
 
 structure Match where
+  /-- Hyps for each slot. The `i`th hyp in this list is the hyp associated with
+  the slot with index `i`. -/
   hyps : List FVarId
+  /-- The substitution induced by the assignment of the hyps in `hyps` to the
+  rule's slots. -/
   subst : Substitution
   deriving Inhabited
 
@@ -109,8 +116,8 @@ def level? (m : Match) : Option SlotIndex :=
 end Match
 
 /-- Partial matches associated with a particular slot instantiation. An entry
-`s ↦ i ↦ (ms, hs)` indicates that for the instantiation `i` of slot `s`, we have
-partial matches `ms` containing hypotheses `hs`. -/
+`s ↦ e ↦ (ms, hs)` indicates that for the instantiation `e` of slot `s`, we have
+partial matches `ms` and hypotheses `hs`. -/
 structure InstMap where
   map : PHashMap SlotIndex (PHashMap Expr (PHashSet Match × PHashSet FVarId))
   deriving Inhabited
@@ -119,20 +126,23 @@ namespace InstMap
 
 instance : EmptyCollection InstMap := ⟨⟨.empty⟩⟩
 
+/-- Returns the set of matches and hypotheses associated with a slot `slot`
+with instantiation `inst`. -/
 @[inline]
 def find? (imap : InstMap) (slot : SlotIndex) (inst : Expr) :
     Option (PHashSet Match × PHashSet FVarId) :=
   imap.map.find? slot |>.bind λ slotMap => slotMap.find? inst
 
+/-- Returns the set of matches and hypotheses associated with a slot `slot`
+with instantiation `inst`, or `(∅, ∅)` if `slot` and `inst` do not have any
+associated matches. -/
 @[inline]
 def findD (imap : InstMap) (slot : SlotIndex) (inst : Expr) :
     PHashSet Match × PHashSet FVarId :=
   imap.find? slot inst |>.getD (∅, ∅)
 
-/-
-Applies a transfomation to a specified image of `slot` and `inst`.
-If the image is not yet defined, applies the transformation to `(∅, ∅)`.
--/
+/-- Applies a transfomation to the data associated to `slot` and `inst`.
+If the there is no such data, the transformation is applied to `(∅, ∅)`. -/
 def modify (imap : InstMap) (slot : SlotIndex) (inst : Expr)
     (f : PHashSet Match → PHashSet FVarId → PHashSet Match × PHashSet FVarId) :
     InstMap :=
@@ -140,9 +150,8 @@ def modify (imap : InstMap) (slot : SlotIndex) (inst : Expr)
   let slotMap := imap.map.findD slot .empty |>.insert inst (f ms hyps)
   ⟨imap.map.insert slot slotMap⟩
 
-/-TODO: Do we need to connect `inst` with `MetaM (Option Substitution)`?.-/
-
-/-- The `slot` represents the input hypothesis corresponding to `hyp`-/
+/-- Inserts a hyp associated with slot `slot` and instantiation `inst`.
+The hyp should be a valid assignment for the slot's premise. -/
 def insertHyp (imap : InstMap) (slot : SlotIndex) (inst : Expr) (hyp : FVarId) :
     InstMap :=
   imap.modify slot inst fun ms hs ↦ (ms, hs.insert hyp)
@@ -332,8 +341,6 @@ def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
     else
       return none
 
-/- Use `Lean.Meta.mkAppOptM` to reconstruct conclusion. Need ordering of mVar
-(notetoself: these include inputHyps and the variables.)-/
 /-- Function reconstructing a rule from a match. -/
 def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
   if m.level?.map (·.toNat) != some (rs.slots.size - 1) then
