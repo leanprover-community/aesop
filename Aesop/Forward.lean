@@ -283,6 +283,7 @@ where
 
 end VariableMap
 
+/-- Structure representing the state of one forward rule. -/
 structure RuleState where
   /-- Expression of the associated theorem. -/
   expr : Expr
@@ -293,7 +294,7 @@ structure RuleState where
   slots : Array Slot
   /-- The conclusion of the rule. -/
   conclusion : Expr
-  /-- MetaState in which slots and conclusion are valid-/
+  /-- Meta state in which slots and conclusion are valid-/
   metaState : Meta.SavedState
   /-- Variable map. -/
   variableMap : VariableMap
@@ -301,39 +302,39 @@ structure RuleState where
 
 namespace RuleState
 
+/-- Construct a `RuleState` for the theorem `thm`. -/
 def ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
   let e ← inferType thm
   let ⟨args, _, conclusion⟩ ← forallMetaTelescope e
   let metaState ← saveState
-  let args ← args.mapM fun expr : Expr => do
-    let type ← expr.mvarId!.getType
-    let deps ← getMVars type
-    return (expr.mvarId!, HashSet.ofArray deps)
-  let mut slots : Array Slot := Array.mkEmpty args.size
+  let mut slots := Array.mkEmpty args.size
   let mut previousDeps := HashSet.empty
   for h : i in [:args.size] do
-    let (mvarId, deps) := args[i]'h.2
+    let mvarId := args[i].mvarId!
+    let deps := HashSet.ofArray (← getMVars (← inferType e))
     let commonDeps := HashSet.filter deps (previousDeps.contains ·)
-    /- We update `slot = 0` with correct ordering later (see **) -/
+    -- We update `slot = 0` with correct ordering later (see *)
     slots := slots.push ⟨mvarId, ⟨0⟩, deps, commonDeps, ⟨i⟩⟩
     previousDeps := previousDeps.insertMany deps
   let numPremises := slots.size
-  /- Filtering out non-input hypetheses-/
+  -- Slots are created only for premises which do not appear in any other
+  -- premises.
   slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
-  /- (**) Assigns ordering of slots -/
-  slots := slots.mapIdx fun index current => {current with index := ⟨index⟩}
+  -- (*)
+  slots := slots.mapIdx fun index current => { current with index := ⟨index⟩ }
   return {
     expr := thm
     variableMap := ∅
     numPremises, slots, metaState, conclusion
   }
 
+/-- Get the slot with the given index. Panic if the index is invalid. -/
 @[macro_inline]
 def slot! (rs : RuleState) (slot : SlotIndex) : Slot :=
   rs.slots[slot.toNat]!
 
-/-- `r.slot! slot` contains the information concerning the inputHypothesis. We match this
-with a given `hyp`.-/
+/-- Match hypothesis `hyp` against the slot with index `slot` in `rs` (which
+must be a valid index). -/
 def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
     MetaM (Option Substitution) := do
   let slot := rs.slot! slot
@@ -341,25 +342,26 @@ def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
     let inputHypType ← slot.mvarId.getType
     let hypType ← hyp.getType
     if ← isDefEq inputHypType hypType then
-      /- Substitution of metavariables. -/
       /- Note: This was over `slot.common` and not `slot.deps`. We need `slot.deps`
       because, among other issues, `slot.common` is empty in the first slot. Even though
       we don't have dependencies, we still need to keep track of the subs of hyp.
       Otherwise, we would trigger the first panic in `AddHypothesis`.-/
-      let mut inst : Substitution := ∅
+      let mut subst : Substitution := ∅
       for var in slot.deps do
-        let assignment ← instantiateMVars (.mvar var)
-        if assignment.isMVar then
-          throwError "Assigned variable can not be an MVar"
-        inst := inst.insert var assignment
-      return inst
+        let mvar := .mvar var
+        let assignment ← instantiateMVars mvar
+        if assignment == mvar then
+          throwError "aesop: internal error: matchInputHypothesis?: while matching hyp {hyp.name}: no assignment for mvar {var.name}"
+        subst := subst.insert var assignment
+      return subst
     else
       return none
 
-/-- Function reconstructing a rule from a match. -/
+/-- Given a complete match `m` for `rs`, produce an application of the theorem
+`rs.expr` to the hypotheses from `m`. -/
 def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
   if m.level.toNat != rs.slots.size - 1 then
-    throwError "level of match is not maximal"
+    throwError "aesop: internal error: reconstruct: level of match is not maximal"
   else
     let sortedSlots :=
       rs.slots.qsort fun s₁ s₂ ↦ s₁.premiseIndex < s₂.premiseIndex
