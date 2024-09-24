@@ -99,8 +99,12 @@ instance : BEq Match where
 instance : Hashable Match where
   hash m := hash m.hyps
 
-def level (m : Match) : SlotIndex :=
-  ⟨m.hyps.length⟩
+/--
+The level of a match `m` is the greatest slot index `i` such that `m` associates
+a hypothesis to slot `i`. It is `none` if the match is empty.
+-/
+def level? (m : Match) : Option SlotIndex :=
+  if m.hyps.isEmpty then none else some ⟨m.hyps.length - 1⟩
 
 end Match
 
@@ -332,7 +336,7 @@ def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
 (notetoself: these include inputHyps and the variables.)-/
 /-- Function reconstructing a rule from a match. -/
 def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
-  if rs.slots.size - 1 != m.level.toNat then
+  if m.level?.map (·.toNat) != some (rs.slots.size - 1) then
     throwError "level of match is not maximal"
   else
     let sortedSlots :=
