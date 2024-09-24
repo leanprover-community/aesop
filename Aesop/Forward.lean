@@ -7,7 +7,6 @@ Authors: Xavier Généreux, Jannis Limperg
 import Aesop.Index.Basic
 import Aesop.Percent
 import Batteries.Data.BinomialHeap.Basic
-import Batteries.Lean.HashMap
 import Batteries.Lean.HashSet
 import Batteries.Lean.Meta.SavedState
 
