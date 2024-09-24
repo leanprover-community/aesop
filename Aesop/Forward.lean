@@ -365,22 +365,21 @@ def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
       arr := arr.set! slot.premiseIndex.toNat (some <| .fvar hyps.head!)
     mkAppOptM' rs.expr arr
 
-/-- Precondition: The `slot` represents the maximal input hypothesis in `m`.
-This means that `m.level = slot.index`.
--/
-partial def addMatch (rs : RuleState) (slot : Slot) (m : Match) :
+partial def addMatch (rs : RuleState) (m : Match) :
     MetaM (RuleState × Array Expr) := do
   let mut rs := rs
   let mut fullMatches : Array Expr := ∅
-  if slot.index.toNat == rs.slots.size - 1 then
+  let some slotIdx := m.level?
+    | panic! "match is empty"
+  let slot := rs.slot! slotIdx
+  if slotIdx.toNat == rs.slots.size - 1 then
     return ⟨rs, #[← rs.reconstruct m]⟩
   else
     rs := { rs with
-      variableMap := rs.variableMap.addMatchToMaps (rs.slot! (slot.index + 1)) m
+      variableMap := rs.variableMap.addMatchToMaps (rs.slot! (slotIdx + 1)) m
     }
     for hyp in rs.variableMap.findHypotheses slot m.subst do
-      let (newRs, newFullMatches) ←
-        rs.addMatch slot ⟨hyp :: m.hyps, m.subst⟩
+      let (newRs, newFullMatches) ← rs.addMatch ⟨hyp :: m.hyps, m.subst⟩
       rs := newRs
       fullMatches := fullMatches ++ newFullMatches
     return ⟨rs, fullMatches⟩
@@ -388,24 +387,23 @@ partial def addMatch (rs : RuleState) (slot : Slot) (m : Match) :
 /-- Precondition: The `slot` represents the input hypothesis corresponding to `h` -/
 def addHypothesis (rs : RuleState) (slot : Slot) (h : FVarId) :
     MetaM (RuleState × Array Expr) := do
-  match ← rs.matchInputHypothesis? slot.index h with
-  | none => panic! "The rule should have a non-trivial substitution at every slot."
-  | some subst =>
-    let mut r :=
-      { rs with variableMap := rs.variableMap.addHypToMaps slot subst h }
-    let mut fullMatches : Array Expr := ∅
-    if slot.index.toNat == 0 then
-      return ← r.addMatch slot ⟨[h], subst⟩
-    else
-      for pm in r.variableMap.findMatch slot subst do
-        let subst := pm.subst.foldl (init := subst) λ subst k v =>
-          assert! let r := subst.find? k; r == none || r == some v
-          subst.insert k v
-        /- We add `hyp` at the beginning, update relevant insts and the level. -/
-        let x ← r.addMatch slot ⟨h :: pm.hyps, subst⟩
-        r := x.1
-        fullMatches := fullMatches.append x.2
-      return ⟨r, fullMatches⟩
+  let some subst ← rs.matchInputHypothesis? slot.index h
+    | return (rs, #[])
+  let mut rs :=
+    { rs with variableMap := rs.variableMap.addHypToMaps slot subst h }
+  if slot.index.toNat == 0 then
+    return ← rs.addMatch ⟨[h], subst⟩
+  else
+    let mut fullMatches := #[]
+    for pm in rs.variableMap.findMatch slot subst do
+      let subst := pm.subst.foldl (init := subst) λ subst k v =>
+        assert! let r := subst.find? k; r == none || r == some v
+        subst.insert k v
+      /- We add `hyp` at the beginning, update relevant insts and the level. -/
+      let (newRs, newFullMatches) ← rs.addMatch ⟨h :: pm.hyps, subst⟩
+      rs := newRs
+      fullMatches := fullMatches ++ newFullMatches
+    return ⟨rs, fullMatches⟩
 
 end RuleState
 
