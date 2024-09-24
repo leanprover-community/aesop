@@ -234,24 +234,22 @@ def modify (vmap : VariableMap) (var : MVarId) (f : InstMap → InstMap) :
   | none => ⟨vmap.map.insert var (f ∅)⟩
   | some m => ⟨vmap.map.insert var (f m)⟩
 
-/-- Function that adds a hypothesis to the relevent InstMaps. These are the variables
-found in `slot.common` where the input hypothesis associated to `slot` matches `hyp`.
-This means that we can unify `slot.MVarId` to `hyp`. -/
-def addHypToMaps (vmap : VariableMap) (slot : Slot) (subs : Substitution)
-    (hyp : FVarId) : VariableMap := Id.run do
-  let mut vmap := vmap
-  for var in slot.common do
-    vmap := vmap.modify var (·.insertHyp slot.index (subs.find? var |>.get!) hyp)
-  return vmap
+/-- Add a hypothesis `hyp`. Precondition: `hyp` matches the premise of slot
+`slot` with substitution `sub` (and hence `sub` contains a mapping for each
+variable in `slot.common`). -/
+def addHyp (vmap : VariableMap) (slot : Slot) (sub : Substitution)
+    (hyp : FVarId) : VariableMap :=
+  slot.common.fold (init := vmap) λ vmap var =>
+    vmap.modify var (·.insertHyp slot.index (sub.find? var |>.get!) hyp)
 
 /-- Add a match `m`. Precondition: `nextSlot` is the slot with index
-`m.level + 1`.
--/
+`m.level + 1`. -/
 def addMatchToMaps (vmap : VariableMap) (nextSlot : Slot) (m : Match) :
     VariableMap :=
   nextSlot.common.fold (init := vmap) λ vmap var =>
     vmap.modify var (·.insertMatch var m)
 
+/-- Remove a hyp from `slot` and all following slots. -/
 def removeHyp (vmap : VariableMap) (hyp : FVarId) (slot : SlotIndex) :
     VariableMap :=
   ⟨vmap.map.map (·.removeHyp hyp slot)⟩
