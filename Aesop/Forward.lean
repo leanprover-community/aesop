@@ -156,10 +156,22 @@ def insertHyp (imap : InstMap) (slot : SlotIndex) (inst : Expr) (hyp : FVarId) :
     InstMap :=
   imap.modify slot inst fun ms hs ↦ (ms, hs.insert hyp)
 
-/-- The `slot` represents the maximal input hypothesis in `m`-/
-def insertMatch (imap : InstMap) (slot : SlotIndex) (inst : Expr) (m : Match) :
-    InstMap :=
+/-- Inserts a match associated with slot `slot` and instantiation `inst`.
+The match's level should be equal to `slot`. -/
+def insertMatchCore (imap : InstMap) (slot : SlotIndex) (inst : Expr)
+    (m : Match) : InstMap :=
   imap.modify slot inst fun ms hs ↦ (ms.insert m, hs)
+
+/-- Inserts a match. The match `m` is associated with the slot given by its
+level (i.e., the maximal slot for which `m` contains a hypothesis) and the
+instantiation of `var` given by the map's substitution. -/
+def insertMatch (imap : InstMap) (var : MVarId) (m : Match) :
+    InstMap := Id.run do
+  let some slot := m.level?
+    | panic! "match contains no hypotheses"
+  let some inst := m.subst.find? var
+    | panic! "variable {var.name} is not assigned in substitution"
+  imap.insertMatchCore slot inst m
 
 /--
 Remove a hyp from an `InstMap`.
@@ -218,15 +230,13 @@ def addHypToMaps (vmap : VariableMap) (slot : Slot) (subs : Substitution)
     vmap := vmap.modify var (·.insertHyp slot.index (subs.find? var |>.get!) hyp)
   return vmap
 
-/-- Function that adds a match to the relevent InstMaps. If `lvl` is the level of the match,
-then `slot.slot = lvl + 1` so the relevent `vars` are the common of the next slot. -/
-def addMatchToMaps (vmap : VariableMap) (slot : Slot) (nextSlot : Slot)
-    (m : Match) : VariableMap := Id.run do
-  let mut vmap := vmap
-  for var in nextSlot.common do
-    vmap :=
-      vmap.modify var (·.insertMatch slot.index (m.subst.find? var |>.get!) m)
-  return vmap
+/-- Add a match `m`. Precondition: `m.level?` is not `none` and `nextSlot` is
+the slot after `m`'s level.
+-/
+def addMatchToMaps (vmap : VariableMap) (nextSlot : Slot) (m : Match) :
+    VariableMap :=
+  nextSlot.common.fold (init := vmap) λ vmap var =>
+    vmap.modify var (·.insertMatch var m)
 
 def removeHyp (vmap : VariableMap) (hyp : FVarId) (slot : SlotIndex) :
     VariableMap :=
@@ -366,8 +376,7 @@ partial def addMatch (rs : RuleState) (slot : Slot) (m : Match) :
     return ⟨rs, #[← rs.reconstruct m]⟩
   else
     rs := { rs with
-      variableMap :=
-        rs.variableMap.addMatchToMaps slot (rs.slot! (slot.index + 1)) m
+      variableMap := rs.variableMap.addMatchToMaps (rs.slot! (slot.index + 1)) m
     }
     for hyp in rs.variableMap.findHypotheses slot m.subst do
       let (newRs, newFullMatches) ←
