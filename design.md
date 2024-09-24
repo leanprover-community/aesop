@@ -116,7 +116,7 @@ We use the forward state in two ways:
 
 1. When selecting rules for a goal `G`, we use the forward state to efficiently determine forward rules that may be applicable to `G`.
 2. When a rule is executed on a goal `G` and yields subgoals `G₁, ..., Gₙ`, we must construct forward states for the subgoals `Gᵢ`.
-   To facilitate this, the rule produces a *context diff* that indicates what changed in the context.
+   To facilitate this, the rule produces a *goal diff* that indicates what changed in the context.
    For forward rules, this diff is almost trivial since we just add hypotheses.
    (Destruct rules may additionally delete some hypotheses.)
 
@@ -135,14 +135,14 @@ The forward state for a goal `G` caches information about the local context of `
 As such, we can always construct a forward state from `G`.
 However, the whole idea behind forward states is that it is much cheaper to take the forward state of the parent goal of `G` and make some (usually small) adjustments.
 
-Hence, when a rule `r` is run in context `Γ`, the rule reports a *context diff* for each subgoal `G` with context `Δ`.
+Hence, when a rule `r` is run in context `Γ`, the rule reports a *goal diff* for each subgoal `G` with context `Δ`.
 This is a tuple `(A, R, σ)` where
 
 - `A` is the set of hypotheses that were added to `G`;
 - `R` is a set of hypotheses that were removed from `G`;
 - `σ` is a unique name substitution from `Γ` to `Δ`.
 
-The context diff must accurately reflect the changes made by `r`, i.e.
+The goal diff must accurately reflect the changes made by `r`, i.e.
 
 ```
 Δ = σ(Γ \ R), A
@@ -156,7 +156,7 @@ The forward state for the child goal `G` is then
 AddHyps(ApplyFVarSubst(RemoveHyps(s, R), σ), A)
 ```
 
-If a rule does not generate a context diff, we compute it.
+If a rule does not generate a goal diff, we compute it.
 However, we can't reasonably construct `σ` for a tactic which renamed some hypotheses, so we must treat the renamed hypotheses as added/removed.
 It remains to be seen whether this is a problem in practice.
 
