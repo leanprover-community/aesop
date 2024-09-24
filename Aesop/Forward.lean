@@ -188,11 +188,9 @@ def insertMatch (imap : InstMap) (var : MVarId) (m : Match) :
     | panic! "variable {var.name} is not assigned in substitution"
   imap.insertMatchCore m.level inst m
 
-/--
-Remove `hyp` from slots starting at `slot`. For each mapping `s ↦ e ↦ (ms, hs)`
-in `imap`, if `s ≥ slot`, then `hyp` is removed from `hs` and any matches
-containing `hyp` are removed from `ms`.
--/
+/-- Remove `hyp` from slots starting at `slot`. For each mapping
+`s ↦ e ↦ (ms, hs)` in `imap`, if `s ≥ slot`, then `hyp` is removed from `hs` and
+any matches containing `hyp` are removed from `ms`. -/
 def removeHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id.run do
   let mut imaps := imap.map
   let nextSlots : List SlotIndex :=
@@ -208,8 +206,8 @@ def removeHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id
 
 end InstMap
 
-/-- Map from variables to the partial matches of slots whose types contain the
-variables. -/
+/-- Map from variables to the matches and hypotheses of slots whose types
+contain the variables. -/
 structure VariableMap where
   map : PHashMap MVarId InstMap
   deriving Inhabited
@@ -219,8 +217,13 @@ namespace VariableMap
 instance : EmptyCollection VariableMap :=
   ⟨⟨.empty⟩⟩
 
+/-- Get the `InstMap` associated with a variable. -/
+def find? (vmap : VariableMap) (var : MVarId) : Option InstMap :=
+  vmap.map.find? var
+
+/-- Get the `InstMap` associated with a variable, or an empty `InstMap`. -/
 def find (vmap : VariableMap) (var : MVarId) : InstMap :=
-  vmap.map.find? var |>.getD ∅
+  vmap.find? var |>.getD ∅
 
 def modify (vmap : VariableMap) (var : MVarId) (f : InstMap → InstMap) :
     VariableMap :=
