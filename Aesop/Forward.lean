@@ -19,11 +19,9 @@ open Batteries (BinomialHeap)
 namespace Aesop
 
 -- TODO move this section to Util
-section
+namespace PHashSet
 
 variable [BEq α] [Hashable α]
-
-namespace PHashSet
 
 def toHashSet (s : PHashSet α) : HashSet α :=
   s.fold (init := ∅) fun result a ↦ result.insert a
@@ -32,16 +30,6 @@ def filter (p : α → Bool) (s : PHashSet α) : PHashSet α :=
   s.fold (init := s) λ s a => if p a then s else s.erase a
 
 end PHashSet
-
-namespace HashSet
-
-def inter (s₁ : HashSet α) (s₂ : HashSet α) : HashSet α :=
-  let (s₁, s₂) := if s₁.size < s₂.size then (s₁, s₂) else (s₂, s₁)
-  s₁.fold (init := ∅) λ result k =>
-    if s₂.contains k then result.insert k else result
-
-end HashSet
-end
 
 structure SlotIndex where
   toNat : Nat
@@ -244,7 +232,7 @@ def addHyp (vmap : VariableMap) (slot : Slot) (sub : Substitution)
 
 /-- Add a match `m`. Precondition: `nextSlot` is the slot with index
 `m.level + 1`. -/
-def addMatchToMaps (vmap : VariableMap) (nextSlot : Slot) (m : Match) :
+def addMatch (vmap : VariableMap) (nextSlot : Slot) (m : Match) :
     VariableMap :=
   nextSlot.common.fold (init := vmap) λ vmap var =>
     vmap.modify var (·.insertMatch var m)
@@ -254,39 +242,44 @@ def removeHyp (vmap : VariableMap) (hyp : FVarId) (slot : SlotIndex) :
     VariableMap :=
   ⟨vmap.map.map (·.removeHyp hyp slot)⟩
 
-/-- `slot` should not be the first slot. -/
-def findMatch (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
+/-- Find matches in slot `slot - 1` whose substitutions are compatible with
+`subst`. Preconditions: `slot.index` is nonzero, `slot.common` is nonempty and
+each variable contained in `slot.common` is also contained in `subst`. -/
+def findMatches (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
     HashSet Match := Id.run do
+  if slot.index == ⟨0⟩ then
+    panic! "slot has index 0"
   let common := slot.common.toArray
   if h : 0 < common.size then
-    let mut pms :=
-      /-TODO: extract-/
-      vmap.find common[0]
-        |>.findD (slot.index - 1) (subst.find? common[0] |>.get!)
-        |>.1 |> PHashSet.toHashSet
+    let firstVar := common[0]
+    let mut ms := prevSlotMatches firstVar |> PHashSet.toHashSet
     for var in common[1:] do
-      pms := HashSet.inter pms
-        <| PHashSet.toHashSet (vmap.find var |>.findD (slot.index - 1) (subst.find? var |>.get!) |>.1)
-    return pms
+      let ms' := prevSlotMatches var
+      ms := HashSet.filter ms (ms'.contains ·)
+    return ms
   else
-    panic! "findMatch: common variable array is empty."
+    panic! "no common variables"
+where
+  prevSlotMatches (var : MVarId) : PHashSet Match :=
+    vmap.find var |>.findD (slot.index - 1) (subst.find? var |>.get!) |>.1
 
-/-- Precondition: slot is not the last slot. -/
-def findHypotheses (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
+/-- Find hyps in `slot` whose substitutions are compatible with `subst`.
+Precondition: `slot.common` is nonempty and each variable contained in it is
+also contained in `subst`. -/
+def findHyps (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
     HashSet FVarId := Id.run do
   let common := slot.common.toArray
   if h : 0 < common.size then
-    let mut hyps : HashSet FVarId :=
-      /-TODO: extract-/
-      vmap.find common[0]
-        |>.findD (slot.index + 1) (subst.find? common[0] |>.get!)
-        |>.2 |> PHashSet.toHashSet
+    let mut hyps := slotHyps common[0] |> PHashSet.toHashSet
     for var in common[1:] do
-      hyps := HashSet.inter hyps
-        <| PHashSet.toHashSet (vmap.find var |>.findD (slot.index + 1) (subst.find? var |>.get!) |>.2)
+      let hyps' := slotHyps var
+      hyps := HashSet.filter hyps (hyps'.contains ·)
     return hyps
   else
-    panic! "findHypotheses: common variable array is empty."
+    panic! "no common variables"
+where
+  slotHyps (var : MVarId) : PHashSet FVarId :=
+    vmap.find var |>.findD slot.index (subst.find? var |>.get!) |>.2
 
 end VariableMap
 
@@ -320,7 +313,7 @@ def ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
   let mut previousDeps := HashSet.empty
   for h : i in [:args.size] do
     let (mvarId, deps) := args[i]'h.2
-    let commonDeps := HashSet.inter previousDeps deps
+    let commonDeps := HashSet.filter deps (previousDeps.contains ·)
     /- We update `slot = 0` with correct ordering later (see **) -/
     slots := slots.push ⟨mvarId, ⟨0⟩, deps, commonDeps, ⟨i⟩⟩
     previousDeps := previousDeps.insertMany deps
@@ -382,14 +375,14 @@ partial def addMatch (rs : RuleState) (m : Match) :
   let mut rs := rs
   let mut fullMatches : Array Expr := ∅
   let slotIdx := m.level
-  let slot := rs.slot! slotIdx
   if slotIdx.toNat == rs.slots.size - 1 then
     return ⟨rs, #[← rs.reconstruct m]⟩
   else
+    let nextSlot := rs.slot! $ slotIdx + 1
     rs := { rs with
-      variableMap := rs.variableMap.addMatchToMaps (rs.slot! (slotIdx + 1)) m
+      variableMap := rs.variableMap.addMatch nextSlot m
     }
-    for hyp in rs.variableMap.findHypotheses slot m.subst do
+    for hyp in rs.variableMap.findHyps nextSlot m.subst do
       let m := { hyps := hyp :: m.hyps, subst := m.subst }
       let (newRs, newFullMatches) ← rs.addMatch m
       rs := newRs
@@ -397,17 +390,17 @@ partial def addMatch (rs : RuleState) (m : Match) :
     return ⟨rs, fullMatches⟩
 
 /-- Precondition: The `slot` represents the input hypothesis corresponding to `h` -/
-def addHypothesis (rs : RuleState) (slot : Slot) (h : FVarId) :
+def addHyp (rs : RuleState) (slot : Slot) (h : FVarId) :
     MetaM (RuleState × Array Expr) := do
   let some subst ← rs.matchInputHypothesis? slot.index h
     | return (rs, #[])
   let mut rs :=
-    { rs with variableMap := rs.variableMap.addHypToMaps slot subst h }
+    { rs with variableMap := rs.variableMap.addHyp slot subst h }
   if slot.index.toNat == 0 then
     return ← rs.addMatch { hyps := [h], subst }
   else
     let mut fullMatches := #[]
-    for pm in rs.variableMap.findMatch slot subst do
+    for pm in rs.variableMap.findMatches slot subst do
       let subst := pm.subst.foldl (init := subst) λ subst k v =>
         assert! let r := subst.find? k; r == none || r == some v
         subst.insert k v
@@ -504,14 +497,14 @@ structure ForwardState where
 
 namespace ForwardState
 
-def addHypothesis (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
+def addHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : MetaM ForwardState := do
   let mut fs := fs
   for (r, i) in ms do
     let rs ← fs.ruleStates.find? r.name |>.getDM (RuleState.ofExpr r.expr)
     let some slot := rs.slots.find? (·.premiseIndex == i)
       | throwError "addHypothesis: internal error: no slot with hyp index {i} for rule {r.name}"
-    let (rs, fullMatches) ← rs.addHypothesis slot h
+    let (rs, fullMatches) ← rs.addHyp slot h
     fs := { fs with ruleStates := fs.ruleStates.insert r.name rs }
     for expr in fullMatches do
       fs := addFullMatch expr r fs
@@ -526,7 +519,7 @@ where
     | .unsafe => { fs with unsafeQueue := fs.unsafeQueue.insert queueEntry }
 
 /- TODO: also update the queues -/
-def removeHypothesis (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
+def removeHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : ForwardState := Id.run do
   let mut fs := fs
   for (r, i) in ms do
