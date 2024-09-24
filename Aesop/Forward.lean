@@ -225,10 +225,13 @@ def find? (vmap : VariableMap) (var : MVarId) : Option InstMap :=
 def find (vmap : VariableMap) (var : MVarId) : InstMap :=
   vmap.find? var |>.getD ∅
 
+/-- Modify the `InstMap` associated to variable `var`. If no such `InstMap`
+exists, the function `f` is applied to the empty `InstMap` and the result is
+associated with `var`. -/
 def modify (vmap : VariableMap) (var : MVarId) (f : InstMap → InstMap) :
     VariableMap :=
   match vmap.map.find? var with
-  | none => vmap
+  | none => ⟨vmap.map.insert var (f ∅)⟩
   | some m => ⟨vmap.map.insert var (f m)⟩
 
 /-- Function that adds a hypothesis to the relevent InstMaps. These are the variables
