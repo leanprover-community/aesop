@@ -93,12 +93,15 @@ structure Match where
   /-- Hyps for each slot. The `i`th hyp in this list is the hyp associated with
   the slot with index `i`. -/
   hyps : List FVarId
+  hyps_ne : 0 < hyps.length := by simp
   /-- The substitution induced by the assignment of the hyps in `hyps` to the
   rule's slots. -/
   subst : Substitution
-  deriving Inhabited
 
 namespace Match
+
+instance : Inhabited Match :=
+  ⟨{ hyps := [default], subst := ∅ }⟩
 
 instance : BEq Match where
   beq m₁ m₂ := m₁.hyps == m₂.hyps
@@ -108,10 +111,10 @@ instance : Hashable Match where
 
 /--
 The level of a match `m` is the greatest slot index `i` such that `m` associates
-a hypothesis to slot `i`. It is `none` if the match is empty.
+a hypothesis to slot `i`.
 -/
-def level? (m : Match) : Option SlotIndex :=
-  if m.hyps.isEmpty then none else some ⟨m.hyps.length - 1⟩
+def level (m : Match) : SlotIndex :=
+  ⟨m.hyps.length - 1⟩
 
 end Match
 
@@ -167,11 +170,9 @@ level (i.e., the maximal slot for which `m` contains a hypothesis) and the
 instantiation of `var` given by the map's substitution. -/
 def insertMatch (imap : InstMap) (var : MVarId) (m : Match) :
     InstMap := Id.run do
-  let some slot := m.level?
-    | panic! "match contains no hypotheses"
   let some inst := m.subst.find? var
     | panic! "variable {var.name} is not assigned in substitution"
-  imap.insertMatchCore slot inst m
+  imap.insertMatchCore m.level inst m
 
 /--
 Remove a hyp from an `InstMap`.
@@ -230,8 +231,8 @@ def addHypToMaps (vmap : VariableMap) (slot : Slot) (subs : Substitution)
     vmap := vmap.modify var (·.insertHyp slot.index (subs.find? var |>.get!) hyp)
   return vmap
 
-/-- Add a match `m`. Precondition: `m.level?` is not `none` and `nextSlot` is
-the slot after `m`'s level.
+/-- Add a match `m`. Precondition: `nextSlot` is the slot with index
+`m.level + 1`.
 -/
 def addMatchToMaps (vmap : VariableMap) (nextSlot : Slot) (m : Match) :
     VariableMap :=
@@ -353,7 +354,7 @@ def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
 
 /-- Function reconstructing a rule from a match. -/
 def reconstruct (rs : RuleState) (m : Match) : MetaM Expr := do
-  if m.level?.map (·.toNat) != some (rs.slots.size - 1) then
+  if m.level.toNat != rs.slots.size - 1 then
     throwError "level of match is not maximal"
   else
     let sortedSlots :=
@@ -369,8 +370,7 @@ partial def addMatch (rs : RuleState) (m : Match) :
     MetaM (RuleState × Array Expr) := do
   let mut rs := rs
   let mut fullMatches : Array Expr := ∅
-  let some slotIdx := m.level?
-    | panic! "match is empty"
+  let slotIdx := m.level
   let slot := rs.slot! slotIdx
   if slotIdx.toNat == rs.slots.size - 1 then
     return ⟨rs, #[← rs.reconstruct m]⟩
@@ -379,7 +379,8 @@ partial def addMatch (rs : RuleState) (m : Match) :
       variableMap := rs.variableMap.addMatchToMaps (rs.slot! (slotIdx + 1)) m
     }
     for hyp in rs.variableMap.findHypotheses slot m.subst do
-      let (newRs, newFullMatches) ← rs.addMatch ⟨hyp :: m.hyps, m.subst⟩
+      let m := { hyps := hyp :: m.hyps, subst := m.subst }
+      let (newRs, newFullMatches) ← rs.addMatch m
       rs := newRs
       fullMatches := fullMatches ++ newFullMatches
     return ⟨rs, fullMatches⟩
@@ -392,15 +393,14 @@ def addHypothesis (rs : RuleState) (slot : Slot) (h : FVarId) :
   let mut rs :=
     { rs with variableMap := rs.variableMap.addHypToMaps slot subst h }
   if slot.index.toNat == 0 then
-    return ← rs.addMatch ⟨[h], subst⟩
+    return ← rs.addMatch { hyps := [h], subst }
   else
     let mut fullMatches := #[]
     for pm in rs.variableMap.findMatch slot subst do
       let subst := pm.subst.foldl (init := subst) λ subst k v =>
         assert! let r := subst.find? k; r == none || r == some v
         subst.insert k v
-      /- We add `hyp` at the beginning, update relevant insts and the level. -/
-      let (newRs, newFullMatches) ← rs.addMatch ⟨h :: pm.hyps, subst⟩
+      let (newRs, newFullMatches) ← rs.addMatch { hyps := h :: pm.hyps, subst }
       rs := newRs
       fullMatches := fullMatches ++ newFullMatches
     return ⟨rs, fullMatches⟩
