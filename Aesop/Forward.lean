@@ -89,14 +89,20 @@ abbrev Substitution := AssocList MVarId Expr
 structure Match where
   hyps : List FVarId
   subst : Substitution
-  level : SlotIndex
   deriving Inhabited
+
+namespace Match
 
 instance : BEq Match where
   beq m₁ m₂ := m₁.hyps == m₂.hyps
 
 instance : Hashable Match where
   hash m := hash m.hyps
+
+def level (m : Match) : SlotIndex :=
+  ⟨m.hyps.length⟩
+
+end Match
 
 /-- Partial matches associated with a particular slot instantiation. An entry
 `s ↦ i ↦ (ms, hs)` indicates that for the instantiation `i` of slot `s`, we have
@@ -354,7 +360,7 @@ partial def addMatch (rs : RuleState) (slot : Slot) (m : Match) :
     }
     for hyp in rs.variableMap.findHypotheses slot m.subst do
       let (newRs, newFullMatches) ←
-        rs.addMatch slot ⟨hyp :: m.hyps, m.subst, slot.index + 1⟩
+        rs.addMatch slot ⟨hyp :: m.hyps, m.subst⟩
       rs := newRs
       fullMatches := fullMatches ++ newFullMatches
     return ⟨rs, fullMatches⟩
@@ -369,14 +375,14 @@ def addHypothesis (rs : RuleState) (slot : Slot) (h : FVarId) :
       { rs with variableMap := rs.variableMap.addHypToMaps slot subst h }
     let mut fullMatches : Array Expr := ∅
     if slot.index.toNat == 0 then
-      return ← r.addMatch slot ⟨[h], subst, ⟨0⟩⟩
+      return ← r.addMatch slot ⟨[h], subst⟩
     else
       for pm in r.variableMap.findMatch slot subst do
         let subst := pm.subst.foldl (init := subst) λ subst k v =>
           assert! let r := subst.find? k; r == none || r == some v
           subst.insert k v
         /- We add `hyp` at the beginning, update relevant insts and the level. -/
-        let x ← r.addMatch slot ⟨h :: pm.hyps, subst, slot.index⟩
+        let x ← r.addMatch slot ⟨h :: pm.hyps, subst⟩
         r := x.1
         fullMatches := fullMatches.append x.2
       return ⟨r, fullMatches⟩
