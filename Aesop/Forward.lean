@@ -387,12 +387,12 @@ def reconstruct (rs : RuleState) (m : Match) : Expr := Id.run do
 -- This function is just `partial`, but Lean doesn't realise that the return
 -- type is inhabited.
 unsafe def addMatchUnsafe (rs : RuleState) (m : Match) :
-    RuleState × Array Expr := Id.run do
+    RuleState × Array Match := Id.run do
   let mut rs := rs
-  let mut fullMatches : Array Expr := ∅
+  let mut fullMatches := #[]
   let slotIdx := m.level
   if slotIdx.toNat == rs.slots.size - 1 then
-    return ⟨rs, #[rs.reconstruct m]⟩
+    return ⟨rs, #[m]⟩
   else
     let nextSlot := rs.slot! $ slotIdx + 1
     rs := { rs with
@@ -406,13 +406,13 @@ unsafe def addMatchUnsafe (rs : RuleState) (m : Match) :
     return ⟨rs, fullMatches⟩
 
 @[implemented_by addMatchUnsafe, inherit_doc addMatchUnsafe]
-opaque addMatch (rs : RuleState) (m : Match) : RuleState × Array Expr :=
+opaque addMatch (rs : RuleState) (m : Match) : RuleState × Array Match :=
   (rs, default)
 
 /-- Add a hyp to the rule state. `subst` must be the substitution that results
 from applying `h` to `slot`. -/
 def addHypCore (rs : RuleState) (slot : Slot) (h : FVarId)
-    (subst : Substitution) : RuleState × Array Expr := Id.run do
+    (subst : Substitution) : RuleState × Array Match := Id.run do
   let mut rs :=
     { rs with variableMap := rs.variableMap.addHyp slot subst h }
   if slot.index.toNat == 0 then
@@ -434,7 +434,7 @@ the premise corresponding to `slot`, then the hypothesis is not added.
 Returns the new rule state and the proofs resulting from any matches that were
 completed by `h`. -/
 def addHyp (rs : RuleState) (slot : Slot) (h : FVarId) :
-    MetaM (RuleState × Array Expr) := do
+    MetaM (RuleState × Array Match) := do
   let some subst ← rs.matchInputHypothesis? slot.index h
     | return (rs, #[])
   return addHypCore rs slot h subst
@@ -503,7 +503,8 @@ def get (idx : ForwardIndex) (e : Expr) :
 end ForwardIndex
 
 structure ForwardStateQueueEntry where
-  expr : Expr
+  rule : RuleName
+  «match» : Match
   prio : ForwardRulePriority
   deriving Inhabited
 
@@ -542,13 +543,13 @@ def addHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
       | throwError "addHypothesis: internal error: no slot with hyp index {i} for rule {r.name}"
     let (rs, fullMatches) ← rs.addHyp slot h
     fs := { fs with ruleStates := fs.ruleStates.insert r.name rs }
-    for expr in fullMatches do
-      fs := addFullMatch expr r fs
+    for m in fullMatches do
+      fs := addFullMatch m r fs
   return fs
 where
-  addFullMatch (expr : Expr) (r : ForwardRule) (fs : ForwardState) :
+  addFullMatch («match» : Match) (r : ForwardRule) (fs : ForwardState) :
       ForwardState :=
-    let queueEntry := { expr, prio := r.prio }
+    let queueEntry := { rule := r.name, «match», prio := r.prio }
     match r.name.phase with
     | .norm   => { fs with normQueue := fs.normQueue.insert queueEntry }
     | .safe   => { fs with safeQueue := fs.safeQueue.insert queueEntry }
@@ -569,19 +570,28 @@ def removeHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     }
   return fs
 
-def popFirstNormMatch (fs : ForwardState) : Option (Expr × ForwardState) :=
+def reconstructQueueEntry (entry : ForwardStateQueueEntry) (fs : ForwardState) :
+    Expr := Id.run do
+  let some rs := fs.ruleStates.find? entry.rule
+    | panic! s!"no rule state found for rule {entry.rule}"
+  rs.reconstruct entry.match
+
+def popFirstNormMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
   match fs.normQueue.deleteMin with
   | none => none
-  | some (entry, normQueue) => (entry.expr, { fs with normQueue })
+  | some (entry, normQueue) =>
+    (fs.reconstructQueueEntry entry, { fs with normQueue })
 
-def popFirstSafeMatch (fs : ForwardState) : Option (Expr × ForwardState) :=
+def popFirstSafeMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
   match fs.safeQueue.deleteMin with
   | none => none
-  | some (entry, safeQueue) => (entry.expr, { fs with safeQueue })
+  | some (entry, safeQueue) =>
+    (fs.reconstructQueueEntry entry, { fs with safeQueue })
 
-def popFirstUnsafeMatch (fs : ForwardState) : Option (Expr × ForwardState) :=
+def popFirstUnsafeMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
   match fs.unsafeQueue.deleteMin with
   | none => none
-  | some (entry, unsafeQueue) => (entry.expr, { fs with unsafeQueue })
+  | some (entry, unsafeQueue) =>
+    (fs.reconstructQueueEntry entry, { fs with unsafeQueue })
 
 end Aesop.ForwardState
