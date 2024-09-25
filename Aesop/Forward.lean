@@ -441,15 +441,18 @@ def addHyp (rs : RuleState) (slot : Slot) (h : FVarId) :
 
 end RuleState
 
-inductive Prio : Type where
-  | normSafe (n : Int) : Prio
-  | «unsafe» (p : Percent) : Prio
+/--
+The priority of a forward rule.
+-/
+inductive ForwardRulePriority : Type where
+  | normSafe (n : Int) : ForwardRulePriority
+  | «unsafe» (p : Percent) : ForwardRulePriority
   deriving Inhabited
 
 structure ForwardRule where
   name : RuleName
   expr : Expr
-  prio : Prio
+  prio : ForwardRulePriority
   deriving Inhabited
 
 instance : BEq ForwardRule :=
@@ -498,7 +501,7 @@ end ForwardIndex
 
 structure ForwardStateQueueEntry where
   expr : Expr
-  prio : Prio
+  prio : ForwardRulePriority
   deriving Inhabited
 
 namespace ForwardStateQueueEntry
