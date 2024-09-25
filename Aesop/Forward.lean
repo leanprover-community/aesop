@@ -502,16 +502,20 @@ def get (idx : ForwardIndex) (e : Expr) :
 
 end ForwardIndex
 
+/-- An entry in the forward state queues. Represents a complete match. -/
 structure ForwardStateQueueEntry where
+  /-- The rule to which this match belongs. -/
   rule : RuleName
+  /-- The match. -/
   «match» : Match
+  /-- The rule's priority. -/
   prio : ForwardRulePriority
   deriving Inhabited
 
 namespace ForwardStateQueueEntry
 
-/- Int with higher number is worse-/
-/- Percentage with higher number is better-/
+/-- Compare two queue entries by rule priority. Higher-priority rules are
+considered less (since the queues are min-queues). -/
 protected def le (q₁ q₂ : ForwardStateQueueEntry) : Bool :=
   match q₁.prio, q₂.prio with
   | .normSafe x, .normSafe y => x ≤ y
@@ -520,9 +524,12 @@ protected def le (q₁ q₂ : ForwardStateQueueEntry) : Bool :=
 
 end ForwardStateQueueEntry
 
+/-- A complete match queue. -/
 abbrev ForwardStateQueue :=
   BinomialHeap ForwardStateQueueEntry ForwardStateQueueEntry.le
 
+/-- State representing the (partial or complete) matches of a given set of
+forward rules in a given local context. -/
 structure ForwardState where
   /-- Map from each rule's `RuleName` to it's `RuleState`-/
   ruleStates : PHashMap RuleName RuleState
@@ -541,6 +548,9 @@ structure ForwardState where
 
 namespace ForwardState
 
+/-- Add a hypothesis to the forward state. If `fs` represents a local context
+`lctx`, then `fs.addHyp h ms` represents `lctx` with `h` added. `ms` must
+overapproximate the rules for which `h` may unify with a maximal premise. -/
 def addHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : MetaM ForwardState := do
   let mut fs := fs
@@ -562,6 +572,9 @@ where
     | .safe   => { fs with safeQueue := fs.safeQueue.insert queueEntry }
     | .unsafe => { fs with unsafeQueue := fs.unsafeQueue.insert queueEntry }
 
+/-- Remove a hypothesis from the forward state. If `fs` represents a local
+context `lctx`, then `fs.eraseHyp h ms` represents `lctx` with `h` removed. `ms`
+must contain all rules for which `h` may unify with a maximal premise. -/
 def eraseHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : ForwardState := Id.run do
   let mut fs := { fs with erasedHyps := fs.erasedHyps.insert h }
@@ -576,6 +589,7 @@ def eraseHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     }
   return fs
 
+/-- Build the proof corresponding to the complete match contained in `entry`. -/
 def reconstructQueueEntry (entry : ForwardStateQueueEntry) (fs : ForwardState) :
     Expr := Id.run do
   let some rs := fs.ruleStates.find? entry.rule
@@ -593,14 +607,17 @@ private partial def popFirstMatch? (fs : ForwardState)
     else
       (fs.reconstructQueueEntry entry, queue)
 
+/-- Get a proof for the first complete match of a norm rule. -/
 def popFirstNormMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
   fs.popFirstMatch? fs.normQueue
     |>.map λ (e, q) => (e, { fs with normQueue := q })
 
+/-- Get a proof for the first complete match of a safe rule. -/
 def popFirstSafeMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
   fs.popFirstMatch? fs.safeQueue
     |>.map λ (e, q) => (e, { fs with safeQueue := q })
 
+/-- Get a proof for the first complete match of an unsafe rule. -/
 def popFirstUnsafeMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
   fs.popFirstMatch? fs.unsafeQueue
     |>.map λ (e, q) => (e, { fs with unsafeQueue := q })
