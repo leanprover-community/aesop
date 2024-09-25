@@ -173,7 +173,7 @@ instantiation of `var` given by the map's substitution. -/
 def insertMatch (imap : InstMap) (var : MVarId) (m : Match) :
     InstMap := Id.run do
   let some inst := m.subst.find? var
-    | panic! "variable {var.name} is not assigned in substitution"
+    | panic! s!"variable {var.name} is not assigned in substitution"
   imap.insertMatchCore m.level inst m
 
 /-- Remove `hyp` from slots starting at `slot`. For each mapping
@@ -582,7 +582,7 @@ def eraseHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     let some rs := fs.ruleStates.find? r.name
       | continue
     let some slot := rs.slots.find? (·.premiseIndex == i)
-      | panic! "no slot with hyp index {i} for rule {r.name}"
+      | panic! s!"no slot with hyp index {i} for rule {r.name}"
     let variableMap := rs.variableMap.eraseHyp h slot.index
     fs := { fs with
       ruleStates := fs.ruleStates.insert r.name { rs with variableMap }
