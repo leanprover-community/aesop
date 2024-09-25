@@ -475,17 +475,17 @@ structure ForwardIndex where
 
 namespace ForwardIndex
 
-/- Insert the input hypotheses (and only the input hypotheses) of the rule in the index. -/
-def insert (r : ForwardRule) (idx : ForwardIndex) : MetaM ForwardIndex := do
-  let type ← inferType r.expr
+/-- Insert a forward rule into the `ForwardIndex`. -/
+def insert (r : ForwardRule) (idx : ForwardIndex) : MetaM ForwardIndex :=
   withReducible do
+    let type ← inferType r.expr
     forallTelescopeReducing type λ args _ => do
-      let args ← args.mapM fun expr : Expr => do
-        let type ← expr.mvarId!.getType
-        let deps ← getMVars type
-        return (expr, HashSet.ofArray deps)
+      let args ← args.mapM fun e => do
+        let type ← inferType e
+        let deps ← getMVarsNoDelayed type
+        return (e, HashSet.ofArray deps)
       let mut tree := idx.tree
-      let mut previousDeps : HashSet MVarId := HashSet.empty
+      let mut previousDeps : HashSet MVarId := ∅
       for h : i in [:args.size] do
         let (arg, deps) := args[i]
         previousDeps := previousDeps.insertMany deps
@@ -493,6 +493,9 @@ def insert (r : ForwardRule) (idx : ForwardIndex) : MetaM ForwardIndex := do
           tree ← tree.insert arg (r, ⟨i⟩) discrTreeConfig
       return ⟨tree⟩
 
+/-- Get the forward rules whose maximal premises likely unify with `e`.
+Each returned pair `(r, i)` contains a rule `r` and the index `i` of the premise
+of `r` that likely unifies with `e`. -/
 def get (idx : ForwardIndex) (e : Expr) :
     MetaM (Array (ForwardRule × PremiseIndex)) :=
   idx.tree.getUnify e discrTreeConfig
