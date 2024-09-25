@@ -524,12 +524,19 @@ abbrev ForwardStateQueue :=
   BinomialHeap ForwardStateQueueEntry ForwardStateQueueEntry.le
 
 structure ForwardState where
-  /-- Map from the rule's `RuleName` to it's `RuleState`-/
+  /-- Map from each rule's `RuleName` to it's `RuleState`-/
   ruleStates : PHashMap RuleName RuleState
-  /-- Queues of complete matches. -/
+  /-- Queue of complete matches for norm rules. -/
   normQueue : ForwardStateQueue
+  /-- Queue of complete matches for safe rules. -/
   safeQueue : ForwardStateQueue
+  /-- Queue of complete matches for unsafe rules. -/
   unsafeQueue : ForwardStateQueue
+  /-- Hypotheses that were removed from the local context. Matches containing
+  such hyps are not removed from the complete match queues. Instead, they are
+  added to this set and when a match is popped from the queues, we check whether
+  it contains any removed hyps. -/
+  erasedHyps : PHashSet FVarId
  deriving Inhabited
 
 namespace ForwardState
@@ -555,10 +562,9 @@ where
     | .safe   => { fs with safeQueue := fs.safeQueue.insert queueEntry }
     | .unsafe => { fs with unsafeQueue := fs.unsafeQueue.insert queueEntry }
 
-/- TODO: also update the queues -/
 def removeHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : ForwardState := Id.run do
-  let mut fs := fs
+  let mut fs := { fs with erasedHyps := fs.erasedHyps.insert h }
   for (r, i) in ms do
     let some rs := fs.ruleStates.find? r.name
       | continue
@@ -576,22 +582,27 @@ def reconstructQueueEntry (entry : ForwardStateQueueEntry) (fs : ForwardState) :
     | panic! s!"no rule state found for rule {entry.rule}"
   rs.reconstruct entry.match
 
-def popFirstNormMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
-  match fs.normQueue.deleteMin with
+@[inline]
+private partial def popFirstMatch? (fs : ForwardState)
+    (queue : ForwardStateQueue) : Option (Expr × ForwardStateQueue) :=
+  match queue.deleteMin with
   | none => none
-  | some (entry, normQueue) =>
-    (fs.reconstructQueueEntry entry, { fs with normQueue })
+  | some (entry, queue) =>
+    if entry.match.revHyps.any (fs.erasedHyps.contains ·) then
+      popFirstMatch? fs queue
+    else
+      (fs.reconstructQueueEntry entry, queue)
+
+def popFirstNormMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
+  fs.popFirstMatch? fs.normQueue
+    |>.map λ (e, q) => (e, { fs with normQueue := q })
 
 def popFirstSafeMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
-  match fs.safeQueue.deleteMin with
-  | none => none
-  | some (entry, safeQueue) =>
-    (fs.reconstructQueueEntry entry, { fs with safeQueue })
+  fs.popFirstMatch? fs.safeQueue
+    |>.map λ (e, q) => (e, { fs with safeQueue := q })
 
 def popFirstUnsafeMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
-  match fs.unsafeQueue.deleteMin with
-  | none => none
-  | some (entry, unsafeQueue) =>
-    (fs.reconstructQueueEntry entry, { fs with unsafeQueue })
+  fs.popFirstMatch? fs.unsafeQueue
+    |>.map λ (e, q) => (e, { fs with unsafeQueue := q })
 
 end Aesop.ForwardState
