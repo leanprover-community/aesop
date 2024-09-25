@@ -88,6 +88,43 @@ structure Slot where
   premiseIndex : PremiseIndex
   deriving Inhabited
 
+structure ForwardRuleInfo where
+  metaState : Meta.SavedState
+  premises : Array MVarId
+  slots : Array Slot
+  deriving Nonempty
+
+namespace ForwardRuleInfo
+
+/-- Construct a `ForwardRuleInfo` for the theorem `thm`. -/
+def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
+  let e ← inferType thm
+  let (premises, _, _) ← forallMetaTelescope e
+  let premises := premises.map (·.mvarId!)
+  let metaState ← saveState
+  let mut slots := Array.mkEmpty premises.size
+  let mut previousDeps := HashSet.empty
+  for h : i in [:premises.size] do
+    let mvarId := premises[i]
+    let deps := HashSet.ofArray (← getMVars (← inferType e))
+    let common := HashSet.filter deps (previousDeps.contains ·)
+    -- We update `index = 0` with correct ordering later (see *)
+    slots := slots.push {
+      index := ⟨0⟩
+      premiseIndex := ⟨i⟩
+      mvarId, deps, common
+    }
+    previousDeps := previousDeps.insertMany deps
+  -- Slots are created only for premises which do not appear in any other
+  -- premises.
+  slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
+  -- (*)
+  slots := slots.mapIdx fun index current => { current with index := ⟨index⟩ }
+  return { premises, slots, metaState }
+
+
+end ForwardRuleInfo
+
 /-- A substitution maps premise metavariables to assignments. -/
 abbrev Substitution := AssocList MVarId Expr
 
@@ -284,53 +321,12 @@ where
 end VariableMap
 
 /-- Structure representing the state of one forward rule. -/
-structure RuleState where
-  /-- Expression of the associated theorem. -/
-  expr : Expr
-  /-- Meta state in which slots, args and conclusion are valid-/
-  metaState : Meta.SavedState
-  /-- Metavariables representing the theorem's premises. -/
-  premises : Array MVarId
-  /-- Conclusion of the theorem. -/
-  conclusion : Expr
-  /-- Slots representing each of the maximal premises. For each index `i` of
-  `slots`, `slots[i].index = i`. -/
-  slots : Array Slot
+structure RuleState extends ForwardRuleInfo where
   /-- Variable map. -/
   variableMap : VariableMap
   deriving Nonempty
 
 namespace RuleState
-
-/-- Construct a `RuleState` for the theorem `thm`. -/
-def ofExpr (thm : Expr) : MetaM RuleState := withoutModifyingState do
-  let e ← inferType thm
-  let ⟨premises, _, conclusion⟩ ← forallMetaTelescope e
-  let premises := premises.map (·.mvarId!)
-  let metaState ← saveState
-  let mut slots := Array.mkEmpty premises.size
-  let mut previousDeps := HashSet.empty
-  for h : i in [:premises.size] do
-    let mvarId := premises[i]
-    let deps := HashSet.ofArray (← getMVars (← inferType e))
-    let common := HashSet.filter deps (previousDeps.contains ·)
-    -- We update `index = 0` with correct ordering later (see *)
-    slots := slots.push {
-      index := ⟨0⟩
-      premiseIndex := ⟨i⟩
-      mvarId, deps, common
-    }
-    previousDeps := previousDeps.insertMany deps
-  -- Slots are created only for premises which do not appear in any other
-  -- premises.
-  slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
-  -- (*)
-  slots := slots.mapIdx fun index current => { current with index := ⟨index⟩ }
-  return {
-    expr := thm
-    variableMap := ∅
-    premises, slots, metaState, conclusion
-  }
 
 /-- Get the slot with the given index. Panic if the index is invalid. -/
 @[macro_inline]
@@ -360,28 +356,6 @@ def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
       return subst
     else
       return none
-
-/-- Given a complete match `m` for `rs`, produce an application of the theorem
-`rs.expr` to the hypotheses from `m`. -/
-def reconstruct (rs : RuleState) (m : Match) : Expr := Id.run do
-  let hyps := m.revHyps.toArray.reverse
-  if hyps.size != rs.slots.size then
-    panic! s!"match is not complete; slots: {rs.slots.size}; match hyps: {hyps.size}"
-  let slots :=
-    rs.slots.qsort (λ s₁ s₂ => s₁.premiseIndex < s₂.premiseIndex) |>.zip hyps
-  let mut args := Array.mkEmpty rs.premises.size
-  let mut slotIdx := 0
-  for h : i in [:rs.premises.size] do
-    if let some (slot, hyp) := slots[slotIdx]? then
-      if slot.premiseIndex.toNat == i then
-        args := args.push (.fvar hyp)
-        slotIdx := slotIdx + 1
-        continue
-    let premise := rs.premises[i]
-    let some inst := m.subst.find? premise
-      | panic! s!"no hyp or instantiation for premise {premise.name}"
-    args := args.push inst
-  return mkAppN rs.expr args
 
 /-- Add a match to the rule state. -/
 -- This function is just `partial`, but Lean doesn't realise that the return
@@ -449,11 +423,13 @@ inductive ForwardRulePriority : Type where
   | «unsafe» (p : Percent) : ForwardRulePriority
   deriving Inhabited
 
-structure ForwardRule where
+structure ForwardRule extends ForwardRuleInfo where
   name : RuleName
   expr : Expr
   prio : ForwardRulePriority
-  deriving Inhabited
+  deriving Nonempty
+
+namespace ForwardRule
 
 instance : BEq ForwardRule :=
   ⟨λ r₁ r₂ => r₁.name == r₂.name⟩
@@ -463,6 +439,33 @@ instance : Hashable ForwardRule :=
 
 instance : Ord ForwardRule :=
   ⟨λ r₁ r₂ => compare r₁.name r₂.name⟩
+
+def initialRuleState (r : ForwardRule) : RuleState :=
+  { r.toForwardRuleInfo with variableMap := ∅ }
+
+/-- Given a complete match `m` for `r`, produce an application of the theorem
+`r.expr` to the hypotheses from `m`. -/
+def reconstruct (r : ForwardRule) (m : Match) : Expr := Id.run do
+  let hyps := m.revHyps.toArray.reverse
+  if hyps.size != r.slots.size then
+    panic! s!"match is not complete; slots: {r.slots.size}; match hyps: {hyps.size}"
+  let slots :=
+    r.slots.qsort (λ s₁ s₂ => s₁.premiseIndex < s₂.premiseIndex) |>.zip hyps
+  let mut args := Array.mkEmpty r.premises.size
+  let mut slotIdx := 0
+  for h : i in [:r.premises.size] do
+    if let some (slot, hyp) := slots[slotIdx]? then
+      if slot.premiseIndex.toNat == i then
+        args := args.push (.fvar hyp)
+        slotIdx := slotIdx + 1
+        continue
+    let premise := r.premises[i]
+    let some inst := m.subst.find? premise
+      | panic! s!"no hyp or instantiation for premise {premise.name}"
+    args := args.push inst
+  return mkAppN r.expr args
+
+end ForwardRule
 
 /--
 Maps expressions `T` to all tuples `(r, i)` where `r : ForwardRule`,
@@ -505,22 +508,24 @@ end ForwardIndex
 /-- An entry in the forward state queues. Represents a complete match. -/
 structure ForwardStateQueueEntry where
   /-- The rule to which this match belongs. -/
-  rule : RuleName
+  rule : ForwardRule
   /-- The match. -/
   «match» : Match
-  /-- The rule's priority. -/
-  prio : ForwardRulePriority
-  deriving Inhabited
+  deriving Nonempty
 
 namespace ForwardStateQueueEntry
 
 /-- Compare two queue entries by rule priority. Higher-priority rules are
 considered less (since the queues are min-queues). -/
 protected def le (q₁ q₂ : ForwardStateQueueEntry) : Bool :=
-  match q₁.prio, q₂.prio with
+  match q₁.rule.prio, q₂.rule.prio with
   | .normSafe x, .normSafe y => x ≤ y
   | .unsafe x, .unsafe y => x ≥ y
   | _, _ => panic! "comparing QueueEntries with different priority types"
+
+/-- Build the proof corresponding to the complete match contained in `entry`. -/
+def toProof (entry : ForwardStateQueueEntry) : Expr := Id.run do
+  entry.rule.reconstruct entry.match
 
 end ForwardStateQueueEntry
 
@@ -555,7 +560,7 @@ def addHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : MetaM ForwardState := do
   let mut fs := fs
   for (r, i) in ms do
-    let rs ← fs.ruleStates.find? r.name |>.getDM (RuleState.ofExpr r.expr)
+    let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState
     let some slot := rs.slots.find? (·.premiseIndex == i)
       | throwError "addHypothesis: internal error: no slot with hyp index {i} for rule {r.name}"
     let (rs, fullMatches) ← rs.addHyp slot h
@@ -566,7 +571,7 @@ def addHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
 where
   addFullMatch («match» : Match) (r : ForwardRule) (fs : ForwardState) :
       ForwardState :=
-    let queueEntry := { rule := r.name, «match», prio := r.prio }
+    let queueEntry := { rule := r, «match» }
     match r.name.phase with
     | .norm   => { fs with normQueue := fs.normQueue.insert queueEntry }
     | .safe   => { fs with safeQueue := fs.safeQueue.insert queueEntry }
@@ -589,13 +594,6 @@ def eraseHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     }
   return fs
 
-/-- Build the proof corresponding to the complete match contained in `entry`. -/
-def reconstructQueueEntry (entry : ForwardStateQueueEntry) (fs : ForwardState) :
-    Expr := Id.run do
-  let some rs := fs.ruleStates.find? entry.rule
-    | panic! s!"no rule state found for rule {entry.rule}"
-  rs.reconstruct entry.match
-
 @[inline]
 private partial def popFirstMatch? (fs : ForwardState)
     (queue : ForwardStateQueue) : Option (Expr × ForwardStateQueue) :=
@@ -605,7 +603,7 @@ private partial def popFirstMatch? (fs : ForwardState)
     if entry.match.revHyps.any (fs.erasedHyps.contains ·) then
       popFirstMatch? fs queue
     else
-      (fs.reconstructQueueEntry entry, queue)
+      (entry.toProof, queue)
 
 /-- Get a proof for the first complete match of a norm rule. -/
 def popFirstNormMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
