@@ -179,7 +179,7 @@ def insertMatch (imap : InstMap) (var : MVarId) (m : Match) :
 /-- Remove `hyp` from slots starting at `slot`. For each mapping
 `s ↦ e ↦ (ms, hs)` in `imap`, if `s ≥ slot`, then `hyp` is removed from `hs` and
 any matches containing `hyp` are removed from `ms`. -/
-def removeHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id.run do
+def eraseHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id.run do
   let mut imaps := imap.map
   let nextSlots : List SlotIndex :=
     imap.map.foldl (init := []) λ acc slot' _ =>
@@ -238,9 +238,9 @@ def addMatch (vmap : VariableMap) (nextSlot : Slot) (m : Match) :
     vmap.modify var (·.insertMatch var m)
 
 /-- Remove a hyp from `slot` and all following slots. -/
-def removeHyp (vmap : VariableMap) (hyp : FVarId) (slot : SlotIndex) :
+def eraseHyp (vmap : VariableMap) (hyp : FVarId) (slot : SlotIndex) :
     VariableMap :=
-  ⟨vmap.map.map (·.removeHyp hyp slot)⟩
+  ⟨vmap.map.map (·.eraseHyp hyp slot)⟩
 
 /-- Find matches in slot `slot - 1` whose substitutions are compatible with
 `subst`. Preconditions: `slot.index` is nonzero, `slot.common` is nonempty and
@@ -562,7 +562,7 @@ where
     | .safe   => { fs with safeQueue := fs.safeQueue.insert queueEntry }
     | .unsafe => { fs with unsafeQueue := fs.unsafeQueue.insert queueEntry }
 
-def removeHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
+def eraseHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : ForwardState := Id.run do
   let mut fs := { fs with erasedHyps := fs.erasedHyps.insert h }
   for (r, i) in ms do
@@ -570,7 +570,7 @@ def removeHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
       | continue
     let some slot := rs.slots.find? (·.premiseIndex == i)
       | panic! "no slot with hyp index {i} for rule {r.name}"
-    let variableMap := rs.variableMap.removeHyp h slot.index
+    let variableMap := rs.variableMap.eraseHyp h slot.index
     fs := { fs with
       ruleStates := fs.ruleStates.insert r.name { rs with variableMap }
     }
