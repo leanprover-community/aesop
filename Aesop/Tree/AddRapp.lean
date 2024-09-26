@@ -19,20 +19,6 @@ structure AddRapp extends RuleApplication where
   appliedRule : RegularRule
   successProbability : Percent
 
-private def clusterGoals (goals : Array Goal) : Array (Array Goal) := Id.run do
-  let mut clusters := UnionFind.ofArray goals
-  let mut mvarOccs : Std.HashMap MVarId (Array Goal) := {}
-  for g in goals do
-    for m in g.mvars do
-      match mvarOccs[m]? with
-      | some otherOccs =>
-        for g' in otherOccs do
-          clusters := clusters.merge g g'
-        mvarOccs := mvarOccs.insert m (otherOccs.push g)
-      | none =>
-        mvarOccs := mvarOccs.insert m #[g]
-  return clusters.sets.fst
-
 private def findPathForAssignedMVars (assignedMVars : UnorderedArraySet MVarId)
     (start : GoalRef) : TreeM (Array RappRef × Std.HashSet GoalId) := do
   if assignedMVars.isEmpty then
@@ -223,7 +209,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
 
   -- Construct the new mvar clusters.
   let crefs : Array MVarClusterRef ←
-    clusterGoals subgoals |>.mapM λ gs => do
+    cluster (·.mvars.toArray) subgoals |>.mapM λ gs => do
       let grefs ← gs.mapM (IO.mkRef ·)
       let cref ← IO.mkRef $ MVarCluster.mk {
         parent? := some rref
