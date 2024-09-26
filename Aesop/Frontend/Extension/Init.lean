@@ -26,11 +26,11 @@ structure DeclaredRuleSets where
   name of the associated `SimpExtension` and the name of the associated
   `SimprocExtension`. The two simp extensions are expected to be declared.
   -/
-  ruleSets : HashMap RuleSetName (RuleSetExtension × Name × Name)
+  ruleSets : Std.HashMap RuleSetName (RuleSetExtension × Name × Name)
   /--
   The set of Aesop rule sets that are enabled by default.
   -/
-  defaultRuleSets : HashSet RuleSetName
+  defaultRuleSets : Std.HashSet RuleSetName
   deriving Inhabited
 
 instance : EmptyCollection DeclaredRuleSets :=
@@ -39,10 +39,10 @@ instance : EmptyCollection DeclaredRuleSets :=
 initialize declaredRuleSetsRef : IO.Ref DeclaredRuleSets ←
   IO.mkRef ∅
 
-def getDeclaredRuleSets : IO (HashMap RuleSetName (RuleSetExtension × Name × Name)) :=
+def getDeclaredRuleSets : IO (Std.HashMap RuleSetName (RuleSetExtension × Name × Name)) :=
   return (← declaredRuleSetsRef.get).ruleSets
 
-def getDefaultRuleSetNames : IO (HashSet Name) :=
+def getDefaultRuleSetNames : IO (Std.HashSet Name) :=
   return (← declaredRuleSetsRef.get).defaultRuleSets
 
 end Aesop

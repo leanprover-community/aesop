@@ -15,67 +15,40 @@ structure StatsExtensionEntry where
   The Aesop call for which stats were collected.
   -/
   aesopStx : Syntax
+  /-
+  The file in which Aesop was called.
+  -/
+  fileName : String
+  /-
+  The position in the file where Aesop was called.
+  -/
+  position? : Option Position
   /--
   The collected stats.
   -/
   stats : Stats
 
-abbrev StatsArray := Array StatsExtensionEntry
+namespace StatsExtensionEntry
 
-structure StatsExtensionState where
-  /--
-  Entries for Aesop calls in the current module.
-  -/
-  currentEntries : List StatsExtensionEntry
-  /--
-  The size of `currentEntries`.
-  -/
-  currentEntriesSize : Nat
-  /--
-  Entries for Aesop calls in imported modules.
-  -/
-  importedEntries : Array (Array StatsExtensionEntry)
-  deriving Inhabited
+def forCurrentFile [Monad m] [MonadLog m] (stx : Syntax) (stats : Stats) :
+    m StatsExtensionEntry := do
+  let fileName ← getFileName
+  let fileMap ← getFileMap
+  let position? := stx.getPos?.map fileMap.toPosition
+  return { aesopStx := stx, stats, fileName, position? }
 
-namespace StatsExtensionState
+end StatsExtensionEntry
 
-def toStatsArray (s : StatsExtensionState) : StatsArray := Id.run do
-  let mut size := s.currentEntriesSize
-  for entries in s.importedEntries do
-    size := size + entries.size
-  let mut result := Array.mkEmpty size
-  for entry in s.currentEntries do
-    result := result.push entry
-  for entries in s.importedEntries do
-    result := result ++ entries
-  return result
+abbrev StatsExtension := SimplePersistentEnvExtension StatsExtensionEntry Unit
 
-protected def empty : StatsExtensionState where
-  currentEntries := ∅
-  currentEntriesSize := 0
-  importedEntries := ∅
-
-instance : EmptyCollection StatsExtensionState :=
-  ⟨.empty⟩
-
-end StatsExtensionState
-
-abbrev StatsExtension :=
-  PersistentEnvExtension StatsExtensionEntry StatsExtensionEntry
-    StatsExtensionState
+def StatsExtension.importedEntries (env : Environment) (ext : StatsExtension) :
+    Array (Array StatsExtensionEntry) :=
+  ext.toEnvExtension.getState env |>.importedEntries
 
 initialize statsExtension : StatsExtension ←
-  registerPersistentEnvExtension {
-    addEntryFn := λ state entry => { state with
-      currentEntries := entry :: state.currentEntries
-      currentEntriesSize := state.currentEntriesSize + 1
-    }
-    addImportedFn := λ importedEntries =>
-      return { StatsExtensionState.empty with importedEntries }
-    mkInitial := return ∅
-    exportEntriesFn := λ state =>
-      state.currentEntries.foldl (init := Array.mkEmpty state.currentEntriesSize)
-        λ entries e => entries.push e
+  registerSimplePersistentEnvExtension {
+    addEntryFn := λ _ _ => ()
+    addImportedFn := λ _ => ()
   }
 
 def recordStatsIfEnabled [Monad m] [MonadEnv m] [MonadOptions m]
@@ -83,7 +56,28 @@ def recordStatsIfEnabled [Monad m] [MonadEnv m] [MonadOptions m]
   if ← isStatsCollectionEnabled then
     modifyEnv λ env => statsExtension.addEntry env s
 
-def getStatsArray [Monad m] [MonadEnv m] : m StatsArray:= do
-  return statsExtension.getState (← getEnv) |>.toStatsArray
+def recordStatsForCurrentFileIfEnabled [Monad m] [MonadEnv m] [MonadOptions m]
+    [MonadLog m] (aesopStx : Syntax) (stats : Stats) : m Unit := do
+  if ← isStatsCollectionEnabled then
+    let entry ← StatsExtensionEntry.forCurrentFile aesopStx stats
+    modifyEnv λ env => statsExtension.addEntry env entry
+
+abbrev StatsArray := Array StatsExtensionEntry
+
+def mkStatsArray (localEntries : List StatsExtensionEntry)
+    (importedEntries : Array (Array StatsExtensionEntry)) :
+    StatsArray := Id.run do
+  let mut result := #[]
+  for entry in localEntries do
+    result := result.push entry
+  for entries in importedEntries do
+    result := result ++ entries
+  return result
+
+def getStatsArray [Monad m] [MonadEnv m] : m StatsArray := do
+  let env ← getEnv
+  let current := statsExtension.getEntries env
+  let imported := statsExtension.importedEntries env
+  return mkStatsArray current imported
 
 end Aesop

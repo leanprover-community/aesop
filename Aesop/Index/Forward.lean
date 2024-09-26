@@ -6,6 +6,7 @@ Authors: Xavier Généreux, Jannis Limperg
 
 import Aesop.Rule.Forward
 import Aesop.Index.Basic
+import Batteries.Lean.Meta.DiscrTree
 
 open Lean Lean.Meta
 

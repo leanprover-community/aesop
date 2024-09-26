@@ -4,9 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Frontend.Attribute
 import Aesop.Frontend.RuleExpr
 import Aesop.Options
+import Batteries.Linter.UnreachableTactic
+import Aesop.Frontend.Extension
 
 open Lean
 open Lean.Meta
@@ -57,6 +58,10 @@ syntax (name := aesopTactic)  "aesop"  Aesop.tactic_clause* : tactic
 @[inherit_doc aesopTactic]
 syntax (name := aesopTactic?) "aesop?" Aesop.tactic_clause* : tactic
 
+initialize do
+  Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``aesopTactic
+  Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``aesopTactic?
+
 end Parser
 
 -- Inspired by declare_config_elab
@@ -80,7 +85,7 @@ def elabSimpConfigCtx : Syntax → TermElabM Simp.ConfigCtx :=
 structure TacticConfig where
   additionalRules : Array RuleExpr
   erasedRules : Array RuleExpr
-  enabledRuleSets : HashSet RuleSetName
+  enabledRuleSets : Std.HashSet RuleSetName
   options : Aesop.Options
   simpConfig : Simp.Config
   simpConfigSyntax? : Option Term

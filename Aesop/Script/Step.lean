@@ -8,6 +8,7 @@ import Aesop.Util.EqualUpToIds
 import Aesop.Script.Tactic
 import Aesop.Script.TacticState
 import Aesop.Script.Util
+import Aesop.Tracing
 import Batteries.Tactic.PermuteGoals
 
 open Lean Lean.Meta
@@ -109,20 +110,28 @@ structure LazyStep where
 namespace LazyStep
 
 def runFirstSuccessfulTacticBuilder (s : LazyStep) : MetaM Tactic := do
-  let initialState ← saveState
-  for b in s.tacticBuilders[:s.tacticBuilders.size - 1] do
-    let tactic ← b
-    let tacticResult ← observing? do
-      runTacticCapturingPostState tactic.uTactic s.preState [s.preGoal]
-    if let some (actualPostState, actualPostGoals) := tacticResult then
-      let actualPostGoals := actualPostGoals.toArray
-      let matchResult? ←
-        matchGoals s.postState actualPostState s.postGoals actualPostGoals
-      if matchResult?.isSome then
+  withConstAesopTraceNode .script (return m!"converting lazy step to step") do
+    let initialState ← saveState
+    for b in s.tacticBuilders[:s.tacticBuilders.size - 1] do
+      if let some tactic ← tryTacticBuilder b then
         return tactic
-    initialState.restore
-  have := s.tacticBuilders_ne
-  s.tacticBuilders[s.tacticBuilders.size - 1]
+      initialState.restore
+    have := s.tacticBuilders_ne
+    let fallback ← s.tacticBuilders[s.tacticBuilders.size - 1]
+    aesop_trace[script] "fallback: {fallback}"
+    return fallback
+where
+  tryTacticBuilder (b : TacticBuilder) : MetaM (Option Tactic) := do
+    let tactic ← b
+    withAesopTraceNode .script (λ res => return m!"{exceptOptionEmoji res} {tactic}") do
+      let tacticResult ← observing? do
+        runTacticCapturingPostState tactic.uTactic s.preState [s.preGoal]
+      let some (actualPostState, actualPostGoals) := tacticResult
+        | return none
+      let actualPostGoals := actualPostGoals.toArray
+      let some _ ← matchGoals s.postState actualPostState s.postGoals actualPostGoals
+        | return none
+      return tactic
 
 def toStep (s : LazyStep) : MetaM Step :=
   s.postState.runMetaM' do

@@ -38,16 +38,25 @@ end RuleStats
 
 inductive ScriptGenerated
   | none
-  | staticallyStructured (perfect : Bool)
-  | dynamicallyStructured (perfect : Bool)
+  | staticallyStructured (perfect : Bool) (hasMVar : Bool)
+  | dynamicallyStructured (perfect : Bool) (hasMVar : Bool)
   deriving Inhabited
 
-def ScriptGenerated.toString : ScriptGenerated → String
+namespace ScriptGenerated
+
+protected def toString : ScriptGenerated → String
   | none => "no"
-  | staticallyStructured perfect => s!"with {go perfect} static structuring"
-  | dynamicallyStructured perfect => s!"with {go perfect} dynamic structuring"
+  | staticallyStructured perfect _ => s!"with {go perfect} static structuring"
+  | dynamicallyStructured perfect _ => s!"with {go perfect} dynamic structuring"
 where
   go b := if b then "perfect" else "imperfect"
+
+def isNontrivial : ScriptGenerated → Bool
+  | none => false
+  | staticallyStructured  (hasMVar := hasMVar) ..
+  | dynamicallyStructured (hasMVar := hasMVar) .. => hasMVar
+
+end ScriptGenerated
 
 structure Stats where
   total : Nanos
@@ -116,10 +125,10 @@ end RuleStatsTotals
 namespace Stats
 
 def ruleStatsTotals (p : Stats)
-    (init : HashMap DisplayRuleName RuleStatsTotals := ∅) :
-    HashMap DisplayRuleName RuleStatsTotals :=
+    (init : Std.HashMap DisplayRuleName RuleStatsTotals := ∅) :
+    Std.HashMap DisplayRuleName RuleStatsTotals :=
   p.ruleStats.foldl (init := init) λ m rp => Id.run do
-    let mut stats := m.findD rp.rule ∅
+    let mut stats := m.getD rp.rule ∅
     if rp.successful then
       stats := { stats with
         numSuccessful := stats.numSuccessful + 1

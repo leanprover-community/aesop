@@ -9,6 +9,8 @@ import Aesop.RulePattern
 import Aesop.Rule.Basic
 import Aesop.Tracing
 import Batteries.Lean.Meta.InstantiateMVars
+import Batteries.Lean.PersistentHashSet
+import Batteries.Lean.Meta.DiscrTree
 
 open Lean
 open Lean.Meta
@@ -155,9 +157,9 @@ def applicableRules (ri : Index α) (goal : MVarId)
   let patternInstsMap ← matchRulePatterns patterns goal
   aesop_trace[debug] "found pattern instantiations:{indentD $ flip MessageData.joinSep "\n" $ patternInstsMap.toList.map λ (name, insts) => m!"{name}: {insts.toArray.map (·.toArray)}"}"
   return result.fold (init := Array.mkEmpty result.size) λ rs rule locs =>
-    let_fun locations := (∅ : HashSet _).insertMany locs
+    let_fun locations := (∅ : Std.HashSet _).insertMany locs
     if rule.pattern?.isSome then
-      if let some patternInstantiations := patternInstsMap.find? rule.name then
+      if let some patternInstantiations := patternInstsMap[rule.name]? then
         rs.push { rule, locations, patternInstantiations }
       else
         rs

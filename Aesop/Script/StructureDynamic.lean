@@ -42,7 +42,7 @@ Given a bijective map `map` from new `MVarId`s to old `MVarId`s, update the
 is replaced with an entry whose key is the corresponding new `MVarId`
 `map⁻¹ m`.
 -/
-def Context.updateMVarIds (c : Context) (map : HashMap MVarId MVarId) :
+def Context.updateMVarIds (c : Context) (map : Std.HashMap MVarId MVarId) :
     Context :=
   let steps := map.fold (init := c.steps) λ steps newMVarId oldMVarId =>
     if let (some step) := steps.find? oldMVarId then
@@ -79,8 +79,8 @@ structure DynStructureResult where
 
 partial def structureDynamicCore (preState : Meta.SavedState) (preGoal : MVarId)
     (uscript : UScript) : MetaM (Option (UScript × Bool)) :=
-  withAesopTraceNode .debug (λ r => return m!"{exceptOptionEmoji r} Dynamically structuring the script") do
-    aesop_trace[debug] "unstructured script:{indentD $ MessageData.joinSep (uscript.map toMessageData |>.toList) "\n"}"
+  withAesopTraceNode .script (λ r => return m!"{exceptOptionEmoji r} Dynamically structuring the script") do
+    aesop_trace[script] "unstructured script:{indentD $ MessageData.joinSep (uscript.map toMessageData |>.toList) "\n"}"
     let (result?, perfect) ← go preState #[preGoal] |>.run uscript
     let some result := result?
       | return none
@@ -92,15 +92,15 @@ where
     if h : 0 < preGoals.size then
       -- Try to apply the step for the main goal, then solve the remaining goals.
       let firstGoal := preGoals[0]
-      let result? ← withAesopTraceNode .debug (λ r => return m!"{exceptOptionEmoji r} Focusing main goal {firstGoal.name}") do
-        aesop_trace[debug] "goal: {firstGoal.name}{← preState.runMetaM' $ addMessageContext $ indentD firstGoal}"
+      let result? ← withAesopTraceNode .script (λ r => return m!"{exceptOptionEmoji r} Focusing main goal {firstGoal.name}") do
+        aesop_trace[script] "goal: {firstGoal.name}{← preState.runMetaM' $ addMessageContext $ indentD firstGoal}"
         goStructured preState preGoals preGoals[0]
       match result? with
       | some result => return result
       | none =>
         -- If this fails, apply the chronologically next step and solve the remaining goals.
         modify ({ · with perfect := false })
-        withAesopTraceNode .debug (λ r => return m!"{exceptOptionEmoji r} Applying step to chronologically first goal") do
+        withAesopTraceNode .script (λ r => return m!"{exceptOptionEmoji r} Applying step to chronologically first goal") do
           goUnstructured preState preGoals
     else
       return some { script := [], postState := preState }
@@ -117,26 +117,26 @@ where
     let firstStep? := findFirstStep? preGoals (steps[·]) (·.fst)
     let some (goalPos, goal, _, step) := firstStep?
       | throwError "aesop: internal error while structuring the script: no step for any of the visible goals{indentD $ ← goalsToMessageData preState preGoals}"
-    aesop_trace[debug] "goal: {goal.name}{← preState.runMetaM' $ addMessageContext $ indentD goal}"
+    aesop_trace[script] "goal: {goal.name}{← preState.runMetaM' $ addMessageContext $ indentD goal}"
     applyStepAndSolveRemaining preState preGoals goal goalPos step
 
   applyStepAndSolveRemaining (preState : Meta.SavedState)
       (preGoals : Array MVarId) (preGoal : MVarId) (goalPos : Nat)
       (step : Step) : DynStructureM (Option DynStructureResult) := do
-    aesop_trace[debug] "applying step:{indentD $ toMessageData step}"
-    aesop_trace[debug] "expected post goals:{indentD $ ← goalsToMessageData step.postState (step.postGoals.map (·.goal))}"
+    aesop_trace[script] "applying step:{indentD $ toMessageData step}"
+    aesop_trace[script] "expected post goals:{indentD $ ← goalsToMessageData step.postState (step.postGoals.map (·.goal))}"
     let (postState, postGoals) ←
       try
         runTacticCapturingPostState step.uTactic preState [preGoal]
       catch e =>
-        aesop_trace[debug] "tactic failed with error:{indentD e.toMessageData}"
+        aesop_trace[script] "tactic failed with error:{indentD e.toMessageData}"
         return none
     let postGoals := postGoals.toArray
     withUpdatedMVarIds step.postState postState (step.postGoals.map (·.goal)) postGoals
       (onFailure := do
-        aesop_trace[debug] "post goals don't match; actual post goals:{indentD $ ← goalsToMessageData postState postGoals}"
+        aesop_trace[script] "post goals don't match; actual post goals:{indentD $ ← goalsToMessageData postState postGoals}"
         return none) do
-      aesop_trace[debug] "post goals match"
+      aesop_trace[script] "post goals match"
       let postGoalsWithMVars ← postState.runMetaM' do
         postGoals.mapM λ goal =>
           return { goal, mvars := ← goal.getMVarDependencies }

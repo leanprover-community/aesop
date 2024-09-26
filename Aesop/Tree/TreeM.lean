@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Tree.RunMetaM
+import Aesop.Tree.Data
 
 open Lean
 open Lean.Meta
@@ -21,7 +21,7 @@ structure Tree where
   /--
   Union of the mvars introduced by all rapps.
   -/
-  allIntroducedMVars : HashSet MVarId
+  allIntroducedMVars : Std.HashSet MVarId
 
 def mkInitialTree (goal : MVarId) : MetaM Tree := do
   let rootClusterRef ← IO.mkRef $ MVarCluster.mk {
@@ -106,7 +106,7 @@ def incrementNumGoals (increment := 1) : TreeM Unit := do
 def incrementNumRapps (increment := 1) : TreeM Unit := do
   modify λ s => { s with numRapps := s.numRapps + increment }
 
-def getAllIntroducedMVars : TreeM (HashSet MVarId) :=
+def getAllIntroducedMVars : TreeM (Std.HashSet MVarId) :=
   return (← get).allIntroducedMVars
 
 def getAndIncrementNextGoalId : TreeM GoalId := do

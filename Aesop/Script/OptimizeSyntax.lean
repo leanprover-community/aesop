@@ -6,118 +6,72 @@ Authors: Jannis Limperg
 
 import Lean
 
-open Lean Lean.Meta
+namespace Aesop
 
-namespace Aesop.SyntaxMap
+open Lean Lean.Meta Lean.Parser.Tactic
 
-inductive Key where
-  | missing
-  | node (kind : SyntaxNodeKind)
-  | atom (val : String)
-  | ident (val : Name) -- TODO what about macro scopes in val?
-  deriving Inhabited, BEq, Hashable
+variable [Monad m] [MonadQuotation m]
 
-namespace Key
-
-instance : ToString Key where
-  toString
-    | missing => "missing"
-    | node kind => s!"node {kind}"
-    | atom val => s!"atom {val}"
-    | ident val => s!"ident {val}"
-
-def ofSyntax : Syntax → Key
-  | .missing => .missing
-  | .node (kind := kind) .. => node kind
-  | .atom (val := val) .. => atom val
-  | .ident (val := val) .. => ident val.eraseMacroScopes
-
-end SyntaxMap.Key
-
-structure SyntaxMap (α : Type _) where
-  toPHashMap : PHashMap SyntaxMap.Key α
-  deriving Inhabited
-
-structure SyntaxRewrite where
-  keys : Array SyntaxMap.Key
-  run : Syntax → CoreM (Option Syntax)
-  deriving Inhabited
-
-namespace SyntaxMap
-
-protected def empty : SyntaxMap α :=
-  ⟨.empty⟩
-
-instance : EmptyCollection (SyntaxMap α) :=
-  ⟨.empty⟩
-
-def find? (key : Key) (m : SyntaxMap α) : Option α :=
-  m.toPHashMap.find? key
-
-def findStx? (stx : Syntax) (m : SyntaxMap α) : Option α :=
-  m.find? $ Key.ofSyntax stx
-
-def insert (key : Key) (val : α) (m : SyntaxMap α) : SyntaxMap α :=
-  ⟨m.toPHashMap.insert key val⟩
-
-@[macro_inline]
-def insertWith (key : Key) (a : α) (f : α → α) (m : SyntaxMap α) : SyntaxMap α :=
-  match m.find? key with
-  | some a' => m.insert key (f a')
-  | none => m.insert key a
-
-end SyntaxMap
-
-abbrev SyntaxRewriteMap := SyntaxMap (List SyntaxRewrite)
-
-namespace SyntaxRewriteMap
-
-def insert (rw : SyntaxRewrite) (m : SyntaxRewriteMap) : SyntaxRewriteMap :=
-  rw.keys.foldl (init := m) λ m key => m.insertWith key [rw] (rw :: ·)
-
-end SyntaxRewriteMap
-
-partial def optimizeSyntaxWith (rws : SyntaxRewriteMap) (stx : Syntax) :
-    CoreM Syntax := do
-  go stx
-where
-  go (stx : Syntax) : CoreM Syntax := withIncRecDepth do
+partial def optimizeFocusRenameI : Syntax → m Syntax
+  | stx@.missing | stx@(.atom ..) | stx@(.ident ..) => return stx
+  | .node info kind args => do
+    let stx := .node info kind (← args.mapM optimizeFocusRenameI)
     match stx with
-    | .missing => return .missing
-    | .node info kind args =>
-      let args ← args.mapM go
-      optimizeHead $ .node info kind args
-    | .atom .. | .ident .. => optimizeHead stx
-
-  optimizeHead (stx : Syntax) : CoreM Syntax := do
-    let mut stx := stx
-    while true do
-      let some rws := rws.findStx? stx
-        | return stx
-      let some stx' ← rws.findSomeM? (·.run stx)
-        | return stx
-      stx := stx'
-    return stx
-
-def SyntaxRewrite.focusRenameI : SyntaxRewrite where
-  keys :=
-    let keyStxs := #[`(tactic| · simp), `(tactic| · { })] -- HACK
-    keyStxs.map λ stx => .ofSyntax (Unhygienic.run stx |>.raw)
-  run
     | `(tactic| · $tacs:tactic*)
     | `(tactic| · { $tacs:tactic* }) => do
       let tacs := tacs.getElems
-      let some tac := tacs[0]?
-        | return none
-      match tac.raw with
+      let some (tac : TSyntax `tactic) := tacs[0]?
+        | return stx
+      match tac with
       | `(tactic| rename_i $[$ns:ident]*) =>
         `(tactic| next $[$ns:ident]* => $(tacs[1:]):tactic*)
-      | _ => return none
-    | _ => return none
+      | _ => return stx
+    | _ => return stx
 
-def optimizeSyntax (stx : TSyntax kind) : CoreM (TSyntax kind) :=
-  let rws := #[SyntaxRewrite.focusRenameI]
-  let rwMap := rws.foldl (init := ∅) (·.insert ·)
-  return ⟨← optimizeSyntaxWith rwMap stx⟩
+private partial def addIdents (acc : Std.HashSet Name) : Syntax → Std.HashSet Name
+  | .missing | .atom .. => acc
+  | .ident (val := val) .. => acc.insert val
+  | .node _ _ args =>
+    args.foldl (init := acc) λ acc stx => addIdents acc stx
+
+def optimizeInitialRenameI : Syntax → m Syntax
+  | stx@`(tacticSeq| $tacs:tactic*) => do
+    let tacs := tacs.getElems
+    let some (tac : TSyntax `tactic) := tacs[0]?
+      | return stx
+    match tac with
+    | `(tactic| rename_i $[$ns:ident]*) =>
+      let usedNames := tacs[1:].foldl (init := ∅) λ usedNames stx =>
+        addIdents usedNames stx.raw
+      let mut dropUntil := 0
+      for n in ns do
+        if usedNames.contains n.getId then
+          break
+        else
+          dropUntil := dropUntil + 1
+      if dropUntil == 0 then
+        return stx
+      else if dropUntil == ns.size then
+        tacsToTacticSeq tacs[1:]
+      else
+        let ns : TSyntaxArray `ident := ns[dropUntil:].toArray
+        let tac ← `(tactic| rename_i $[$ns:ident]*)
+        let mut result : Array (TSyntax `tactic) := Array.mkEmpty tacs.size
+        result := result.push tac
+        result := result ++ tacs[1:]
+        tacsToTacticSeq result
+    | _ => return stx
+  | stx => return stx
+where
+  -- Inlining this helper function triggers a code gen issue:
+  -- https://github.com/leanprover/lean4/issues/4548
+  tacsToTacticSeq (tacs : Array (TSyntax `tactic)) : m (TSyntax ``tacticSeq) :=
+    `(tacticSeq| $tacs:tactic*)
+
+def optimizeSyntax (stx : TSyntax kind) : m (TSyntax kind) := do
+  let mut stx := stx.raw
+  stx ← optimizeFocusRenameI stx
+  stx ← optimizeInitialRenameI stx
+  return ⟨stx⟩
 
 end Aesop

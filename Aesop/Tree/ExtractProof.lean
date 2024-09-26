@@ -5,8 +5,8 @@ Authors: Jannis Limperg
 -/
 import Lean.Replay
 import Aesop.Tracing
-import Aesop.Tree.Tracing
 import Aesop.Tree.TreeM
+import Batteries.Lean.Meta.InstantiateMVars
 
 open Lean
 open Lean.Meta
@@ -52,10 +52,10 @@ local macro "throwPRError " s:interpolatedStr(term) : term =>
 -- ## Copying Declarations
 
 private def getNewConsts (oldEnv newEnv : Environment) :
-    HashMap Name ConstantInfo := Id.run do
+    Std.HashMap Name ConstantInfo := Id.run do
   let oldMap₂ := oldEnv.constants.map₂
   let newMap₂ := newEnv.constants.map₂
-  newMap₂.foldl (init := HashMap.empty) λ cs n c =>
+  newMap₂.foldl (init := Std.HashMap.empty) λ cs n c =>
     if oldMap₂.contains n then cs else cs.insert n c
 
 -- For each declaration `d` that appears in `newState` but not in

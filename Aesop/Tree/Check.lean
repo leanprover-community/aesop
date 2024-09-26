@@ -9,6 +9,7 @@ import Aesop.Tree.State
 import Aesop.Tree.Traversal
 import Aesop.Tree.TreeM
 import Batteries.Lean.HashSet
+import Aesop.Tree.RunMetaM
 
 open Lean
 open Lean.Meta
@@ -16,8 +17,8 @@ open Lean.Meta
 namespace Aesop.MVarClusterRef
 
 def checkIds (root : MVarClusterRef) : CoreM Unit := do
-  let visitedGoalIds : IO.Ref (HashSet GoalId) ← IO.mkRef {}
-  let visitedRappIds : IO.Ref (HashSet RappId) ← IO.mkRef {}
+  let visitedGoalIds : IO.Ref (Std.HashSet GoalId) ← IO.mkRef {}
+  let visitedRappIds : IO.Ref (Std.HashSet RappId) ← IO.mkRef {}
   preTraverseDown
     (λ gref => do
       let id := (← gref.get).id
@@ -154,7 +155,7 @@ def checkMVars (root : MVarClusterRef) (rootMetaState : Meta.SavedState) :
     checkDroppedMVars (r : Rapp) : MetaM Unit := do
       let droppableMVars :=
         (← r.parent.get).mvars ++ r.introducedMVars |>.toArray
-      let mut nonDroppedMVars := HashSet.ofArray r.assignedMVars.toArray
+      let mut nonDroppedMVars := Std.HashSet.ofArray r.assignedMVars.toArray
       for cref in r.children do
         for gref in (← cref.get).goals do
           let g ← gref.get
@@ -167,7 +168,7 @@ def checkMVars (root : MVarClusterRef) (rootMetaState : Meta.SavedState) :
       checkNormMVars g
       let actualPreNormMVars ← g.runMetaMInParentState'
         g.preNormGoal.getMVarDependencies
-      let expectedMVars := HashSet.ofArray g.mvars.toArray
+      let expectedMVars := Std.HashSet.ofArray g.mvars.toArray
       unless actualPreNormMVars == expectedMVars do throwError
         "{Check.tree.name}: goal {g.id} reports incorrect unassigned mvars.\n  reported: {g.mvars.toArray.map (·.name)}\n  actual: {actualPreNormMVars.toArray.map (·.name)}"
 
@@ -198,7 +199,7 @@ def checkMVars (root : MVarClusterRef) (rootMetaState : Meta.SavedState) :
 -- state or has an introducing rapp.
 def checkIntroducedMVars (root : MVarClusterRef)
     (rootMetaState : Meta.SavedState) : MetaM Unit := do
-  let declaredAtRoot : HashSet MVarId :=
+  let declaredAtRoot : Std.HashSet MVarId :=
     rootMetaState.meta.mctx.decls.foldl (init := ∅) λ acc mvarId _ =>
       acc.insert mvarId
   let introducedMVarsRef ← IO.mkRef declaredAtRoot

@@ -128,31 +128,68 @@ def extN (r : ExtResult) : TacticBuilder := do
     for (g, fvarIds) in r.goals do
       let pats' ← g.withContext do fvarIds.mapM mkPat
       pats := pats ++ pats'
-  let tac ←
-    if r.depth == 1 then
-      `(tactic| ext1 $pats:rintroPat*)
-    else
-      let depth := Syntax.mkNumLit $ toString r.depth
-      `(tactic| ext $pats:rintroPat* : $depth)
+  let depthStx := Syntax.mkNumLit $ toString r.depth
+  let tac ← `(tactic| ext $pats:rintroPat* : $depthStx)
   return .unstructured tac
 where
   mkPat (fvarId : FVarId) : MetaM (TSyntax `rintroPat) := do
     `(rintroPat| $(mkIdent $ ← fvarId.getUserName):ident)
 
-def simpAllOrSimpAtStarOnly (simpAll : Bool) (inGoal : MVarId)
+private def simpAllOrSimpAtStarStx [Monad m] [MonadQuotation m] (simpAll : Bool)
+    (configStx? : Option Term) : m (Syntax.Tactic) :=
+  if simpAll then
+    match configStx? with
+    | none => `(tactic| simp_all)
+    | some cfg => `(tactic| simp_all (config := $cfg))
+  else
+    match configStx? with
+    | none => `(tactic| simp at *)
+    | some cfg => `(tactic| simp (config := $cfg) at *)
+
+private def simpAllOrSimpAtStarOnlyStx (simpAll : Bool) (inGoal : MVarId)
     (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
-    TacticBuilder := do
-  let originalStx ←
-    if simpAll then
-      match configStx? with
-      | none => `(tactic| simp_all)
-      | some cfg => `(tactic| simp_all (config := $cfg))
-    else
-      match configStx? with
-      | none => `(tactic| simp at *)
-      | some cfg => `(tactic| simp (config := $cfg) at *)
+    MetaM Syntax.Tactic := do
+  let originalStx ← simpAllOrSimpAtStarStx simpAll configStx?
   let stx ← inGoal.withContext do
     Elab.Tactic.mkSimpOnly originalStx usedTheorems
+  return ⟨stx⟩
+
+def simpAllOrSimpAtStarOnly (simpAll : Bool) (inGoal : MVarId)
+    (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
+    TacticBuilder :=
+  .unstructured <$>
+    simpAllOrSimpAtStarOnlyStx simpAll inGoal configStx? usedTheorems
+
+private def isGlobalSimpTheorem (thms : SimpTheorems) (simprocs : Simprocs) : Origin → Bool
+  | origin@(.decl decl) =>
+    simprocs.simprocNames.contains decl ||
+    thms.lemmaNames.contains origin ||
+    thms.toUnfold.contains decl ||
+    thms.toUnfoldThms.contains decl
+  | _ => false
+
+def simpAllOrSimpAtStar (simpAll : Bool) (inGoal : MVarId)
+    (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
+    TacticBuilder := do
+  let simpTheorems ← getSimpTheorems
+  let simprocs ← Simp.getSimprocs
+  let (map, size) ←
+    usedTheorems.map.foldlM (init := ({}, 0)) λ (map, size) origin thm => do
+      if isGlobalSimpTheorem simpTheorems simprocs origin then
+        return (map, size)
+      else
+        return (map.insert origin thm, size + 1)
+  let stx ←
+    match ← simpAllOrSimpAtStarOnlyStx simpAll inGoal configStx? { map, size } with
+    | `(tactic| simp_all $[$cfg:config]? only [$lems,*]) =>
+      `(tactic| simp_all $[$cfg]? [$lems,*])
+    | `(tactic| simp $[$cfg:config]? only [$lems,*] at *) =>
+      `(tactic| simp $[$cfg]? [$lems,*] at *)
+    | `(tactic| simp_all $[$cfg:config]? only) =>
+      `(tactic| simp_all $[$cfg]?)
+    | `(tactic| simp $[$cfg:config]? only at *) =>
+      `(tactic| simp $[$cfg]? at *)
+    | stx => throwError "simp tactic builder: unexpected syntax:{indentD stx}"
   return .unstructured ⟨stx⟩
 
 def intros (postGoal : MVarId) (newFVarIds : Array FVarId)
@@ -175,6 +212,11 @@ def substFVars (goal : MVarId) (fvarIds : Array FVarId) : TacticBuilder := do
   let names ← goal.withContext $ fvarIds.mapM λ fvarId =>
     return mkIdent (← fvarId.getUserName)
   let tac ← `(tactic| subst $names:ident*)
+  return .unstructured tac
+
+def substFVars' (fvarUserNames : Array Name) : TacticBuilder := do
+  let fvarUserNames := fvarUserNames.map mkIdent
+  let tac ← `(tactic| subst $fvarUserNames:ident*)
   return .unstructured tac
 
 end Script.TacticBuilder
@@ -200,10 +242,9 @@ where
       | some eStx => TacticBuilder.applyStx eStx md
 
 def replaceFVarS (goal : MVarId) (fvarId : FVarId) (type : Expr) (proof : Expr) :
-    ScriptM (MVarId × FVarId) :=
+    ScriptM (MVarId × FVarId × Bool) :=
   withScriptStep goal (#[·.1]) (λ _ => true) tacticBuilder do
-    let (postGoal, newFVarId, _) ← replaceFVar goal fvarId type proof
-    return (postGoal, newFVarId)
+    replaceFVar goal fvarId type proof
 where
   tacticBuilder := (TacticBuilder.replace goal ·.1 fvarId type proof)
 

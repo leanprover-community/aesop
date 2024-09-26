@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Search.Main
-import Aesop.BuiltinRules -- ensures that the builtin rules are registered
 import Aesop.Frontend.Tactic
 import Aesop.Stats.Extension
 
@@ -36,7 +35,7 @@ def evalAesop : Tactic := λ stx => do
         replaceMainGoal goals.toList
         statsRef.set stats
     let stats ← statsRef.get
-    recordStatsIfEnabled { aesopStx := stx, stats }
+    recordStatsForCurrentFileIfEnabled stx stats
     stats.trace .stats
 
 end Aesop

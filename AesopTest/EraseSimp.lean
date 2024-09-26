@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
-import Batteries.Linter.UnreachableTactic
 
 set_option aesop.check.all true
 set_option aesop.smallErrorMessages true

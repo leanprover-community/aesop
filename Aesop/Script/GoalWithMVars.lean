@@ -1,12 +1,12 @@
 import Lean
 
-open Lean Lean.Meta
+open Lean Std Lean.Meta
 
 namespace Aesop
 
 structure GoalWithMVars where
   goal : MVarId
-  mvars : HashSet MVarId
+  mvars : Std.HashSet MVarId
   deriving Inhabited
 
 instance : Repr GoalWithMVars where

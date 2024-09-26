@@ -4,11 +4,11 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.RuleTac.Forward.Basic
 import Aesop.Util.Basic
 import Aesop.Util.EqualUpToIds
+import Batteries.Lean.Meta.SavedState
 
-open Lean Lean.Meta
+open Lean Std Lean.Meta
 
 namespace Aesop.Script
 
@@ -30,7 +30,7 @@ def findFirstStep? {α β : Type} (goals : Array α) (step? : α → Option β)
   return firstStep?
 
 def matchGoals (postState₁ postState₂ : Meta.SavedState)
-    (goals₁ goals₂ : Array MVarId) : MetaM (Option (HashMap MVarId MVarId)) := do
+    (goals₁ goals₂ : Array MVarId) : MetaM (Option (Std.HashMap MVarId MVarId)) := do
   let goals₁ ← getProperGoals postState₁ goals₁
   let goals₂ ← getProperGoals postState₂ goals₂
   let (equal, s) ←

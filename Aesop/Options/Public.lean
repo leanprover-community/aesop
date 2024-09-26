@@ -162,7 +162,32 @@ structure Options where
 -/
 register_option aesop.dev.dynamicStructuring : Bool := {
   descr := "(aesop) Only for use by Aesop developers. Enables dynamic script structuring."
+  defValue := true
+}
+
+/--
+(aesop) Only for use by Aesop developers. Uses static structuring instead of
+dynamic structuring if no metavariables appear in the proof.
+-/
+register_option aesop.dev.optimizedDynamicStructuring : Bool := {
+  descr := "(aesop) Only for use by Aesop developers. Uses static structuring instead of dynamic structuring if no metavariables appear in the proof."
+  defValue := true
+}
+
+/--
+(aesop) Only for use by Aesop developers. Generates a script even if none was requested.
+-/
+register_option aesop.dev.generateScript : Bool := {
+  descr := "(aesop) Only for use by Aesop developers. Generates a script even if none was requested."
   defValue := false
+}
+
+/--
+(aesop) Warn when apply builder is applied to a rule with conclusion of the form A ↔ B
+-/
+register_option aesop.warn.applyIff : Bool := {
+  descr := "(aesop) Warn when apply builder is applied to a rule with conclusion of the form A ↔ B"
+  defValue := true
 }
 
 end Aesop

@@ -31,8 +31,7 @@ namespace TraceOption
 def isEnabled [Monad m] [MonadOptions m] (opt : TraceOption) : m Bool :=
   return opt.option.get (← getOptions)
 
-def withEnabled [Monad m] [MonadWithOptions m] (opt : TraceOption) (k : m α) :
-    m α := do
+def withEnabled [MonadWithOptions m] (opt : TraceOption) (k : m α) : m α :=
   withOptions (λ opts => opt.option.set opts true) k
 
 initialize steps : TraceOption ←
@@ -62,6 +61,10 @@ initialize stats : TraceOption ←
 initialize debug : TraceOption ←
   registerTraceOption `debug
     "(aesop) Print various debugging information."
+
+initialize script : TraceOption ←
+  registerTraceOption `script
+    "(aesop) Print a trace of script generation."
 
 end TraceOption
 

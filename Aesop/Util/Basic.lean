@@ -5,12 +5,9 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 
 import Aesop.Nanos
-import Aesop.Util.UnionFind
 import Aesop.Util.UnorderedArraySet
-import Batteries.Data.String
 import Batteries.Lean.Expr
-import Batteries.Lean.Meta.DiscrTree
-import Batteries.Lean.PersistentHashSet
+import Batteries.Data.String.Basic
 import Lean
 import Std.Data.HashSet.Basic
 
@@ -65,13 +62,13 @@ end PersistentHashSet
 
 -- TODO upstream; generalise to {m : Type u → Type v}.
 -- Need to generalise `HashMap.forM` first.
-scoped instance {m : Type u → Type u} [BEq α] [Hashable α] [Monad m] :
-    ForM m (HashMap α β) (α × β) where
+scoped instance {m : Type u → Type u} [BEq α] [Hashable α] :
+    ForM m (Std.HashMap α β) (α × β) where
   forM | m, f => m.forM λ a b => f (a, b)
 
 -- TODO upstream; generalise to {m : Type u → Type v}.
-scoped instance {m : Type u → Type u} [BEq α] [Hashable α] [Monad m] :
-    ForIn m (HashMap α β) (α × β) where
+scoped instance {m : Type u → Type u} [BEq α] [Hashable α] :
+    ForIn m (Std.HashMap α β) (α × β) where
   forIn := ForM.forIn
 
 section DiscrTree
@@ -217,7 +214,7 @@ def updateSimpEntryPriority (priority : Nat) (e : SimpEntry) : SimpEntry :=
   | .thm t => .thm { t with priority }
   | .toUnfoldThms .. | .toUnfold .. => e
 
-def getMVarDependencies (e : Expr) : MetaM (HashSet MVarId) := do
+def getMVarDependencies (e : Expr) : MetaM (Std.HashSet MVarId) := do
   let (_, deps) ←
     Lean.MVarId.getMVarDependencies.addMVars (includeDelayed := true) e
     |>.run {}

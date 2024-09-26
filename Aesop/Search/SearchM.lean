@@ -5,10 +5,10 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Options
-import Aesop.Search.Expansion.Simp
 import Aesop.Search.Queue.Class
 import Aesop.Stats.Basic
 import Aesop.RuleSet
+import Aesop.Tree.TreeM
 
 open Lean
 open Lean.Meta

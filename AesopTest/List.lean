@@ -3,8 +3,6 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
--- import Std
-import Batteries.Data.List.Lemmas
 -- Ported from mathlib3, file src/data/list/basic.lean,
 -- commit a945b3769cb82bc238ee004b4327201a6864e7e0
 
@@ -85,7 +83,7 @@ inductive Mem (a : α) : Option α → Prop
   | some : Mem a (some a)
 
 instance : Membership α (Option α) :=
-  ⟨Option.Mem⟩
+  ⟨λ a o => Option.Mem a o⟩
 
 @[simp]
 theorem mem_spec {o : Option α} : a ∈ o ↔ o = some a := by
@@ -386,7 +384,8 @@ theorem X.exists_mem_of_length_pos : ∀ {l : List α}, 0 < length l → ∃ a, 
 theorem X.length_pos_iff_exists_mem {l : List α} : 0 < length l ↔ ∃ a, a ∈ l := by
   aesop (add unsafe [length_pos_of_mem, exists_mem_of_length_pos])
 
-theorem ne_nil_of_length_pos' {l : List α} : 0 < length l → l ≠ [] := by
+-- attribute [-simp] ne_nil_of_length_pos
+theorem X.ne_nil_of_length_pos {l : List α} : 0 < length l → l ≠ [] := by
   aesop (add 1% cases List)
 
 theorem length_pos_of_ne_nil {l : List α} : l ≠ [] → 0 < length l := by
@@ -513,7 +512,7 @@ theorem append_subset_of_subset_of_subset {l₁ l₂ l : List α} (l₁subl : l�
   aesop (add norm simp [HasSubset.Subset, List.Subset])
 
 @[aesop safe destruct]
-theorem eq_nil_of_subset_nil {l : List α} : l ⊆ [] → l = [] := by
+theorem eq_nil_of_subset_nil' {l : List α} : l ⊆ [] → l = [] := by
   aesop (add 1% cases List)
 
 -- attribute [-simp] eq_nil_iff_forall_not_mem
@@ -573,7 +572,6 @@ attribute [-simp] take_append_drop
     have ih := take_append_drop n xs
     aesop
 
--- attribute [-simp] append_inj
 @[aesop safe forward]
 theorem X.append_inj :
   ∀ {s₁ s₂ t₁ t₂ : List α}, s₁ ++ t₁ = s₂ ++ t₂ → length s₁ = length s₂ → s₁ = s₂ ∧ t₁ = t₂
@@ -684,7 +682,7 @@ theorem eq_of_mem_map_const {b₁ b₂ : β} {l : List α} (h : b₁ ∈ map (λ
 @[simp] theorem map_replicate' (f : α → β) (a : α) (n) : map f (replicate n a) = replicate n (f a) := by
   induction n <;> aesop
 
-@[simp] theorem tail_replicate (a : α) (n) : tail (replicate n a) = replicate n.pred a := by
+@[simp] theorem tail_replicate' (a : α) (n) : tail (replicate n a) = replicate n.pred a := by
   aesop (add 1% cases Nat)
 
 @[simp] theorem join_replicate_nil' (n : Nat) : join (replicate n []) = @nil α := by
@@ -722,7 +720,8 @@ instance : Bind List where
 @[simp] theorem bind_eq_bind {α β} (f : α → List β) (l : List α) :
     l >>= f = l.bind f := rfl
 
-theorem bind_append' (f : α → List β) (l₁ l₂ : List α) :
+attribute [-simp] bind_append
+theorem X.bind_append (f : α → List β) (l₁ l₂ : List α) :
   (l₁ ++ l₂).bind f = l₁.bind f ++ l₂.bind f := by
   induction l₁ <;> aesop
 
@@ -772,7 +771,6 @@ attribute [simp] append_assoc
 theorem X.concat_append (a : α) (l₁ l₂ : List α) : concat l₁ a ++ l₂ = l₁ ++ a :: l₂ := by
   aesop
 
-attribute [-simp] length_concat
 theorem X.length_concat (a : α) (l : List α) : length (concat l a) = .succ (length l) := by
   aesop
 
@@ -803,9 +801,10 @@ theorem reverse_cons' (a : α) (l : List α) : reverse (a::l) = concat (reverse 
 
 @[simp] theorem reverse_singleton (a : α) : reverse [a] = [a] := rfl
 
-attribute [-simp] reverse_append
-@[simp] theorem X.reverse_append (s t : List α) : reverse (s ++ t) = (reverse t) ++ (reverse s) := by
-  induction s <;> aesop
+-- TODO: after nightly-2024-08-27, `aesop` can not prove this anymore!
+-- attribute [-simp] reverse_append in
+-- @[simp] theorem X.reverse_append (s t : List α) : reverse (s ++ t) = (reverse t) ++ (reverse s) := by
+--   induction s <;> aesop
 
 -- attribute [-simp] reverse_concat
 theorem X.reverse_concat (l : List α) (a : α) : reverse (concat l a) = a :: reverse l := by
@@ -827,10 +826,11 @@ attribute [-simp] reverse_reverse
 @[simp] theorem reverse_bijective : Bijective (@reverse α) := by
   aesop
 
-@[simp] theorem reverse_inj {l₁ l₂ : List α} : reverse l₁ = reverse l₂ ↔ l₁ = l₂ := by
+@[simp] theorem reverse_inj' {l₁ l₂ : List α} : reverse l₁ = reverse l₂ ↔ l₁ = l₂ := by
   aesop (add safe forward reverse_injective)
 
-theorem reverse_eq_iff' {l l' : List α} :
+-- attribute [-simp] reverse_eq_iff
+theorem X.reverse_eq_iff {l l' : List α} :
   l.reverse = l' ↔ l = l'.reverse := by
   aesop
 
@@ -987,7 +987,7 @@ theorem ilast_eq_last' [Inhabited α] : ∀ l : List α, l.ilast = l.last'.iget
     have ih := last'_append_cons (c :: l₁) a
     by aesop
 
-@[simp] theorem getLast?_cons_cons (x y : α) (l : List α) :
+@[simp] theorem getLast?_cons_cons' (x y : α) (l : List α) :
   getLast? (x :: y :: l) = getLast? (y :: l) := rfl
 
 theorem last'_append_of_ne_nil (l₁ : List α) : ∀ {l₂ : List α} (_ : l₂ ≠ []),
@@ -1021,8 +1021,8 @@ attribute [-simp] tail_nil
 attribute [-simp] tail_cons
 @[simp] theorem X.tail_cons (a : α) (l : List α) : tail (a::l) = l := rfl
 
--- attribute [-simp] ihead_append
-@[simp] theorem head_append' [Inhabited α] (t : List α) {s : List α} (h : s ≠ []) :
+-- attribute [-simp] head_append
+@[simp] theorem X.head_append [Inhabited α] (t : List α) {s : List α} (h : s ≠ []) :
   ihead (s ++ t) = ihead s := by
   aesop (add 1% cases List)
 

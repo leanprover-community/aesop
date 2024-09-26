@@ -24,4 +24,4 @@ axiom RingId (R : Ring) : RingHom R R
 axiom ZZ : Ring
 
 example : ∃ (R : Ring) (_ : RingHom R R), True := by
-  aesop
+  aesop (add safe True.intro) (config := { enableSimp := false })

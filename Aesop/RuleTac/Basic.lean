@@ -5,13 +5,13 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Index.Basic
-import Aesop.Options
 import Aesop.Percent
 import Aesop.RuleTac.GoalDiff
 import Aesop.RuleTac.FVarIdSubst
 import Aesop.Script.CtorNames
 import Aesop.Script.Step
 import Batteries.Lean.Meta.SavedState
+import Aesop.Options.Internal
 
 open Lean
 open Lean.Elab.Tactic
@@ -44,8 +44,8 @@ Input for a rule tactic. Contains:
 structure RuleTacInput where
   goal : MVarId
   mvars : UnorderedArraySet MVarId
-  indexMatchLocations : HashSet IndexMatchLocation
-  patternInstantiations : HashSet RulePatternInstantiation
+  indexMatchLocations : Std.HashSet IndexMatchLocation
+  patternInstantiations : Std.HashSet RulePatternInstantiation
   options : Options'
   deriving Inhabited
 

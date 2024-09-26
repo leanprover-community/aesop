@@ -5,9 +5,9 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
-import Batteries.Linter.UnreachableTactic
 
 set_option aesop.check.all true
+set_option aesop.smallErrorMessages true
 set_option linter.unreachableTactic false
 
 @[aesop safe constructors]
@@ -15,16 +15,10 @@ inductive Even : Nat → Prop
   | zero : Even 0
   | plusTwo : Even n → Even (n + 2)
 
--- FIXME this is producing a different message under v4.11.0-rc1
-
--- /--
--- error: (deterministic) timeout at `whnf`, maximum number of heartbeats (1) has been reached
--- use `set_option maxHeartbeats <num>` to set the limit
--- use `set_option diagnostics true` to get diagnostic information
--- -/
--- #guard_msgs in
--- example : Even 10 := by
---   aesop (config := { maxRuleHeartbeats := 1, terminal := true })
+/-- error: tactic 'aesop' failed, failed to prove the goal after exhaustive search. -/
+#guard_msgs in
+example : Even 10 := by
+  aesop (config := { maxRuleHeartbeats := 1, terminal := true })
 
 example : Even 10 := by
   aesop
