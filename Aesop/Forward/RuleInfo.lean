@@ -47,14 +47,14 @@ def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
   let premises := premises.map (·.mvarId!)
   let metaState ← saveState
   let mut slots := Array.mkEmpty premises.size
-  let mut previousDeps := Std.HashSet.empty
+  let mut previousDeps : Std.HashSet MVarId := ∅
   for h : i in [:premises.size] do
     let mvarId := premises[i]
     let type ← mvarId.getType
     let typeDiscrTreeKeys ← mkDiscrTreePath type
-    let deps := Std.HashSet.ofArray $
+    let deps := (∅ : Std.HashSet _).insertMany $
       (← getMVars type).filter (premises.contains ·)
-    let common := HashSet.filter deps (previousDeps.contains ·)
+    let common := deps.filter (previousDeps.contains ·)
     -- We update `index = 0` with correct ordering later (see *)
     slots := slots.push {
       index := ⟨0⟩

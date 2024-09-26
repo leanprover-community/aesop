@@ -10,6 +10,7 @@ import Aesop.Util.UnorderedArraySet
 import Batteries.Lean.Expr
 import Batteries.Data.String.Basic
 import Lean
+import Std.Data.HashSet.Basic
 
 open Lean
 open Lean.Meta Lean.Elab.Tactic
@@ -37,14 +38,6 @@ def time' [Monad m] [MonadLiftT BaseIO m] (x : m Unit) : m Aesop.Nanos := do
   let stop ← IO.monoNanosNow
   return ⟨stop - start⟩
 
-namespace HashSet
-
--- TODO reuse old hash set instead of building a new one.
-def filter [BEq α] [Hashable α] (hs : Std.HashSet α) (p : α → Bool) : Std.HashSet α :=
-  hs.fold (init := ∅) λ hs a => if p a then hs.insert a else hs
-
-end HashSet
-
 namespace PersistentHashSet
 
 variable [BEq α] [Hashable α]
@@ -60,7 +53,7 @@ def toList (s : PersistentHashSet α) : List α :=
 def toArray (s : PersistentHashSet α) : Array α :=
   s.fold (init := #[]) λ as a => as.push a
 
-def toHashSet (s : PHashSet α) : HashSet α :=
+def toHashSet (s : PHashSet α) : Std.HashSet α :=
   s.fold (init := ∅) fun result a ↦ result.insert a
 
 def filter (p : α → Bool) (s : PHashSet α) : PHashSet α :=

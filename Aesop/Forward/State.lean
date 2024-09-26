@@ -193,7 +193,7 @@ def eraseHyp (vmap : VariableMap) (hyp : FVarId) (slot : SlotIndex) :
 `subst`. Preconditions: `slot.index` is nonzero, `slot.common` is nonempty and
 each variable contained in `slot.common` is also contained in `subst`. -/
 def findMatches (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
-    HashSet Match := Id.run do
+    Std.HashSet Match := Id.run do
   if slot.index == ⟨0⟩ then
     panic! "slot has index 0"
   let common := slot.common.toArray
@@ -202,7 +202,7 @@ def findMatches (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
     let mut ms := prevSlotMatches firstVar |> PersistentHashSet.toHashSet
     for var in common[1:] do
       let ms' := prevSlotMatches var
-      ms := HashSet.filter ms (ms'.contains ·)
+      ms := ms.filter (ms'.contains ·)
     return ms
   else
     panic! "no common variables"
@@ -214,13 +214,13 @@ where
 Precondition: `slot.common` is nonempty and each variable contained in it is
 also contained in `subst`. -/
 def findHyps (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
-    HashSet FVarId := Id.run do
+    Std.HashSet FVarId := Id.run do
   let common := slot.common.toArray
   if h : 0 < common.size then
     let mut hyps := slotHyps common[0] |> PersistentHashSet.toHashSet
     for var in common[1:] do
       let hyps' := slotHyps var
-      hyps := HashSet.filter hyps (hyps'.contains ·)
+      hyps := hyps.filter (hyps'.contains ·)
     return hyps
   else
     panic! "no common variables"
