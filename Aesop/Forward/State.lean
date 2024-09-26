@@ -376,6 +376,15 @@ structure ForwardState where
 
 namespace ForwardState
 
+instance : EmptyCollection ForwardState where
+  emptyCollection := {
+    ruleStates := .empty
+    normQueue := ∅
+    safeQueue := ∅
+    unsafeQueue := ∅
+    erasedHyps := ∅
+  }
+
 /-- Add a hypothesis to the forward state. If `fs` represents a local context
 `lctx`, then `fs.addHyp h ms` represents `lctx` with `h` added. `ms` must
 overapproximate the rules for which `h` may unify with a maximal premise. -/
@@ -418,29 +427,34 @@ def eraseHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
   return fs
 
 @[inline]
-private partial def popFirstMatch? (fs : ForwardState)
+private partial def popFirstMatch?' (fs : ForwardState)
     (queue : ForwardStateQueue) : Option (Expr × ForwardStateQueue) :=
   match queue.deleteMin with
   | none => none
   | some (entry, queue) =>
     if entry.match.revHyps.any (fs.erasedHyps.contains ·) then
-      popFirstMatch? fs queue
+      popFirstMatch?' fs queue
     else
       (entry.toProof, queue)
 
 /-- Get a proof for the first complete match of a norm rule. -/
 def popFirstNormMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
-  fs.popFirstMatch? fs.normQueue
+  fs.popFirstMatch?' fs.normQueue
     |>.map λ (e, q) => (e, { fs with normQueue := q })
 
 /-- Get a proof for the first complete match of a safe rule. -/
 def popFirstSafeMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
-  fs.popFirstMatch? fs.safeQueue
+  fs.popFirstMatch?' fs.safeQueue
     |>.map λ (e, q) => (e, { fs with safeQueue := q })
 
 /-- Get a proof for the first complete match of an unsafe rule. -/
 def popFirstUnsafeMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
-  fs.popFirstMatch? fs.unsafeQueue
+  fs.popFirstMatch?' fs.unsafeQueue
     |>.map λ (e, q) => (e, { fs with unsafeQueue := q })
+
+def popFirstMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
+  fs.popFirstNormMatch?.orElse λ _ =>
+  fs.popFirstSafeMatch?.orElse λ _ =>
+  fs.popFirstUnsafeMatch?
 
 end Aesop.ForwardState

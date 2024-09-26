@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Forward.State
 import Aesop.RuleSet
 import Aesop.RuleTac
 import Aesop.Search.Expansion.Basic
@@ -101,11 +102,47 @@ where
         return some goal
     return none
 
+namespace Stateful
+
+partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) : MetaM MVarId :=
+  withExceptionPrefix "saturate: internal error: " do
+  goal.withContext do
+    goal.checkNotAssigned `saturate
+    let index := rs.forwardRules
+    let mut fs : ForwardState := ∅
+    for ldecl in ← getLCtx do
+      let rules ← index.get ldecl.type
+      fs ← fs.addHyp ldecl.fvarId rules
+    go fs goal
+where
+  go (fs : ForwardState) (goal : MVarId) : MetaM MVarId := do
+    withIncRecDepth do
+    goal.withContext do
+      if let some (prf, fs) := fs.popFirstMatch? then
+        trace[saturate] "goal:{indentD goal}"
+        let name ← getUnusedUserName forwardHypPrefix
+        let type ← inferType prf
+        trace[saturate] "add: {name} : {type} := {prf}"
+        let (hyp, goal) ← goal.note name prf (some type)
+        goal.withContext do
+          let rules ← rs.forwardRules.get (← hyp.getType)
+          let fs ← fs.addHyp hyp rules
+          go fs goal
+      else
+        return goal
+
+end Stateful
+
 def saturate (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') :
     MetaM MVarId := do
   if ! options.generateScript then
-    (·.fst) <$> (saturateCore rs goal |>.run { options } |>.run)
+    if aesop.dev.statefulForward.get (← getOptions) then
+      Stateful.saturateCore rs goal
+    else
+      return (← saturateCore rs goal |>.run { options } |>.run).fst
   else
+    if aesop.dev.statefulForward.get (← getOptions) then
+      logWarning s!"saturate: option aesop.dev.statefulForward has no effect on saturate?"
     let preState ← saveState
     let tacticState ← Script.TacticState.mkInitial goal
     let preGoal := goal

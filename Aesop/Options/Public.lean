@@ -183,6 +183,14 @@ register_option aesop.dev.generateScript : Bool := {
 }
 
 /--
+(aesop) Only for use by Aesop developers. Enables the new stateful forward reasoning engine.
+-/
+register_option aesop.dev.statefulForward : Bool := {
+  descr := "(aesop) Only for use by Aesop developers. Enables the new stateful forward reasoning engine."
+  defValue := false
+}
+
+/--
 (aesop) Warn when apply builder is applied to a rule with conclusion of the form A ↔ B
 -/
 register_option aesop.warn.applyIff : Bool := {
