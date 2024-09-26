@@ -49,18 +49,24 @@ end HashSet
 
 namespace PersistentHashSet
 
+variable [BEq α] [Hashable α]
+
 -- Elements are returned in unspecified order.
 @[inline]
-def toList [BEq α] [Hashable α] (s : PersistentHashSet α) :
-    List α :=
+def toList (s : PersistentHashSet α) : List α :=
   s.fold (init := []) λ as a => a :: as
 
 -- Elements are returned in unspecified order. (In fact, they are currently
 -- returned in reverse order of `toList`.)
 @[inline]
-def toArray [BEq α] [Hashable α] (s : PersistentHashSet α) :
-    Array α :=
+def toArray (s : PersistentHashSet α) : Array α :=
   s.fold (init := #[]) λ as a => as.push a
+
+def toHashSet (s : PHashSet α) : HashSet α :=
+  s.fold (init := ∅) fun result a ↦ result.insert a
+
+def filter (p : α → Bool) (s : PHashSet α) : PHashSet α :=
+  s.fold (init := s) λ s a => if p a then s else s.erase a
 
 end PersistentHashSet
 
