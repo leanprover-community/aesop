@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 import Aesop.Index
 import Aesop.RuleSet.Filter
 import Aesop.RuleSet.Member
+import Aesop.Index.Forward
 
 open Lean Lean.Meta
 
@@ -40,8 +41,13 @@ structure BaseRuleSet where
   -/
   unfoldRules : PHashMap Name (Option Name)
   /--
-  The set of rules that were erased from `normRules`, `unsafeRules` and
-  `safeRules`. When we erase a rule which is present in any of these three
+  Forward rules. There's a special procedure for applying forward rules, so we
+  don't store them in the regular indices.
+  -/
+  forwardRules : ForwardIndex
+  /--
+  The set of rules that were erased from `normRules`, `unsafeRules`, `safeRules`
+  and `forwardRules`. When we erase a rule which is present in any of these four
   indices, the rule is not removed from the indices but just added to this set.
   By contrast, when we erase a rule from `unfoldRules`, we actually delete it.
   -/
@@ -49,10 +55,10 @@ structure BaseRuleSet where
   /--
   A cache of the names of all rules registered in this rule set. Invariant:
   `ruleNames` contains exactly the names of the rules present in `normRules`,
-  `unsafeRules`, `safeRules` and `unfoldRules` and not present in `erased`. We
-  use this cache (a) to quickly determine whether a rule is present in the rule
-  set and (b) to find the full rule names associated with the fvar or const
-  identified by a name.
+  `unsafeRules`, `safeRules`, `forwardRules` and `unfoldRules` and not present
+  in `erased`. We use this cache (a) to quickly determine whether a rule is
+  present in the rule set and (b) to find the full rule names associated with
+  the fvar or const identified by a name.
   -/
   ruleNames : PHashMap Name (UnorderedArraySet RuleName)
   deriving Inhabited
@@ -209,6 +215,7 @@ def BaseRuleSet.empty : BaseRuleSet where
   unsafeRules := ∅
   safeRules := ∅
   unfoldRules := {}
+  forwardRules := ∅
   ruleNames := {}
   erased := ∅
 
@@ -270,6 +277,7 @@ def BaseRuleSet.merge (rs₁ rs₂ : BaseRuleSet) : BaseRuleSet where
   normRules := rs₁.normRules.merge rs₂.normRules
   unsafeRules := rs₁.unsafeRules.merge rs₂.unsafeRules
   safeRules := rs₁.safeRules.merge rs₂.safeRules
+  forwardRules := rs₁.forwardRules.merge rs₂.forwardRules
   unfoldRules := rs₁.unfoldRules.mergeWith rs₂.unfoldRules
     λ _ unfoldThm?₁ _ => unfoldThm?₁
   ruleNames :=
@@ -306,6 +314,21 @@ def BaseRuleSet.add (rs : BaseRuleSet) (r : BaseRuleSetMember) :
     { rs with safeRules := rs.safeRules.add r r.indexingMode }
   | .unfoldRule r =>
     { rs with unfoldRules := rs.unfoldRules.insert r.decl r.unfoldThm? }
+  | .normForwardRule r₁ r₂ => {
+      rs with
+      forwardRules := rs.forwardRules.insert r₁
+      normRules := rs.normRules.add r₂ r₂.indexingMode
+    }
+  | .unsafeForwardRule r₁ r₂ => {
+      rs with
+      forwardRules := rs.forwardRules.insert r₁
+      unsafeRules := rs.unsafeRules.add r₂ r₂.indexingMode
+    }
+  | .safeForwardRule r₁ r₂ => {
+      rs with
+      forwardRules := rs.forwardRules.insert r₁
+      safeRules := rs.safeRules.add r₂ r₂.indexingMode
+    }
 
 def LocalRuleSet.add (rs : LocalRuleSet) :
     LocalRuleSetMember → LocalRuleSet
@@ -423,6 +446,7 @@ def applicableSafeRules (rs : LocalRuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult SafeRule)) :=
   rs.applicableSafeRulesWith goal (include? := λ _ => true)
 
+-- NOTE: only non-forward norm/safe/unsafe rules can be unindexed.
 def unindex (rs : LocalRuleSet) (p : RuleName → Bool) : LocalRuleSet := {
   rs with
   normRules := rs.normRules.unindex (p ·.name)

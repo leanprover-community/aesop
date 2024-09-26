@@ -5,7 +5,7 @@ Authors: Xavier Généreux, Jannis Limperg
 -/
 
 import Aesop.Rule.Forward
-import Aesop.Index.Basic
+import Batteries.Lean.Meta.DiscrTree
 
 open Lean Lean.Meta
 
@@ -40,6 +40,6 @@ Each returned pair `(r, i)` contains a rule `r` and the index `i` of the premise
 of `r` that likely unifies with `e`. -/
 def get (idx : ForwardIndex) (e : Expr) :
     MetaM (Array (ForwardRule × PremiseIndex)) :=
-  idx.tree.getUnify e discrTreeConfig
+  getUnify idx.tree e
 
 end Aesop.ForwardIndex

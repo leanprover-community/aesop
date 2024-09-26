@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Rule
+import Aesop.Rule.Forward
 
 namespace Aesop
 
@@ -13,6 +14,9 @@ inductive BaseRuleSetMember
   | unsafeRule (r : UnsafeRule)
   | safeRule (r : SafeRule)
   | unfoldRule (r : UnfoldRule)
+  | normForwardRule (r₁ : ForwardRule) (r₂ : NormRule)
+  | unsafeForwardRule (r₁ : ForwardRule) (r₂ : UnsafeRule)
+  | safeForwardRule (r₁ : ForwardRule) (r₂ : SafeRule)
   deriving Inhabited
 
 def BaseRuleSetMember.name : BaseRuleSetMember → RuleName
@@ -20,6 +24,9 @@ def BaseRuleSetMember.name : BaseRuleSetMember → RuleName
   | unsafeRule r => r.name
   | safeRule r => r.name
   | unfoldRule r => r.name
+  | normForwardRule r _ => r.name
+  | unsafeForwardRule r _ => r.name
+  | safeForwardRule r _ => r.name
 
 inductive GlobalRuleSetMember
   | base (m : BaseRuleSetMember)
