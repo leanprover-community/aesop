@@ -33,7 +33,7 @@ structure Slot where
   deriving Inhabited
 
 structure ForwardRuleInfo where
-  metaState : Meta.SavedState
+  mctx : MetavarContext
   premises : Array MVarId
   slots : Array Slot
   deriving Nonempty
@@ -45,7 +45,7 @@ def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
   let e ← inferType thm
   let (premises, _, _) ← forallMetaTelescope e
   let premises := premises.map (·.mvarId!)
-  let metaState ← saveState
+  let mctx ← getMCtx
   let mut slots := Array.mkEmpty premises.size
   let mut previousDeps : Std.HashSet MVarId := ∅
   for h : i in [:premises.size] do
@@ -67,6 +67,6 @@ def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
   slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
   -- (*)
   slots := slots.mapIdx fun index current => { current with index := ⟨index⟩ }
-  return { premises, slots, metaState }
+  return { premises, slots, mctx }
 
 end ForwardRuleInfo
