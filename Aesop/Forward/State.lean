@@ -4,113 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
 
-import Aesop.Index.Basic
-import Aesop.Percent
-import Batteries.Data.BinomialHeap.Basic
-import Batteries.Lean.HashSet
+import Aesop.Rule.Forward
 import Batteries.Lean.Meta.SavedState
+import Batteries.Data.BinomialHeap.Basic
 
 open Lean Lean.Meta
 open Batteries (BinomialHeap)
 
-/- Building data stucture for partial matches. -/
-/- TODO, figure out how to make sure we don't have duplicate matches.-/
-
 namespace Aesop
-
-structure SlotIndex where
-  toNat : Nat
-  deriving Inhabited, BEq, Hashable, DecidableEq
-
-instance : LT SlotIndex where
-  lt i j := i.toNat < j.toNat
-
-instance : DecidableRel (α := SlotIndex) (· < ·) :=
-  λ i j => inferInstanceAs $ Decidable (i.toNat < j.toNat)
-
-instance : LE SlotIndex where
-  le i j := i.toNat ≤ j.toNat
-
-instance : DecidableRel (α := SlotIndex) (· ≤ ·) :=
-  λ i j => inferInstanceAs $ Decidable (i.toNat ≤ j.toNat)
-
-instance : HAdd SlotIndex Nat SlotIndex where
-  hAdd i j := ⟨i.toNat + j⟩
-
-instance : HSub SlotIndex Nat SlotIndex where
-  hSub i j := ⟨i.toNat - j⟩
-
-structure PremiseIndex where
-  toNat : Nat
-  deriving Inhabited, BEq, Hashable, DecidableEq
-
-instance : LT PremiseIndex where
-  lt i j := i.toNat < j.toNat
-
-instance : DecidableRel (α := PremiseIndex) (· < ·) :=
-  λ i j => inferInstanceAs $ Decidable (i.toNat < j.toNat)
-
-instance : LE PremiseIndex where
-  le i j := i.toNat ≤ j.toNat
-
-instance : DecidableRel (α := PremiseIndex) (· ≤ ·) :=
-  λ i j => inferInstanceAs $ Decidable (i.toNat ≤ j.toNat)
-
-instance : ToString PremiseIndex where
-  toString i := toString i.toNat
-
-structure Slot where
-  /-- Metavariable representing the premise of this slot. -/
-  mvarId : MVarId
-  /-- Index of the slot. Slots are always part of a list of slots, and `index`
-  is the 0-based index of this slot in that list. -/
-  index : SlotIndex
-  /-- The previous premises that the premise of this slot depends on. -/
-  deps : HashSet MVarId
-  /-- Common variables shared between this slot and the previous slots. -/
-  common : HashSet MVarId
-  /-- 0-based index of the premise represented by this slot in the rule type.
-  Note that the slots array may use a different ordering than the original
-  order of premises, so it is *not* the case that `slotIndex ≤ premiseIndex`. -/
-  premiseIndex : PremiseIndex
-  deriving Inhabited
-
-structure ForwardRuleInfo where
-  metaState : Meta.SavedState
-  premises : Array MVarId
-  slots : Array Slot
-  deriving Nonempty
-
-namespace ForwardRuleInfo
-
-/-- Construct a `ForwardRuleInfo` for the theorem `thm`. -/
-def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
-  let e ← inferType thm
-  let (premises, _, _) ← forallMetaTelescope e
-  let premises := premises.map (·.mvarId!)
-  let metaState ← saveState
-  let mut slots := Array.mkEmpty premises.size
-  let mut previousDeps := HashSet.empty
-  for h : i in [:premises.size] do
-    let mvarId := premises[i]
-    let deps := HashSet.ofArray (← getMVars (← inferType e))
-    let common := HashSet.filter deps (previousDeps.contains ·)
-    -- We update `index = 0` with correct ordering later (see *)
-    slots := slots.push {
-      index := ⟨0⟩
-      premiseIndex := ⟨i⟩
-      mvarId, deps, common
-    }
-    previousDeps := previousDeps.insertMany deps
-  -- Slots are created only for premises which do not appear in any other
-  -- premises.
-  slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
-  -- (*)
-  slots := slots.mapIdx fun index current => { current with index := ⟨index⟩ }
-  return { premises, slots, metaState }
-
-
-end ForwardRuleInfo
 
 /-- A substitution maps premise metavariables to assignments. -/
 abbrev Substitution := AssocList MVarId Expr
@@ -141,6 +42,28 @@ a hypothesis to slot `i`.
 -/
 def level (m : Match) : SlotIndex :=
   ⟨m.revHyps.length - 1⟩
+
+/-- Given a complete match `m` for `r`, produce an application of the theorem
+`r.expr` to the hypotheses from `m`. -/
+def reconstruct (r : ForwardRule) (m : Match) : Expr := Id.run do
+  let hyps := m.revHyps.toArray.reverse
+  if hyps.size != r.slots.size then
+    panic! s!"match is not complete; slots: {r.slots.size}; match hyps: {hyps.size}"
+  let slots :=
+    r.slots.qsort (λ s₁ s₂ => s₁.premiseIndex < s₂.premiseIndex) |>.zip hyps
+  let mut args := Array.mkEmpty r.premises.size
+  let mut slotIdx := 0
+  for h : i in [:r.premises.size] do
+    if let some (slot, hyp) := slots[slotIdx]? then
+      if slot.premiseIndex.toNat == i then
+        args := args.push (.fvar hyp)
+        slotIdx := slotIdx + 1
+        continue
+    let premise := r.premises[i]
+    let some inst := m.subst.find? premise
+      | panic! s!"no hyp or instantiation for premise {premise.name}"
+    args := args.push inst
+  return mkAppN r.expr args
 
 end Match
 
@@ -313,6 +236,9 @@ structure RuleState extends ForwardRuleInfo where
   variableMap : VariableMap
   deriving Nonempty
 
+def ForwardRule.initialRuleState (r : ForwardRule) : RuleState :=
+  { r.toForwardRuleInfo with variableMap := ∅ }
+
 namespace RuleState
 
 /-- Get the slot with the given index. Panic if the index is invalid. -/
@@ -402,96 +328,6 @@ def addHyp (rs : RuleState) (slot : Slot) (h : FVarId) :
 
 end RuleState
 
-/--
-The priority of a forward rule.
--/
-inductive ForwardRulePriority : Type where
-  | normSafe (n : Int) : ForwardRulePriority
-  | «unsafe» (p : Percent) : ForwardRulePriority
-  deriving Inhabited
-
-structure ForwardRule extends ForwardRuleInfo where
-  name : RuleName
-  expr : Expr
-  prio : ForwardRulePriority
-  deriving Nonempty
-
-namespace ForwardRule
-
-instance : BEq ForwardRule :=
-  ⟨λ r₁ r₂ => r₁.name == r₂.name⟩
-
-instance : Hashable ForwardRule :=
-  ⟨λ r => hash r.name⟩
-
-instance : Ord ForwardRule :=
-  ⟨λ r₁ r₂ => compare r₁.name r₂.name⟩
-
-def initialRuleState (r : ForwardRule) : RuleState :=
-  { r.toForwardRuleInfo with variableMap := ∅ }
-
-/-- Given a complete match `m` for `r`, produce an application of the theorem
-`r.expr` to the hypotheses from `m`. -/
-def reconstruct (r : ForwardRule) (m : Match) : Expr := Id.run do
-  let hyps := m.revHyps.toArray.reverse
-  if hyps.size != r.slots.size then
-    panic! s!"match is not complete; slots: {r.slots.size}; match hyps: {hyps.size}"
-  let slots :=
-    r.slots.qsort (λ s₁ s₂ => s₁.premiseIndex < s₂.premiseIndex) |>.zip hyps
-  let mut args := Array.mkEmpty r.premises.size
-  let mut slotIdx := 0
-  for h : i in [:r.premises.size] do
-    if let some (slot, hyp) := slots[slotIdx]? then
-      if slot.premiseIndex.toNat == i then
-        args := args.push (.fvar hyp)
-        slotIdx := slotIdx + 1
-        continue
-    let premise := r.premises[i]
-    let some inst := m.subst.find? premise
-      | panic! s!"no hyp or instantiation for premise {premise.name}"
-    args := args.push inst
-  return mkAppN r.expr args
-
-end ForwardRule
-
-/--
-Maps expressions `T` to all tuples `(r, i)` where `r : ForwardRule`,
-`i : PremiseIndex` and the `i`-th argument of the type of `r.expr` (counting
-from zero) likely unifies with `T`.
--/
-structure ForwardIndex where
-  tree : DiscrTree (ForwardRule × PremiseIndex)
-  deriving Inhabited
-
-namespace ForwardIndex
-
-/-- Insert a forward rule into the `ForwardIndex`. -/
-def insert (r : ForwardRule) (idx : ForwardIndex) : MetaM ForwardIndex :=
-  withReducible do
-    let type ← inferType r.expr
-    forallTelescopeReducing type λ args _ => do
-      let args ← args.mapM fun e => do
-        let type ← inferType e
-        let deps ← getMVarsNoDelayed type
-        return (e, HashSet.ofArray deps)
-      let mut tree := idx.tree
-      let mut previousDeps : HashSet MVarId := ∅
-      for h : i in [:args.size] do
-        let (arg, deps) := args[i]
-        previousDeps := previousDeps.insertMany deps
-        if ! previousDeps.contains arg.mvarId! then do
-          tree ← tree.insert arg (r, ⟨i⟩) discrTreeConfig
-      return ⟨tree⟩
-
-/-- Get the forward rules whose maximal premises likely unify with `e`.
-Each returned pair `(r, i)` contains a rule `r` and the index `i` of the premise
-of `r` that likely unifies with `e`. -/
-def get (idx : ForwardIndex) (e : Expr) :
-    MetaM (Array (ForwardRule × PremiseIndex)) :=
-  idx.tree.getUnify e discrTreeConfig
-
-end ForwardIndex
-
 /-- An entry in the forward state queues. Represents a complete match. -/
 structure ForwardStateQueueEntry where
   /-- The rule to which this match belongs. -/
@@ -512,7 +348,7 @@ protected def le (q₁ q₂ : ForwardStateQueueEntry) : Bool :=
 
 /-- Build the proof corresponding to the complete match contained in `entry`. -/
 def toProof (entry : ForwardStateQueueEntry) : Expr := Id.run do
-  entry.rule.reconstruct entry.match
+  entry.match.reconstruct entry.rule
 
 end ForwardStateQueueEntry
 
