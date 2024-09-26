@@ -23,9 +23,9 @@ structure Slot where
   is the 0-based index of this slot in that list. -/
   index : SlotIndex
   /-- The previous premises that the premise of this slot depends on. -/
-  deps : HashSet MVarId
+  deps : Std.HashSet MVarId
   /-- Common variables shared between this slot and the previous slots. -/
-  common : HashSet MVarId
+  common : Std.HashSet MVarId
   /-- 0-based index of the premise represented by this slot in the rule type.
   Note that the slots array may use a different ordering than the original
   order of premises, so it is *not* the case that `slotIndex ≤ premiseIndex`. -/
@@ -47,13 +47,14 @@ def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
   let premises := premises.map (·.mvarId!)
   let metaState ← saveState
   let mut slots := Array.mkEmpty premises.size
-  let mut previousDeps := HashSet.empty
+  let mut previousDeps : Std.HashSet MVarId := ∅
   for h : i in [:premises.size] do
     let mvarId := premises[i]
     let type ← mvarId.getType
     let typeDiscrTreeKeys ← DiscrTree.mkPath type discrTreeConfig
-    let deps := HashSet.ofArray $ (← getMVars type).filter (premises.contains ·)
-    let common := HashSet.filter deps (previousDeps.contains ·)
+    let deps := (∅ : Std.HashSet _).insertMany $
+      (← getMVars type).filter (premises.contains ·)
+    let common := deps.filter (previousDeps.contains ·)
     -- We update `index = 0` with correct ordering later (see *)
     slots := slots.push {
       index := ⟨0⟩
