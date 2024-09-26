@@ -18,19 +18,6 @@ open Batteries (BinomialHeap)
 
 namespace Aesop
 
--- TODO move this section to Util
-namespace PHashSet
-
-variable [BEq α] [Hashable α]
-
-def toHashSet (s : PHashSet α) : HashSet α :=
-  s.fold (init := ∅) fun result a ↦ result.insert a
-
-def filter (p : α → Bool) (s : PHashSet α) : PHashSet α :=
-  s.fold (init := s) λ s a => if p a then s else s.erase a
-
-end PHashSet
-
 structure SlotIndex where
   toNat : Nat
   deriving Inhabited, BEq, Hashable, DecidableEq
@@ -224,7 +211,7 @@ def eraseHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id.
   for i in nextSlots do
     let maps := imap.map.find! i
     let maps := maps.foldl (init := maps) fun m e (ms, hs) =>
-      let ms := PHashSet.filter (·.revHyps.contains hyp) ms
+      let ms := PersistentHashSet.filter (·.revHyps.contains hyp) ms
       m.insert e (ms, hs.erase hyp)
     imaps := imaps.insert i maps
   return { map := imaps }
@@ -289,7 +276,7 @@ def findMatches (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
   let common := slot.common.toArray
   if h : 0 < common.size then
     let firstVar := common[0]
-    let mut ms := prevSlotMatches firstVar |> PHashSet.toHashSet
+    let mut ms := prevSlotMatches firstVar |> PersistentHashSet.toHashSet
     for var in common[1:] do
       let ms' := prevSlotMatches var
       ms := HashSet.filter ms (ms'.contains ·)
@@ -307,7 +294,7 @@ def findHyps (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
     HashSet FVarId := Id.run do
   let common := slot.common.toArray
   if h : 0 < common.size then
-    let mut hyps := slotHyps common[0] |> PHashSet.toHashSet
+    let mut hyps := slotHyps common[0] |> PersistentHashSet.toHashSet
     for var in common[1:] do
       let hyps' := slotHyps var
       hyps := HashSet.filter hyps (hyps'.contains ·)
