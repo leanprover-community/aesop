@@ -22,23 +22,18 @@ structure ForwardIndex where
 
 namespace ForwardIndex
 
+instance : EmptyCollection ForwardIndex :=
+  ⟨⟨{}⟩⟩
+
+def merge (idx₁ idx₂ : ForwardIndex) : ForwardIndex :=
+  ⟨idx₁.tree.mergePreservingDuplicates idx₂.tree⟩
+
 /-- Insert a forward rule into the `ForwardIndex`. -/
-def insert (r : ForwardRule) (idx : ForwardIndex) : MetaM ForwardIndex :=
-  withReducible do
-    let type ← inferType r.expr
-    forallTelescopeReducing type λ args _ => do
-      let args ← args.mapM fun e => do
-        let type ← inferType e
-        let deps ← getMVarsNoDelayed type
-        return (e, HashSet.ofArray deps)
-      let mut tree := idx.tree
-      let mut previousDeps : HashSet MVarId := ∅
-      for h : i in [:args.size] do
-        let (arg, deps) := args[i]
-        previousDeps := previousDeps.insertMany deps
-        if ! previousDeps.contains arg.mvarId! then do
-          tree ← tree.insert arg (r, ⟨i⟩) discrTreeConfig
-      return ⟨tree⟩
+def insert (r : ForwardRule) (idx : ForwardIndex) : ForwardIndex := Id.run do
+  let mut tree := idx.tree
+  for slot in r.slots do
+    tree := tree.insertCore slot.typeDiscrTreeKeys (r, slot.premiseIndex)
+  return ⟨tree⟩
 
 /-- Get the forward rules whose maximal premises likely unify with `e`.
 Each returned pair `(r, i)` contains a rule `r` and the index `i` of the premise
