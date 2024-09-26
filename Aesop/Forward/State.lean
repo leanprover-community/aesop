@@ -251,7 +251,7 @@ must be a valid index). -/
 def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
     MetaM (Option Substitution) := do
   let slot := rs.slot! slot
-  rs.metaState.runMetaM' do
+  withMCtx rs.mctx do
     let inputHypType ← slot.mvarId.getType
     let hypType ← hyp.getType
     if ← isDefEq inputHypType hypType then
