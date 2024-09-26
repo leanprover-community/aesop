@@ -94,6 +94,28 @@ where
   errPrefix : MessageData :=
     m!"aesop: forward builder: "
 
+def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
+    (pat? : Option RulePattern) (imode? : Option IndexingMode)
+    (md indexMd : TransparencyMode) (phase : PhaseSpec) (isDestruct : Bool) :
+    MetaM (Option ForwardRule) := do
+  -- TODO support all these options
+  if immediate?.isSome || pat?.isSome || imode?.isSome || md != .default ||
+     indexMd != .reducible || isDestruct then
+    return none
+  let expr ← t.expr
+  let name ← t.name
+  let info ← ForwardRuleInfo.ofExpr expr
+  let prio :=
+    match phase with
+    | .safe info => .normSafe info.penalty
+    | .norm info => .normSafe info.penalty
+    | .unsafe info => .unsafe info.successProbability
+  return some {
+    toForwardRuleInfo := info
+    name := { phase := phase.phase, name, scope := t.scope, builder := .forward }
+    expr, prio
+  }
+
 def forwardCore (t : ElabRuleTerm) (immediate? : Option (Array Name))
     (pat? : Option RulePattern) (imode? : Option IndexingMode)
     (md indexMd : TransparencyMode) (phase : PhaseSpec) (isDestruct : Bool) :
@@ -108,8 +130,22 @@ def forwardCore (t : ElabRuleTerm) (immediate? : Option (Array Name))
   let imode ← imode?.getDM $ getForwardIndexingMode type immediate md indexMd
   aesop_trace[debug] "imode: {imode}"
   let tac := .forward t.toRuleTerm pat? immediate isDestruct md
-  return .global $ .base $
-    phase.toRule (← t.name) builderName t.scope tac imode pat?
+  let member := phase.toRule (← t.name) builderName t.scope tac imode pat?
+  -- HACK we currently add two rule set members for each forward rule; one
+  -- normal, tactic-based rule and one `ForwardRule`. Eventually, only the
+  -- `ForwardRule` will remain.
+  let forwardRule? ←
+    forwardCore₂ t immediate? pat? imode? md indexMd phase isDestruct
+  let member :=
+    if let some forwardRule := forwardRule? then
+      match member with
+      | .normRule r => .normForwardRule forwardRule r
+      | .safeRule r => .safeForwardRule forwardRule r
+      | .unsafeRule r => .unsafeForwardRule forwardRule r
+      | _ => member
+    else
+      member
+  return .global $ .base member
 
 def forward (isDestruct : Bool) : RuleBuilder := λ input => do
   withConstAesopTraceNode .debug (return "forward builder") do
