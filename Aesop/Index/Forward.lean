@@ -32,8 +32,9 @@ def merge (idx₁ idx₂ : ForwardIndex) : ForwardIndex :=
 /-- Insert a forward rule into the `ForwardIndex`. -/
 def insert (r : ForwardRule) (idx : ForwardIndex) : ForwardIndex := Id.run do
   let mut tree := idx.tree
-  for slot in r.slots do
-    tree := tree.insertCore slot.typeDiscrTreeKeys (r, slot.premiseIndex)
+  for cluster in r.slotClusters do
+    for slot in cluster do
+      tree := tree.insertCore slot.typeDiscrTreeKeys (r, slot.premiseIndex)
   return ⟨tree⟩
 
 /-- Get the forward rules whose maximal premises likely unify with `e`.

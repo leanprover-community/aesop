@@ -8,6 +8,7 @@ import Aesop.Forward.PremiseIndex
 import Aesop.Forward.SlotIndex
 import Aesop.Index.Basic
 import Aesop.Util.Basic
+import Aesop.Util.UnionFind
 import Batteries.Lean.HashSet
 
 open Lean Lean.Meta
@@ -28,17 +29,26 @@ structure Slot where
   common : Std.HashSet MVarId
   /-- 0-based index of the premise represented by this slot in the rule type.
   Note that the slots array may use a different ordering than the original
-  order of premises, so it is *not* the case that `slotIndex ≤ premiseIndex`. -/
+  order of premises, so we *don't* always have `slotIndex ≤ premiseIndex`. -/
   premiseIndex : PremiseIndex
   deriving Inhabited
+
+local instance : BEq Slot :=
+  ⟨λ s₁ s₂ => s₁.premiseIndex == s₂.premiseIndex⟩
+
+local instance : Hashable Slot :=
+  ⟨(hash ·.premiseIndex)⟩
 
 structure ForwardRuleInfo where
   mctx : MetavarContext
   premises : Array MVarId
-  slots : Array Slot
-  deriving Nonempty
+  slotClusters : Array (Array Slot)
+  deriving Inhabited
 
 namespace ForwardRuleInfo
+
+def numSlots (info : ForwardRuleInfo) : Nat :=
+  info.slotClusters.foldl (init := 0) λ n cluster => n + cluster.size
 
 /-- Construct a `ForwardRuleInfo` for the theorem `thm`. -/
 def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
@@ -46,7 +56,7 @@ def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
   let (premises, _, _) ← forallMetaTelescope e
   let premises := premises.map (·.mvarId!)
   let mctx ← getMCtx
-  let mut slots := Array.mkEmpty premises.size
+  let mut slots : Array Slot := Array.mkEmpty premises.size
   let mut previousDeps : Std.HashSet MVarId := ∅
   for h : i in [:premises.size] do
     let mvarId := premises[i]
@@ -64,9 +74,11 @@ def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
     previousDeps := previousDeps.insertMany deps
   -- Slots are created only for premises which do not appear in any other
   -- premises.
-  slots := slots.filter fun slot => ! previousDeps.contains slot.mvarId
+  slots := slots.filter (! previousDeps.contains ·.mvarId)
+  let slotClusters := cluster (·.deps.toArray) slots
+  let slotClusters := slotClusters.map λ cluster =>
+    cluster.mapIdx λ i slot => { slot with index := ⟨i⟩ }
   -- (*)
-  slots := slots.mapIdx fun index current => { current with index := ⟨index⟩ }
-  return { premises, slots, mctx }
+  return { premises, slotClusters, mctx }
 
 end ForwardRuleInfo

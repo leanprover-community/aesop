@@ -24,7 +24,7 @@ structure ForwardRule extends ForwardRuleInfo where
   name : RuleName
   expr : Expr
   prio : ForwardRulePriority
-  deriving Nonempty
+  deriving Inhabited
 
 namespace ForwardRule
 
