@@ -16,6 +16,17 @@ namespace Aesop
 /-- A substitution maps premise metavariables to assignments. -/
 abbrev Substitution := AssocList MVarId Expr
 
+namespace Substitution
+
+/-- Merge two substitutions. Precondition: the substitutions are compatible, so
+if `s₁[x]` and `s₂[x]` are both defined, they must be the same value. -/
+def mergeCompatible (s₁ s₂ : Substitution) : Substitution :=
+  s₂.foldl (init := s₁) λ s k v =>
+    assert! let r? := s.find? k; r?.isNone || r? == some v
+    s.insert k v
+
+end Substitution
+
 structure Match where
   /-- Hyps for each slot, in reverse order. If there are `n` slots, the `i`th
   hyp in `revHyps` is the hyp associated with the slot with index `n - i`. -/
@@ -42,28 +53,6 @@ a hypothesis to slot `i`.
 -/
 def level (m : Match) : SlotIndex :=
   ⟨m.revHyps.length - 1⟩
-
-/-- Given a complete match `m` for `r`, produce an application of the theorem
-`r.expr` to the hypotheses from `m`. -/
-def reconstruct (r : ForwardRule) (m : Match) : Expr := Id.run do
-  let hyps := m.revHyps.toArray.reverse
-  if hyps.size != r.slots.size then
-    panic! s!"match is not complete; slots: {r.slots.size}; match hyps: {hyps.size}"
-  let slots :=
-    r.slots.qsort (λ s₁ s₂ => s₁.premiseIndex < s₂.premiseIndex) |>.zip hyps
-  let mut args := Array.mkEmpty r.premises.size
-  let mut slotIdx := 0
-  for h : i in [:r.premises.size] do
-    if let some (slot, hyp) := slots[slotIdx]? then
-      if slot.premiseIndex.toNat == i then
-        args := args.push (.fvar hyp)
-        slotIdx := slotIdx + 1
-        continue
-    let premise := r.premises[i]
-    let some inst := m.subst.find? premise
-      | panic! s!"no hyp or instantiation for premise {premise.name}"
-    args := args.push inst
-  return mkAppN r.expr args
 
 end Match
 
@@ -179,8 +168,7 @@ def addHyp (vmap : VariableMap) (slot : Slot) (sub : Substitution)
 
 /-- Add a match `m`. Precondition: `nextSlot` is the slot with index
 `m.level + 1`. -/
-def addMatch (vmap : VariableMap) (nextSlot : Slot) (m : Match) :
-    VariableMap :=
+def addMatch (vmap : VariableMap) (nextSlot : Slot) (m : Match) : VariableMap :=
   nextSlot.common.fold (init := vmap) λ vmap var =>
     vmap.modify var (·.insertMatch var m)
 
@@ -230,28 +218,35 @@ where
 
 end VariableMap
 
-/-- Structure representing the state of one forward rule. -/
-structure RuleState extends ForwardRuleInfo where
-  /-- Variable map. -/
+/-- Structure representing the state of a slot cluster. -/
+structure ClusterState where
+  /-- The metavariable context in which `slots` and `variableMaps` are valid. -/
+  mctx : MetavarContext
+  /-- The cluster's slots. -/
+  slots : Array Slot
+  /-- The variable map for this cluster. -/
   variableMap : VariableMap
-  deriving Nonempty
+  /-- Complete matches for this cluster. -/
+  completeMatches : PArray Match
+  deriving Inhabited
 
-def ForwardRule.initialRuleState (r : ForwardRule) : RuleState :=
-  { r.toForwardRuleInfo with variableMap := ∅ }
-
-namespace RuleState
+namespace ClusterState
 
 /-- Get the slot with the given index. Panic if the index is invalid. -/
-@[macro_inline]
-def slot! (rs : RuleState) (slot : SlotIndex) : Slot :=
-  rs.slots[slot.toNat]!
+@[macro_inline, always_inline]
+def slot! (cs : ClusterState) (slot : SlotIndex) : Slot :=
+  cs.slots[slot.toNat]!
+
+/-- Get the slot with the given premise index. -/
+def findSlot? (cs : ClusterState) (i : PremiseIndex) : Option Slot :=
+  cs.slots.find? (·.premiseIndex == i)
 
 /-- Match hypothesis `hyp` against the slot with index `slot` in `rs` (which
 must be a valid index). -/
-def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
+def matchPremise? (cs : ClusterState) (slot : SlotIndex) (hyp : FVarId) :
     MetaM (Option Substitution) := do
-  let slot := rs.slot! slot
-  withMCtx rs.mctx do
+  let slot := cs.slot! slot
+  withMCtx cs.mctx do
     let inputHypType ← slot.mvarId.getType
     let hypType ← hyp.getType
     if ← isDefEq inputHypType hypType then
@@ -270,107 +265,221 @@ def matchInputHypothesis? (rs : RuleState) (slot : SlotIndex) (hyp : FVarId) :
     else
       return none
 
-/-- Add a match to the rule state. -/
--- This function is just `partial`, but Lean doesn't realise that the return
--- type is inhabited.
-unsafe def addMatchUnsafe (rs : RuleState) (m : Match) :
-    RuleState × Array Match := Id.run do
-  let mut rs := rs
-  let mut fullMatches := #[]
-  let slotIdx := m.level
-  if slotIdx.toNat == rs.slots.size - 1 then
-    return ⟨rs, #[m]⟩
-  else
-    let nextSlot := rs.slot! $ slotIdx + 1
-    rs := { rs with
-      variableMap := rs.variableMap.addMatch nextSlot m
-    }
-    for hyp in rs.variableMap.findHyps nextSlot m.subst do
-      let m := { revHyps := hyp :: m.revHyps, subst := m.subst }
-      let (newRs, newFullMatches) ← rs.addMatchUnsafe m
-      rs := newRs
-      fullMatches := fullMatches ++ newFullMatches
-    return ⟨rs, fullMatches⟩
+/-- Add a match to the cluster state. Returns the new cluster state and any new
+complete matches for this cluster. -/
+partial def addMatchCore (newCompleteMatches : Array Match)
+      (cs : ClusterState) (m : Match) :
+      ClusterState × Array Match := Id.run do
+    let mut cs := cs
+    let slotIdx := m.level
+    if slotIdx.toNat == cs.slots.size - 1 then
+      cs := { cs with completeMatches := cs.completeMatches.push m }
+      return (cs, newCompleteMatches.push m)
+    else
+      let nextSlot := cs.slot! $ slotIdx + 1
+      cs := { cs with
+        variableMap := cs.variableMap.addMatch nextSlot m
+      }
+      let mut newCompleteMatches := newCompleteMatches
+      for hyp in cs.variableMap.findHyps nextSlot m.subst do
+        let m := { revHyps := hyp :: m.revHyps, subst := m.subst }
+        let (cs', newCompleteMatches') ← cs.addMatchCore newCompleteMatches m
+        cs := cs'
+        newCompleteMatches := newCompleteMatches'
+      return (cs, newCompleteMatches)
 
-@[implemented_by addMatchUnsafe, inherit_doc addMatchUnsafe]
-opaque addMatch (rs : RuleState) (m : Match) : RuleState × Array Match :=
-  (rs, default)
+@[inherit_doc addMatchCore]
+def addMatch (cs : ClusterState) (m : Match) : ClusterState × Array Match :=
+  addMatchCore #[] cs m
 
-/-- Add a hyp to the rule state. `subst` must be the substitution that results
-from applying `h` to `slot`. -/
-def addHypCore (rs : RuleState) (slot : Slot) (h : FVarId)
-    (subst : Substitution) : RuleState × Array Match := Id.run do
-  let mut rs :=
-    { rs with variableMap := rs.variableMap.addHyp slot subst h }
+/-- Add a hypothesis to the cluster state. `subst` must be the substitution that
+results from applying `h` to `slot`. -/
+def addHypCore (newCompleteMatches : Array Match) (cs : ClusterState)
+    (slot : Slot) (h : FVarId) (subst : Substitution) :
+    ClusterState × Array Match := Id.run do
+  let mut cs :=
+    { cs with variableMap := cs.variableMap.addHyp slot subst h }
   if slot.index.toNat == 0 then
-    return ← rs.addMatch { revHyps := [h], subst }
+    return ← cs.addMatch { revHyps := [h], subst }
   else
-    let mut fullMatches := #[]
-    for pm in rs.variableMap.findMatches slot subst do
-      let subst := pm.subst.foldl (init := subst) λ subst k v =>
-        assert! let r := subst.find? k; r == none || r == some v
-        subst.insert k v
+    let mut newCompleteMatches := newCompleteMatches
+    for pm in cs.variableMap.findMatches slot subst do
+      let subst := subst.mergeCompatible pm.subst
       let m := { revHyps := h :: pm.revHyps, subst }
-      let (newRs, newFullMatches) ← rs.addMatch m
-      rs := newRs
-      fullMatches := fullMatches ++ newFullMatches
-    return ⟨rs, fullMatches⟩
+      let (cs', newCompleteMatches') ← cs.addMatchCore newCompleteMatches m
+      cs := cs'
+      newCompleteMatches := newCompleteMatches'
+    return (cs, newCompleteMatches)
 
 /-- Add a hypothesis to the rule state. If the hypothesis's type does not match
-the premise corresponding to `slot`, then the hypothesis is not added.
-Returns the new rule state and the proofs resulting from any matches that were
-completed by `h`. -/
-def addHyp (rs : RuleState) (slot : Slot) (h : FVarId) :
-    MetaM (RuleState × Array Match) := do
-  let some subst ← rs.matchInputHypothesis? slot.index h
-    | return (rs, #[])
-  return addHypCore rs slot h subst
+the premise corresponding to `slot`, then the hypothesis is not added. -/
+def addHyp (cs : ClusterState) (i : PremiseIndex) (h : FVarId) :
+    MetaM (ClusterState × Array Match) := do
+  let some slot := cs.findSlot? i
+    | return (cs, #[])
+  let some subst ← cs.matchPremise? slot.index h
+    | return (cs, #[])
+  return addHypCore #[] cs slot h subst
 
-end RuleState
+/-- Erase a hypothesis from the cluster state. -/
+def eraseHyp (h : FVarId) (pi : PremiseIndex) (cs : ClusterState) :
+    ClusterState := Id.run do
+  let some slot := cs.findSlot? pi
+    | return cs
+  { cs with variableMap := cs.variableMap.eraseHyp h slot.index }
+
+end ClusterState
+
+structure CompleteMatch where
+  clusterMatches : Array Match
+  deriving Inhabited
+
+namespace CompleteMatch
+
+/-- Given a complete match `m` for `r`, produce an application of the theorem
+`r.expr` to the hypotheses from `m`. -/
+def reconstruct (r : ForwardRule) (m : CompleteMatch) : Expr := Id.run do
+  let mut slotHyps : Std.HashMap PremiseIndex FVarId := ∅
+  for h : i in [:r.slotClusters.size] do
+    let cluster := r.slotClusters[i]
+    let some m := m.clusterMatches[i]?
+      | panic! s!"match for rule {r.name} is not complete: no cluster match for cluster {i}"
+    let hyps := m.revHyps.toArray.reverse
+    for h' : j in [:cluster.size] do
+      let slot := cluster[j]
+      let some hyp := hyps[j]?
+        | panic! s!"match for rule {r.name} is not complete: no hyp for slot with premise index {slot.premiseIndex} in cluster {i}"
+      slotHyps := slotHyps.insert slot.premiseIndex hyp
+
+  let mut subst : Substitution := ∅
+  for m in m.clusterMatches do
+    subst := subst.mergeCompatible m.subst
+
+  let mut args := Array.mkEmpty r.premises.size
+  for h : i in [:r.premises.size] do
+    if let some hyp := slotHyps.get? ⟨i⟩ then
+      args := args.push (.fvar hyp)
+    else if let some inst := subst.find? r.premises[i] then
+      args := args.push inst
+    else
+      panic! s!"match for rule {r.name} is not complete: no hyp or instantiation for premise {i}"
+
+  return mkAppN r.expr args
+
+end CompleteMatch
 
 /-- An entry in the forward state queues. Represents a complete match. -/
-structure ForwardStateQueueEntry where
+structure CompleteMatchQueue.Entry where
   /-- The rule to which this match belongs. -/
   rule : ForwardRule
   /-- The match. -/
-  «match» : Match
+  «match» : CompleteMatch
   deriving Nonempty
 
-namespace ForwardStateQueueEntry
+namespace CompleteMatchQueue.Entry
 
 /-- Compare two queue entries by rule priority. Higher-priority rules are
 considered less (since the queues are min-queues). -/
-protected def le (q₁ q₂ : ForwardStateQueueEntry) : Bool :=
+protected def le (q₁ q₂ : CompleteMatchQueue.Entry) : Bool :=
   match q₁.rule.prio, q₂.rule.prio with
   | .normSafe x, .normSafe y => x ≤ y
   | .unsafe x, .unsafe y => x ≥ y
   | _, _ => panic! "comparing QueueEntries with different priority types"
 
 /-- Build the proof corresponding to the complete match contained in `entry`. -/
-def toProof (entry : ForwardStateQueueEntry) : Expr := Id.run do
+def toProof (entry : CompleteMatchQueue.Entry) : Expr :=
   entry.match.reconstruct entry.rule
 
-end ForwardStateQueueEntry
+end CompleteMatchQueue.Entry
 
 /-- A complete match queue. -/
-abbrev ForwardStateQueue :=
-  BinomialHeap ForwardStateQueueEntry ForwardStateQueueEntry.le
+abbrev CompleteMatchQueue :=
+  BinomialHeap CompleteMatchQueue.Entry CompleteMatchQueue.Entry.le
+
+/-- Forward state for one rule. -/
+structure RuleState where
+  /-- The rule to which this state belongs. -/
+  rule : ForwardRule
+  /-- States for each of the rule's slot clusters. -/
+  clusterStates : Array ClusterState
+  deriving Inhabited
+
+/-- The initial (empty) rule state for a given forward rule. -/
+def ForwardRule.initialRuleState (r : ForwardRule) : RuleState :=
+  let clusterStates := r.slotClusters.map λ slots =>
+    { mctx := r.mctx, slots, variableMap := ∅, completeMatches := {} }
+  { rule := r, clusterStates }
+
+namespace RuleState
+
+/-- Add a hypothesis to the rule state. Returns the new rule state and any newly
+completed matches. If `h` does not match premise `pi`, nothing happens. -/
+def addHyp (h : FVarId) (pi : PremiseIndex) (rs : RuleState) :
+    MetaM (RuleState × Array CompleteMatch) := do
+  let mut rs := rs
+  let mut clusterStates := rs.clusterStates
+  let mut completeMatches := #[]
+  for i in [:clusterStates.size] do
+    let cs := clusterStates[i]!
+    let (cs, newCompleteMatches) ← cs.addHyp pi h
+    clusterStates := clusterStates.set! i cs
+    completeMatches :=
+      completeMatches ++
+      getCompleteMatches clusterStates i newCompleteMatches
+  return ({ rs with clusterStates }, completeMatches)
+where
+  getCompleteMatches (clusterStates : Array ClusterState) (clusterIdx : Nat)
+      (newCompleteMatches : Array Match) :
+      Array CompleteMatch := Id.run do
+    if newCompleteMatches.isEmpty ||
+       clusterStates.any (·.completeMatches.isEmpty) then
+      return #[]
+    else
+      let mut completeMatches := #[]
+      for h : i in [:clusterStates.size] do
+        completeMatches :=
+          if i == clusterIdx then
+            addMatches completeMatches newCompleteMatches
+          else
+            addMatches completeMatches clusterStates[i].completeMatches.toArray
+      return completeMatches
+
+  addMatches (completeMatches : Array CompleteMatch)
+      (clusterMatches : Array Match) : Array CompleteMatch := Id.run do
+    if completeMatches.isEmpty then
+      return clusterMatches.map ({ clusterMatches := #[·] })
+    else
+      let mut newCompleteMatches := Array.mkEmpty (completeMatches.size * clusterMatches.size)
+      for completeMatch in completeMatches do
+        for clusterMatch in clusterMatches do
+          newCompleteMatches := newCompleteMatches.push
+            { clusterMatches := completeMatch.clusterMatches.push clusterMatch }
+      return newCompleteMatches
+
+/-- Erase a hypothesis from the rule state. -/
+def eraseHyp (h : FVarId) (pi : PremiseIndex) (rs : RuleState) :
+    RuleState := Id.run do
+  let clusterStates ← rs.clusterStates.mapM λ cs =>
+     cs.eraseHyp h pi
+  return { rs with clusterStates }
+
+end RuleState
 
 /-- State representing the (partial or complete) matches of a given set of
 forward rules in a given local context. -/
 structure ForwardState where
-  /-- Map from each rule's `RuleName` to it's `RuleState`-/
+  /-- Map from each rule's name to its `RuleState`-/
   ruleStates : PHashMap RuleName RuleState
   /-- Queue of complete matches for norm rules. -/
-  normQueue : ForwardStateQueue
+  normQueue : CompleteMatchQueue
   /-- Queue of complete matches for safe rules. -/
-  safeQueue : ForwardStateQueue
+  safeQueue : CompleteMatchQueue
   /-- Queue of complete matches for unsafe rules. -/
-  unsafeQueue : ForwardStateQueue
+  unsafeQueue : CompleteMatchQueue
   /-- Hypotheses that were removed from the local context. Matches containing
-  such hyps are not removed from the complete match queues. Instead, they are
-  added to this set and when a match is popped from the queues, we check whether
-  it contains any removed hyps. -/
+  such hyps are not removed from the complete match queues. Instead, the hyps
+  are added to this set and when a match is popped from the queues, we check
+  whether it contains any removed hyps. -/
   erasedHyps : PHashSet FVarId
  deriving Inhabited
 
@@ -385,6 +494,15 @@ instance : EmptyCollection ForwardState where
     erasedHyps := ∅
   }
 
+/-- Add a complete match entry to the forward state's complete match queue for
+`phase`. -/
+def addCompleteMatchQueueEntry (entry : CompleteMatchQueue.Entry)
+    (phase : PhaseName) (fs : ForwardState) : ForwardState :=
+  match phase with
+  | .norm => { fs with normQueue := fs.normQueue.insert entry }
+  | .safe => { fs with safeQueue := fs.safeQueue.insert entry }
+  | .unsafe => { fs with unsafeQueue := fs.unsafeQueue.insert entry }
+
 /-- Add a hypothesis to the forward state. If `fs` represents a local context
 `lctx`, then `fs.addHyp h ms` represents `lctx` with `h` added. `ms` must
 overapproximate the rules for which `h` may unify with a maximal premise. -/
@@ -393,46 +511,36 @@ def addHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
   let mut fs := fs
   for (r, i) in ms do
     let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState
-    let some slot := rs.slots.find? (·.premiseIndex == i)
-      | throwError "addHypothesis: internal error: no slot with hyp index {i} for rule {r.name}"
-    let (rs, fullMatches) ← rs.addHyp slot h
+    let (rs, completeMatches) ← rs.addHyp h i
     fs := { fs with ruleStates := fs.ruleStates.insert r.name rs }
-    for m in fullMatches do
-      fs := addFullMatch m r fs
+    for m in completeMatches do
+      let entry := { rule := r, «match» := m }
+      fs := fs.addCompleteMatchQueueEntry entry r.name.phase
   return fs
-where
-  addFullMatch («match» : Match) (r : ForwardRule) (fs : ForwardState) :
-      ForwardState :=
-    let queueEntry := { rule := r, «match» }
-    match r.name.phase with
-    | .norm   => { fs with normQueue := fs.normQueue.insert queueEntry }
-    | .safe   => { fs with safeQueue := fs.safeQueue.insert queueEntry }
-    | .unsafe => { fs with unsafeQueue := fs.unsafeQueue.insert queueEntry }
 
 /-- Remove a hypothesis from the forward state. If `fs` represents a local
 context `lctx`, then `fs.eraseHyp h ms` represents `lctx` with `h` removed. `ms`
 must contain all rules for which `h` may unify with a maximal premise. -/
 def eraseHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : ForwardState := Id.run do
-  let mut fs := { fs with erasedHyps := fs.erasedHyps.insert h }
+  let mut ruleStates := fs.ruleStates
   for (r, i) in ms do
-    let some rs := fs.ruleStates.find? r.name
+    let some rs := ruleStates.find? r.name
       | continue
-    let some slot := rs.slots.find? (·.premiseIndex == i)
-      | panic! s!"no slot with hyp index {i} for rule {r.name}"
-    let variableMap := rs.variableMap.eraseHyp h slot.index
-    fs := { fs with
-      ruleStates := fs.ruleStates.insert r.name { rs with variableMap }
-    }
-  return fs
+    let rs := rs.eraseHyp h i
+    ruleStates := ruleStates.insert r.name rs
+  return { fs with ruleStates, erasedHyps := fs.erasedHyps.insert h }
 
 @[inline]
 private partial def popFirstMatch?' (fs : ForwardState)
-    (queue : ForwardStateQueue) : Option (Expr × ForwardStateQueue) :=
+    (queue : CompleteMatchQueue) : Option (Expr × CompleteMatchQueue) :=
   match queue.deleteMin with
   | none => none
   | some (entry, queue) =>
-    if entry.match.revHyps.any (fs.erasedHyps.contains ·) then
+    let entryHasErasedHyp :=
+      entry.match.clusterMatches.any λ m =>
+        m.revHyps.any (fs.erasedHyps.contains ·)
+    if entryHasErasedHyp then
       popFirstMatch?' fs queue
     else
       (entry.toProof, queue)
@@ -452,8 +560,10 @@ def popFirstUnsafeMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
   fs.popFirstMatch?' fs.unsafeQueue
     |>.map λ (e, q) => (e, { fs with unsafeQueue := q })
 
+/-- Get a proof for the first complete match. Norm rules are prioritised over
+safe rules, and safe over unsafe rules. -/
 def popFirstMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
-  fs.popFirstNormMatch?.orElse λ _ =>
+  fs.popFirstNormMatch?.orElse λ _ => -- <||> doesn't seem to work
   fs.popFirstSafeMatch?.orElse λ _ =>
   fs.popFirstUnsafeMatch?
 

@@ -104,6 +104,7 @@ where
 
 namespace Stateful
 
+-- TODO respect maxDepth option
 partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) : MetaM MVarId :=
   withExceptionPrefix "saturate: internal error: " do
   goal.withContext do
