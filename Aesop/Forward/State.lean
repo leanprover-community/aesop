@@ -164,7 +164,10 @@ variable in `slot.common`). -/
 def addHyp (vmap : VariableMap) (slot : Slot) (sub : Substitution)
     (hyp : FVarId) : VariableMap :=
   slot.common.fold (init := vmap) λ vmap var =>
-    vmap.modify var (·.insertHyp slot.index (sub.find? var |>.get!) hyp)
+    if let some inst := sub.find? var then
+      vmap.modify var (·.insertHyp slot.index inst hyp)
+    else
+      panic! s!"substitution contains no instantiation for variable {var.name}"
 
 /-- Add a match `m`. Precondition: `nextSlot` is the slot with index
 `m.level + 1`. -/
@@ -196,7 +199,10 @@ def findMatches (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
     panic! "no common variables"
 where
   prevSlotMatches (var : MVarId) : PHashSet Match :=
-    vmap.find var |>.findD (slot.index - 1) (subst.find? var |>.get!) |>.1
+    if let some inst := subst.find? var then
+      vmap.find var |>.findD (slot.index - 1) inst |>.1
+    else
+      panic! s!"substitution contains no instantiation for variable {var.name}"
 
 /-- Find hyps in `slot` whose substitutions are compatible with `subst`.
 Precondition: `slot.common` is nonempty and each variable contained in it is
@@ -214,7 +220,10 @@ def findHyps (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
     panic! "no common variables"
 where
   slotHyps (var : MVarId) : PHashSet FVarId :=
-    vmap.find var |>.findD slot.index (subst.find? var |>.get!) |>.2
+    if let some inst := subst.find? var then
+      vmap.find var |>.findD slot.index inst |>.2
+    else
+      panic! s!"substitution contains no instantiation for variable {var.name}"
 
 end VariableMap
 
