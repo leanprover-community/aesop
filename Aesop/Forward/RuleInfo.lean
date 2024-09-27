@@ -39,16 +39,18 @@ local instance : BEq Slot :=
 local instance : Hashable Slot :=
   ⟨(hash ·.premiseIndex)⟩
 
+/-- Information about the decomposed type of a forward rule. -/
 structure ForwardRuleInfo where
+  /-- Metavariable context in which `premises` and `slotClusters` are valid. -/
   mctx : MetavarContext
+  /-- Metavariables representing the premises of the forward rule. -/
   premises : Array MVarId
+  /-- Slots representing the maximal premises of the forward rule, partitioned
+  into metavariable clusters. -/
   slotClusters : Array (Array Slot)
   deriving Inhabited
 
 namespace ForwardRuleInfo
-
-def numSlots (info : ForwardRuleInfo) : Nat :=
-  info.slotClusters.foldl (init := 0) λ n cluster => n + cluster.size
 
 /-- Construct a `ForwardRuleInfo` for the theorem `thm`. -/
 def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
