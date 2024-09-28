@@ -59,28 +59,55 @@ def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
   let premises := premises.map (·.mvarId!)
   let mctx ← getMCtx
   let mut slots : Array Slot := Array.mkEmpty premises.size
-  let mut previousDeps : Std.HashSet MVarId := ∅
+  let mut allDeps : Std.HashSet MVarId := ∅
   for h : i in [:premises.size] do
     let mvarId := premises[i]
     let type ← mvarId.getType
     let typeDiscrTreeKeys ← mkDiscrTreePath type
     let deps := (∅ : Std.HashSet _).insertMany $
       (← getMVars type).filter (premises.contains ·)
-    let common := deps.filter (previousDeps.contains ·)
-    -- We update `index = 0` with correct ordering later (see *)
+    -- We update `index` and `common` with correct info later.
     slots := slots.push {
       index := ⟨0⟩
       premiseIndex := ⟨i⟩
-      mvarId, deps, common, typeDiscrTreeKeys
+      common := ∅
+      mvarId, deps, typeDiscrTreeKeys
     }
-    previousDeps := previousDeps.insertMany deps
-  -- Slots are created only for premises which do not appear in any other
-  -- premises.
-  slots := slots.filter (! previousDeps.contains ·.mvarId)
-  let slotClusters := cluster (·.deps.toArray) slots
-  let slotClusters := slotClusters.map λ cluster =>
-    cluster.mapIdx λ i slot => { slot with index := ⟨i⟩ }
-  -- (*)
+    allDeps := allDeps.insertMany deps
+  -- Slots are created only for premises which are maximal, i.e. which do not
+  -- appear in any other premises.
+  slots := slots.filter (! allDeps.contains ·.mvarId)
+  -- Slots are clustered into metavariable clusters and sorted as indicated
+  -- below.
+  let slotClusters := cluster (·.deps.toArray) slots |>.map sortSlots
+  -- The sorting ensures that for each slot in a cluster (except the first), the
+  -- slot has some variables in common with the previous slots.
+  assert! ! slotClusters.any λ cluster => cluster.any λ slot =>
+    slot.index.toNat > 0 && slot.common.isEmpty
   return { premises, slotClusters, mctx }
+where
+  /-- Sort slots such that each slot has at least one variable in common with
+  the previous slots. -/
+  sortSlots (slots : Array Slot) : Array Slot := Id.run do
+    if slots.isEmpty then
+      panic! "empty slot cluster"
+    have : Ord Slot := ⟨compareOn (·.deps.size)⟩
+    let firstSlot := slots.maxI
+    let mut newSlots := Array.mkEmpty slots.size |>.push firstSlot
+    let mut seen := (∅ : Std.HashSet Slot).insert firstSlot
+    let mut previousDeps : Std.HashSet MVarId := firstSlot.deps
+    let mut i := 1
+    while newSlots.size != slots.size do
+      let slot? :=
+        slots.find? λ slot =>
+          ! seen.contains slot && slot.deps.any (previousDeps.contains ·)
+      let some slot := slot?
+        | panic! "not enough suitable slots"
+      let common := previousDeps.filter (slot.deps.contains ·)
+      newSlots := newSlots.push { slot with index := ⟨i⟩, common }
+      seen := seen.insert slot
+      previousDeps := previousDeps.insertMany slot.deps
+      i := i + 1
+    return newSlots
 
 end ForwardRuleInfo
