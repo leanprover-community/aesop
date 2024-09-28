@@ -104,11 +104,11 @@ where
 
 namespace Stateful
 
-partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
-    (options : Aesop.Options') : MetaM MVarId :=
+partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) :
+    SaturateM MVarId :=
   withExceptionPrefix "saturate: internal error: " do
   goal.withContext do
-    if options.forwardMaxDepth?.isSome then
+    if (← read).options.forwardMaxDepth?.isSome then
       logWarning "saturate: forwardMaxDepth option currently has no effect when using stateful forward reasoning"
     goal.checkNotAssigned `saturate
     let index := rs.forwardRules
@@ -120,7 +120,7 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
       fs ← fs.addHyp ldecl.fvarId rules
     go fs goal
 where
-  go (fs : ForwardState) (goal : MVarId) : MetaM MVarId := do
+  go (fs : ForwardState) (goal : MVarId) : ScriptM MVarId := do
     withIncRecDepth do
     goal.withContext do
       if let some (prf, fs) := fs.popFirstMatch? then
@@ -128,9 +128,11 @@ where
         let name ← getUnusedUserName forwardHypPrefix
         let type ← inferType prf
         trace[saturate] "add: {name} : {type} := {prf}"
-        let (hyp, goal) ← goal.note name prf (some type)
+        let hyp := { userName := name, value := prf, type }
+        let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
+          | unreachable!
         goal.withContext do
-          let rules ← rs.forwardRules.get (← hyp.getType)
+          let rules ← rs.forwardRules.get type
           let fs ← fs.addHyp hyp rules
           go fs goal
       else
@@ -138,20 +140,24 @@ where
 
 end Stateful
 
+def saturateMain (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') :
+    MetaM (MVarId × Array Script.LazyStep) := do
+  let doSaturate :=
+    if aesop.dev.statefulForward.get (← getOptions) then
+      Stateful.saturateCore rs goal
+    else
+      saturateCore rs goal
+  doSaturate.run { options } |>.run
+
 def saturate (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') :
     MetaM MVarId := do
   if ! options.generateScript then
-    if aesop.dev.statefulForward.get (← getOptions) then
-      Stateful.saturateCore rs goal options
-    else
-      return (← saturateCore rs goal |>.run { options } |>.run).fst
+    (·.fst) <$> saturateMain rs goal options
   else
-    if aesop.dev.statefulForward.get (← getOptions) then
-      logWarning s!"saturate: option aesop.dev.statefulForward has no effect on saturate?"
     let preState ← saveState
     let tacticState ← Script.TacticState.mkInitial goal
     let preGoal := goal
-    let (goal, steps) ← saturateCore rs goal |>.run { options } |>.run
+    let (goal, steps) ← saturateMain rs goal options
     let options ← options.toOptions'
     if options.generateScript then
       let uscript : Script.UScript ← steps.mapM (·.toStep)
