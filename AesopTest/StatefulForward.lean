@@ -6,11 +6,14 @@ Authors: Jannis Limperg
 
 import Aesop
 
--- TODO enable checks once stateful forward reasoning supports script generation
-
+set_option aesop.check.all true
 set_option aesop.dev.statefulForward true
 
 /--
+info: Try this:
+  have fwd : γ₁ ∧ γ₂ := r₁ a b
+  have fwd_1 : δ₁ ∧ δ₂ := r₂ a
+---
 error: unsolved goals
 α : Sort u_1
 β : Sort u_2
@@ -26,9 +29,13 @@ fwd_1 : δ₁ ∧ δ₂
 #guard_msgs in
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
-  saturate [*]
+  saturate? [*]
 
 /--
+info: Try this:
+  have fwd : β := h₁ h₃
+  have fwd_1 : γ := h₂ fwd
+---
 error: unsolved goals
 α β γ : Prop
 h₁ : α → β
@@ -40,7 +47,7 @@ fwd_1 : γ
 -/
 #guard_msgs in
 example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
-  saturate [*]
+  saturate? [*]
 
 section
 
@@ -55,6 +62,10 @@ axiom ab : A → B
 axiom bc : B → C
 
 /--
+info: Try this:
+  have fwd : B := ab a
+  have fwd_1 : C := bc fwd
+---
 error: unsolved goals
 a : A
 fwd : B
@@ -64,11 +75,14 @@ fwd_1 : C
 #guard_msgs in
 noncomputable example : A → C := by
   intro a
-  saturate
+  saturate?
 
 end
 
 /--
+info: Try this:
+have fwd : R a b := h₁ a b h₂ h₃
+---
 error: unsolved goals
 α : Sort u_1
 β : Sort u_2
@@ -84,9 +98,12 @@ fwd : R a b
 #guard_msgs in
 example {P Q R : α → β → Prop} (h₁ : ∀ a b, P a b → Q a b → R a b)
     (h₂ : P a b) (h₃ : Q a b) : R a b := by
-  saturate [h₁]
+  saturate? [h₁]
 
 /--
+info: Try this:
+have fwd : R a b := h₁ a b h₂ h₄
+---
 error: unsolved goals
 α : Sort u_1
 a b : α
@@ -101,7 +118,7 @@ fwd : R a b
 #guard_msgs in
 example {P Q R : α → α → Prop} (h₁ : ∀ a b, P a b → Q b a → R a b)
     (h₂ : P a b) (h₃ : Q a b) (h₄ : Q b a) : R a b := by
-  saturate [*]
+  saturate? [*]
 
 /--
 error: unsolved goals
@@ -119,6 +136,9 @@ example {P Q R : α → α → Prop} (h₁ : ∀ a b, P a b → Q b a → R a b)
   saturate [*]
 
 /--
+info: Try this:
+have fwd : R b a := h₁ b a h₄ h₃
+---
 error: unsolved goals
 α : Sort u_1
 c d a b : α
@@ -133,9 +153,15 @@ fwd : R b a
 #guard_msgs in
 example {P Q R : α → α → Prop} (h₁ : ∀ a b, P a b → Q b a → R a b)
     (h₂ : P c d) (h₃ : Q a b) (h₄ : P b a) : R b a := by
-  saturate [*]
+  saturate? [*]
 
 /--
+info: Try this:
+  have fwd : R b c := h₁ b a d c h₄ h₅
+  have fwd_1 : R c c := h₁ c d d c h₂ h₅
+  have fwd_2 : R b b := h₁ b a a b h₄ h₃
+  have fwd_3 : R c b := h₁ c d a b h₂ h₃
+---
 error: unsolved goals
 α : Sort u_1
 c d a b : α
@@ -154,9 +180,13 @@ fwd_3 : R c b
 #guard_msgs in
 example {P Q R : α → α → Prop} (h₁ : ∀ a b c d, P a b → Q c d → R a d)
     (h₂ : P c d) (h₃ : Q a b) (h₄ : P b a) (h₅ : Q d c) : R c b := by
-  saturate [*]
+  saturate? [*]
 
 /--
+info: Try this:
+  have fwd : S a c := h₁ a b d c h₂ h₃ h₅
+  have fwd_1 : S a d := h₁ a b c d h₂ h₃ h₄
+---
 error: unsolved goals
 α : Sort u_1
 a b c d : α
@@ -173,9 +203,12 @@ fwd_1 : S a d
 #guard_msgs in
 example {P Q R S : α → α → Prop} (h₁ : ∀ a b c d, P a b → Q b a → R c d → S a d)
     (h₂ : P a b) (h₃ : Q b a) (h₄ : R c d) (h₅ : R d c) : S a d := by
-  saturate [*]
+  saturate? [*]
 
 /--
+info: Try this:
+have fwd : R b a := h₁ a b h₂ h₃ h₄
+---
 error: unsolved goals
 α : Sort u_1
 a b : α
@@ -192,9 +225,12 @@ fwd : R b a
 example {P : α → Prop} {Q R : α → α → Prop}
     (h₁ : ∀ a b, P a → P b → Q a b → R b a)
     (h₂ : P a) (h₃ : P b) (h₄ : Q a b) : Q b a := by
-  saturate [*]
+  saturate? [*]
 
 /--
+info: Try this:
+have fwd : R b a := h₁ a b h₆ h₅ h₄
+---
 error: unsolved goals
 α : Sort u_1
 c d a b : α
@@ -213,9 +249,13 @@ fwd : R b a
 example {P : α → Prop} {Q R : α → α → Prop}
     (h₁ : ∀ a b, P a → P b → Q a b → R b a)
     (h₂ : P c) (h₃ : P d) (h₄ : Q a b) (h₅ : P b) (h₆ : P a) : Q b a := by
-  saturate [*]
+  saturate? [*]
 
 /--
+info: Try this:
+  have fwd : R c d := h₁ d c h₃ h₂ h₇
+  have fwd_1 : R b a := h₁ a b h₆ h₅ h₄
+---
 error: unsolved goals
 α : Sort u_1
 c d a b : α
@@ -236,4 +276,4 @@ fwd_1 : R b a
 example {P : α → Prop} {Q R : α → α → Prop}
     (h₁ : ∀ a b, P a → P b → Q a b → R b a)
     (h₂ : P c) (h₃ : P d) (h₄ : Q a b) (h₅ : P b) (h₆ : P a) (h₇ : Q d c) : Q b a := by
-  saturate [*]
+  saturate? [*]
