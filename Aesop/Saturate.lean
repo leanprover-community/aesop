@@ -104,10 +104,12 @@ where
 
 namespace Stateful
 
--- TODO respect maxDepth option
-partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) : MetaM MVarId :=
+partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
+    (options : Aesop.Options') : MetaM MVarId :=
   withExceptionPrefix "saturate: internal error: " do
   goal.withContext do
+    if options.forwardMaxDepth?.isSome then
+      logWarning "saturate: forwardMaxDepth option currently has no effect when using stateful forward reasoning"
     goal.checkNotAssigned `saturate
     let index := rs.forwardRules
     let mut fs : ForwardState := ∅
@@ -138,7 +140,7 @@ def saturate (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') :
     MetaM MVarId := do
   if ! options.generateScript then
     if aesop.dev.statefulForward.get (← getOptions) then
-      Stateful.saturateCore rs goal
+      Stateful.saturateCore rs goal options
     else
       return (← saturateCore rs goal |>.run { options } |>.run).fst
   else

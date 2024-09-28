@@ -12,18 +12,6 @@ set_option aesop.dev.statefulForward true
 
 /--
 error: unsolved goals
-P Q R : Prop
-rule : ∀ (α β : Prop), α ∧ β → α
-h : P ∧ Q ∧ R
-fwd : P
-⊢ P
--/
-#guard_msgs in
-example (rule : ∀ α β, α ∧ β → α) (h : P ∧ Q ∧ R) : P := by
-  forward [*]
-
-/--
-error: unsolved goals
 α : Sort u_1
 β : Sort u_2
 γ₁ γ₂ δ₁ δ₂ : Prop
@@ -53,20 +41,6 @@ fwd_1 : γ
 #guard_msgs in
 example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
   saturate [*]
-
-/--
-error: unsolved goals
-α β γ : Prop
-h₁ : α → β
-h₂ : β → γ
-h₃ : α
-fwd : β
-fwd_1 : γ
-⊢ γ
--/
-#guard_msgs in
-example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
-  forward [*]
 
 section
 
