@@ -114,6 +114,8 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
     let index := rs.forwardRules
     let mut fs : ForwardState := ∅
     for ldecl in ← getLCtx do
+      if ldecl.isImplementationDetail then
+        continue
       let rules ← index.get ldecl.type
       fs ← fs.addHyp ldecl.fvarId rules
     go fs goal
