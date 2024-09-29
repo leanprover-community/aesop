@@ -7,10 +7,13 @@ Authors: Xavier Généreux, Jannis Limperg
 import Aesop.Rule.Forward
 import Batteries.Lean.Meta.DiscrTree
 
+set_option linter.missingDocs true
+
 open Lean Lean.Meta
 
 namespace Aesop
 
+set_option linter.missingDocs false in
 /--
 Maps expressions `T` to all tuples `(r, i)` where `r : ForwardRule`,
 `i : PremiseIndex` and the `i`-th argument of the type of `r.expr` (counting
@@ -25,6 +28,7 @@ namespace ForwardIndex
 instance : EmptyCollection ForwardIndex :=
   ⟨⟨{}⟩⟩
 
+/-- Merge two indices. -/
 def merge (idx₁ idx₂ : ForwardIndex) : ForwardIndex :=
   ⟨idx₁.tree.mergePreservingDuplicates idx₂.tree⟩
 

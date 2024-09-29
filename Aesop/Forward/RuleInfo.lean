@@ -11,10 +11,16 @@ import Aesop.Util.Basic
 import Aesop.Util.UnionFind
 import Batteries.Lean.HashSet
 
+set_option linter.missingDocs true
+
 open Lean Lean.Meta
 
 namespace Aesop
 
+/-- A slot represents a maximal premise of a forward rule, i.e. a premise with
+no forward dependencies. The goal of forward reasoning is to assign a
+hypothesis to each slot in such a way that the assignments agree on all
+variables shared between them. -/
 structure Slot where
   /-- Metavariable representing the premise of this slot. -/
   mvarId : MVarId
