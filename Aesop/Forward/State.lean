@@ -15,8 +15,8 @@ set_option linter.missingDocs true
 
 namespace Aesop
 
-/-- A substitution maps premise metavariables to assignments. -/
-abbrev Substitution := AssocList MVarId Expr
+/-- A substitution maps premise indices to assignments. -/
+abbrev Substitution := AssocList PremiseIndex Expr
 
 namespace Substitution
 
@@ -112,10 +112,10 @@ def insertMatchCore (imap : InstMap) (slot : SlotIndex) (inst : Expr)
 /-- Inserts a match. The match `m` is associated with the slot given by its
 level (i.e., the maximal slot for which `m` contains a hypothesis) and the
 instantiation of `var` given by the map's substitution. -/
-def insertMatch (imap : InstMap) (var : MVarId) (m : Match) :
+def insertMatch (imap : InstMap) (var : PremiseIndex) (m : Match) :
     InstMap := Id.run do
   let some inst := m.subst.find? var
-    | panic! s!"variable {var.name} is not assigned in substitution"
+    | panic! s!"variable {var} is not assigned in substitution"
   imap.insertMatchCore m.level inst m
 
 /-- Remove `hyp` from slots starting at `slot`. For each mapping
@@ -140,7 +140,7 @@ set_option linter.missingDocs false in
 /-- Map from variables to the matches and hypotheses of slots whose types
 contain the variables. -/
 structure VariableMap where
-  map : PHashMap MVarId InstMap
+  map : PHashMap PremiseIndex InstMap
   deriving Inhabited
 
 namespace VariableMap
@@ -149,17 +149,17 @@ instance : EmptyCollection VariableMap :=
   ⟨⟨.empty⟩⟩
 
 /-- Get the `InstMap` associated with a variable. -/
-def find? (vmap : VariableMap) (var : MVarId) : Option InstMap :=
+def find? (vmap : VariableMap) (var : PremiseIndex) : Option InstMap :=
   vmap.map.find? var
 
 /-- Get the `InstMap` associated with a variable, or an empty `InstMap`. -/
-def find (vmap : VariableMap) (var : MVarId) : InstMap :=
+def find (vmap : VariableMap) (var : PremiseIndex) : InstMap :=
   vmap.find? var |>.getD ∅
 
 /-- Modify the `InstMap` associated to variable `var`. If no such `InstMap`
 exists, the function `f` is applied to the empty `InstMap` and the result is
 associated with `var`. -/
-def modify (vmap : VariableMap) (var : MVarId) (f : InstMap → InstMap) :
+def modify (vmap : VariableMap) (var : PremiseIndex) (f : InstMap → InstMap) :
     VariableMap :=
   match vmap.map.find? var with
   | none => ⟨vmap.map.insert var (f ∅)⟩
@@ -174,7 +174,7 @@ def addHyp (vmap : VariableMap) (slot : Slot) (sub : Substitution)
     if let some inst := sub.find? var then
       vmap.modify var (·.insertHyp slot.index inst hyp)
     else
-      panic! s!"substitution contains no instantiation for variable {var.name}"
+      panic! s!"substitution contains no instantiation for variable {var}"
 
 /-- Add a match `m`. Precondition: `nextSlot` is the slot with index
 `m.level + 1`. -/
@@ -205,11 +205,11 @@ def findMatches (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
   else
     panic! "no common variables"
 where
-  prevSlotMatches (var : MVarId) : PHashSet Match :=
+  prevSlotMatches (var : PremiseIndex) : PHashSet Match :=
     if let some inst := subst.find? var then
       vmap.find var |>.findD (slot.index - 1) inst |>.1
     else
-      panic! s!"substitution contains no instantiation for variable {var.name}"
+      panic! s!"substitution contains no instantiation for variable {var}"
 
 /-- Find hyps in `slot` whose substitutions are compatible with `subst`.
 Precondition: `slot.common` is nonempty and each variable contained in it is
@@ -226,11 +226,11 @@ def findHyps (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
   else
     panic! "no common variables"
 where
-  slotHyps (var : MVarId) : PHashSet FVarId :=
+  slotHyps (var : PremiseIndex) : PHashSet FVarId :=
     if let some inst := subst.find? var then
       vmap.find var |>.findD slot.index inst |>.2
     else
-      panic! s!"substitution contains no instantiation for variable {var.name}"
+      panic! s!"substitution contains no instantiation for variable {var}"
 
 end VariableMap
 
@@ -259,11 +259,14 @@ def findSlot? (cs : ClusterState) (i : PremiseIndex) : Option Slot :=
 
 /-- Match hypothesis `hyp` against the slot with index `slot` in `rs` (which
 must be a valid index). -/
-def matchPremise? (cs : ClusterState) (slot : SlotIndex) (hyp : FVarId) :
-    MetaM (Option Substitution) := do
-  let slot := cs.slot! slot
+def matchPremise? (premises : Array MVarId) (cs : ClusterState)
+    (slot : SlotIndex) (hyp : FVarId) : MetaM (Option Substitution) := do
+  let some slot := cs.slots[slot.toNat]?
+    | throwError "aesop: internal error: matchPremise?: no slot with index {slot}"
   withMCtx cs.mctx do
-    let inputHypType ← slot.mvarId.getType
+    let some slotPremise := premises[slot.premiseIndex.toNat]?
+      | throwError "aesop: internal error: matchPremise?: slot with premise index {slot.premiseIndex}, but only {premises.size} premises"
+    let inputHypType ← slotPremise.getType
     let hypType ← hyp.getType
     if ← isDefEq inputHypType hypType then
       /- Note: This was over `slot.common` and not `slot.deps`. We need `slot.deps`
@@ -272,10 +275,12 @@ def matchPremise? (cs : ClusterState) (slot : SlotIndex) (hyp : FVarId) :
       Otherwise, we would trigger the first panic in `AddHypothesis`.-/
       let mut subst : Substitution := ∅
       for var in slot.deps do
-        let mvar := .mvar var
+        let some varMVarId := premises[var.toNat]?
+          | throwError "aesop: internal error: matchPremise?: dependency with index {var}, but only {premises.size} premises"
+        let mvar := .mvar varMVarId
         let assignment ← instantiateMVars mvar
         if assignment == mvar then
-          throwError "aesop: internal error: matchInputHypothesis?: while matching hyp {hyp.name}: no assignment for mvar {var.name}"
+          throwError "aesop: internal error: matchPremise?: while matching hyp {hyp.name}: no assignment for variable {var}"
         subst := subst.insert var assignment
       return subst
     else
@@ -329,11 +334,11 @@ def addHypCore (newCompleteMatches : Array Match) (cs : ClusterState)
 
 /-- Add a hypothesis to the rule state. If the hypothesis's type does not match
 the premise corresponding to `slot`, then the hypothesis is not added. -/
-def addHyp (cs : ClusterState) (i : PremiseIndex) (h : FVarId) :
-    MetaM (ClusterState × Array Match) := do
+def addHyp (premises : Array MVarId) (cs : ClusterState) (i : PremiseIndex)
+    (h : FVarId) : MetaM (ClusterState × Array Match) := do
   let some slot := cs.findSlot? i
     | return (cs, #[])
-  let some subst ← cs.matchPremise? slot.index h
+  let some subst ← cs.matchPremise? premises slot.index h
     | return (cs, #[])
   return addHypCore #[] cs slot h subst
 
@@ -376,10 +381,10 @@ def reconstruct (r : ForwardRule) (m : CompleteMatch) : Expr := Id.run do
     subst := subst.mergeCompatible m.subst
 
   let mut args := Array.mkEmpty r.premises.size
-  for h : i in [:r.premises.size] do
+  for i in [:r.premises.size] do
     if let some hyp := slotHyps.get? ⟨i⟩ then
       args := args.push (.fvar hyp)
-    else if let some inst := subst.find? r.premises[i] then
+    else if let some inst := subst.find? ⟨i⟩ then
       args := args.push inst
     else
       panic! s!"match for rule {r.name} is not complete: no hyp or instantiation for premise {i}"
@@ -441,7 +446,7 @@ def addHyp (h : FVarId) (pi : PremiseIndex) (rs : RuleState) :
   let mut completeMatches := #[]
   for i in [:clusterStates.size] do
     let cs := clusterStates[i]!
-    let (cs, newCompleteMatches) ← cs.addHyp pi h
+    let (cs, newCompleteMatches) ← cs.addHyp rs.rule.premises pi h
     clusterStates := clusterStates.set! i cs
     completeMatches :=
       completeMatches ++

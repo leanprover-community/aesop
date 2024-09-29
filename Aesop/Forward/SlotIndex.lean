@@ -28,4 +28,7 @@ instance : HAdd SlotIndex Nat SlotIndex where
 instance : HSub SlotIndex Nat SlotIndex where
   hSub i j := ⟨i.toNat - j⟩
 
+instance : ToString SlotIndex where
+  toString i := toString i.toNat
+
 end Aesop
