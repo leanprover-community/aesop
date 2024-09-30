@@ -171,6 +171,36 @@ inductive RuleTerm
   | const (decl : Name)
   | term (term : Term)
 
+inductive ElabRuleTerm
+  | const (decl : Name)
+  | term (term : Term) (expr : Expr)
+
+namespace ElabRuleTerm
+
+def expr : ElabRuleTerm → MetaM Expr
+  | const decl => mkConstWithFreshMVarLevels decl
+  | term _ e => return e
+
+def scope : ElabRuleTerm → ScopeName
+  | const .. => .global
+  | term .. => .local
+
+def name : ElabRuleTerm → MetaM Name
+  | const decl => return decl
+  | term _ e => getRuleNameForExpr e
+
+def toRuleTerm : ElabRuleTerm → RuleTerm
+  | const decl => .const decl
+  | term t _ => .term t
+
+def ofElaboratedTerm (tm : Term) (expr : Expr) : ElabRuleTerm :=
+  if let some decl := expr.constName? then
+    .const decl
+  else
+    .term tm expr
+
+end ElabRuleTerm
+
 inductive RuleTacDescr
   | apply (term : RuleTerm) (md : TransparencyMode) (pat? : Option RulePattern)
   | constructors (constructorNames : Array Name) (md : TransparencyMode)
