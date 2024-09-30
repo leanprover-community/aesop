@@ -588,8 +588,8 @@ def popFirstUnsafeMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
 /-- Get a proof for the first complete match. Norm rules are prioritised over
 safe rules, and safe over unsafe rules. -/
 def popFirstMatch? (fs : ForwardState) : Option (Expr × ForwardState) :=
-  fs.popFirstNormMatch?.orElse λ _ => -- <||> doesn't seem to work
-  fs.popFirstSafeMatch?.orElse λ _ =>
+  fs.popFirstNormMatch? <|>
+  fs.popFirstSafeMatch? <|>
   fs.popFirstUnsafeMatch?
 
 end Aesop.ForwardState
