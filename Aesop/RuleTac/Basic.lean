@@ -19,7 +19,6 @@ open Lean.Meta
 
 namespace Aesop
 
-
 /-! # Rule Tactic Types -/
 
 -- TODO put docs on the structure fields instead of the structures
@@ -170,10 +169,12 @@ inductive CasesTarget
 inductive RuleTerm
   | const (decl : Name)
   | term (term : Term)
+  deriving Inhabited
 
 inductive ElabRuleTerm
   | const (decl : Name)
   | term (term : Term) (expr : Expr)
+  deriving Inhabited
 
 namespace ElabRuleTerm
 

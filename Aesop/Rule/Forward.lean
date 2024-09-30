@@ -4,9 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
 
+import Aesop.Forward.RuleInfo
 import Aesop.Percent
 import Aesop.Rule.Name
-import Aesop.Forward.RuleInfo
+import Aesop.RuleTac.Basic
 
 set_option linter.missingDocs true
 
@@ -28,8 +29,7 @@ structure ForwardRule extends ForwardRuleInfo where
   /-- The rule's name. Should be unique among all rules in a rule set. -/
   name : RuleName
   /-- The theorem from which this rule is derived. -/
-  -- FIXME What happens if this expr becomes invalid due to fvar renamings etc.?
-  expr : Expr
+  term : RuleTerm
   /-- The rule's priority. -/
   prio : ForwardRulePriority
   deriving Inhabited
@@ -44,6 +44,5 @@ instance : Hashable ForwardRule :=
 
 instance : Ord ForwardRule :=
   ⟨λ r₁ r₂ => compare r₁.name r₂.name⟩
-
 
 end Aesop.ForwardRule

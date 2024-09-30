@@ -27,14 +27,14 @@ structure Slot where
   /-- Index of the slot. Slots are always part of a list of slots, and `index`
   is the 0-based index of this slot in that list. -/
   index : SlotIndex
+  /-- 0-based index of the premise represented by this slot in the rule type.
+  Note that the slots array may use a different ordering than the original
+  order of premises, so we *don't* always have `index ≤ premiseIndex`. -/
+  premiseIndex : PremiseIndex
   /-- The previous premises that the premise of this slot depends on. -/
   deps : Std.HashSet PremiseIndex
   /-- Common variables shared between this slot and the previous slots. -/
   common : Std.HashSet PremiseIndex
-  /-- 0-based index of the premise represented by this slot in the rule type.
-  Note that the slots array may use a different ordering than the original
-  order of premises, so we *don't* always have `slotIndex ≤ premiseIndex`. -/
-  premiseIndex : PremiseIndex
   deriving Inhabited
 
 local instance : BEq Slot :=
@@ -45,10 +45,8 @@ local instance : Hashable Slot :=
 
 /-- Information about the decomposed type of a forward rule. -/
 structure ForwardRuleInfo where
-  /-- Metavariable context in which `premises` and `slotClusters` are valid. -/
-  mctx : MetavarContext
-  /-- Metavariables representing the premises of the forward rule. -/
-  premises : Array MVarId
+  /-- The rule's number of premises. -/
+  numPremises : Nat
   /-- Slots representing the maximal premises of the forward rule, partitioned
   into metavariable clusters. -/
   slotClusters : Array (Array Slot)
@@ -60,7 +58,6 @@ namespace ForwardRuleInfo
 def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
   let e ← inferType thm
   let (premises, _, _) ← forallMetaTelescope e
-  let mctx ← getMCtx
   let premises := premises.map (·.mvarId!)
   let mut premiseToIdx : Std.HashMap MVarId PremiseIndex := ∅
   for h : i in [:premises.size] do
@@ -93,7 +90,7 @@ def ofExpr (thm : Expr) : MetaM ForwardRuleInfo := withNewMCtxDepth do
   -- slot has some variables in common with the previous slots.
   assert! ! slotClusters.any λ cluster => cluster.any λ slot =>
     slot.index.toNat > 0 && slot.common.isEmpty
-  return { premises, slotClusters, mctx }
+  return { slotClusters, numPremises := premises.size }
 where
   /-- Sort slots such that each slot has at least one variable in common with
   the previous slots. -/

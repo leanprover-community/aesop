@@ -67,6 +67,10 @@ initialize script : TraceOption ←
   registerTraceOption `script
     "(aesop) Print a trace of script generation."
 
+initialize forward : TraceOption ←
+  registerTraceOption `forward
+    "(aesop) Trace forward reasoning."
+
 end TraceOption
 
 section

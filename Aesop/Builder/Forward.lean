@@ -113,7 +113,8 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
   return some {
     toForwardRuleInfo := info
     name := { phase := phase.phase, name, scope := t.scope, builder := .forward }
-    expr, prio
+    term := t.toRuleTerm
+    prio
   }
 
 def forwardCore (t : ElabRuleTerm) (immediate? : Option (Array Name))
