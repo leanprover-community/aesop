@@ -117,23 +117,23 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) :
       if ldecl.isImplementationDetail then
         continue
       let rules ← index.get ldecl.type
-      fs ← fs.addHyp ldecl.fvarId rules
+      fs ← fs.addHyp goal ldecl.fvarId rules
     go fs goal
 where
   go (fs : ForwardState) (goal : MVarId) : ScriptM MVarId := do
     withIncRecDepth do
     goal.withContext do
-      if let some (prf, fs) := fs.popFirstMatch? then
+      if let some (prf, fs) ← fs.popFirstMatch? goal then
         trace[saturate] "goal:{indentD goal}"
         let name ← getUnusedUserName forwardHypPrefix
         let type ← inferType prf
-        trace[saturate] "add: {name} : {type} := {prf}"
+        trace[saturate] "add hyp {name} : {type} := {prf}"
         let hyp := { userName := name, value := prf, type }
         let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
           | unreachable!
         goal.withContext do
           let rules ← rs.forwardRules.get type
-          let fs ← fs.addHyp hyp rules
+          let fs ← fs.addHyp goal hyp rules
           go fs goal
       else
         return goal
