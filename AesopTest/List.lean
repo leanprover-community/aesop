@@ -916,90 +916,87 @@ theorem last_replicate_succ (a m : Nat) :
   a := by
   induction m <;> aesop
 
-/-! ### last' -/
+/-! ### getLast? -/
 
-section last'
-set_option linter.deprecated false
--- TODO `last'` has been deprecated in favour of `getLast?`
--- unfortunately a simple replacement breaks the tests below.
+section getLast?
 
-@[simp] theorem last'_is_none :
+@[simp] theorem getLast?_is_none :
   ∀ {l : List α}, (getLast? l).isNone ↔ l = []
   | [] => by aesop
   | [a] => by aesop
   | a :: a' :: as => by
-    have ih := last'_is_none (l := a' :: as)
+    have ih := getLast?_is_none (l := a' :: as)
     aesop
 
-@[simp] theorem last'_is_some : ∀ {l : List α}, l.last'.isSome ↔ l ≠ []
+@[simp] theorem getLast?_is_some : ∀ {l : List α}, l.getLast?.isSome ↔ l ≠ []
   | [] => by aesop
   | [a] => by aesop
   | a :: a' :: as => by
-    have ih := last'_is_some (l := a' :: as)
+    have ih := getLast?_is_some (l := a' :: as)
     aesop
 
-theorem mem_last'_eq_last : ∀ {l : List α} {x : α}, x ∈ l.last' → ∃ h, x = last l h
+theorem mem_getLast?_eq_last : ∀ {l : List α} {x : α}, x ∈ l.getLast? → ∃ h, x = last l h
   | [], _, h => by aesop
   | [_], _, h => by aesop
   | a :: a' :: as, x, h => by
-    have ih := mem_last'_eq_last (l := a' :: as) (x := x)
-    aesop (add norm simp last')
+    have ih := mem_getLast?_eq_last (l := a' :: as) (x := x)
+    aesop (add norm simp getLast?)
 
-theorem last'_eq_last_of_ne_nil : ∀ {l : List α} (h : l ≠ []), l.last' = some (l.last h)
+theorem getLast?_eq_last_of_ne_nil : ∀ {l : List α} (h : l ≠ []), l.getLast? = some (l.last h)
   | [], h => by aesop
   | [a], _ => by aesop
   | _ :: b :: l, _ => by
-    have ih := last'_eq_last_of_ne_nil (l := b :: l)
+    have ih := getLast?_eq_last_of_ne_nil (l := b :: l)
     aesop
 
-theorem mem_last'_cons {x y : α} : ∀ {l : List α} (_ : x ∈ l.last'), x ∈ (y :: l).last' := by
+theorem mem_getLast?_cons {x y : α} : ∀ {l : List α} (_ : x ∈ l.getLast?), x ∈ (y :: l).getLast? := by
   intro l; induction l <;> aesop
 
-theorem mem_of_mem_last' {l : List α} {a : α} (ha : a ∈ l.last') : a ∈ l := by
+theorem mem_of_mem_getLast? {l : List α} {a : α} (ha : a ∈ l.getLast?) : a ∈ l := by
   match l with
   | [] => aesop
   | [_] => aesop
   | x :: y :: zs =>
-    have ih := mem_of_mem_last' (l := y :: zs) (a := a)
+    have ih := mem_of_mem_getLast? (l := y :: zs) (a := a)
     aesop
 
-theorem init_append_last' : ∀ {l : List α} {a}, a ∈ l.last' → init l ++ [a] = l
+theorem init_append_getLast? : ∀ {l : List α} {a}, a ∈ l.getLast? → init l ++ [a] = l
   | [], _ => by aesop
   | [_], _ => by aesop
   | x :: y :: zs, a => by
-    have ih := init_append_last' (l := y :: zs) (a := a)
+    have ih := init_append_getLast? (l := y :: zs) (a := a)
     aesop (add norm simp init)
 
-theorem ilast_eq_last' [Inhabited α] : ∀ l : List α, l.ilast = l.last'.iget
+theorem ilast_eq_getLast? [Inhabited α] : ∀ l : List α, l.ilast = l.getLast?.iget
   | [] => by aesop
   | [a] => by aesop
   | [_, _] => by aesop
   | [_, _, _] => by aesop
   | (_ :: _ :: c :: l) => by
-    have ih := ilast_eq_last' (c :: l)
+    have ih := ilast_eq_getLast? (c :: l)
     aesop
 
-@[simp] theorem last'_append_cons : ∀ (l₁ : List α) (a : α) (l₂ : List α),
-  last' (l₁ ++ a :: l₂) = last' (a :: l₂)
+@[simp] theorem getLast?_append_cons : ∀ (l₁ : List α) (a : α) (l₂ : List α),
+  getLast? (l₁ ++ a :: l₂) = getLast? (a :: l₂)
   | [], a, l₂ => by aesop
   | [_], a, l₂ => by aesop
   | _ :: c :: l₁, a, l₂ =>
-    have ih := last'_append_cons (c :: l₁) a
+    have ih := getLast?_append_cons (c :: l₁) a
     by aesop
 
 @[simp] theorem getLast?_cons_cons' (x y : α) (l : List α) :
   getLast? (x :: y :: l) = getLast? (y :: l) := rfl
 
-theorem last'_append_of_ne_nil (l₁ : List α) : ∀ {l₂ : List α} (_ : l₂ ≠ []),
-  last' (l₁ ++ l₂) = last' l₂
+theorem getLast?_append_of_ne_nil (l₁ : List α) : ∀ {l₂ : List α} (_ : l₂ ≠ []),
+  getLast? (l₁ ++ l₂) = getLast? l₂
   | [], hl₂ => by aesop
   | b :: l₂, _ => by aesop
 
-theorem last'_append {l₁ l₂ : List α} {x : α} (h : x ∈ l₂.last') :
-  x ∈ (l₁ ++ l₂).last' := by
+theorem getLast?_append' {l₁ l₂ : List α} {x : α} (h : x ∈ l₂.getLast?) :
+  x ∈ (l₁ ++ l₂).getLast? := by
   aesop (add 1% cases List)
 
-end last'
+end getLast?
 
 /-! ### head(') and tail -/
 
