@@ -69,7 +69,10 @@ instance : MonadStats (SearchM Q) where
 
 instance : MonadLift TreeM (SearchM Q) where
   monadLift x := do
-    let ctx := { currentIteration := (← get).iteration }
+    let ctx := {
+      currentIteration := (← get).iteration
+      ruleSet := (← read).ruleSet
+    }
     liftM $ ReaderT.run x ctx
 
 protected def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
@@ -82,7 +85,7 @@ protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     (simpConfig : Simp.Config) (simpConfigStx? : Option Term)
     (goal : MVarId) (stats : Stats) (x : SearchM Q α) :
     MetaM (α × State Q × Tree × Stats) := do
-  let t ← mkInitialTree goal
+  let t ← mkInitialTree goal ruleSet
   let normSimpContext := {
     toContext := ← Simp.mkContext simpConfig (simpTheorems := ruleSet.simpTheoremsArray.map (·.snd))
       (congrTheorems := ← getSimpCongrTheorems)

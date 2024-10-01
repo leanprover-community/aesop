@@ -19,7 +19,7 @@ structure AddRapp extends RuleApplication where
   appliedRule : RegularRule
   successProbability : Percent
 
-private def findPathForAssignedMVars (assignedMVars : UnorderedArraySet MVarId)
+def findPathForAssignedMVars (assignedMVars : UnorderedArraySet MVarId)
     (start : GoalRef) : TreeM (Array RappRef × Std.HashSet GoalId) := do
   if assignedMVars.isEmpty then
     return (#[], {})
@@ -51,7 +51,7 @@ private def findPathForAssignedMVars (assignedMVars : UnorderedArraySet MVarId)
       throwError "aesop: internal error: introducing rapps not found for these mvars: {reallyUnseen}"
   return (← pathRapps.get, ← pathGoals.get)
 
-private def getGoalsToCopy (assignedMVars : UnorderedArraySet MVarId)
+def getGoalsToCopy (assignedMVars : UnorderedArraySet MVarId)
     (start : GoalRef) : TreeM (Array GoalRef) := do
   let (pathRapps, pathGoals) ← findPathForAssignedMVars assignedMVars start
   let mut toCopy := #[]
@@ -73,7 +73,7 @@ private def getGoalsToCopy (assignedMVars : UnorderedArraySet MVarId)
           toCopyIds := toCopyIds.insert id
   return toCopy
 
-private unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
+unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
     (start : GoalRef) (parentMetaState : Meta.SavedState)
     (parentSuccessProbability : Percent) (depth : Nat) :
     TreeM (Array Goal) := do
@@ -83,6 +83,7 @@ private unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
     have : Ord MVarId := ⟨λ m₁ m₂ => m₁.name.quickCmp m₂.name⟩
     let mvars ← parentMetaState.runMetaM' $
       .ofHashSet <$> g.preNormGoal.getMVarDependencies
+    let rs := (← read).ruleSet
     return Goal.mk {
       id := ← getAndIncrementNextGoalId
       parent := unsafeCast () -- will be filled in later
@@ -95,6 +96,8 @@ private unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
       preNormGoal := g.preNormGoal
       normalizationState := NormalizationState.notNormal
       mvars
+      forwardState := ← parentMetaState.runMetaM' do
+        rs.mkInitialForwardState g.preNormGoal -- FIXME use goal diff
       successProbability := parentSuccessProbability
       addedInIteration := (← read).currentIteration
       lastExpandedInIteration := Iteration.none
@@ -103,9 +106,10 @@ private unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
       failedRapps := #[]
     }
 
-private def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-    (parent : MVarClusterRef) (depth : Nat) (successProbability : Percent)
-    (origin : GoalOrigin) : TreeM Goal :=
+def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
+    (parent : MVarClusterRef) (parentMetaState : Meta.SavedState) (depth : Nat)
+    (successProbability : Percent) (origin : GoalOrigin) : TreeM Goal := do
+  let rs := (← read).ruleSet
   return Goal.mk {
     id := ← getAndIncrementNextGoalId
     children := #[]
@@ -114,6 +118,8 @@ private def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     isForcedUnprovable := false
     preNormGoal := goal
     normalizationState := NormalizationState.notNormal
+    forwardState := ← parentMetaState.runMetaM' do
+      rs.mkInitialForwardState goal -- FIXME use goal diff
     addedInIteration := (← read).currentIteration
     lastExpandedInIteration := Iteration.none
     unsafeRulesSelected := false
@@ -122,7 +128,7 @@ private def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     parent, origin, depth, mvars, successProbability
   }
 
-private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
+unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   let originalSubgoals := r.goals.map (·.mvarId)
 
   let rref : RappRef ← IO.mkRef $ Rapp.mk {
@@ -203,7 +209,7 @@ private unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     else
       let origin :=
         if droppedMVars.contains goal then .droppedMVar else .subgoal
-      makeInitialGoal goal mvars (unsafeCast ()) goalDepth
+      makeInitialGoal goal mvars (unsafeCast ()) r.postState goalDepth
         r.successProbability origin
         -- The parent (`unsafeCast ()`) will be patched up later.
 
