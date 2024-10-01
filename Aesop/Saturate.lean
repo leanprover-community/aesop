@@ -111,7 +111,7 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) :
     if (← read).options.forwardMaxDepth?.isSome then
       logWarning "saturate: forwardMaxDepth option currently has no effect when using stateful forward reasoning"
     goal.checkNotAssigned `saturate
-    let fs ← rs.forwardRules.mkInitialForwardState goal
+    let fs ← rs.mkInitialForwardState goal
     go fs goal
 where
   go (fs : ForwardState) (goal : MVarId) : ScriptM MVarId := do
@@ -126,7 +126,7 @@ where
         let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
           | unreachable!
         goal.withContext do
-          let rules ← rs.forwardRules.get type
+          let rules ← rs.applicableForwardRules type
           let fs ← fs.addHyp goal hyp rules
           go fs goal
       else
