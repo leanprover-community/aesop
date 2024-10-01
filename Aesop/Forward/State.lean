@@ -6,7 +6,10 @@ Authors: Xavier Généreux, Jannis Limperg
 
 import Aesop.Rule.Forward
 import Aesop.RuleTac.ElabRuleTerm
+import Aesop.RuleTac.Forward.Basic
+import Aesop.Script.SpecificTactics
 import Batteries.Lean.Meta.SavedState
+import Batteries.Lean.Meta.UnusedNames
 import Batteries.Data.BinomialHeap.Basic
 
 open Lean Lean.Meta
@@ -398,47 +401,67 @@ def reconstructArgs (r : ForwardRule) (m : CompleteMatch) :
 
   return args
 
-/-- Given a complete match `m` for `r`, produce an application of the theorem
-`r.expr` to the hypotheses from `m`. Returns `none` if the term of `e` does not
-elaborate in the current goal. -/
-def reconstruct? (goal : MVarId) (r : ForwardRule) (m : CompleteMatch) :
-    MetaM (Option Expr) := do
-  let some e ← elabForwardRuleTerm? goal r.term
-    | return none
-  return mkAppN e (m.reconstructArgs r)
-
 end CompleteMatch
 
 /-- An entry in the forward state queues. Represents a complete match. -/
-structure CompleteMatchQueue.Entry where
+structure ForwardRuleMatch where
   /-- The rule to which this match belongs. -/
   rule : ForwardRule
   /-- The match. -/
   «match» : CompleteMatch
   deriving Nonempty
 
-namespace CompleteMatchQueue.Entry
+namespace ForwardRuleMatch
 
 /-- Compare two queue entries by rule priority. Higher-priority rules are
 considered less (since the queues are min-queues). -/
-protected def le (q₁ q₂ : CompleteMatchQueue.Entry) : Bool :=
-  match q₁.rule.prio, q₂.rule.prio with
+protected def le (m₁ m₂ : ForwardRuleMatch) : Bool :=
+  match m₁.rule.prio, m₂.rule.prio with
   | .normSafe x, .normSafe y => x ≤ y
   | .unsafe x, .unsafe y => x ≥ y
-  | _, _ => panic! "comparing QueueEntries with different priority types"
+  | _, _ => panic! "comparing ForwardRuleMatches with different priority types"
 
-/-- Build the proof corresponding to the complete match contained in `entry`.
-May fail if the forward rule is local and can't be elaborated in the current
-goal. -/
-def toProof? (goal : MVarId) (entry : CompleteMatchQueue.Entry) :
-    MetaM (Option Expr) :=
-  entry.match.reconstruct? goal entry.rule
+end ForwardRuleMatch
 
-end CompleteMatchQueue.Entry
+/-- A `ForwardRuleMatch` whose rule term has already been elaborated. -/
+structure ElabForwardRuleMatch where
+  /-- The rule to which this match belongs. -/
+  rule : ForwardRule
+  /-- The elaborated term of `rule`. -/
+  expr : Expr
+  /-- The match. -/
+  «match» : CompleteMatch
+
+/-- Try to elaborate the rule term of `m` for `goal`. -/
+def ForwardRuleMatch.elab? (goal : MVarId) (m : ForwardRuleMatch) :
+    MetaM (Option ElabForwardRuleMatch) := do
+  let some expr ← elabForwardRuleTerm? goal m.rule.term
+    | return none
+  return some { m with expr }
+
+namespace ElabForwardRuleMatch
+
+/-- Construct the proof of the new hypothesis represented by `m`. -/
+def proof (m : ElabForwardRuleMatch) : Expr :=
+  mkAppN m.expr (m.match.reconstructArgs m.rule)
+
+/-- Apply a forward rule match to a goal. This adds the hypothesis corresponding
+to the match to the local context. -/
+def apply (goal : MVarId) (m : ElabForwardRuleMatch) :
+    ScriptM (MVarId × FVarId) :=
+  goal.withContext do
+    let name ← getUnusedUserName forwardHypPrefix
+    let prf := m.proof
+    let type ← inferType prf
+    let hyp := { userName := name, value := prf, type }
+    let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
+      | unreachable!
+    return (goal, hyp)
+
+end ElabForwardRuleMatch
 
 /-- A complete match queue. -/
-abbrev CompleteMatchQueue :=
-  BinomialHeap CompleteMatchQueue.Entry CompleteMatchQueue.Entry.le
+abbrev CompleteMatchQueue := BinomialHeap ForwardRuleMatch ForwardRuleMatch.le
 
 /-- Forward state for one rule. -/
 structure RuleState where
@@ -540,12 +563,12 @@ instance : EmptyCollection ForwardState where
 
 /-- Add a complete match entry to the forward state's complete match queue for
 `phase`. -/
-def addCompleteMatchQueueEntry (entry : CompleteMatchQueue.Entry)
-    (phase : PhaseName) (fs : ForwardState) : ForwardState :=
+def addForwardRuleMatch (m : ForwardRuleMatch) (phase : PhaseName)
+    (fs : ForwardState) : ForwardState :=
   match phase with
-  | .norm => { fs with normQueue := fs.normQueue.insert entry }
-  | .safe => { fs with safeQueue := fs.safeQueue.insert entry }
-  | .unsafe => { fs with unsafeQueue := fs.unsafeQueue.insert entry }
+  | .norm => { fs with normQueue := fs.normQueue.insert m }
+  | .safe => { fs with safeQueue := fs.safeQueue.insert m }
+  | .unsafe => { fs with unsafeQueue := fs.unsafeQueue.insert m }
 
 /-- Add a hypothesis to the forward state. If `fs` represents a local context
 `lctx`, then `fs.addHyp h ms` represents `lctx` with `h` added. `ms` must
@@ -561,8 +584,8 @@ def addHyp (goal : MVarId) (h : FVarId) (ms : Array (ForwardRule × PremiseIndex
         let fs := { fs with ruleStates := fs.ruleStates.insert r.name rs }
         completeMatches.foldlM (init := fs) λ fs m => do
           aesop_trace[forward] "new complete match with args {m.reconstructArgs r}"
-          let entry := { rule := r, «match» := m }
-          return fs.addCompleteMatchQueueEntry entry r.name.phase
+          let m := { rule := r, «match» := m }
+          return fs.addForwardRuleMatch m r.name.phase
 
 /-- Remove a hypothesis from the forward state. If `fs` represents a local
 context `lctx`, then `fs.eraseHyp h ms` represents `lctx` with `h` removed. `ms`
@@ -580,49 +603,46 @@ def eraseHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
 @[inline]
 private partial def popFirstMatch?' (goal : MVarId) (fs : ForwardState)
     (queue : CompleteMatchQueue) :
-    MetaM (Option (Expr × CompleteMatchQueue)) := do
+    MetaM (Option (ElabForwardRuleMatch × CompleteMatchQueue)) := do
   match queue.deleteMin with
   | none => return none
-  | some (entry, queue) =>
+  | some (m, queue) =>
     let result? ←
-      withAesopTraceNode .debug (λ r => return m!"{toEmoji r} reconstruct queue entry for rule {entry.rule.name} with args {entry.match.reconstructArgs entry.rule}") do
-        let entryHasErasedHyp :=
-          entry.match.clusterMatches.any λ m =>
+      withAesopTraceNode .debug (λ r => return m!"{toEmoji r} reconstruct queue entry for rule {m.rule.name} with args {m.match.reconstructArgs m.rule}") do
+        let hasErasedHyp :=
+          m.match.clusterMatches.any λ m =>
             m.revHyps.any (fs.erasedHyps.contains ·)
-        if entryHasErasedHyp then
+        if hasErasedHyp then
           aesop_trace[forward] "args contain erased hyp"
           pure none
-        else if let some prf ← entry.toProof? goal then
-          pure (prf, queue)
         else
-          aesop_trace[forward] "rule does not elaborate"
-          pure none
+          return (← m.elab? goal).map ((·, queue))
     match result? with
     | none => popFirstMatch?' goal fs queue
     | some result => return result
 
 /-- Get a proof for the first complete match of a norm rule. -/
 def popFirstNormMatch? (goal : MVarId) (fs : ForwardState) :
-    MetaM (Option (Expr × ForwardState)) :=
+    MetaM (Option (ElabForwardRuleMatch × ForwardState)) :=
   return (← fs.popFirstMatch?' goal fs.normQueue).map λ (e, q) =>
     (e, { fs with normQueue := q })
 
 /-- Get a proof for the first complete match of a safe rule. -/
 def popFirstSafeMatch? (goal : MVarId) (fs : ForwardState) :
-    MetaM (Option (Expr × ForwardState)) :=
+    MetaM (Option (ElabForwardRuleMatch × ForwardState)) :=
   return (← fs.popFirstMatch?' goal fs.safeQueue).map λ (e, q) =>
     (e, { fs with safeQueue := q })
 
 /-- Get a proof for the first complete match of an unsafe rule. -/
 def popFirstUnsafeMatch? (goal : MVarId) (fs : ForwardState) :
-    MetaM (Option (Expr × ForwardState)) :=
+    MetaM (Option (ElabForwardRuleMatch × ForwardState)) :=
   return (← fs.popFirstMatch?' goal fs.unsafeQueue).map λ (e, q) =>
     (e, { fs with unsafeQueue := q })
 
 /-- Get a proof for the first complete match. Norm rules are prioritised over
 safe rules, and safe over unsafe rules. -/
 def popFirstMatch? (goal  : MVarId) (fs : ForwardState) :
-    MetaM (Option (Expr × ForwardState)) := do
+    MetaM (Option (ElabForwardRuleMatch × ForwardState)) := do
   if let some result ← fs.popFirstNormMatch? goal then
     return result
   else if let some result ← fs.popFirstSafeMatch? goal then
