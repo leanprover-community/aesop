@@ -183,6 +183,7 @@ def BaseRuleSet.trace (rs : BaseRuleSet) (traceOpt : TraceOption) :
   withConstAesopTraceNode traceOpt (return "Constants to unfold") do
     for r in rs.unfoldRules.toArray.map (·.fst.toString) |>.qsortOrd do
       aesop_trace![traceOpt] r
+  -- FIXME trace forward rules
 
 def GlobalRuleSet.trace (rs : GlobalRuleSet) (traceOpt : TraceOption) :
     CoreM Unit := do
@@ -445,6 +446,17 @@ def applicableSafeRulesWith (rs : LocalRuleSet) (goal : MVarId)
 def applicableSafeRules (rs : LocalRuleSet) (goal : MVarId) :
     MetaM (Array (IndexMatchResult SafeRule)) :=
   rs.applicableSafeRulesWith goal (include? := λ _ => true)
+
+def applicableForwardRulesWith (rs : LocalRuleSet) (e : Expr)
+    (include? : ForwardRule → Bool) :
+    MetaM (Array (ForwardRule × PremiseIndex)) := do
+  let rules ← rs.forwardRules.get e
+  return rules.filter λ (rule, _) => include? rule && !rs.isErased rule.name
+
+@[inline, always_inline]
+def applicableForwardRules (rs : LocalRuleSet) (e : Expr) :
+    MetaM (Array (ForwardRule × PremiseIndex)) :=
+  rs.applicableForwardRulesWith e (include? := λ _ => true)
 
 -- NOTE: only non-forward norm/safe/unsafe rules can be unindexed.
 def unindex (rs : LocalRuleSet) (p : RuleName → Bool) : LocalRuleSet := {

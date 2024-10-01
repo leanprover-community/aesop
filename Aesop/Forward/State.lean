@@ -536,13 +536,7 @@ structure ForwardState where
 namespace ForwardState
 
 instance : EmptyCollection ForwardState where
-  emptyCollection := {
-    ruleStates := .empty
-    normQueue := ∅
-    safeQueue := ∅
-    unsafeQueue := ∅
-    erasedHyps := ∅
-  }
+  emptyCollection := by refine' {..} <;> first | exact ∅ | exact .empty
 
 /-- Add a complete match entry to the forward state's complete match queue for
 `phase`. -/

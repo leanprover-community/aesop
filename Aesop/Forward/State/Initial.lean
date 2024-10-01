@@ -5,22 +5,22 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Forward.State
-import Aesop.Index.Forward
+import Aesop.RuleSet
 
 open Lean Lean.Meta
 
-namespace Aesop.ForwardIndex
+namespace Aesop.LocalRuleSet
 
-def mkInitialForwardState (goal : MVarId) (idx : ForwardIndex) :
+def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
     MetaM ForwardState :=
   goal.withContext do
     let mut fs := ∅
     for ldecl in ← getLCtx do
       if ldecl.isImplementationDetail then
         continue
-      let rules ← idx.get ldecl.type
+      let rules ← rs.applicableForwardRules ldecl.type
       fs ← fs.addHyp goal ldecl.fvarId rules
     return fs
 
 
-end Aesop.ForwardIndex
+end Aesop.LocalRuleSet
