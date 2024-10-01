@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Forward.State
+import Aesop.Forward.State.Initial
 import Aesop.RuleSet
 import Aesop.RuleTac
 import Aesop.Search.Expansion.Basic
@@ -111,13 +111,7 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) :
     if (← read).options.forwardMaxDepth?.isSome then
       logWarning "saturate: forwardMaxDepth option currently has no effect when using stateful forward reasoning"
     goal.checkNotAssigned `saturate
-    let index := rs.forwardRules
-    let mut fs : ForwardState := ∅
-    for ldecl in ← getLCtx do
-      if ldecl.isImplementationDetail then
-        continue
-      let rules ← index.get ldecl.type
-      fs ← fs.addHyp goal ldecl.fvarId rules
+    let fs ← rs.forwardRules.mkInitialForwardState goal
     go fs goal
 where
   go (fs : ForwardState) (goal : MVarId) : ScriptM MVarId := do
