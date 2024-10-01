@@ -117,15 +117,12 @@ where
   go (fs : ForwardState) (goal : MVarId) : ScriptM MVarId := do
     withIncRecDepth do
     goal.withContext do
-      if let some (prf, fs) ← fs.popFirstMatch? goal then
+      if let some (m, fs) ← fs.popFirstMatch? goal then
         trace[saturate] "goal:{indentD goal}"
-        let name ← getUnusedUserName forwardHypPrefix
-        let type ← inferType prf
-        trace[saturate] "add hyp {name} : {type} := {prf}"
-        let hyp := { userName := name, value := prf, type }
-        let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
-          | unreachable!
+        let (goal, hyp) ← m.apply goal
         goal.withContext do
+          let type ← inferType (.fvar hyp)
+          trace[saturate] "added hyp {Expr.fvar hyp} : {type}"
           let rules ← rs.applicableForwardRules type
           let fs ← fs.addHyp goal hyp rules
           go fs goal
