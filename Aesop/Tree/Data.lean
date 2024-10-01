@@ -8,6 +8,7 @@ import Aesop.Constants
 import Aesop.Script.Step
 import Aesop.Tracing
 import Aesop.Tree.UnsafeQueue
+import Aesop.Forward.State
 
 open Lean
 open Lean.Meta
@@ -328,6 +329,11 @@ structure GoalData (Rapp MVarCluster : Type) : Type where
     -- appear in the target or hypotheses of `goal` when interpreted in the
     -- metavar context of `parent?` (or in the global metavar context if
     -- `parent? = none`).
+  /-- The forward state reflects the local context of the current goal. Before
+  normalisation, this is the local context of `preNormGoal`; after normalisation,
+  it is the local context of the post-normalisation goal (unless normalisation
+  solved the goal, in which case the forward state is undetermined). -/
+  forwardState : ForwardState
   successProbability : Percent
   addedInIteration : Iteration
   lastExpandedInIteration : Iteration
@@ -531,6 +537,10 @@ def mvars (g : Goal) : UnorderedArraySet MVarId :=
   g.elim.mvars
 
 @[inline]
+def forwardState (g : Goal) : ForwardState :=
+  g.elim.forwardState
+
+@[inline]
 def successProbability (g : Goal) : Percent :=
   g.elim.successProbability
 
@@ -598,6 +608,10 @@ def setNormalizationState (normalizationState : NormalizationState) (g : Goal) :
 @[inline]
 def setMVars (mvars : UnorderedArraySet MVarId) (g : Goal) : Goal :=
   g.modify λ g => { g with mvars }
+
+@[inline]
+def setForwardState (forwardState : ForwardState) (g : Goal) : Goal :=
+  g.modify λ g => { g with forwardState }
 
 @[inline]
 def setSuccessProbability (successProbability : Percent) (g : Goal) : Goal :=

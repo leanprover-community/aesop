@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Forward.State.Initial
+import Aesop.RuleSet
 import Aesop.Tree.Data
 
 open Lean
@@ -23,7 +25,7 @@ structure Tree where
   -/
   allIntroducedMVars : Std.HashSet MVarId
 
-def mkInitialTree (goal : MVarId) : MetaM Tree := do
+def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : MetaM Tree := do
   let rootClusterRef ← IO.mkRef $ MVarCluster.mk {
     parent? := none
     goals := #[] -- patched up below
@@ -42,6 +44,7 @@ def mkInitialTree (goal : MVarId) : MetaM Tree := do
     preNormGoal := goal
     normalizationState := NormalizationState.notNormal
     mvars := .ofHashSet (← goal.getMVarDependencies)
+    forwardState := ← rs.mkInitialForwardState goal
     successProbability := Percent.hundred
     addedInIteration := Iteration.one
     lastExpandedInIteration := Iteration.none
@@ -62,6 +65,7 @@ def mkInitialTree (goal : MVarId) : MetaM Tree := do
 
 structure TreeM.Context where
   currentIteration : Iteration
+  ruleSet : LocalRuleSet
 
 abbrev TreeM := ReaderT TreeM.Context $ StateRefT Tree MetaM
 
@@ -80,7 +84,6 @@ def run' (ctx : TreeM.Context) (t : Tree) (x : TreeM α) :
   ReaderT.run x ctx |>.run t
 
 end TreeM
-
 
 def getRootMVarCluster : TreeM MVarClusterRef :=
   return (← get).root
