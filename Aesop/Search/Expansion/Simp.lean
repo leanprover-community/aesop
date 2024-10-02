@@ -3,13 +3,9 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-import Lean.Elab.Tactic.Simp
-import Aesop.Options
-import Aesop.RuleSet
-import Lean.Elab.Tactic.Simp
+import Lean.Meta.Tactic.Simp.SimpAll
 
 open Lean Lean.Meta
-open Lean.Elab.Tactic (mkSimpOnly)
 open Simp (UsedSimps)
 
 namespace Aesop

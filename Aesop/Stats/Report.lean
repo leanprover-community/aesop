@@ -11,21 +11,17 @@ open Lean
 
 namespace Aesop
 
-namespace StatsArray
+/-- Assumes that `xs` is ascending. We use a simple nearest-rank definition of
+percentiles. -/
+def sortedPercentileD (p : Percent) (dflt : α) (xs : Array α) : α :=
+  if xs.size == 0 then
+    dflt
+  else
+    let rank := xs.size.toFloat * p.toFloat |>.ceil.toUInt64.toNat |>.min (xs.size - 1)
+    xs[rank]?.getD dflt
 
-def filterPercentile [Ord α] (f : Stats → α) (percentile : Percent)
-    (stats : StatsArray) : StatsArray :=
-  let stats := stats.qsort λ s₁ s₂ => compare (f s₁.stats) (f s₂.stats) |>.isLT
-  let n := stats.usize.toUInt64.toFloat * percentile.toFloat |>.toUInt64.toNat
-  stats.shrink n
-
-def filterOptPercentile [Ord α] (f : Stats → α) (percentile? : Option Percent)
-    (stats : StatsArray) : StatsArray :=
-  match percentile? with
-  | none => stats
-  | some percentile => stats.filterPercentile f percentile
-
-end StatsArray
+def sortedMedianD (dflt : α) (xs : Array α) : α :=
+  sortedPercentileD ⟨0.5⟩ dflt xs
 
 abbrev StatsReport := StatsArray → Format
 
@@ -33,9 +29,6 @@ namespace StatsReport
 
 local instance : ToString Nanos :=
   ⟨Nanos.printAsMillis⟩
-
-private def fmtTime (n : Nanos) (samples : Nat) : Format :=
-    f!"{n} [{if samples == 0 then 0 else n / samples}]"
 
 def default : StatsReport := λ statsArray => Id.run do
   let mut total := 0
@@ -56,8 +49,8 @@ def default : StatsReport := λ statsArray => Id.run do
     ruleStats := stats.ruleStatsTotals (init := ruleStats)
   let samples := statsArray.size
   f!"Statistics for {statsArray.size} Aesop calls in current and imported modules\n\
-     Displaying totals and [averages] in milliseconds\n\
-     Total time:            {fmtTime total samples}\n\
+     Displaying totals and [averages]\n\
+     Total Aesop time:      {fmtTime total samples}\n\
      Config parsing:        {fmtTime configParsing samples}\n\
      Rule set construction: {fmtTime ruleSetConstruction samples}\n\
      Rule selection:        {fmtTime ruleSelection samples}\n\
@@ -65,6 +58,9 @@ def default : StatsReport := λ statsArray => Id.run do
      Search:                {fmtTime search samples}\n\
      Rules:{Std.Format.indentD $ fmtRuleStats $ sortRuleStatsTotals $ ruleStats.toArray}"
 where
+  fmtTime (n : Nanos) (samples : Nat) : Format :=
+    f!"{n} [{if samples == 0 then 0 else n / samples}]"
+
   fmtRuleStats (stats : Array (DisplayRuleName × RuleStatsTotals)) :
       Format := Id.run do
     let fmtSection (n : Nanos) (samples : Nat) : Format :=
@@ -78,50 +74,75 @@ where
           {"  "}failed:     {fmtSection totals.elapsedFailed totals.numFailed}\n"
     return fmt
 
-def scriptsCore (percentile? : Option Percent := none) :
+def scriptsCore (nSlowest := 30) (nontrivialOnly := false) :
     StatsReport := λ statsArray => Id.run do
-  let statsArray := statsArray.filterOptPercentile (·.script) percentile?
-  let mut totalTime := 0
-  let mut scriptTime := 0
-  let mut generated := 0
+  let statsArray :=
+    if nontrivialOnly then
+      statsArray.filter (·.stats.scriptGenerated.isNontrivial)
+    else
+      statsArray
   let mut staticallyStructured := 0
   let mut perfectlyStaticallyStructured := 0
   let mut dynamicallyStructured := 0
   let mut perfectlyDynamicallyStructured := 0
+  let mut totalTimes := Array.mkEmpty statsArray.size
+  let mut scriptTimes := Array.mkEmpty statsArray.size
   for stats in statsArray do
     let stats := stats.stats
-    totalTime := totalTime + stats.total
-    scriptTime := scriptTime + stats.script
+    totalTimes := totalTimes.push stats.total
     match stats.scriptGenerated with
     | .none => pure ()
-    | .staticallyStructured perfect =>
-      generated := generated + 1
+    | .staticallyStructured perfect .. =>
+      scriptTimes := scriptTimes.push stats.script
       staticallyStructured := staticallyStructured + 1
       if perfect then
         perfectlyStaticallyStructured := perfectlyStaticallyStructured + 1
-    | .dynamicallyStructured perfect =>
-      generated := generated + 1
+    | .dynamicallyStructured perfect .. =>
+      scriptTimes := scriptTimes.push stats.script
       dynamicallyStructured := dynamicallyStructured + 1
       if perfect then
         perfectlyDynamicallyStructured := perfectlyDynamicallyStructured + 1
-  let samples := statsArray.size
-  let pctStr :=
-    if let some pct := percentile? then
-      s!" (percentile by script generation time: {pct})"
-    else
-      ""
-  f!"Statistics for {statsArray.size} Aesop calls in current and imported modules{pctStr}\n\
-     Durations are given as totals and [averages] in milliseconds\n\
-     Total time:               {fmtTime totalTime samples}\n\
-     Script generation time:   {fmtTime scriptTime samples}\n\
-     Scripts generated:        {generated}\n\
+
+  let slowest := statsArray.qsort (λ s₁ s₂ => s₁.stats.script > s₂.stats.script)
+  let slowest := slowest[:nSlowest].toArray
+  let nSlowest := min slowest.size nSlowest
+  let slowestFmt := slowest.map λ e =>
+    let pos :=
+      match e.position? with
+      | some pos => f!"{pos.line}:{pos.column}"
+      | none => f!"?:?"
+    f!"{e.fileName}:{pos}: script {e.stats.script}, total {e.stats.total}, type {fmtScriptGenerated e.stats.scriptGenerated}"
+
+  f!"Statistics for {statsArray.size} Aesop calls{if nontrivialOnly then f!" with nontrivial script generation" else ""} in current and imported modules\n\
+     Total Aesop time:         {fmtTimes totalTimes}\n\
+     Script generation time:   {fmtTimes scriptTimes}\n\
+     Scripts generated:        {scriptTimes.size}\n\
      - Statically  structured: {staticallyStructured}\n" ++
   f!"  - perfectly:            {perfectlyStaticallyStructured}\n\
      - Dynamically structured: {dynamicallyStructured}\n" ++
-  f!"  - perfectly:            {perfectlyDynamicallyStructured}"
+  f!"  - perfectly:            {perfectlyDynamicallyStructured}\n\
+     \n\
+     {nSlowest} Aesop calls with slowest script generation:\n\
+     {Format.joinSep slowestFmt.toList "\n"}"
+where
+  fmtScriptGenerated : ScriptGenerated → Format
+    | .none => "<none>"
+    | .staticallyStructured perfect _ => f!"static (perfect: {perfect})"
+    | .dynamicallyStructured perfect _ => f!"dynamic (perfect: {perfect})"
 
-def scripts   := scriptsCore
-def scripts99 := scriptsCore (percentile? := some ⟨0.99⟩)
-def scripts95 := scriptsCore (percentile? := some ⟨0.95⟩)
+  fmtTimes (ns : Array Nanos) : Format :=
+    let ns := ns.qsortOrd
+    let total : Nanos := ns.foldl (init := 0) (· + ·)
+    let average := if ns.size == 0 then 0 else total / ns.size
+    let min := ns[0]?.getD 0
+    let max := ns[ns.size - 1]?.getD 0
+    let median := sortedMedianD 0 ns
+    let pct80 := sortedPercentileD ⟨0.80⟩ 0 ns
+    let pct95 := sortedPercentileD ⟨0.95⟩ 0 ns
+    let pct99 := sortedPercentileD ⟨0.99⟩ 0 ns
+    f!"{total} (min = {min}, avg = {average}, median = {median}, 80pct = {pct80}, 95pct = {pct95}, 99pct = {pct99}, max = {max})"
+
+def scripts := scriptsCore
+def scriptsNontrivial := scriptsCore (nontrivialOnly := true)
 
 end Aesop.StatsReport

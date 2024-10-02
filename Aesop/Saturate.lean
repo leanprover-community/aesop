@@ -4,11 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.Builder.Forward
 import Aesop.RuleSet
 import Aesop.RuleTac
-import Aesop.Script.Main
 import Aesop.Search.Expansion.Basic
+import Aesop.Script.Check
 
 open Lean Lean.Meta
 
@@ -43,22 +42,35 @@ where
     trace[saturate] "goal {goal.name}:{indentD goal}"
     let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
     let preState ← show MetaM _ from saveState
-    let normMatchResults ← rs.applicableNormalizationRulesWith goal
-      (include? := (isForwardOrDestructRuleName ·.name))
-    if let some goal ← runFirstRule goal mvars preState normMatchResults then
+    if let some goal ← tryNormRules goal mvars preState then
+      return ← go goal
+    else if let some goal ← trySafeRules goal mvars preState then
       return ← go goal
     else
-      let safeMatchResults ← rs.applicableSafeRulesWith goal
-        (include? := (isForwardOrDestructRuleName ·.name))
-      if let some goal ← runFirstRule goal mvars preState safeMatchResults then
-        return ← go goal
-      else
-        clearForwardImplDetailHyps goal
+      clearForwardImplDetailHyps goal
+
+  tryNormRules (goal : MVarId) (mvars : UnorderedArraySet MVarId)
+      (preState : Meta.SavedState) : SaturateM (Option MVarId) :=
+    withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying normalisation rules") do
+      let matchResults ←
+        withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting normalisation rules") do
+        rs.applicableNormalizationRulesWith goal
+          (include? := (isForwardOrDestructRuleName ·.name))
+      runFirstRule goal mvars preState matchResults
+
+  trySafeRules (goal : MVarId) (mvars : UnorderedArraySet MVarId)
+      (preState : Meta.SavedState) : SaturateM (Option MVarId) :=
+    withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying safe rules") do
+      let matchResults ←
+        withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting safe rules") do
+        rs.applicableSafeRulesWith goal
+          (include? := (isForwardOrDestructRuleName ·.name))
+      runFirstRule goal mvars preState matchResults
 
   runRule {α} (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       (preState : Meta.SavedState) (matchResult : IndexMatchResult (Rule α)) :
       SaturateM (Option (MVarId × Option (Array Script.LazyStep))) := do
-    trace[saturate] "running rule {matchResult.rule.name}"
+    withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} running rule {matchResult.rule.name}") do
     let input := {
       indexMatchLocations := matchResult.locations
       patternInstantiations := matchResult.patternInstantiations
@@ -69,7 +81,7 @@ where
       runRuleTac matchResult.rule.tac.run matchResult.rule.name preState input
     match tacResult with
     | .inl exc =>
-      trace[saturate] "rule failed:{indentD exc.toMessageData}"
+      trace[saturate] exc.toMessageData
       return none
     | .inr output =>
       let (goal, postState, scriptSteps?) ← getSingleGoal output
@@ -98,12 +110,14 @@ def saturate (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') :
     let tacticState ← Script.TacticState.mkInitial goal
     let preGoal := goal
     let (goal, steps) ← saturateCore rs goal |>.run { options } |>.run
-    let uscript : Script.UScript ← steps.mapM (·.toStep)
-    let tacticSeq ← `(tacticSeq| $(← uscript.render tacticState):tactic*)
-    checkRenderedScriptIfEnabled tacticSeq preState preGoal
-      (expectCompleteProof := false)
-    if options.traceScript then
-      addTryThisTacticSeqSuggestion (← getRef) tacticSeq
+    let options ← options.toOptions'
+    if options.generateScript then
+      let uscript : Script.UScript ← steps.mapM (·.toStep)
+      let tacticSeq ← `(tacticSeq| $(← uscript.render tacticState):tactic*)
+      checkRenderedScriptIfEnabled tacticSeq preState preGoal
+        (expectCompleteProof := false)
+      if options.traceScript then
+        addTryThisTacticSeqSuggestion (← getRef) tacticSeq
     return goal
 
 end Aesop

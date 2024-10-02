@@ -15,6 +15,18 @@ namespace Nanos
 instance : OfNat Nanos n where
   ofNat := ⟨n⟩
 
+instance : LT Nanos where
+  lt | ⟨n₁⟩, ⟨n₂⟩ => n₁ < n₂
+
+instance : DecidableRel (α := Nanos) (· < ·) :=
+  λ ⟨n₁⟩ ⟨n₂⟩ => inferInstanceAs (Decidable (n₁ < n₂))
+
+instance : LE Nanos where
+  le | ⟨n₁⟩, ⟨n₂⟩ => n₁ ≤ n₂
+
+instance : DecidableRel (α := Nanos) (· ≤ ·) :=
+  λ ⟨n₁⟩ ⟨n₂⟩ => inferInstanceAs (Decidable (n₁ ≤ n₂))
+
 instance : Add Nanos where
   add n m := ⟨n.nanos + m.nanos⟩
 

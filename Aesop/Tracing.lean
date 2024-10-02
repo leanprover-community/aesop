@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Util.Basic
+import Batteries.Data.Array.Basic
 import Lean.Elab.Term
 import Lean.Meta.Tactic.Simp
 

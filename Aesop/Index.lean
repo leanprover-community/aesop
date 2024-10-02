@@ -9,6 +9,8 @@ import Aesop.RulePattern
 import Aesop.Rule.Basic
 import Aesop.Tracing
 import Batteries.Lean.Meta.InstantiateMVars
+import Batteries.Lean.PersistentHashSet
+import Batteries.Lean.Meta.DiscrTree
 
 open Lean
 open Lean.Meta

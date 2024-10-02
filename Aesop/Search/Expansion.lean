@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Search.Expansion.Norm
+import Aesop.Tree.AddRapp
 
 open Lean
 open Lean.Meta
