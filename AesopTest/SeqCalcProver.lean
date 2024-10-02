@@ -405,7 +405,7 @@ theorem Prove_sound_complete [DecidableEq Φ] (φ : Form Φ)
     have h' : Any (Val i) (φ :: [].map (♩·)) := Iff.mp h Pφ i dec All.nil
     aesop
   case mpr =>
-    aesop
+    aesop (add simp Valid)
 
 
 --- Proof System
