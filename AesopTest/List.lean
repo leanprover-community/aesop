@@ -94,10 +94,6 @@ theorem mem_none : a ∈ none ↔ False := by
   aesop
 
 @[simp]
-theorem mem_some : a ∈ some b ↔ a = b := by
-  aesop
-
-@[simp]
 def iget [Inhabited α] : Option α → α
   | none => default
   | some a => a
@@ -318,7 +314,7 @@ theorem X.forall_mem_map_iff {f : α → β} {l : List α} {P : β → Prop} :
   (∀ i, i ∈ l.map f → P i) ↔ ∀ j, j ∈ l → P (f j) := by
   aesop
 
-attribute [-simp] map_eq_nil
+-- attribute [-simp] map_eq_nil
 @[simp] theorem X.map_eq_nil {f : α → β} {l : List α} : map f l = [] ↔ l = [] := by
   aesop (add 1% cases List)
 
@@ -548,14 +544,17 @@ attribute [-simp] append_eq_nil
 @[simp] theorem X.append_eq_nil {p q : List α} : (p ++ q) = [] ↔ p = [] ∧ q = [] := by
   aesop (add 1% cases List)
 
-@[simp] theorem nil_eq_append_iff {a b : List α} : [] = a ++ b ↔ a = [] ∧ b = [] := by
+-- attribute [-simp] nil_eq_append_iff
+@[simp] theorem X.nil_eq_append_iff {a b : List α} : [] = a ++ b ↔ a = [] ∧ b = [] := by
   induction a <;> aesop
 
-theorem append_eq_cons_iff {a b c : List α} {x : α} :
+-- attribute [-simp] append_eq_cons_iff
+theorem X.append_eq_cons_iff {a b c : List α} {x : α} :
   a ++ b = x :: c ↔ (a = [] ∧ b = x :: c) ∨ (∃a', a = x :: a' ∧ c = a' ++ b) := by
   aesop (add 1% cases List)
 
-theorem cons_eq_append_iff {a b c : List α} {x : α} :
+-- attribute [-simp] cons_eq_append_iff
+theorem X.cons_eq_append_iff {a b c : List α} {x : α} :
     (x :: c : List α) = a ++ b ↔ (a = [] ∧ b = x :: c) ∨ (∃a', a = x :: a' ∧ c = a' ++ b) := by
   aesop (add norm simp [append_eq_cons_iff, eq_comm])
 
@@ -952,12 +951,13 @@ theorem getLast?_eq_last_of_ne_nil : ∀ {l : List α} (h : l ≠ []), l.getLast
 theorem mem_getLast?_cons {x y : α} : ∀ {l : List α} (_ : x ∈ l.getLast?), x ∈ (y :: l).getLast? := by
   intro l; induction l <;> aesop
 
-theorem mem_of_mem_getLast? {l : List α} {a : α} (ha : a ∈ l.getLast?) : a ∈ l := by
+-- attribute [-simp] mem_of_mem_getLast?
+theorem X.mem_of_mem_getLast? {l : List α} {a : α} (ha : a ∈ l.getLast?) : a ∈ l := by
   match l with
   | [] => aesop
   | [_] => aesop
   | x :: y :: zs =>
-    have ih := mem_of_mem_getLast? (l := y :: zs) (a := a)
+    have ih := X.mem_of_mem_getLast? (l := y :: zs) (a := a)
     aesop
 
 theorem init_append_getLast? : ∀ {l : List α} {a}, a ∈ l.getLast? → init l ++ [a] = l
