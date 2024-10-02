@@ -7,7 +7,6 @@ Authors: Jannis Limperg
 import Aesop.RuleTac.Basic
 import Aesop.RuleTac.ElabRuleTerm
 import Batteries.Lean.Meta.UnusedNames
-import Batteries.Lean.Meta.AssertHypotheses
 import Aesop.Script.SpecificTactics
 import Aesop.RuleTac.Forward.Basic
 
@@ -103,7 +102,7 @@ def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (depth : Nat)
         binderInfo := .default
         kind := .implDetail
     }
-    let (#[fvarId, _], goal) ← goal.assertHypotheses' #[hyp, implDetailHyp]
+    let (#[fvarId, _], goal) ← goal.assertHypotheses #[hyp, implDetailHyp]
       | throwError "aesop: internal error in assertForwardHyp: unexpected number of asserted fvars"
     return (fvarId, goal)
 where
