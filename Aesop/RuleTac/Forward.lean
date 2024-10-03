@@ -4,11 +4,12 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Forward.Match
 import Aesop.RuleTac.Basic
 import Aesop.RuleTac.ElabRuleTerm
-import Batteries.Lean.Meta.UnusedNames
-import Aesop.Script.SpecificTactics
 import Aesop.RuleTac.Forward.Basic
+import Aesop.Script.SpecificTactics
+import Batteries.Lean.Meta.UnusedNames
 
 open Lean
 open Lean.Meta
@@ -187,5 +188,11 @@ def forward (t : RuleTerm) (pat? : Option RulePattern)
   match t with
   | .const decl => forwardConst decl pat? immediate clear md
   | .term tm => forwardTerm tm pat? immediate clear md
+
+def forwardMatch (m : ForwardRuleMatch) :
+    RuleTac := SingleRuleTac.toRuleTac λ input => do
+  let ((goal, hyp), steps) ← m.apply input.goal |>.run
+  let diff := { addedFVars := {hyp}, removedFVars := ∅, fvarSubst := ∅ }
+  return (#[{ mvarId := goal, diff }], some steps, none)
 
 end Aesop.RuleTac

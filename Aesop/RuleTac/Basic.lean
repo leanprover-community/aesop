@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Forward.Match.Types
+import Aesop.Forward.RuleInfo
 import Aesop.Index.Basic
 import Aesop.Percent
 import Aesop.RuleTac.GoalDiff
@@ -216,6 +218,8 @@ inductive RuleTacDescr
   | singleRuleTac (decl : Name)
   | tacticStx (stx : Syntax)
   | preprocess
+  | forwardMatch (ruleName : RuleName) (ruleTerm : RuleTerm)
+      (prio : Int ⊕ Percent) (info : ForwardRuleInfo) (m : CompleteMatch)
   deriving Inhabited
 
 end Aesop
