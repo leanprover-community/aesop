@@ -22,7 +22,20 @@ inductive ForwardRulePriority : Type where
   /-- If the rule is an unsafe rule, its priority is a percentage representing
   the rule's success probability. -/
   | «unsafe» (p : Percent) : ForwardRulePriority
-  deriving Inhabited
+  deriving Inhabited, BEq
+
+namespace ForwardRulePriority
+
+/-- Compare two rule priorities. Norm/safe rules have higher priority than
+unsafe rules. Among norm/safe rules, lower penalty is better (lower). Among
+unsafe rules, higher percentage is better. -/
+protected def le : (p₁ p₂ : ForwardRulePriority) → Bool
+  | .normSafe _, .unsafe _ => true
+  | .unsafe _, .normSafe _ => true
+  | .normSafe n₁, .normSafe n₂ => n₁ ≤ n₂
+  | .unsafe p₁, .unsafe p₂ => p₁ ≥ p₂
+
+end ForwardRulePriority
 
 /-- A forward rule. -/
 structure ForwardRule extends ForwardRuleInfo where

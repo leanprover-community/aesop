@@ -124,13 +124,11 @@ structure ForwardRuleMatch where
 
 namespace ForwardRuleMatch
 
-/-- Compare two queue entries by rule priority. Higher-priority rules are
-considered less (since the queues are min-queues). -/
+/-- Compare two queue entries by rule priority and rule name. Higher-priority
+rules are considered less (since the queues are min-queues). -/
 protected def le (m₁ m₂ : ForwardRuleMatch) : Bool :=
-  match m₁.rule.prio, m₂.rule.prio with
-  | .normSafe x, .normSafe y => x ≤ y
-  | .unsafe x, .unsafe y => x ≥ y
-  | _, _ => panic! "comparing ForwardRuleMatches with different priority types"
+  m₁.rule.prio.le m₂.rule.prio ||
+  (m₁.rule.prio == m₂.rule.prio && (m₁.rule.name.compare m₂.rule.name).isLE)
 
 /-- Returns `true` if any hypothesis contained in `m` satisfies `f`. -/
 def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
