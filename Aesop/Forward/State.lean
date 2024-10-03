@@ -21,10 +21,10 @@ set_option linter.missingDocs true
 namespace Aesop
 
 /-- Elaborate the term of a forward rule in the current goal. -/
-def elabForwardRuleTerm? (goal : MVarId) : RuleTerm → MetaM (Option Expr)
+def elabForwardRuleTerm (goal : MVarId) : RuleTerm → MetaM Expr
   | .const n => mkConstWithFreshMVarLevels n
-  | .term stx => observing? do
-    (withFullElaboration $ elabRuleTermForApplyLikeMetaM goal stx) |>.run'
+  | .term stx =>
+    (withFullElaboration $ elabRuleTermForApplyLikeMetaM goal stx).run'
 
 /-- A substitution maps premise indices to assignments. -/
 abbrev Substitution := AssocList PremiseIndex Expr
@@ -421,47 +421,48 @@ protected def le (m₁ m₂ : ForwardRuleMatch) : Bool :=
   | .unsafe x, .unsafe y => x ≥ y
   | _, _ => panic! "comparing ForwardRuleMatches with different priority types"
 
-end ForwardRuleMatch
-
-/-- A `ForwardRuleMatch` whose rule term has already been elaborated. -/
-structure ElabForwardRuleMatch where
-  /-- The rule to which this match belongs. -/
-  rule : ForwardRule
-  /-- The elaborated term of `rule`. -/
-  expr : Expr
-  /-- The match. -/
-  «match» : CompleteMatch
-
-/-- Try to elaborate the rule term of `m` for `goal`. -/
-def ForwardRuleMatch.elab? (goal : MVarId) (m : ForwardRuleMatch) :
-    MetaM (Option ElabForwardRuleMatch) := do
-  let some expr ← elabForwardRuleTerm? goal m.rule.term
-    | return none
-  return some { m with expr }
-
-namespace ElabForwardRuleMatch
+/-- Returns `true` if any hypothesis contained in `m` satisfies `f`. -/
+def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
+  m.match.clusterMatches.any (·.revHyps.any f)
 
 /-- Construct the proof of the new hypothesis represented by `m`. -/
-def proof (m : ElabForwardRuleMatch) : Expr :=
-  mkAppN m.expr (m.match.reconstructArgs m.rule)
+def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM Expr :=
+  goal.withContext do
+    let e ← elabForwardRuleTerm goal m.rule.term
+    return mkAppN e (m.match.reconstructArgs m.rule)
 
 /-- Apply a forward rule match to a goal. This adds the hypothesis corresponding
 to the match to the local context. -/
-def apply (goal : MVarId) (m : ElabForwardRuleMatch) :
-    ScriptM (MVarId × FVarId) :=
+def apply (goal : MVarId) (m : ForwardRuleMatch) : ScriptM (MVarId × FVarId) :=
   goal.withContext do
     let name ← getUnusedUserName forwardHypPrefix
-    let prf := m.proof
+    let prf ← m.getProof goal
     let type ← inferType prf
     let hyp := { userName := name, value := prf, type }
     let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
       | unreachable!
     return (goal, hyp)
 
-end ElabForwardRuleMatch
+end ForwardRuleMatch
 
 /-- A complete match queue. -/
 abbrev CompleteMatchQueue := BinomialHeap ForwardRuleMatch ForwardRuleMatch.le
+
+namespace CompleteMatchQueue
+
+/-- Drop elements satisfying `f` from the front of `queue` until we reach
+an element that does not satisfy `f` (or until the queue is empty). -/
+partial def dropInitial (queue : CompleteMatchQueue)
+    (f : ForwardRuleMatch → Bool) : CompleteMatchQueue :=
+  match queue.deleteMin with
+  | none => queue
+  | some (m, queue') =>
+    if f m then
+      dropInitial queue' f
+    else
+      queue
+
+end CompleteMatchQueue
 
 /-- Forward state for one rule. -/
 structure RuleState where
@@ -483,7 +484,7 @@ namespace RuleState
 completed matches. If `h` does not match premise `pi`, nothing happens. -/
 def addHyp (goal : MVarId) (h : FVarId) (pi : PremiseIndex) (rs : RuleState) :
     MetaM (RuleState × Array CompleteMatch) := do
-  let some ruleExpr ← elabForwardRuleTerm? goal rs.rule.term
+  let some ruleExpr ← observing? $ elabForwardRuleTerm goal rs.rule.term
     | return (rs, #[])
   withNewMCtxDepth do
     let (premises, _, _) ← forallMetaTelescope (← inferType ruleExpr)
@@ -600,54 +601,68 @@ def eraseHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     ruleStates := ruleStates.insert r.name rs
   return { fs with ruleStates, erasedHyps := fs.erasedHyps.insert h }
 
-@[inline]
-private partial def popFirstMatch?' (goal : MVarId) (fs : ForwardState)
-    (queue : CompleteMatchQueue) :
-    MetaM (Option (ElabForwardRuleMatch × CompleteMatchQueue)) := do
-  match queue.deleteMin with
-  | none => return none
-  | some (m, queue) =>
-    let result? ←
-      withAesopTraceNode .debug (λ r => return m!"{toEmoji r} reconstruct queue entry for rule {m.rule.name} with args {m.match.reconstructArgs m.rule}") do
-        let hasErasedHyp :=
-          m.match.clusterMatches.any λ m =>
-            m.revHyps.any (fs.erasedHyps.contains ·)
-        if hasErasedHyp then
-          aesop_trace[forward] "args contain erased hyp"
-          pure none
-        else
-          return (← m.elab? goal).map ((·, queue))
-    match result? with
-    | none => popFirstMatch?' goal fs queue
-    | some result => return result
+/-- Drop complete matches containing an erased hyp from the complete match
+queues. Note that we only drop matches at the front of the queue, until we reach
+the first match containing no erased hyps. -/
+def dropForwardMatchesWithErasedHyps (fs : ForwardState) : ForwardState := {
+  fs with
+  normQueue := fs.normQueue.dropInitial (·.anyHyp fs.erasedHyps.contains)
+  safeQueue := fs.safeQueue.dropInitial (·.anyHyp fs.erasedHyps.contains)
+  unsafeQueue := fs.unsafeQueue.dropInitial (·.anyHyp fs.erasedHyps.contains)
+}
 
-/-- Get a proof for the first complete match of a norm rule. -/
-def popFirstNormMatch? (goal : MVarId) (fs : ForwardState) :
-    MetaM (Option (ElabForwardRuleMatch × ForwardState)) :=
-  return (← fs.popFirstMatch?' goal fs.normQueue).map λ (e, q) =>
-    (e, { fs with normQueue := q })
+/-- Get the first norm match (if any) without dropping it from the norm complete
+match queue. Use `dropForwardMatchesWithErasedHyps` to ensure that the match does
+not contain erased hyps. -/
+def peekNormMatch? (fs : ForwardState) : Option ForwardRuleMatch :=
+  fs.normQueue.head?
 
-/-- Get a proof for the first complete match of a safe rule. -/
-def popFirstSafeMatch? (goal : MVarId) (fs : ForwardState) :
-    MetaM (Option (ElabForwardRuleMatch × ForwardState)) :=
-  return (← fs.popFirstMatch?' goal fs.safeQueue).map λ (e, q) =>
-    (e, { fs with safeQueue := q })
+/-- Remove first norm match (if any) from the norm complete match queue. Use
+`dropForwardMatchesWithErasedHyps` to ensure that the match does not contain
+erased hyps. -/
+def dropNormMatch (fs : ForwardState) : ForwardState :=
+  { fs with normQueue := fs.normQueue.tail }
 
-/-- Get a proof for the first complete match of an unsafe rule. -/
-def popFirstUnsafeMatch? (goal : MVarId) (fs : ForwardState) :
-    MetaM (Option (ElabForwardRuleMatch × ForwardState)) :=
-  return (← fs.popFirstMatch?' goal fs.unsafeQueue).map λ (e, q) =>
-    (e, { fs with unsafeQueue := q })
+/-- Get the first safe match (if any) without dropping it from the safe complete
+match queue. Use `dropForwardMatchesWithErasedHyps` to ensure that the match does
+not contain erased hyps. -/
+def peekSafeMatch? (fs : ForwardState) : Option ForwardRuleMatch :=
+  fs.safeQueue.head?
 
-/-- Get a proof for the first complete match. Norm rules are prioritised over
-safe rules, and safe over unsafe rules. -/
-def popFirstMatch? (goal  : MVarId) (fs : ForwardState) :
-    MetaM (Option (ElabForwardRuleMatch × ForwardState)) := do
-  if let some result ← fs.popFirstNormMatch? goal then
-    return result
-  else if let some result ← fs.popFirstSafeMatch? goal then
-    return result
+/-- Remove first safe match (if any) from the safe complete match queue. Use
+`dropForwardMatchesWithErasedHyps` to ensure that the match does not contain
+erased hyps. -/
+def dropSafeMatch (fs : ForwardState) : ForwardState :=
+  { fs with safeQueue := fs.safeQueue.tail }
+
+/-- Get all unsafe complete matches and remove them from the unsafe match
+queue. -/
+partial def getResetUnsafeMatches (fs : ForwardState) :
+    Array ForwardRuleMatch × ForwardState :=
+  let ms := go #[] fs.unsafeQueue
+  (ms, { fs with unsafeQueue := ∅ })
+where
+  go (acc : Array ForwardRuleMatch) (q : CompleteMatchQueue) :
+      Array ForwardRuleMatch :=
+    match q.deleteMin with
+    | none => acc
+    | some (m, q) =>
+      if m.anyHyp (fs.erasedHyps.contains ·) then
+        go acc q
+      else
+        go (acc.push m) q
+
+/-- Get the first complete match. Norm matches are prioritised over safe matches
+and safe over unsafe matches. Use `dropForwardMatchesWithErasedHyps` to ensure
+that the match does not contain erased hyps. -/
+def popMatch? (fs : ForwardState) : Option (ForwardRuleMatch × ForwardState) :=
+  if let some (m, queue) := fs.normQueue.deleteMin then
+    (m, { fs with normQueue := queue })
+  else if let some (m, queue) := fs.safeQueue.deleteMin then
+    (m, { fs with safeQueue := queue })
+  else if let some (m, queue) := fs.unsafeQueue.deleteMin then
+    (m, { fs with unsafeQueue := queue })
   else
-    fs.popFirstUnsafeMatch? goal
+    none
 
 end Aesop.ForwardState
