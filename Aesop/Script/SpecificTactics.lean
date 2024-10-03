@@ -9,7 +9,6 @@ import Aesop.Util.Tactic.Ext
 import Aesop.Util.Tactic.Unfold
 import Aesop.Script.CtorNames
 import Aesop.Script.ScriptM
-import Batteries.Lean.Meta.Clear
 import Batteries.Lean.Meta.Inaccessible
 
 open Lean
