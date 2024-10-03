@@ -387,6 +387,12 @@ structure ForwardState where
   safeQueue : CompleteMatchQueue
   /-- Queue of complete matches for unsafe rules. -/
   unsafeQueue : CompleteMatchQueue
+  /-- A map from hypotheses to the rules and premises that they matched against
+  when they were initially added to the rule state. Invariant: the rule states
+  in which a hypothesis `h` appear are exactly those identified by the rule
+  names in `hyps[h]`. Furthermore, `h` only appears in slots with premise
+  indices greater than or equal to those in `hyps[h]`. -/
+  hyps : PHashMap FVarId (PArray (RuleName × PremiseIndex))
   /-- Hypotheses that were removed from the local context. Matches containing
   such hyps are not removed from the complete match queues. Instead, the hyps
   are added to this set and when a match is popped from the queues, we check
@@ -419,7 +425,10 @@ def addHyp (goal : MVarId) (h : FVarId) (ms : Array (ForwardRule × PremiseIndex
       withConstAesopTraceNode .debug (return m!"rule {r.name}, premise {i}") do
         let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState
         let (rs, completeMatches) ← rs.addHyp goal h i
-        let fs := { fs with ruleStates := fs.ruleStates.insert r.name rs }
+        let ruleStates := fs.ruleStates.insert r.name rs
+        let hyps := fs.hyps.insert h $
+          ms.map (λ (r, i) => (r.name, i)) |>.toPArray'
+        let fs := { fs with ruleStates, hyps }
         completeMatches.foldlM (init := fs) λ fs m => do
           aesop_trace[forward] "new complete match with args {m.reconstructArgs r}"
           let m := { rule := r, «match» := m }
@@ -428,15 +437,19 @@ def addHyp (goal : MVarId) (h : FVarId) (ms : Array (ForwardRule × PremiseIndex
 /-- Remove a hypothesis from the forward state. If `fs` represents a local
 context `lctx`, then `fs.eraseHyp h ms` represents `lctx` with `h` removed. `ms`
 must contain all rules for which `h` may unify with a maximal premise. -/
-def eraseHyp (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
-    (fs : ForwardState) : ForwardState := Id.run do
+def eraseHyp (h : FVarId) (fs : ForwardState) : ForwardState := Id.run do
   let mut ruleStates := fs.ruleStates
-  for (r, i) in ms do
-    let some rs := ruleStates.find? r.name
-      | continue
+  for (r, i) in fs.hyps[h].getD {} do
+    let some rs := ruleStates.find? r
+      | panic! s!"hyps entry for rule {r}, but no rule state"
     let rs := rs.eraseHyp h i
-    ruleStates := ruleStates.insert r.name rs
-  return { fs with ruleStates, erasedHyps := fs.erasedHyps.insert h }
+    ruleStates := ruleStates.insert r rs
+  return {
+    fs with
+    erasedHyps := fs.erasedHyps.insert h
+    hyps := fs.hyps.erase h
+    ruleStates
+  }
 
 /-- Drop complete matches containing an erased hyp from the complete match
 queues. Note that we only drop matches at the front of the queue, until we reach
