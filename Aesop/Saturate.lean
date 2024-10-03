@@ -117,7 +117,7 @@ where
   go (fs : ForwardState) (goal : MVarId) : ScriptM MVarId := do
     withIncRecDepth do
     goal.withContext do
-      if let some (m, fs) ← fs.popFirstMatch? goal then
+      if let some (m, fs) := fs.popMatch? then
         trace[saturate] "goal:{indentD goal}"
         let (goal, hyp) ← m.apply goal
         goal.withContext do
