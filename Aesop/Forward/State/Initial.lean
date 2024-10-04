@@ -12,15 +12,19 @@ open Lean Lean.Meta
 namespace Aesop.LocalRuleSet
 
 def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
-    MetaM ForwardState :=
+    MetaM (ForwardState × Array ForwardRuleMatch) :=
   goal.withContext do
     let mut fs := ∅
+    let mut ruleMatches := #[]
     for ldecl in ← getLCtx do
       if ldecl.isImplementationDetail then
         continue
       let rules ← rs.applicableForwardRules ldecl.type
-      fs ← fs.addHyp goal ldecl.fvarId rules
-    return fs
+      let (fs', ruleMatches') ←
+        fs.addHypCore ruleMatches goal ldecl.fvarId rules
+      fs := fs'
+      ruleMatches := ruleMatches'
+    return (fs, ruleMatches)
 
 
 end Aesop.LocalRuleSet

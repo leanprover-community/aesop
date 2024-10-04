@@ -39,15 +39,6 @@ end Substitution
 
 namespace Match
 
-instance : Inhabited Match :=
-  ⟨{ revHyps := [default], subst := ∅ }⟩
-
-instance : BEq Match where
-  beq m₁ m₂ := m₁.revHyps == m₂.revHyps
-
-instance : Hashable Match where
-  hash m := hash m.revHyps
-
 /--
 The level of a match `m` is the greatest slot index `i` such that `m` associates
 a hypothesis to slot `i`.
@@ -98,7 +89,7 @@ structure ForwardRuleMatch where
   rule : ForwardRule
   /-- The match. -/
   «match» : CompleteMatch
-  deriving Nonempty
+  deriving Inhabited, BEq, Hashable
 
 namespace ForwardRuleMatch
 

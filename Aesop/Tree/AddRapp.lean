@@ -84,6 +84,8 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
     let mvars ← parentMetaState.runMetaM' $
       .ofHashSet <$> g.preNormGoal.getMVarDependencies
     let rs := (← read).ruleSet
+    let (forwardState, ms) ← parentMetaState.runMetaM' do
+      rs.mkInitialForwardState g.preNormGoal -- FIXME use goal diff
     return Goal.mk {
       id := ← getAndIncrementNextGoalId
       parent := unsafeCast () -- will be filled in later
@@ -96,8 +98,8 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
       preNormGoal := g.preNormGoal
       normalizationState := NormalizationState.notNormal
       mvars
-      forwardState := ← parentMetaState.runMetaM' do
-        rs.mkInitialForwardState g.preNormGoal -- FIXME use goal diff
+      forwardState
+      forwardRuleMatches := .ofArray ms
       successProbability := parentSuccessProbability
       addedInIteration := (← read).currentIteration
       lastExpandedInIteration := Iteration.none
@@ -110,6 +112,8 @@ def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (parent : MVarClusterRef) (parentMetaState : Meta.SavedState) (depth : Nat)
     (successProbability : Percent) (origin : GoalOrigin) : TreeM Goal := do
   let rs := (← read).ruleSet
+  let (forwardState, ms) ← parentMetaState.runMetaM' do
+    rs.mkInitialForwardState goal -- FIXME use goal diff
   return Goal.mk {
     id := ← getAndIncrementNextGoalId
     children := #[]
@@ -118,8 +122,8 @@ def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     isForcedUnprovable := false
     preNormGoal := goal
     normalizationState := NormalizationState.notNormal
-    forwardState := ← parentMetaState.runMetaM' do
-      rs.mkInitialForwardState goal -- FIXME use goal diff
+    forwardState
+    forwardRuleMatches := .ofArray ms
     addedInIteration := (← read).currentIteration
     lastExpandedInIteration := Iteration.none
     unsafeRulesSelected := false

@@ -32,6 +32,7 @@ def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : MetaM Tree := do
     isIrrelevant := false
     state := NodeState.unknown
   }
+  let (forwardState, ms) ← rs.mkInitialForwardState goal
   let rootGoalRef ← IO.mkRef $ Goal.mk {
     id := GoalId.zero
     parent := rootClusterRef
@@ -44,7 +45,8 @@ def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : MetaM Tree := do
     preNormGoal := goal
     normalizationState := NormalizationState.notNormal
     mvars := .ofHashSet (← goal.getMVarDependencies)
-    forwardState := ← rs.mkInitialForwardState goal
+    forwardState
+    forwardRuleMatches := .ofArray ms
     successProbability := Percent.hundred
     addedInIteration := Iteration.one
     lastExpandedInIteration := Iteration.none

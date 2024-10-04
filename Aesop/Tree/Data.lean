@@ -7,6 +7,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 import Aesop.Constants
 import Aesop.Script.Step
 import Aesop.Tracing
+import Aesop.Tree.Data.ForwardRuleMatches
 import Aesop.Tree.UnsafeQueue
 import Aesop.Forward.State
 
@@ -307,6 +308,7 @@ protected def toString : GoalOrigin → String
 
 end GoalOrigin
 
+-- TODO docs
 
 structure GoalData (Rapp MVarCluster : Type) : Type where
   id : GoalId
@@ -334,6 +336,9 @@ structure GoalData (Rapp MVarCluster : Type) : Type where
   it is the local context of the post-normalisation goal (unless normalisation
   solved the goal, in which case the forward state is undetermined). -/
   forwardState : ForwardState
+  /-- Complete matches of forward rules for the current goal (in the same sense
+  as above). -/
+  forwardRuleMatches : ForwardRuleMatches
   successProbability : Percent
   addedInIteration : Iteration
   lastExpandedInIteration : Iteration

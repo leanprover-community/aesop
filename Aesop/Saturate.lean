@@ -9,8 +9,10 @@ import Aesop.RuleSet
 import Aesop.RuleTac
 import Aesop.Search.Expansion.Basic
 import Aesop.Script.Check
+import Batteries.Data.BinomialHeap.Basic
 
 open Lean Lean.Meta
+open Batteries (BinomialHeap)
 
 namespace Aesop
 
@@ -104,6 +106,8 @@ where
 
 namespace Stateful
 
+abbrev Queue := BinomialHeap ForwardRuleMatch ForwardRuleMatch.le
+
 partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) :
     SaturateM MVarId :=
   withExceptionPrefix "saturate: internal error: " do
@@ -111,21 +115,24 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) :
     if (← read).options.forwardMaxDepth?.isSome then
       logWarning "saturate: forwardMaxDepth option currently has no effect when using stateful forward reasoning"
     goal.checkNotAssigned `saturate
-    let fs ← rs.mkInitialForwardState goal
-    go fs goal
+    let (fs, ruleMatches) ← rs.mkInitialForwardState goal
+    let queue := ruleMatches.foldl (init := ∅) λ queue m => queue.insert m
+    go fs queue goal
 where
-  go (fs : ForwardState) (goal : MVarId) : ScriptM MVarId := do
+  go (fs : ForwardState) (queue : Queue) (goal : MVarId) : ScriptM MVarId := do
     withIncRecDepth do
     goal.withContext do
-      if let some (m, fs) := fs.popMatch? then
+      if let some (m, queue) := queue.deleteMin then
         trace[saturate] "goal:{indentD goal}"
         let (goal, hyp) ← m.apply goal
         goal.withContext do
           let type ← inferType (.fvar hyp)
           trace[saturate] "added hyp {Expr.fvar hyp} : {type}"
           let rules ← rs.applicableForwardRules type
-          let fs ← fs.addHyp goal hyp rules
-          go fs goal
+          let (fs, ruleMatches) ← fs.addHyp goal hyp rules
+          let queue :=
+            ruleMatches.foldl (init := queue) λ queue m => queue.insert m
+          go fs queue goal
       else
         return goal
 
