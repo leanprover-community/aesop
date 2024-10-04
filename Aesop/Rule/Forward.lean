@@ -26,6 +26,16 @@ inductive ForwardRulePriority : Type where
 
 namespace ForwardRulePriority
 
+/-- If a `ForwardRulePriority` contains a penalty, extract it. -/
+def penalty? : ForwardRulePriority → Option Int
+  | .normSafe n => some n
+  | .unsafe .. => none
+
+/-- If a `ForwardRulePriority` contains a success probability, extract it. -/
+def successProbability? : ForwardRulePriority → Option Percent
+  | .unsafe p => some p
+  | .normSafe .. => none
+
 /-- Compare two rule priorities. Norm/safe rules have higher priority than
 unsafe rules. Among norm/safe rules, lower penalty is better (lower). Among
 unsafe rules, higher percentage is better. -/
