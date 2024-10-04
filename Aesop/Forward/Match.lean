@@ -6,6 +6,7 @@ Authors: Xavier Généreux, Jannis Limperg
 
 import Aesop.Forward.PremiseIndex
 import Aesop.Forward.SlotIndex
+import Aesop.Rule
 import Aesop.Rule.Forward
 import Aesop.RuleTac.ElabRuleTerm
 import Aesop.RuleTac.Forward.Basic
@@ -128,5 +129,40 @@ def apply (goal : MVarId) (m : ForwardRuleMatch) : ScriptM (MVarId × FVarId) :=
     let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
       | unreachable!
     return (goal, hyp)
+
+/-- Convert a forward rule match to a rule tactic description. -/
+def toRuleTacDescr (m : ForwardRuleMatch) : RuleTacDescr :=
+  let prio :=
+    match m.rule.prio with
+    | .normSafe n => .inl n
+    | .unsafe p => .inr p
+  .forwardMatch m.rule.name m.rule.term prio m.rule.toForwardRuleInfo m.match
+
+/-- Convert a forward rule match `m` to a rule. Fails if `mkExtra? m` fails. -/
+def toRule? (m : ForwardRuleMatch) (mkExtra? : ForwardRuleMatch → Option α) :
+    Option (Rule α) := do
+  let extra ← mkExtra? m
+  return {
+    name := m.rule.name
+    indexingMode := .unindexed
+    pattern? := none
+    tac := m.toRuleTacDescr
+    extra
+  }
+
+/-- Convert a norm forward rule match to a norm rule. Fails if the match is not
+a norm rule match. -/
+def toNormRule? (m : ForwardRuleMatch) : Option NormRule :=
+  m.toRule? (·.rule.prio.penalty?.map ({ penalty := · }))
+
+/-- Convert a safe forward rule match to a safe rule. Fails if the match is not
+a safe rule match. -/
+def toSafeRule? (m : ForwardRuleMatch) : Option SafeRule :=
+  m.toRule? (·.rule.prio.penalty?.map ({ penalty := ·, safety := .safe }))
+
+/-- Convert an unsafe forward rule match to an unsafe rule. Fails if the match
+is not an unsafe rule match. -/
+def toUnsafeRule? (m : ForwardRuleMatch) : Option UnsafeRule :=
+  m.toRule? (·.rule.prio.successProbability?.map ({ successProbability := · }))
 
 end Aesop.ForwardRuleMatch
