@@ -5,6 +5,7 @@ Authors: Xavier Généreux, Jannis Limperg
 -/
 
 import Aesop.Forward.CompleteMatchQueue
+import Aesop.Index.Forward
 
 open Lean Lean.Meta
 open ExceptToEmoji (toEmoji)
@@ -450,6 +451,21 @@ def eraseHyp (h : FVarId) (fs : ForwardState) : ForwardState := Id.run do
     hyps := fs.hyps.erase h
     ruleStates
   }
+
+/-- Apply a goal diff to the state, adding and removing hypotheses as indicated
+by the diff. `goal` must be the post-goal of `diff`. -/
+def applyGoalDiff (idx : ForwardIndex) (goal : MVarId) (diff : GoalDiff)
+    (fs : ForwardState) : MetaM ForwardState :=
+  goal.withContext do
+    if ! diff.fvarSubst.isEmpty then
+      throwError "aesop: internal error: non-empty FVarSubst in GoalDiff is currently not supported"
+    let mut fs := fs
+    for h in diff.removedFVars do
+      fs := fs.eraseHyp h
+    for h in diff.addedFVars do
+      let rs ← idx.get (← h.getType)
+      fs ← fs.addHyp goal h rs
+    return fs
 
 /-- Drop complete matches containing an erased hyp from the complete match
 queues. Note that we only drop matches at the front of the queue, until we reach
