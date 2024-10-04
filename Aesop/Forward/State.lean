@@ -218,7 +218,7 @@ def matchPremise? (premises : Array MVarId) (cs : ClusterState)
     | throwError "aesop: internal error: matchPremise?: slot with premise index {slot.premiseIndex}, but only {premises.size} premises"
   let inputHypType ← slotPremise.getType
   let hypType ← hyp.getType
-  withAesopTraceNode .debug (λ r => return m!"{toEmoji r} match against premise {slot.premiseIndex}: {hypType} ≟ {inputHypType}") do
+  withAesopTraceNode .forward (λ r => return m!"{toEmoji r} match against premise {slot.premiseIndex}: {hypType} ≟ {inputHypType}") do
     if ← isDefEq inputHypType hypType then
       /- Note: This was over `slot.common` and not `slot.deps`. We need `slot.deps`
       because, among other issues, `slot.common` is empty in the first slot. Even though
@@ -402,9 +402,9 @@ def addHypCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
     (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) := do
   goal.withContext do
-  withConstAesopTraceNode .debug (return m!"add hyp {Expr.fvar h}") do
+  withConstAesopTraceNode .forward (return m!"add hyp {Expr.fvar h}") do
     ms.foldlM (init := (fs, ruleMatches)) λ (fs, ruleMatches) (r, i) => do
-      withConstAesopTraceNode .debug (return m!"rule {r.name}, premise {i}") do
+      withConstAesopTraceNode .forward (return m!"rule {r.name}, premise {i}") do
         let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState
         let (rs, newRuleMatches) ← rs.addHyp goal h i
         let ruleStates := fs.ruleStates.insert r.name rs
