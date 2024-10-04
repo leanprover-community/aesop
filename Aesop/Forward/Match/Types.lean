@@ -26,12 +26,20 @@ structure Match where
 instance : Inhabited Match :=
   ⟨{ revHyps := [default], subst := ∅ }⟩
 
+instance : BEq Match where
+  beq m₁ m₂ := m₁.revHyps == m₂.revHyps
+
+instance : Hashable Match where
+  hash m := hash m.revHyps
+
 set_option linter.missingDocs false in
 /-- A complete match contains complete matches for each slot cluster. This means
 there is one match for each slot cluster and each such match contains a
 hypothesis for each of the slots. -/
 structure CompleteMatch where
   clusterMatches : Array Match
-  deriving Inhabited
+  deriving Inhabited, BEq, Hashable
+
+-- TODO hash as a computed field
 
 end Aesop

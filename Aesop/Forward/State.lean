@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
 
-import Aesop.Forward.CompleteMatchQueue
+import Aesop.Forward.Match
 import Aesop.Index.Forward
 
 open Lean Lean.Meta
@@ -377,63 +377,50 @@ def eraseHyp (h : FVarId) (pi : PremiseIndex) (rs : RuleState) :
 
 end RuleState
 
-/-- State representing the (partial or complete) matches of a given set of
-forward rules in a given local context. -/
+/-- State representing the non-complete matches of a given set of forward rules
+in a given local context. -/
 structure ForwardState where
   /-- Map from each rule's name to its `RuleState`-/
   ruleStates : PHashMap RuleName RuleState
-  /-- Queue of complete matches for norm rules. -/
-  normQueue : CompleteMatchQueue
-  /-- Queue of complete matches for safe rules. -/
-  safeQueue : CompleteMatchQueue
-  /-- Queue of complete matches for unsafe rules. -/
-  unsafeQueue : CompleteMatchQueue
   /-- A map from hypotheses to the rules and premises that they matched against
   when they were initially added to the rule state. Invariant: the rule states
   in which a hypothesis `h` appear are exactly those identified by the rule
   names in `hyps[h]`. Furthermore, `h` only appears in slots with premise
   indices greater than or equal to those in `hyps[h]`. -/
   hyps : PHashMap FVarId (PArray (RuleName × PremiseIndex))
-  /-- Hypotheses that were removed from the local context. Matches containing
-  such hyps are not removed from the complete match queues. Instead, the hyps
-  are added to this set and when a match is popped from the queues, we check
-  whether it contains any removed hyps. -/
-  erasedHyps : PHashSet FVarId
  deriving Inhabited
 
 namespace ForwardState
 
 instance : EmptyCollection ForwardState where
-  emptyCollection := by refine' {..} <;> first | exact ∅ | exact .empty
-
-/-- Add a complete match entry to the forward state's complete match queue for
-`phase`. -/
-def addForwardRuleMatch (m : ForwardRuleMatch) (phase : PhaseName)
-    (fs : ForwardState) : ForwardState :=
-  match phase with
-  | .norm => { fs with normQueue := fs.normQueue.insert m }
-  | .safe => { fs with safeQueue := fs.safeQueue.insert m }
-  | .unsafe => { fs with unsafeQueue := fs.unsafeQueue.insert m }
+  emptyCollection := by refine' {..} <;> exact .empty
 
 /-- Add a hypothesis to the forward state. If `fs` represents a local context
 `lctx`, then `fs.addHyp h ms` represents `lctx` with `h` added. `ms` must
 overapproximate the rules for which `h` may unify with a maximal premise. -/
-def addHyp (goal : MVarId) (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
-    (fs : ForwardState) : MetaM ForwardState := do
+def addHypCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
+    (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
+    (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) := do
   goal.withContext do
   withConstAesopTraceNode .debug (return m!"add hyp {Expr.fvar h}") do
-    ms.foldlM (init := fs) λ fs (r, i) => do
+    ms.foldlM (init := (fs, ruleMatches)) λ (fs, ruleMatches) (r, i) => do
       withConstAesopTraceNode .debug (return m!"rule {r.name}, premise {i}") do
         let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState
-        let (rs, completeMatches) ← rs.addHyp goal h i
+        let (rs, newRuleMatches) ← rs.addHyp goal h i
         let ruleStates := fs.ruleStates.insert r.name rs
         let hyps := fs.hyps.insert h $
           ms.map (λ (r, i) => (r.name, i)) |>.toPArray'
         let fs := { fs with ruleStates, hyps }
-        completeMatches.foldlM (init := fs) λ fs m => do
-          aesop_trace[forward] "new complete match with args {m.reconstructArgs r}"
-          let m := { rule := r, «match» := m }
-          return fs.addForwardRuleMatch m r.name.phase
+        let ruleMatches :=
+          newRuleMatches.foldl (init := ruleMatches) λ ruleMatches «match» =>
+            ruleMatches.push { rule := r, «match» }
+        return (fs, ruleMatches)
+
+@[inherit_doc addHypCore]
+def addHyp (goal : MVarId) (h : FVarId)
+    (ms : Array (ForwardRule × PremiseIndex)) (fs : ForwardState) :
+    MetaM (ForwardState × Array ForwardRuleMatch) :=
+  fs.addHypCore #[] goal h ms
 
 /-- Remove a hypothesis from the forward state. If `fs` represents a local
 context `lctx`, then `fs.eraseHyp h ms` represents `lctx` with `h` removed. `ms`
@@ -445,90 +432,24 @@ def eraseHyp (h : FVarId) (fs : ForwardState) : ForwardState := Id.run do
       | panic! s!"hyps entry for rule {r}, but no rule state"
     let rs := rs.eraseHyp h i
     ruleStates := ruleStates.insert r rs
-  return {
-    fs with
-    erasedHyps := fs.erasedHyps.insert h
-    hyps := fs.hyps.erase h
-    ruleStates
-  }
+  return { fs with hyps := fs.hyps.erase h, ruleStates }
 
 /-- Apply a goal diff to the state, adding and removing hypotheses as indicated
 by the diff. `goal` must be the post-goal of `diff`. -/
 def applyGoalDiff (idx : ForwardIndex) (goal : MVarId) (diff : GoalDiff)
-    (fs : ForwardState) : MetaM ForwardState :=
+    (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) :=
   goal.withContext do
     if ! diff.fvarSubst.isEmpty then
       throwError "aesop: internal error: non-empty FVarSubst in GoalDiff is currently not supported"
     let mut fs := fs
+    let mut ruleMatches := #[]
     for h in diff.removedFVars do
       fs := fs.eraseHyp h
     for h in diff.addedFVars do
       let rs ← idx.get (← h.getType)
-      fs ← fs.addHyp goal h rs
-    return fs
-
-/-- Drop complete matches containing an erased hyp from the complete match
-queues. Note that we only drop matches at the front of the queue, until we reach
-the first match containing no erased hyps. -/
-def dropForwardMatchesWithErasedHyps (fs : ForwardState) : ForwardState := {
-  fs with
-  normQueue := fs.normQueue.dropInitial (·.anyHyp fs.erasedHyps.contains)
-  safeQueue := fs.safeQueue.dropInitial (·.anyHyp fs.erasedHyps.contains)
-  unsafeQueue := fs.unsafeQueue.dropInitial (·.anyHyp fs.erasedHyps.contains)
-}
-
-/-- Get the first norm match (if any) without dropping it from the norm complete
-match queue. Use `dropForwardMatchesWithErasedHyps` to ensure that the match does
-not contain erased hyps. -/
-def peekNormMatch? (fs : ForwardState) : Option ForwardRuleMatch :=
-  fs.normQueue.head?
-
-/-- Remove first norm match (if any) from the norm complete match queue. Use
-`dropForwardMatchesWithErasedHyps` to ensure that the match does not contain
-erased hyps. -/
-def dropNormMatch (fs : ForwardState) : ForwardState :=
-  { fs with normQueue := fs.normQueue.tail }
-
-/-- Get the first safe match (if any) without dropping it from the safe complete
-match queue. Use `dropForwardMatchesWithErasedHyps` to ensure that the match does
-not contain erased hyps. -/
-def peekSafeMatch? (fs : ForwardState) : Option ForwardRuleMatch :=
-  fs.safeQueue.head?
-
-/-- Remove first safe match (if any) from the safe complete match queue. Use
-`dropForwardMatchesWithErasedHyps` to ensure that the match does not contain
-erased hyps. -/
-def dropSafeMatch (fs : ForwardState) : ForwardState :=
-  { fs with safeQueue := fs.safeQueue.tail }
-
-/-- Get all unsafe complete matches and remove them from the unsafe match
-queue. -/
-partial def getResetUnsafeMatches (fs : ForwardState) :
-    Array ForwardRuleMatch × ForwardState :=
-  let ms := go #[] fs.unsafeQueue
-  (ms, { fs with unsafeQueue := ∅ })
-where
-  go (acc : Array ForwardRuleMatch) (q : CompleteMatchQueue) :
-      Array ForwardRuleMatch :=
-    match q.deleteMin with
-    | none => acc
-    | some (m, q) =>
-      if m.anyHyp (fs.erasedHyps.contains ·) then
-        go acc q
-      else
-        go (acc.push m) q
-
-/-- Get the first complete match. Norm matches are prioritised over safe matches
-and safe over unsafe matches. Use `dropForwardMatchesWithErasedHyps` to ensure
-that the match does not contain erased hyps. -/
-def popMatch? (fs : ForwardState) : Option (ForwardRuleMatch × ForwardState) :=
-  if let some (m, queue) := fs.normQueue.deleteMin then
-    (m, { fs with normQueue := queue })
-  else if let some (m, queue) := fs.safeQueue.deleteMin then
-    (m, { fs with safeQueue := queue })
-  else if let some (m, queue) := fs.unsafeQueue.deleteMin then
-    (m, { fs with unsafeQueue := queue })
-  else
-    none
+      let (fs', ruleMatches') ← fs.addHypCore ruleMatches goal h rs
+      fs := fs'
+      ruleMatches := ruleMatches'
+    return (fs, ruleMatches)
 
 end Aesop.ForwardState
