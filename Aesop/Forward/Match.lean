@@ -107,7 +107,9 @@ def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
 def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM Expr :=
   goal.withContext do
     let e ← elabForwardRuleTerm goal m.rule.term
-    return mkAppN e (m.match.reconstructArgs m.rule)
+    mkAppOptM' e $ m.match.reconstructArgs m.rule |>.map some
+      -- We use `mkAppOptM'` here, rather than `mkAppN`, to ensure that level
+      -- mvars of `e` are unified with the levels from the args.
 
 /-- Apply a forward rule match to a goal. This adds the hypothesis corresponding
 to the match to the local context. -/
