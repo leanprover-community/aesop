@@ -321,10 +321,10 @@ namespace RuleState
 /-- Add a hypothesis to the rule state. Returns the new rule state and any newly
 completed matches. If `h` does not match premise `pi`, nothing happens. -/
 def addHyp (goal : MVarId) (h : FVarId) (pi : PremiseIndex) (rs : RuleState) :
-    MetaM (RuleState × Array CompleteMatch) := do
-  let some ruleExpr ← observing? $ elabForwardRuleTerm goal rs.rule.term
-    | return (rs, #[])
+    MetaM (RuleState × Array CompleteMatch) :=
   withNewMCtxDepth do
+    let some ruleExpr ← observing? $ elabForwardRuleTerm goal rs.rule.term
+      | return (rs, #[])
     let (premises, _, _) ← forallMetaTelescope (← inferType ruleExpr)
     let premises := premises.map (·.mvarId!)
     let mut rs := rs
