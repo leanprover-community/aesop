@@ -232,6 +232,8 @@ def matchPremise? (premises : Array MVarId) (cs : ClusterState)
         let assignment ← instantiateMVars mvar
         if assignment == mvar then
           throwError "aesop: internal error: matchPremise?: while matching hyp {hyp.name}: no assignment for variable {var}"
+        if ← hasAssignableMVar assignment then
+          throwError "aesop: internal error: matchPremise?: assignment has mvar:{indentExpr assignment}"
         subst := subst.insert var assignment
       return subst
     else

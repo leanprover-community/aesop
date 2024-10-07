@@ -100,10 +100,19 @@ def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
 /-- Construct the proof of the new hypothesis represented by `m`. -/
 def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM Expr :=
   goal.withContext do
+  withNewMCtxDepth do
     let e ← elabForwardRuleTerm goal m.rule.term
-    mkAppOptM' e $ m.match.reconstructArgs m.rule |>.map some
-      -- We use `mkAppOptM'` here, rather than `mkAppN`, to ensure that level
-      -- mvars of `e` are unified with the levels from the args.
+    let (argMVars, _, _) ← forallMetaTelescope (← inferType e)
+    let args := m.match.reconstructArgs m.rule
+    for arg in args, mvar in argMVars do
+      if ! (← isDefEq arg mvar) then
+        throwError "type mismatch during reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\n: expected{indentExpr (← inferType mvar)}\nbut got{indentExpr arg} : {← inferType arg}"
+    let result ← instantiateMVars $ mkAppN e argMVars
+    if ← hasAssignableMVar result then
+      -- NOTE This prevents applications of forward rules where a universe
+      -- param occurs only in the codomain.
+      throwError "reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\nhas mvars:{indentExpr result}"
+    return result
 
 /-- Apply a forward rule match to a goal. This adds the hypothesis corresponding
 to the match to the local context. -/
