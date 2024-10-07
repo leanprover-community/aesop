@@ -37,6 +37,9 @@ abbrev NormM := ReaderT NormM.Context $ StateRefT NormM.State MetaM
 instance : MonadStats NormM where
   readStatsRef := return (← read).statsRef
 
+def getForwardState : NormM ForwardState :=
+  return (← get).forwardState
+
 def getResetForwardState : NormM ForwardState := do
   modifyGet λ s => (s.forwardState, { s with forwardState := ∅ })
 
@@ -133,7 +136,7 @@ def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       goal, mvars
     }
     withNormTraceNode (.ruleName rule.rule.name) do
-      let fs ← getResetForwardState
+      let fs ← getForwardState
       let (result?, consumedForwardRuleMatch?) ←
         runNormRuleTac rule.rule ruleInput fs (← read).ruleSet.forwardRules
       if let some m := consumedForwardRuleMatch? then
