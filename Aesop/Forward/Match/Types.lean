@@ -40,6 +40,9 @@ instance : BEq Match where
 instance : Hashable Match where
   hash m := hash m.revHyps
 
+instance : ToMessageData Match where
+  toMessageData m := toMessageData $ m.revHyps.reverse.map Expr.fvar
+
 set_option linter.missingDocs false in
 /-- A complete match contains complete matches for each slot cluster. This means
 there is one match for each slot cluster and each such match contains a

@@ -17,6 +17,21 @@ namespace Aesop
 variable [Monad M] [MonadTrace M] [MonadOptions M] [MonadRef M]
   [AddMessageContext M] [MonadLiftT IO M]
 
+private def ppPHashMap [BEq α] [Hashable α] [ToMessageData α]
+    [ToMessageData β] (indent : Bool) (m : PHashMap α β) : MessageData :=
+  flip MessageData.joinSep "\n" $
+    m.foldl (init := []) λ xs a b =>
+      let x :=
+        if indent then
+          m!"{a} =>{indentD $ toMessageData b}"
+        else
+          m!"{a} => {b}"
+      x :: xs
+
+private def ppPHashSet [BEq α] [Hashable α] [ToMessageData α] (s : PHashSet α) :
+    MessageData :=
+  toMessageData $ s.fold (init := #[]) λ as a => as.push a
+
 set_option linter.missingDocs false in
 /-- Partial matches associated with a particular slot instantiation. An entry
 `s ↦ e ↦ (ms, hs)` indicates that for the instantiation `e` of slot `s`, we have
@@ -28,6 +43,16 @@ structure InstMap where
 namespace InstMap
 
 instance : EmptyCollection InstMap := ⟨⟨.empty⟩⟩
+
+instance : ToMessageData InstMap where
+  toMessageData m :=
+    ppPHashMap (indent := true) $
+      m.map.map λ instMap =>
+        ppPHashMap (indent := false) $
+          instMap.map λ (ms, hs) =>
+            let hs : Array MessageData :=
+              hs.fold (init := #[]) λ hs h => hs.push (Expr.fvar h)
+            (ppPHashSet ms, hs)
 
 /-- Returns the set of matches and hypotheses associated with a slot `slot`
 with instantiation `inst`. -/
@@ -103,6 +128,9 @@ namespace VariableMap
 
 instance : EmptyCollection VariableMap :=
   ⟨⟨.empty⟩⟩
+
+instance : ToMessageData VariableMap where
+  toMessageData m := ppPHashMap (indent := true) m.map
 
 /-- Get the `InstMap` associated with a variable. -/
 def find? (vmap : VariableMap) (var : PremiseIndex) : Option InstMap :=
@@ -205,6 +233,11 @@ structure ClusterState where
   deriving Inhabited
 
 namespace ClusterState
+
+instance : ToMessageData ClusterState where
+  toMessageData cs :=
+    m!"variables:{indentD $ toMessageData cs.variableMap}\n\
+       complete matches:{indentD $ .joinSep (cs.completeMatches.toList.map toMessageData) "\n"}"
 
 /-- Get the slot with the given index. Panic if the index is invalid. -/
 @[macro_inline, always_inline]
@@ -319,6 +352,12 @@ structure RuleState where
   clusterStates : Array ClusterState
   deriving Inhabited
 
+instance : ToMessageData RuleState where
+  toMessageData rs :=
+    flip MessageData.joinSep "\n" $
+      rs.clusterStates.toList.mapIdx λ i cs =>
+        m!"cluster {i}:{indentD $ toMessageData cs}"
+
 /-- The initial (empty) rule state for a given forward rule. -/
 def ForwardRule.initialRuleState (r : ForwardRule) : RuleState :=
   let clusterStates := r.slotClusters.map λ slots =>
@@ -403,6 +442,12 @@ namespace ForwardState
 
 instance : EmptyCollection ForwardState where
   emptyCollection := by refine' {..} <;> exact .empty
+
+instance : ToMessageData ForwardState where
+  toMessageData fs :=
+    flip MessageData.joinSep "\n" $
+      fs.ruleStates.foldl (init := []) λ result r rs =>
+        m!"{r}:{indentD $ toMessageData rs}" :: result
 
 /-- Add a hypothesis to the forward state. If `fs` represents a local context
 `lctx`, then `fs.addHyp h ms` represents `lctx` with `h` added. `ms` must

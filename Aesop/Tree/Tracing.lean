@@ -46,6 +46,8 @@ def Goal.traceMetadata (g : Goal) (traceOpt : TraceOption) : MetaM Unit := do
   trc m!"Forced unprovable: {toYesNo g.isForcedUnprovable}"
   trc m!"Added in iteration: {g.addedInIteration}"
   trc m!"Last expanded in iteration: {if g.lastExpandedInIteration == .none then "never" else toString $ g.lastExpandedInIteration}"
+  trcNode m!"Forward state" do
+    trc $ toMessageData g.forwardState
   if g.unsafeRulesSelected then
     if g.unsafeQueue.isEmpty then
       trc m!"Unsafe rule queue: <empty>"
