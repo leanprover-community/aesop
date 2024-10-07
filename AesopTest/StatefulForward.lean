@@ -8,6 +8,7 @@ import Aesop
 
 set_option aesop.check.all true
 set_option aesop.dev.statefulForward true
+set_option aesop.smallErrorMessages true
 
 /--
 info: Try this:
@@ -277,3 +278,33 @@ example {P : α → Prop} {Q R : α → α → Prop}
     (h₁ : ∀ a b, P a → P b → Q a b → R b a)
     (h₂ : P c) (h₃ : P d) (h₄ : Q a b) (h₅ : P b) (h₆ : P a) (h₇ : Q d c) : Q b a := by
   saturate? [*]
+
+example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
+    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+  aesop (add safe [forward r₁, forward (immediate := [a]) r₂])
+
+/--
+info: Try this:
+  have fwd : γ₁ ∧ γ₂ := r₁ a b
+  simp_all only [and_self, implies_true, true_and]
+  obtain ⟨left, right⟩ := fwd
+  have fwd : δ₁ ∧ δ₂ := r₂ a
+  simp_all only [and_self, implies_true]
+-/
+#guard_msgs in
+example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
+    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+  aesop? (add safe [forward r₁, forward (immediate := [a]) r₂])
+
+/--
+error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+-/
+#guard_msgs in
+example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
+    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+  aesop (add safe [destruct r₁, destruct (immediate := [a]) r₂])
+    (config := { terminal := true })
+
+example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
+    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+  aesop (add safe [forward r₁], 90% destruct r₂)

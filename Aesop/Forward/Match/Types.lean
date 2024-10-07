@@ -1,5 +1,6 @@
 import Aesop.Forward.PremiseIndex
 import Aesop.Forward.SlotIndex
+import Aesop.Rule.Forward
 import Lean
 
 set_option linter.missingDocs true
@@ -41,5 +42,13 @@ structure CompleteMatch where
   deriving Inhabited, BEq, Hashable
 
 -- TODO hash as a computed field
+
+/-- An entry in the forward state queues. Represents a complete match. -/
+structure ForwardRuleMatch where
+  /-- The rule to which this match belongs. -/
+  rule : ForwardRule
+  /-- The match. -/
+  «match» : CompleteMatch
+  deriving Inhabited, BEq, Hashable
 
 end Aesop

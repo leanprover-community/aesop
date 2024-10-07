@@ -85,7 +85,7 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
       .ofHashSet <$> g.preNormGoal.getMVarDependencies
     let rs := (← read).ruleSet
     let (forwardState, ms) ← parentMetaState.runMetaM' do
-      rs.mkInitialForwardState g.preNormGoal -- FIXME use goal diff
+      rs.mkInitialForwardState g.preNormGoal -- FIXME do something more clever
     return Goal.mk {
       id := ← getAndIncrementNextGoalId
       parent := unsafeCast () -- will be filled in later

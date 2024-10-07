@@ -5,9 +5,9 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Forward.Match.Types
-import Aesop.Forward.RuleInfo
 import Aesop.Index.Basic
 import Aesop.Percent
+import Aesop.Rule.Forward
 import Aesop.RuleTac.GoalDiff
 import Aesop.RuleTac.FVarIdSubst
 import Aesop.Script.CtorNames
@@ -166,60 +166,6 @@ def CasesPattern := AbstractMVarsResult
 inductive CasesTarget
   | decl (decl : Name)
   | patterns (patterns : Array CasesPattern)
-  deriving Inhabited
-
-inductive RuleTerm
-  | const (decl : Name)
-  | term (term : Term)
-  deriving Inhabited
-
-inductive ElabRuleTerm
-  | const (decl : Name)
-  | term (term : Term) (expr : Expr)
-  deriving Inhabited
-
-namespace ElabRuleTerm
-
-def expr : ElabRuleTerm → MetaM Expr
-  | const decl => mkConstWithFreshMVarLevels decl
-  | term _ e => return e
-
-def scope : ElabRuleTerm → ScopeName
-  | const .. => .global
-  | term .. => .local
-
-def name : ElabRuleTerm → MetaM Name
-  | const decl => return decl
-  | term _ e => getRuleNameForExpr e
-
-def toRuleTerm : ElabRuleTerm → RuleTerm
-  | const decl => .const decl
-  | term t _ => .term t
-
-def ofElaboratedTerm (tm : Term) (expr : Expr) : ElabRuleTerm :=
-  if let some decl := expr.constName? then
-    .const decl
-  else
-    .term tm expr
-
-end ElabRuleTerm
-
-inductive RuleTacDescr
-  | apply (term : RuleTerm) (md : TransparencyMode) (pat? : Option RulePattern)
-  | constructors (constructorNames : Array Name) (md : TransparencyMode)
-  | forward (term : RuleTerm) (pat? : Option RulePattern)
-      (immediate : UnorderedArraySet Nat) (isDestruct : Bool)
-      (md : TransparencyMode)
-  | cases (target : CasesTarget) (md : TransparencyMode)
-      (isRecursiveType : Bool) (ctorNames : Array CtorNames)
-  | tacticM (decl : Name)
-  | ruleTac (decl : Name)
-  | tacGen (decl : Name)
-  | singleRuleTac (decl : Name)
-  | tacticStx (stx : Syntax)
-  | preprocess
-  | forwardMatch (ruleName : RuleName) (ruleTerm : RuleTerm)
-      (prio : Int ⊕ Percent) (info : ForwardRuleInfo) (m : CompleteMatch)
   deriving Inhabited
 
 end Aesop

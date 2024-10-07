@@ -38,9 +38,10 @@ def Goal.traceMetadata (g : Goal) (traceOpt : TraceOption) : MetaM Unit := do
   trc m!"Metavariables: {g.mvars.toArray.map (·.name)}"
   trc m!"Parent rapp:  {← (← g.parentRapp?).mapM λ rref => (·.id) <$> rref.get}"
   trc m!"Child rapps:  {← g.children.mapM λ rref => (·.id) <$> rref.get}"
-  trc m!"Origin: {g.origin.toString}" -- TODO
+  trc m!"Origin: {g.origin.toString}"
   trc m!"Depth: {g.depth}"
   trc m!"State: {g.state.toEmoji} {g.state}"
+  trc m!"Forward rule matches: {g.forwardRuleMatches.size}"
   trc m!"Irrelevant: {toYesNo g.isIrrelevant}"
   trc m!"Forced unprovable: {toYesNo g.isForcedUnprovable}"
   trc m!"Added in iteration: {g.addedInIteration}"

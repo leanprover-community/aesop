@@ -105,6 +105,8 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
   let expr ← t.expr
   let name ← t.name
   let info ← ForwardRuleInfo.ofExpr expr
+  if info.numPremises == 0 then
+    return none -- Constant forward rules currently don't work.
   let prio :=
     match phase with
     | .safe info => .normSafe info.penalty

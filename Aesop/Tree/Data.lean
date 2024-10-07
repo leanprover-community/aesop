@@ -546,6 +546,10 @@ def forwardState (g : Goal) : ForwardState :=
   g.elim.forwardState
 
 @[inline]
+def forwardRuleMatches (g : Goal) : ForwardRuleMatches :=
+  g.elim.forwardRuleMatches
+
+@[inline]
 def successProbability (g : Goal) : Percent :=
   g.elim.successProbability
 
@@ -617,6 +621,11 @@ def setMVars (mvars : UnorderedArraySet MVarId) (g : Goal) : Goal :=
 @[inline]
 def setForwardState (forwardState : ForwardState) (g : Goal) : Goal :=
   g.modify λ g => { g with forwardState }
+
+@[inline]
+def setForwardRuleMatches (forwardRuleMatches : ForwardRuleMatches) (g : Goal) :
+    Goal :=
+  g.modify λ g => { g with forwardRuleMatches }
 
 @[inline]
 def setSuccessProbability (successProbability : Percent) (g : Goal) : Goal :=

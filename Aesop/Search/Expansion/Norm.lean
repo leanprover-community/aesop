@@ -25,19 +25,36 @@ structure Context where
   normSimpContext : NormSimpContext
   statsRef : StatsRef
 
+structure State where
+  forwardState : ForwardState
+  forwardRuleMatches : ForwardRuleMatches
+  deriving Inhabited
+
 end NormM
 
-abbrev NormM := ReaderT NormM.Context MetaM
-
-instance : MonadBacktrack Meta.SavedState NormM where
-  saveState := Meta.saveState
-  restoreState s := s.restore
+abbrev NormM := ReaderT NormM.Context $ StateRefT NormM.State MetaM
 
 instance : MonadStats NormM where
   readStatsRef := return (← read).statsRef
 
-instance [Queue Q] : MonadLift NormM (SearchM Q) where
-  monadLift x := do x.run { (← read) with }
+def getResetForwardState : NormM ForwardState := do
+  modifyGet λ s => (s.forwardState, { s with forwardState := ∅ })
+
+def updateForwardState (fs : ForwardState) (ms : Array ForwardRuleMatch) :
+    NormM Unit :=
+  modify λ s => {
+    forwardState := fs
+    forwardRuleMatches := s.forwardRuleMatches.insertMany ms
+  }
+
+def eraseForwardRuleMatch (m : ForwardRuleMatch) : NormM Unit :=
+  modify λ s => { s with forwardRuleMatches := s.forwardRuleMatches.erase m }
+
+def applyDiffToForwardState (newGoal : MVarId) (diff : GoalDiff) :
+    NormM Unit := do
+  let fs ← getResetForwardState
+  let (fs, ms) ← fs.applyGoalDiff (← read).ruleSet.forwardRules newGoal diff
+  updateForwardState fs ms
 
 inductive NormRuleResult
   | succeeded (goal : MVarId) (steps? : Option (Array Script.LazyStep))
@@ -72,28 +89,36 @@ def withNormTraceNode (ruleName : DisplayRuleName)
       let emoji := exceptRuleResultToEmoji (optNormRuleResultEmoji ·) r
       return m!"{emoji} {ruleName}"
 
-def runNormRuleTac (rule : NormRule) (input : RuleTacInput) :
-    MetaM (Option NormRuleResult) := do
+/-- On success, returns the rule tactic's result, the new forward state and the
+new forward rule matches. If `rule` corresponds to a forward rule match,
+returns that match as well. -/
+def runNormRuleTac (rule : NormRule) (input : RuleTacInput) (fs : ForwardState)
+    (idx : ForwardIndex) :
+    MetaM $
+      Option (NormRuleResult × ForwardState × Array ForwardRuleMatch) ×
+      Option ForwardRuleMatch := do
   let preMetaState ← saveState
   let result? ← runRuleTac rule.tac.run rule.name preMetaState input
+  let forwardRuleMatch? := rule.tac.forwardRuleMatch?
   match result? with
   | Sum.inl e =>
     aesop_trace[steps] e.toMessageData
-    return none
+    return (none, forwardRuleMatch?)
   | Sum.inr result =>
     let #[rapp] := result.applications
       | err m!"rule did not produce exactly one rule application."
     restoreState rapp.postState
     if rapp.goals.isEmpty then
-      return some $ .proved rapp.scriptSteps?
-    let (#[{ mvarId := g, .. }]) := rapp.goals
+      return (some (.proved rapp.scriptSteps?, fs, #[]), forwardRuleMatch?)
+    let (#[{ mvarId := g, diff }]) := rapp.goals
       | err m!"rule produced more than one subgoal."
-    let mvars := .ofArray input.mvars.toArray
+    let (fs, ms) ← fs.applyGoalDiff idx g diff
     if ← Check.rules.isEnabled then
+      let mvars := .ofArray input.mvars.toArray
       let actualMVars ← rapp.postState.runMetaM' g.getMVarDependencies
       if ! actualMVars == mvars then
          err "the goal produced by the rule depends on different metavariables than the original goal."
-    return some $ .succeeded g rapp.scriptSteps?
+    return (some (.succeeded g rapp.scriptSteps?, fs, ms), forwardRuleMatch?)
   where
     err {α} (msg : MessageData) : MetaM α := throwError
       "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal input.goal}"
@@ -108,7 +133,15 @@ def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       goal, mvars
     }
     withNormTraceNode (.ruleName rule.rule.name) do
-      runNormRuleTac rule.rule ruleInput
+      let fs ← getResetForwardState
+      let (result?, consumedForwardRuleMatch?) ←
+        runNormRuleTac rule.rule ruleInput fs (← read).ruleSet.forwardRules
+      if let some m := consumedForwardRuleMatch? then
+        eraseForwardRuleMatch m
+      let (some (result, fs, ms)) := result?
+        | return none
+      updateForwardState fs ms
+      return result
 
 def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (rules : Array (IndexMatchResult NormRule)) :
@@ -142,24 +175,11 @@ def mkNormSimpScriptStep
     preGoal, preState, postState
   }
 
-def SimpResult.toNormRuleResult (originalGoal : MVarId)
-    (preState postState : Meta.SavedState) :
-    SimpResult → NormM (Option NormRuleResult)
-  | .unchanged => return none
-  | .solved usedTheorems => do
-    let step ←
-      mkNormSimpScriptStep originalGoal none preState postState usedTheorems
-    return some $ .proved #[step]
-  | .simplified newGoal usedTheorems => do
-    let step ←
-      mkNormSimpScriptStep originalGoal newGoal preState postState usedTheorems
-    return some $ .succeeded newGoal #[step]
-
 def normSimpCore (goal : MVarId) (goalMVars : Std.HashSet MVarId) :
     NormM (Option NormRuleResult) := do
   let ctx := (← read).normSimpContext
   goal.withContext do
-    let preState ← saveState
+    let preState ← show MetaM _ from saveState
     let localRules := (← read).ruleSet.localNormSimpRules
     let result ←
       if ctx.useHyps then
@@ -181,7 +201,7 @@ def normSimpCore (goal : MVarId) (goalMVars : Std.HashSet MVarId) :
         let anyMVarDropped ← goalMVars.anyM (notM ·.isAssignedOrDelayedAssigned)
         if anyMVarDropped then
           aesop_trace[steps] "Normalisation simp solved the goal but dropped some metavariables. Skipping normalisation simp."
-          restoreState preState
+          show MetaM _ from restoreState preState
           pure .unchanged
         else
           pure result
@@ -191,8 +211,19 @@ def normSimpCore (goal : MVarId) (goalMVars : Std.HashSet MVarId) :
       | .simplified .. =>
         pure result
 
-    let postState ← saveState
-    result.toNormRuleResult goal preState postState
+    let postState ← show MetaM _ from saveState
+    match result with
+    | .unchanged => return none
+    | .solved usedTheorems => do
+      let step ←
+        mkNormSimpScriptStep goal none preState postState usedTheorems
+      return some $ .proved #[step]
+    | .simplified newGoal usedTheorems => do
+      let step ←
+        mkNormSimpScriptStep goal newGoal preState postState usedTheorems
+      let diff ← diffGoals goal newGoal ∅
+      applyDiffToForwardState newGoal diff
+      return some $ .succeeded newGoal #[step]
 where
   addLocalRules (localRules : Array LocalNormSimpRule) (ctx : Simp.Context)
       (simprocs : Simp.SimprocsArray) (isSimpAll : Bool) :
@@ -209,10 +240,10 @@ def checkSimp (name : String) (mayCloseGoal : Bool) (goal : MVarId)
   if ! (← Check.rules.isEnabled) then
     x
   else
-    let preMetaState ← saveState
+    let preMetaState ← show MetaM _ from saveState
     let result? ← x
     let newGoal? := result?.bind (·.newGoal?)
-    let postMetaState ← saveState
+    let postMetaState ← show MetaM _ from saveState
     let introduced :=
         (← getIntroducedExprMVars preMetaState postMetaState).filter
         (some · != newGoal?)
@@ -245,6 +276,8 @@ def normUnfoldCore (goal : MVarId) : NormM (Option NormRuleResult) := do
     aesop_trace[steps] "nothing to unfold"
     return none
   | some newGoal =>
+    let diff ← diffGoals goal newGoal ∅
+    applyDiffToForwardState newGoal diff
     return some $ .succeeded newGoal steps
 
 def normUnfold (goal : MVarId) : NormM (Option NormRuleResult) := do
@@ -290,7 +323,7 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
   let mut anySuccess := false
   while iteration < maxIterations do
     if step.val == 0 then
-      let rules ← selectNormRules ctx.ruleSet goal
+      let rules ← selectNormRules ctx.ruleSet (← get).forwardRuleMatches goal
       let (preSimpRules', postSimpRules') :=
         rules.partition λ r => r.rule.extra.penalty < (0 : Int)
       preSimpRules := preSimpRules'
@@ -315,15 +348,19 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
           return .unchanged
   throwError "aesop: exceeded maximum number of normalisation iterations ({maxIterations}). This means normalisation probably got stuck in an infinite loop."
 
-def NormStep.runPreSimpRules (mvars : UnorderedArraySet MVarId) : NormStep
+namespace NormStep
+
+def runPreSimpRules (mvars : UnorderedArraySet MVarId) : NormStep
   | goal, preSimpRules, _ => do
-    optNormRuleResultToNormSeqResult <$> runFirstNormRule goal mvars preSimpRules
+    optNormRuleResultToNormSeqResult <$>
+      runFirstNormRule goal mvars preSimpRules
 
-def NormStep.runPostSimpRules (mvars : UnorderedArraySet MVarId) : NormStep
+def runPostSimpRules (mvars : UnorderedArraySet MVarId) : NormStep
   | goal, _, postSimpRules =>
-    optNormRuleResultToNormSeqResult <$> runFirstNormRule goal mvars postSimpRules
+    optNormRuleResultToNormSeqResult <$>
+      runFirstNormRule goal mvars postSimpRules
 
-def NormStep.unfold : NormStep
+def unfold : NormStep
   | goal, _, _ => do
     if ! (← readThe NormM.Context).options.enableUnfold then
       aesop_trace[steps] "norm unfold is disabled (options := \{ ..., enableUnfold := false })"
@@ -331,13 +368,15 @@ def NormStep.unfold : NormStep
     let r := (← normUnfold goal).map (.normUnfold, ·)
     return optNormRuleResultToNormSeqResult r
 
-def NormStep.simp (mvars : Std.HashSet MVarId) : NormStep
+def simp (mvars : Std.HashSet MVarId) : NormStep
   | goal, _, _ => do
     if ! (← readThe NormM.Context).normSimpContext.enabled then
       aesop_trace[steps] "norm simp is disabled (simp_options := \{ ..., enabled := false })"
       return .unchanged
     let r := (← normSimp goal mvars).map (.normSimp, ·)
     return optNormRuleResultToNormSeqResult r
+
+end NormStep
 
 partial def normalizeGoalMVar (goal : MVarId)
     (mvars : UnorderedArraySet MVarId) : NormM NormSeqResult := do
@@ -359,18 +398,26 @@ def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
   if ← g.isRoot then
     -- For the root goal, we skip normalization.
     let rootState ← getRootMetaState
-    gref.modify λ g => g.setNormalizationState (.normal preGoal rootState #[])
+    gref.modify (·.setNormalizationState (.normal preGoal rootState #[]))
     return false
   match g.normalizationState with
   | .provenByNormalization .. => return true
   | .normal .. => return false
   | .notNormal => pure ()
-  let (normResult, postState) ← controlAt MetaM λ runInBase => do
-    (← gref.get).runMetaMInParentState do
-      runInBase $ normalizeGoalMVar preGoal g.mvars
+  let normCtx := { (← read) with }
+  let normState := {
+    forwardState := g.forwardState
+    forwardRuleMatches := g.forwardRuleMatches
+  }
+  let ((normResult, { forwardState, forwardRuleMatches }), postState) ←
+    g.runMetaMInParentState do
+      normalizeGoalMVar preGoal g.mvars |>.run normCtx |>.run normState
   match normResult with
   | .changed postGoal script? =>
-    gref.modify (·.setNormalizationState (.normal postGoal postState script?))
+    gref.modify λ g =>
+      g.setNormalizationState (.normal postGoal postState script?)
+        |>.setForwardState forwardState
+        |>.setForwardRuleMatches forwardRuleMatches
     return false
   | .unchanged =>
     gref.modify (·.setNormalizationState (.normal preGoal postState #[]))
