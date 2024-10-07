@@ -105,7 +105,6 @@ private def markProvenCore (root : TreeRef) : BaseIO Unit := do
   preTraverseUp
     (λ gref => do
       let g ← gref.get
-      -- dbg_trace "marking goal {g.id} proven"
       gref.set $
         g.setState GoalState.provenByRuleApplication |>.setIsIrrelevant true
       g.children.forM λ rref => rref.markSubtreeIrrelevant
@@ -114,12 +113,10 @@ private def markProvenCore (root : TreeRef) : BaseIO Unit := do
       let r ← rref.get
       if ! (← r.isProvenNoCache) then
         return false
-      -- dbg_trace "marking rapp {r.id} proven"
       rref.set $ r.setState NodeState.proven |>.setIsIrrelevant true
       return true)
     (λ cref => do
       let c ← cref.get
-      -- dbg_trace "marking mvar cluster proven"
       cref.set $ c.setState NodeState.proven |>.setIsIrrelevant true
       c.goals.forM λ gref => gref.markSubtreeIrrelevant
       return true)
