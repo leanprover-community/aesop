@@ -32,7 +32,8 @@ def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : MetaM Tree := do
     isIrrelevant := false
     state := NodeState.unknown
   }
-  let (forwardState, ms) ← rs.mkInitialForwardState goal
+  let (forwardState, ms) ← withConstAesopTraceNode .forward (return m!"building initial forward state") do
+    rs.mkInitialForwardState goal
   let rootGoalRef ← IO.mkRef $ Goal.mk {
     id := GoalId.zero
     parent := rootClusterRef

@@ -414,6 +414,9 @@ def addHypCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
         let ruleMatches :=
           newRuleMatches.foldl (init := ruleMatches) λ ruleMatches «match» =>
             ruleMatches.push { rule := r, «match» }
+        aesop_trace[forward] do
+          for m in ruleMatches do
+            aesop_trace![forward] "new complete match for {m.rule.name}: {m.match.reconstructArgs m.rule}"
         return (fs, ruleMatches)
 
 @[inherit_doc addHypCore]

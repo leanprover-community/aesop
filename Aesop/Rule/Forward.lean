@@ -7,7 +7,7 @@ Authors: Xavier Généreux, Jannis Limperg
 import Aesop.Forward.RuleInfo
 import Aesop.Percent
 import Aesop.Rule.Name
-import Aesop.RuleTac.Basic
+import Aesop.RuleTac.RuleTerm
 
 set_option linter.missingDocs true
 
@@ -45,6 +45,11 @@ protected def le : (p₁ p₂ : ForwardRulePriority) → Bool
   | .normSafe n₁, .normSafe n₂ => n₁ ≤ n₂
   | .unsafe p₁, .unsafe p₂ => p₁ ≥ p₂
 
+instance : ToString ForwardRulePriority where
+  toString
+    | .normSafe n => toString n
+    | .unsafe p => p.toHumanString
+
 end ForwardRulePriority
 
 /-- A forward rule. -/
@@ -67,5 +72,8 @@ instance : Hashable ForwardRule :=
 
 instance : Ord ForwardRule :=
   ⟨λ r₁ r₂ => compare r₁.name r₂.name⟩
+
+instance : ToString ForwardRule where
+  toString r := s!"[{r.prio}] {r.name}"
 
 end Aesop.ForwardRule

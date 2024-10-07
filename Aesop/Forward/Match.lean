@@ -4,10 +4,12 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
 
+import Aesop.Forward.Match.Types
 import Aesop.Forward.PremiseIndex
 import Aesop.Forward.SlotIndex
 import Aesop.Rule
 import Aesop.Rule.Forward
+import Aesop.RuleTac.Descr
 import Aesop.RuleTac.ElabRuleTerm
 import Aesop.RuleTac.Forward.Basic
 import Aesop.Script.SpecificTactics
@@ -83,14 +85,6 @@ def reconstructArgs (r : ForwardRule) (m : CompleteMatch) :
 
 end CompleteMatch
 
-/-- An entry in the forward state queues. Represents a complete match. -/
-structure ForwardRuleMatch where
-  /-- The rule to which this match belongs. -/
-  rule : ForwardRule
-  /-- The match. -/
-  «match» : CompleteMatch
-  deriving Inhabited, BEq, Hashable
-
 namespace ForwardRuleMatch
 
 /-- Compare two queue entries by rule priority and rule name. Higher-priority
@@ -125,11 +119,7 @@ def apply (goal : MVarId) (m : ForwardRuleMatch) : ScriptM (MVarId × FVarId) :=
 
 /-- Convert a forward rule match to a rule tactic description. -/
 def toRuleTacDescr (m : ForwardRuleMatch) : RuleTacDescr :=
-  let prio :=
-    match m.rule.prio with
-    | .normSafe n => .inl n
-    | .unsafe p => .inr p
-  .forwardMatch m.rule.name m.rule.term prio m.rule.toForwardRuleInfo m.match
+  .forwardMatch m
 
 /-- Convert a forward rule match `m` to a rule. Fails if `mkExtra? m` fails. -/
 def toRule? (m : ForwardRuleMatch) (mkExtra? : ForwardRuleMatch → Option α) :

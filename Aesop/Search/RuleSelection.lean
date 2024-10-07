@@ -13,9 +13,9 @@ namespace Aesop
 variable [Aesop.Queue Q]
 
 def selectNormRules [Monad m] [MonadStats m] [MonadLiftT MetaM m]
-    (rs : LocalRuleSet) (goal : MVarId) :
+    (rs : LocalRuleSet) (fms : ForwardRuleMatches) (goal : MVarId) :
     m (Array (IndexMatchResult NormRule)) :=
-  profilingRuleSelection do rs.applicableNormalizationRules goal
+  profilingRuleSelection do rs.applicableNormalizationRules fms goal
 
 def preprocessRule : SafeRule where
   name := {
@@ -39,8 +39,9 @@ def selectSafeRules (g : Goal) :
         patternInstantiations := ∅
       }]
     let ruleSet := (← read).ruleSet
-    g.runMetaMInPostNormState' λ postNormGoal =>
-      ruleSet.applicableSafeRules postNormGoal
+    let rs ← g.runMetaMInPostNormState' λ postNormGoal =>
+      ruleSet.applicableSafeRules g.forwardRuleMatches postNormGoal
+    return rs
 
 def selectUnsafeRules (postponedSafeRules : Array PostponedSafeRule)
     (gref : GoalRef) : SearchM Q UnsafeQueue := do
@@ -51,7 +52,7 @@ def selectUnsafeRules (postponedSafeRules : Array PostponedSafeRule)
     | none => do
       let ruleSet := (← read).ruleSet
       let unsafeRules ←  g.runMetaMInPostNormState' λ postNormGoal =>
-        ruleSet.applicableUnsafeRules postNormGoal
+        ruleSet.applicableUnsafeRules g.forwardRuleMatches postNormGoal
       let unsafeQueue := UnsafeQueue.initial postponedSafeRules unsafeRules
       gref.set $ g.setUnsafeRulesSelected true |>.setUnsafeQueue unsafeQueue
       return unsafeQueue

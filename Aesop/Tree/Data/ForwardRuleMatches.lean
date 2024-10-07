@@ -47,6 +47,19 @@ def insertMany (ms : Array ForwardRuleMatch) (ms' : ForwardRuleMatches) :
     ForwardRuleMatches :=
   ms.foldl (init := ms') λ ms' m => ms'.insert m
 
+/-- Erase a complete match. -/
+def erase (m : ForwardRuleMatch) (ms : ForwardRuleMatches) :
+    ForwardRuleMatches :=
+  match m.rule.name.phase with
+  | .norm =>   { ms with normMatches   := ms.normMatches.erase m }
+  | .safe =>   { ms with safeMatches   := ms.safeMatches.erase m }
+  | .unsafe => { ms with unsafeMatches := ms.unsafeMatches.erase m }
+
+/-- Erase several complete matches. -/
+def eraseMany (ms : Array ForwardRuleMatch) (ms' : ForwardRuleMatches) :
+    ForwardRuleMatches :=
+  ms.foldl (init := ms') λ ms' m => ms'.erase m
+
 /-- Build a `ForwardRuleMatches` structure containing the matches from `ms`. -/
 def ofArray (ms : Array ForwardRuleMatch) : ForwardRuleMatches :=
   (∅ : ForwardRuleMatches).insertMany ms
@@ -80,15 +93,33 @@ def foldNormRules (ms : ForwardRuleMatches) (f : σ → NormRule → σ) (init :
     σ :=
   foldRules! ms.normMatches (·.toNormRule?) f init
 
+/-- Get the norm rules corresponding to the norm rule matches. -/
+def normRules (ms : ForwardRuleMatches) : Array NormRule :=
+  ms.foldNormRules (init := #[]) (·.push ·)
+
 /-- Fold over the safe rules corresponding to the safe rule matches. -/
 def foldSafeRules (ms : ForwardRuleMatches) (f : σ → SafeRule → σ) (init : σ) :
     σ :=
-  foldRules! ms.normMatches (·.toSafeRule?) f init
+  foldRules! ms.safeMatches (·.toSafeRule?) f init
+
+/-- Get the safe rules corresponding to the safe rule matches. -/
+def safeRules (ms : ForwardRuleMatches) : Array SafeRule :=
+  ms.foldSafeRules (init := #[]) (·.push ·)
 
 /-- Fold over the unsafe rules corresponding to the unsafe rule matches. -/
 def foldUnsafeRules (ms : ForwardRuleMatches) (f : σ → UnsafeRule → σ)
     (init : σ) : σ :=
-  foldRules! ms.normMatches (·.toUnsafeRule?) f init
+  foldRules! ms.unsafeMatches (·.toUnsafeRule?) f init
+
+/-- Get the unsafe rules corresponding to the unsafe rule matches. -/
+def unsafeRules (ms : ForwardRuleMatches) : Array UnsafeRule :=
+  ms.foldUnsafeRules (init := #[]) (·.push ·)
+
+/-- `O(n)` Number of matches in `ms`. -/
+def size (ms : ForwardRuleMatches) : Nat :=
+  ms.normMatches.fold   (init := 0) (λ n _ => n + 1) +
+  ms.safeMatches.fold   (init := 0) (λ n _ => n + 1) +
+  ms.unsafeMatches.fold (init := 0) (λ n _ => n + 1)
 
 end ForwardRuleMatches
 

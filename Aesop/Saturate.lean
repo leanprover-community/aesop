@@ -57,7 +57,7 @@ where
     withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying normalisation rules") do
       let matchResults ←
         withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting normalisation rules") do
-        rs.applicableNormalizationRulesWith goal
+        rs.applicableNormalizationRulesWith ∅ goal
           (include? := (isForwardOrDestructRuleName ·.name))
       runFirstRule goal mvars preState matchResults
 
@@ -66,7 +66,7 @@ where
     withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying safe rules") do
       let matchResults ←
         withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting safe rules") do
-        rs.applicableSafeRulesWith goal
+        rs.applicableSafeRulesWith ∅ goal
           (include? := (isForwardOrDestructRuleName ·.name))
       runFirstRule goal mvars preState matchResults
 

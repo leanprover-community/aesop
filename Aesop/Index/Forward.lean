@@ -28,6 +28,15 @@ namespace ForwardIndex
 instance : EmptyCollection ForwardIndex :=
   ⟨⟨{}⟩⟩
 
+protected def trace (traceOpt : TraceOption) (idx : ForwardIndex) : CoreM Unit := do
+  if ! (← traceOpt.isEnabled) then
+    return
+  else
+    have : Ord (ForwardRule × PremiseIndex) := ⟨λ (r₁, _) (r₂, _) => compare r₁ r₂⟩
+    have : BEq (ForwardRule × PremiseIndex) := ⟨λ (r₁, _) (r₂, _) => r₁ == r₂⟩
+    let rs := idx.tree.values.qsortOrd.dedupSorted
+    rs.forM λ (r, _) => do aesop_trace![traceOpt] r
+
 /-- Merge two indices. -/
 def merge (idx₁ idx₂ : ForwardIndex) : ForwardIndex :=
   ⟨idx₁.tree.mergePreservingDuplicates idx₂.tree⟩

@@ -28,11 +28,6 @@ protected def run : RuleTacDescr → RuleTac
   | tacticStx stx => RuleTac.tacticStx stx
   | tacGen decl => RuleTac.tacGen decl
   | preprocess => RuleTac.preprocess
-  | forwardMatch name term prio info «match» =>
-    let prio :=
-      match prio with
-      | .inl i => .normSafe i
-      | .inr p => .unsafe p
-    RuleTac.forwardMatch { «match», rule := { info with name, term, prio } }
+  | forwardMatch m => RuleTac.forwardMatch m
 
 end RuleTacDescr
