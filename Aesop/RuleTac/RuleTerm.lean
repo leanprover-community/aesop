@@ -9,12 +9,22 @@ inductive RuleTerm
   | term (term : Term)
   deriving Inhabited
 
+instance : ToMessageData RuleTerm where
+  toMessageData
+    | .const decl => m!"{decl}"
+    | .term tm => m!"{tm}"
+
 inductive ElabRuleTerm
   | const (decl : Name)
   | term (term : Term) (expr : Expr)
   deriving Inhabited
 
 namespace ElabRuleTerm
+
+instance : ToMessageData ElabRuleTerm where
+  toMessageData
+    | .const decl => m!"{decl}"
+    | .term tm _ => m!"{tm}"
 
 def expr : ElabRuleTerm → MetaM Expr
   | const decl => mkConstWithFreshMVarLevels decl
