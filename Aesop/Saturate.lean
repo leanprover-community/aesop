@@ -123,6 +123,8 @@ where
     withIncRecDepth do
     goal.withContext do
       if let some (m, queue) := queue.deleteMin then
+        if m.rule.name.phase == .unsafe then
+          return ← go fs queue goal
         trace[saturate] "goal:{indentD goal}"
         let (goal, hyp) ← m.apply goal
         goal.withContext do
