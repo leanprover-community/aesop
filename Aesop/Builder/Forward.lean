@@ -98,13 +98,23 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
     (pat? : Option RulePattern) (imode? : Option IndexingMode)
     (md indexMd : TransparencyMode) (phase : PhaseSpec) (isDestruct : Bool) :
     MetaM (Option ForwardRule) := do
+  withConstAesopTraceNode .forward (return m!"building forward rule for {t}") do
   -- TODO support all these options
   if immediate?.isSome || pat?.isSome || imode?.isSome || md != .default ||
      indexMd != .reducible || isDestruct then
+    aesop_trace[forward] "unsupported builder option"
     return none
   let expr ← t.expr
   let name ← t.name
   let info ← ForwardRuleInfo.ofExpr expr
+  aesop_trace[forward] "rule type: {← inferType expr}"
+  withConstAesopTraceNode .forward (return m!"slot clusters") do
+    aesop_trace[forward] do
+      for h : i in [:info.slotClusters.size] do
+        let cluster := info.slotClusters[i]
+        withConstAesopTraceNode .forward (return m!"cluster {i}") do
+          for s in cluster do
+            aesop_trace[forward] "slot {s.index} (premise {s.premiseIndex}, deps {s.deps.toArray}, common {s.common.toArray})"
   if info.numPremises == 0 then
     return none -- Constant forward rules currently don't work.
   let prio :=
