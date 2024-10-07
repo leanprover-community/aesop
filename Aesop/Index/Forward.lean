@@ -29,6 +29,7 @@ namespace ForwardIndex
 instance : EmptyCollection ForwardIndex :=
   ⟨⟨{}⟩⟩
 
+/-- Trace the rules contained in `idx` if `traceOpt` is enabled. -/
 protected def trace (traceOpt : TraceOption) (idx : ForwardIndex) : CoreM Unit := do
   if ! (← traceOpt.isEnabled) then
     return
