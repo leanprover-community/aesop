@@ -32,12 +32,26 @@ private def ppPHashSet [BEq α] [Hashable α] [ToMessageData α] (s : PHashSet �
     MessageData :=
   toMessageData $ s.fold (init := #[]) λ as a => as.push a
 
+/-- A hypothesis that was matched against a premise. -/
+structure Hyp where
+  /-- The hypothesis. -/
+  fvarId : FVarId
+  /-- The substitution that results from matching `fvarId` against a premise. -/
+  subst : Substitution
+  deriving Inhabited
+
+instance : BEq Hyp where
+  beq h₁ h₂ := h₁.fvarId == h₂.fvarId
+
+instance : Hashable Hyp where
+  hash h := hash h.fvarId
+
 set_option linter.missingDocs false in
 /-- Partial matches associated with a particular slot instantiation. An entry
 `s ↦ e ↦ (ms, hs)` indicates that for the instantiation `e` of slot `s`, we have
 partial matches `ms` and hypotheses `hs`. -/
 structure InstMap where
-  map : PHashMap SlotIndex (PHashMap Expr (PHashSet Match × PHashSet FVarId))
+  map : PHashMap SlotIndex (PHashMap Expr (PHashSet Match × PHashSet Hyp))
   deriving Inhabited
 
 namespace InstMap
@@ -51,14 +65,15 @@ instance : ToMessageData InstMap where
         ppPHashMap (indent := false) $
           instMap.map λ (ms, hs) =>
             let hs : Array MessageData :=
-              hs.fold (init := #[]) λ hs h => hs.push (Expr.fvar h)
+              hs.fold (init := #[]) λ hs (h : Hyp) =>
+                hs.push (Expr.fvar h.fvarId)
             (ppPHashSet ms, hs)
 
 /-- Returns the set of matches and hypotheses associated with a slot `slot`
 with instantiation `inst`. -/
 @[inline]
 def find? (imap : InstMap) (slot : SlotIndex) (inst : Expr) :
-    Option (PHashSet Match × PHashSet FVarId) :=
+    Option (PHashSet Match × PHashSet Hyp) :=
   imap.map.find? slot |>.bind λ slotMap => slotMap.find? inst
 
 /-- Returns the set of matches and hypotheses associated with a slot `slot`
@@ -66,13 +81,13 @@ with instantiation `inst`, or `(∅, ∅)` if `slot` and `inst` do not have any
 associated matches. -/
 @[inline]
 def findD (imap : InstMap) (slot : SlotIndex) (inst : Expr) :
-    PHashSet Match × PHashSet FVarId :=
+    PHashSet Match × PHashSet Hyp :=
   imap.find? slot inst |>.getD (∅, ∅)
 
 /-- Applies a transfomation to the data associated to `slot` and `inst`.
 If the there is no such data, the transformation is applied to `(∅, ∅)`. -/
 def modify (imap : InstMap) (slot : SlotIndex) (inst : Expr)
-    (f : PHashSet Match → PHashSet FVarId → PHashSet Match × PHashSet FVarId) :
+    (f : PHashSet Match → PHashSet Hyp → PHashSet Match × PHashSet Hyp) :
     InstMap :=
   let (ms, hyps) := imap.findD slot inst
   let slotMap := imap.map.findD slot .empty |>.insert inst (f ms hyps)
@@ -80,7 +95,7 @@ def modify (imap : InstMap) (slot : SlotIndex) (inst : Expr)
 
 /-- Inserts a hyp associated with slot `slot` and instantiation `inst`.
 The hyp should be a valid assignment for the slot's premise. -/
-def insertHyp (imap : InstMap) (slot : SlotIndex) (inst : Expr) (hyp : FVarId) :
+def insertHyp (imap : InstMap) (slot : SlotIndex) (inst : Expr) (hyp : Hyp) :
     InstMap :=
   imap.modify slot inst fun ms hs ↦ (ms, hs.insert hyp)
 
@@ -111,7 +126,7 @@ def eraseHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id.
     let maps := imap.map.find! i
     let maps := maps.foldl (init := maps) fun m e (ms, hs) =>
       let ms := PersistentHashSet.filter (·.revHyps.contains hyp) ms
-      m.insert e (ms, hs.erase hyp)
+      m.insert e (ms, hs.erase { fvarId := hyp, subst := ∅ })
     imaps := imaps.insert i maps
   return { map := imaps }
 
@@ -150,12 +165,11 @@ def modify (vmap : VariableMap) (var : PremiseIndex) (f : InstMap → InstMap) :
   | some m => ⟨vmap.map.insert var (f m)⟩
 
 /-- Add a hypothesis `hyp`. Precondition: `hyp` matches the premise of slot
-`slot` with substitution `sub` (and hence `sub` contains a mapping for each
-variable in `slot.common`). -/
-def addHyp (vmap : VariableMap) (slot : Slot) (sub : Substitution)
-    (hyp : FVarId) : VariableMap :=
+`slot` with substitution `hyp.subst` (and hence `hyp.subst` contains a mapping
+for each variable in `slot.common`). -/
+def addHyp (vmap : VariableMap) (slot : Slot) (hyp : Hyp) : VariableMap :=
   slot.common.fold (init := vmap) λ vmap var =>
-    if let some inst := sub.find? var then
+    if let some inst := hyp.subst.find? var then
       vmap.modify var (·.insertHyp slot.index inst hyp)
     else
       panic! s!"substitution contains no instantiation for variable {var}"
@@ -201,7 +215,7 @@ where
 Precondition: `slot.common` is nonempty and each variable contained in it is
 also contained in `subst`. -/
 def findHyps (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
-    Std.HashSet FVarId := Id.run do
+    Std.HashSet Hyp := Id.run do
   let common := slot.common.toArray
   if h : 0 < common.size then
     let mut hyps := slotHyps common[0] |> PersistentHashSet.toHashSet
@@ -214,7 +228,7 @@ def findHyps (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
   else
     panic! "no common variables"
 where
-  slotHyps (var : PremiseIndex) : PHashSet FVarId :=
+  slotHyps (var : PremiseIndex) : PHashSet Hyp :=
     if let some inst := subst.find? var then
       vmap.find var |>.findD slot.index inst |>.2
     else
@@ -295,7 +309,10 @@ partial def addMatchCore (newCompleteMatches : Array Match) (cs : ClusterState)
     cs := { cs with variableMap := cs.variableMap.addMatch nextSlot m } -- This is correct; VariableMap.addMatch needs the next slot.
     let mut newCompleteMatches := newCompleteMatches
     for hyp in cs.variableMap.findHyps nextSlot m.subst do
-      let m := { revHyps := hyp :: m.revHyps, subst := m.subst }
+      let m := {
+        revHyps := hyp.fvarId :: m.revHyps
+        subst := m.subst.mergeCompatible hyp.subst
+      }
       let (cs', newCompleteMatches') ← cs.addMatchCore newCompleteMatches m
       cs := cs'
       newCompleteMatches := newCompleteMatches'
@@ -305,21 +322,23 @@ partial def addMatchCore (newCompleteMatches : Array Match) (cs : ClusterState)
 def addMatch (cs : ClusterState) (m : Match) : M (ClusterState × Array Match) :=
   addMatchCore #[] cs m
 
-/-- Add a hypothesis to the cluster state. `subst` must be the substitution that
-results from applying `h` to `slot`. -/
+/-- Add a hypothesis to the cluster state. `hyp.subst` must be the substitution
+that results from applying `h` to `slot`. -/
 def addHypCore (newCompleteMatches : Array Match) (cs : ClusterState)
-    (slot : Slot) (h : FVarId) (subst : Substitution) :
-    M (ClusterState × Array Match) := do
-  aesop_trace[forward] "add hyp {Expr.fvar h} for slot {slot.index} with substitution {subst}"
+    (slot : Slot) (h : Hyp) : M (ClusterState × Array Match) := do
+  aesop_trace[forward] "add hyp {Expr.fvar h.fvarId} for slot {slot.index} with substitution {h.subst}"
   let mut cs :=
-    { cs with variableMap := cs.variableMap.addHyp slot subst h }
+    { cs with variableMap := cs.variableMap.addHyp slot h }
   if slot.index.toNat == 0 then
-    cs.addMatchCore newCompleteMatches { revHyps := [h], subst }
+    let m := { revHyps := [h.fvarId], subst := h.subst }
+    cs.addMatchCore newCompleteMatches m
   else
     let mut newCompleteMatches := newCompleteMatches
-    for pm in cs.variableMap.findMatches slot subst do
-      let subst := subst.mergeCompatible pm.subst
-      let m := { revHyps := h :: pm.revHyps, subst }
+    for pm in cs.variableMap.findMatches slot h.subst do
+      let m := {
+        revHyps := h.fvarId :: pm.revHyps
+        subst := h.subst.mergeCompatible pm.subst
+      }
       let (cs', newCompleteMatches') ← cs.addMatchCore newCompleteMatches m
       cs := cs'
       newCompleteMatches := newCompleteMatches'
@@ -333,7 +352,7 @@ def addHyp (premises : Array MVarId) (cs : ClusterState) (i : PremiseIndex)
     | return (cs, #[])
   let some subst ← cs.matchPremise? premises slot.index h
     | return (cs, #[])
-  addHypCore #[] cs slot h subst
+  addHypCore #[] cs slot { fvarId := h, subst }
 
 /-- Erase a hypothesis from the cluster state. -/
 def eraseHyp (h : FVarId) (pi : PremiseIndex) (cs : ClusterState) :
