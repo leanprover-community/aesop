@@ -218,7 +218,7 @@ def matchPremise? (premises : Array MVarId) (cs : ClusterState)
     | throwError "aesop: internal error: matchPremise?: slot with premise index {slot.premiseIndex}, but only {premises.size} premises"
   let inputHypType ← slotPremise.getType
   let hypType ← hyp.getType
-  withAesopTraceNode .forward (λ r => return m!"{toEmoji r} match against premise {slot.premiseIndex}: {hypType} ≟ {inputHypType}") do
+  withAesopTraceNodeBefore .forward (return m!"match against premise {slot.premiseIndex}: {hypType} ≟ {inputHypType}") do
     if ← isDefEq inputHypType hypType then
       /- Note: This was over `slot.common` and not `slot.deps`. We need `slot.deps`
       because, among other issues, `slot.common` is empty in the first slot. Even though
