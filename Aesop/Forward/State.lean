@@ -14,6 +14,9 @@ set_option linter.missingDocs true
 
 namespace Aesop
 
+variable [Monad M] [MonadTrace M] [MonadOptions M] [MonadRef M]
+  [AddMessageContext M] [MonadLiftT IO M]
+
 set_option linter.missingDocs false in
 /-- Partial matches associated with a particular slot instantiation. An entry
 `s ↦ e ↦ (ms, hs)` indicates that for the instantiation `e` of slot `s`, we have
@@ -152,6 +155,8 @@ def findMatches (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
     let firstVar := common[0]
     let mut ms := prevSlotMatches firstVar |> PersistentHashSet.toHashSet
     for var in common[1:] do
+      if ms.isEmpty then
+        break
       let ms' := prevSlotMatches var
       ms := ms.filter (ms'.contains ·)
     return ms
@@ -173,6 +178,8 @@ def findHyps (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
   if h : 0 < common.size then
     let mut hyps := slotHyps common[0] |> PersistentHashSet.toHashSet
     for var in common[1:] do
+      if hyps.isEmpty then
+        break
       let hyps' := slotHyps var
       hyps := hyps.filter (hyps'.contains ·)
     return hyps
@@ -235,46 +242,46 @@ def matchPremise? (premises : Array MVarId) (cs : ClusterState)
         if ← hasAssignableMVar assignment then
           throwError "aesop: internal error: matchPremise?: assignment has mvar:{indentExpr assignment}"
         subst := subst.insert var assignment
+      aesop_trace[forward] "substitution: {subst}"
       return subst
     else
       return none
 
 /-- Add a match to the cluster state. Returns the new cluster state and any new
 complete matches for this cluster. -/
-partial def addMatchCore (newCompleteMatches : Array Match)
-      (cs : ClusterState) (m : Match) :
-      ClusterState × Array Match := Id.run do
-    let mut cs := cs
-    let slotIdx := m.level
-    if slotIdx.toNat == cs.slots.size - 1 then
-      cs := { cs with completeMatches := cs.completeMatches.push m }
-      return (cs, newCompleteMatches.push m)
-    else
-      let nextSlot := cs.slot! $ slotIdx + 1
-      cs := { cs with
-        variableMap := cs.variableMap.addMatch nextSlot m
-      }
-      let mut newCompleteMatches := newCompleteMatches
-      for hyp in cs.variableMap.findHyps nextSlot m.subst do
-        let m := { revHyps := hyp :: m.revHyps, subst := m.subst }
-        let (cs', newCompleteMatches') ← cs.addMatchCore newCompleteMatches m
-        cs := cs'
-        newCompleteMatches := newCompleteMatches'
-      return (cs, newCompleteMatches)
+partial def addMatchCore (newCompleteMatches : Array Match) (cs : ClusterState)
+    (m : Match) : M (ClusterState × Array Match) := do
+  let mut cs := cs
+  let slotIdx := m.level
+  if slotIdx.toNat == cs.slots.size - 1 then
+    cs := { cs with completeMatches := cs.completeMatches.push m }
+    return (cs, newCompleteMatches.push m)
+  else
+    let nextSlot := cs.slot! $ slotIdx + 1
+    aesop_trace[forward] "add match {m.revHyps.reverse.map Expr.fvar} for slot {slotIdx} with subst {m.subst}"
+    cs := { cs with variableMap := cs.variableMap.addMatch nextSlot m } -- This is correct; VariableMap.addMatch needs the next slot.
+    let mut newCompleteMatches := newCompleteMatches
+    for hyp in cs.variableMap.findHyps nextSlot m.subst do
+      let m := { revHyps := hyp :: m.revHyps, subst := m.subst }
+      let (cs', newCompleteMatches') ← cs.addMatchCore newCompleteMatches m
+      cs := cs'
+      newCompleteMatches := newCompleteMatches'
+    return (cs, newCompleteMatches)
 
 @[inherit_doc addMatchCore]
-def addMatch (cs : ClusterState) (m : Match) : ClusterState × Array Match :=
+def addMatch (cs : ClusterState) (m : Match) : M (ClusterState × Array Match) :=
   addMatchCore #[] cs m
 
 /-- Add a hypothesis to the cluster state. `subst` must be the substitution that
 results from applying `h` to `slot`. -/
 def addHypCore (newCompleteMatches : Array Match) (cs : ClusterState)
     (slot : Slot) (h : FVarId) (subst : Substitution) :
-    ClusterState × Array Match := Id.run do
+    M (ClusterState × Array Match) := do
+  aesop_trace[forward] "add hyp {Expr.fvar h} for slot {slot.index} with substitution {subst}"
   let mut cs :=
     { cs with variableMap := cs.variableMap.addHyp slot subst h }
   if slot.index.toNat == 0 then
-    return ← cs.addMatch { revHyps := [h], subst }
+    cs.addMatchCore newCompleteMatches { revHyps := [h], subst }
   else
     let mut newCompleteMatches := newCompleteMatches
     for pm in cs.variableMap.findMatches slot subst do
@@ -293,7 +300,7 @@ def addHyp (premises : Array MVarId) (cs : ClusterState) (i : PremiseIndex)
     | return (cs, #[])
   let some subst ← cs.matchPremise? premises slot.index h
     | return (cs, #[])
-  return addHypCore #[] cs slot h subst
+  addHypCore #[] cs slot h subst
 
 /-- Erase a hypothesis from the cluster state. -/
 def eraseHyp (h : FVarId) (pi : PremiseIndex) (cs : ClusterState) :
