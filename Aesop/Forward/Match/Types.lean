@@ -12,6 +12,13 @@ open Lean
 /-- A substitution maps premise indices to assignments. -/
 abbrev Substitution := AssocList PremiseIndex Expr
 
+instance : ToMessageData Substitution where
+  toMessageData s :=
+    let xs :=
+      s.toList.mergeSort (λ (i₁, _) (i₂, _) => i₁ < i₂)
+        |>.map λ (i, e) => m!"{i} ↦ {e}"
+    .bracket "{" (.joinSep xs ", ") "}"
+
 /-- A match associates hypotheses to (a prefix of) the slots of a slot
 cluster. -/
 structure Match where
