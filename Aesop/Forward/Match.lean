@@ -99,11 +99,15 @@ def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
 
 /-- Construct the proof of the new hypothesis represented by `m`. -/
 def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM Expr :=
+  withConstAesopTraceNode .forward (return m!"proof construction for forward rule match") do
   goal.withContext do
   withNewMCtxDepth do
+    aesop_trace[forward] "rule: {m.rule.name}"
     let e ← elabForwardRuleTerm goal m.rule.term
+    aesop_trace[forward] "term: {e} : {← inferType e}"
     let (argMVars, _, _) ← forallMetaTelescope (← inferType e)
     let args := m.match.reconstructArgs m.rule
+    aesop_trace[forward] "args: {args}"
     for arg in args, mvar in argMVars do
       if ! (← isDefEq arg mvar) then
         throwError "type mismatch during reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\n: expected{indentExpr (← inferType mvar)}\nbut got{indentExpr arg} : {← inferType arg}"
@@ -111,7 +115,8 @@ def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM Expr :=
     if ← hasAssignableMVar result then
       -- NOTE This prevents applications of forward rules where a universe
       -- param occurs only in the codomain.
-      throwError "reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\nhas mvars:{indentExpr result}"
+      throwError "reconstruction of complete match for forward rule{indentD m!"{m.rule.name}"}\nhas mvars:{indentExpr result}"
+    aesop_trace[forward] "result: {result}"
     return result
 
 /-- Apply a forward rule match to a goal. This adds the hypothesis corresponding
