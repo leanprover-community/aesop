@@ -108,22 +108,29 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
       failedRapps := #[]
     }
 
-def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-    (parent : MVarClusterRef) (parentMetaState : Meta.SavedState) (depth : Nat)
+def makeInitialGoal (goal : Subgoal) (mvars : UnorderedArraySet MVarId)
+    (parent : MVarClusterRef) (parentMetaState : Meta.SavedState)
+    (parentForwardState : ForwardState)
+    (parentForwardMatches : ForwardRuleMatches) (depth : Nat)
     (successProbability : Percent) (origin : GoalOrigin) : TreeM Goal := do
   let rs := (← read).ruleSet
-  let (forwardState, ms) ← parentMetaState.runMetaM' do
-    rs.mkInitialForwardState goal -- FIXME use goal diff
+  let (forwardState, forwardRuleMatches) ← parentMetaState.runMetaM' do
+    let (fs, newMatches) ←
+      parentForwardState.applyGoalDiff rs.forwardRules goal.mvarId goal.diff
+    let ms :=
+      parentForwardMatches.insertMany newMatches
+        |>.eraseHyps goal.diff.removedFVars
+    pure (fs, ms)
   return Goal.mk {
     id := ← getAndIncrementNextGoalId
     children := #[]
     state := GoalState.unknown
     isIrrelevant := false
     isForcedUnprovable := false
-    preNormGoal := goal
+    preNormGoal := goal.mvarId
     normalizationState := NormalizationState.notNormal
     forwardState
-    forwardRuleMatches := .ofArray ms
+    forwardRuleMatches
     addedInIteration := (← read).currentIteration
     lastExpandedInIteration := Iteration.none
     unsafeRulesSelected := false
@@ -133,7 +140,7 @@ def makeInitialGoal (goal : MVarId) (mvars : UnorderedArraySet MVarId)
   }
 
 unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
-  let originalSubgoals := r.goals.map (·.mvarId)
+  let originalSubgoals := r.goals
 
   let rref : RappRef ← IO.mkRef $ Rapp.mk {
     id := ← getAndIncrementNextRappId
@@ -143,7 +150,7 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     isIrrelevant := false
     appliedRule := r.appliedRule
     scriptSteps? := r.scriptSteps?
-    originalSubgoals
+    originalSubgoals := originalSubgoals.map (·.mvarId)
     successProbability := r.successProbability
     metaState := r.postState
     introducedMVars := {} -- will be filled in later
@@ -157,8 +164,8 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     r.postState.runMetaM' do
       -- Get mvars which the original subgoals depend on.
       let originalSubgoalMVars : Std.HashSet MVarId ←
-        originalSubgoals.foldlM (init := ∅) λ acc mvarId =>
-          return acc.insertMany (← mvarId.getMVarDependencies)
+        originalSubgoals.foldlM (init := ∅) λ acc subgoal =>
+          return acc.insertMany (← subgoal.mvarId.getMVarDependencies)
 
       -- Get mvars which were either assigned or dropped by the rapp. We assume
       -- that rules only assign mvars which appear in the rapp's parent goal. A
@@ -182,7 +189,10 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   let copiedGoals : Array Goal ←
     copyGoals assignedOrDroppedMVars r.parent r.postState
       r.successProbability goalDepth
-  let copiedMVars := copiedGoals.map (·.preNormGoal)
+  let copiedSubgoals : Array Subgoal :=
+    copiedGoals.map λ g => { mvarId := g.preNormGoal, diff := ∅ }
+    -- The diff is irrelevant because we later add `g` to the tree (and the
+    -- forward state of `g` is already up to date).
 
   -- Collect the mvars which occur in the original subgoals and copied goals.
   let originalSubgoalAndCopiedGoalMVars :=
@@ -192,30 +202,39 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   -- Turn the dropped mvars into subgoals. Note: an mvar that was dropped by the
   -- rapp may occur in the copied goals, in which case we don't count it as
   -- dropped any more.
-  let droppedMVars ← r.postState.runMetaM' do
+  let droppedSubgoals : Array Subgoal ← r.postState.runMetaM' do
     let mut droppedMVars := #[]
     for mvarId in parentGoal.mvars do
       unless ← (pure $ originalSubgoalAndCopiedGoalMVars.contains mvarId) <||>
                mvarId.isAssignedOrDelayedAssigned do
-        droppedMVars := droppedMVars.push mvarId
+        let diff ← diffGoals parentGoal.currentGoal mvarId ∅
+        droppedMVars := droppedMVars.push { mvarId, diff }
     pure droppedMVars
 
   -- Partition the subgoals into 'proper goals' and 'proper mvars'. A proper
   -- mvar is an mvar that occurs in any of the other subgoal mvars. Any other
   -- mvar is a proper goal.
   let (properGoals, _) ← r.postState.runMetaM' do
-    partitionGoalsAndMVars $ originalSubgoals ++ copiedMVars ++ droppedMVars
+    partitionGoalsAndMVars (·.mvarId) $
+      originalSubgoals ++ copiedSubgoals ++ droppedSubgoals
 
   -- Construct the subgoals
   let subgoals ← properGoals.mapM λ (goal, mvars) =>
-    if let some copiedGoal := copiedGoals.find? (·.preNormGoal == goal) then
+    if let some copiedGoal := copiedGoals.find? (·.preNormGoal == goal.mvarId) then
       pure copiedGoal
     else
       let origin :=
-        if droppedMVars.contains goal then .droppedMVar else .subgoal
-      makeInitialGoal goal mvars (unsafeCast ()) r.postState goalDepth
-        r.successProbability origin
-        -- The parent (`unsafeCast ()`) will be patched up later.
+        if droppedSubgoals.find? (·.mvarId == goal.mvarId) |>.isSome then
+          .droppedMVar
+        else
+          .subgoal
+      try
+        makeInitialGoal goal mvars (unsafeCast ()) r.postState
+          parentGoal.forwardState parentGoal.forwardRuleMatches goalDepth
+          r.successProbability origin
+          -- The parent (`unsafeCast ()`) will be patched up later.
+      catch e =>
+        throwError "in rapp for rule {r.appliedRule.name}:{indentD e.toMessageData}"
 
   -- Construct the new mvar clusters.
   let crefs : Array MVarClusterRef ←
