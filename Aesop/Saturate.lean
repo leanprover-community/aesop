@@ -108,33 +108,42 @@ namespace Stateful
 
 abbrev Queue := BinomialHeap ForwardRuleMatch ForwardRuleMatch.le
 
-partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) :
-    SaturateM MVarId :=
+partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
+    (options : Options') : SaturateM MVarId :=
   withExceptionPrefix "saturate: internal error: " do
   goal.withContext do
-    if (← read).options.forwardMaxDepth?.isSome then
-      logWarning "saturate: forwardMaxDepth option currently has no effect when using stateful forward reasoning"
     goal.checkNotAssigned `saturate
     let (fs, ruleMatches) ← rs.mkInitialForwardState goal
     let queue := ruleMatches.foldl (init := ∅) λ queue m => queue.insert m
-    go fs queue goal
+    go ∅ fs queue goal
 where
-  go (fs : ForwardState) (queue : Queue) (goal : MVarId) : ScriptM MVarId := do
+  go (hypDepths : Std.HashMap FVarId Nat) (fs : ForwardState) (queue : Queue)
+      (goal : MVarId) : ScriptM MVarId := do
     withIncRecDepth do
     goal.withContext do
       if let some (m, queue) := queue.deleteMin then
         if m.rule.name.phase == .unsafe then
-          return ← go fs queue goal
+          return ← go hypDepths fs queue goal
         trace[saturate] "goal:{indentD goal}"
         let (goal, hyp) ← m.apply goal
         goal.withContext do
           let type ← inferType (.fvar hyp)
-          trace[saturate] "added hyp {Expr.fvar hyp} : {type}"
-          let rules ← rs.applicableForwardRules type
-          let (fs, ruleMatches) ← fs.addHyp goal hyp rules
-          let queue :=
-            ruleMatches.foldl (init := queue) λ queue m => queue.insert m
-          go fs queue goal
+          let mut depth := 0
+          let mut hypDepths := hypDepths
+          let maxDepth? := options.forwardMaxDepth?
+          if maxDepth?.isSome then
+            depth := 1 + m.foldHyps (init := 0) λ depth h =>
+              max depth (hypDepths[h]?.getD 0)
+            hypDepths := hypDepths.insert hyp depth
+          trace[saturate] "added hyp (depth {depth}) {Expr.fvar hyp} : {type}"
+          if maxDepth?.isSome && depth ≥ maxDepth?.get! then
+            go hypDepths fs queue goal
+          else
+            let rules ← rs.applicableForwardRules type
+            let (fs, ruleMatches) ← fs.addHyp goal hyp rules
+            let queue :=
+              ruleMatches.foldl (init := queue) λ queue m => queue.insert m
+            go hypDepths fs queue goal
       else
         return goal
 
@@ -144,7 +153,7 @@ def saturateMain (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') 
     MetaM (MVarId × Array Script.LazyStep) := do
   let doSaturate :=
     if aesop.dev.statefulForward.get (← getOptions) then
-      Stateful.saturateCore rs goal
+      Stateful.saturateCore rs goal options
     else
       saturateCore rs goal
   doSaturate.run { options } |>.run

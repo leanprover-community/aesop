@@ -93,6 +93,11 @@ protected def le (m₁ m₂ : ForwardRuleMatch) : Bool :=
   m₁.rule.prio.le m₂.rule.prio ||
   (m₁.rule.prio == m₂.rule.prio && (m₁.rule.name.compare m₂.rule.name).isLE)
 
+/-- Fold over the hypotheses contained in a match. -/
+def foldHyps (f : σ → FVarId → σ) (init : σ) (m : ForwardRuleMatch) : σ :=
+  m.match.clusterMatches.foldl (init := init) λ s cm =>
+    cm.revHyps.foldl (init := s) f
+
 /-- Returns `true` if any hypothesis contained in `m` satisfies `f`. -/
 def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
   m.match.clusterMatches.any (·.revHyps.any f)
