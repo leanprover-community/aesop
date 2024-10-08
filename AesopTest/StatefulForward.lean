@@ -50,6 +50,80 @@ fwd_1 : γ
 example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
   saturate? [*]
 
+/--
+info: Try this:
+have fwd : β := h₁ h₃
+---
+error: unsolved goals
+α β γ : Prop
+h₁ : α → β
+h₂ : β → γ
+h₃ : α
+fwd : β
+⊢ γ
+-/
+#guard_msgs in
+example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
+  forward? [*]
+
+/--
+info: Try this:
+have fwd : β := h₁ h₃
+---
+error: unsolved goals
+α β γ : Prop
+h₁ : α → β
+h₂ : β → γ
+h₃ : α
+fwd : β
+⊢ γ
+-/
+#guard_msgs in
+example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
+  saturate? 1 [*]
+
+/--
+info: Try this:
+  have fwd : β := h₁ h₄
+  have fwd_1 : γ := h₂ fwd
+---
+error: unsolved goals
+α β γ δ : Prop
+h₁ : α → β
+h₂ : β → γ
+h₃ : γ → δ
+h₄ : α
+fwd : β
+fwd_1 : γ
+⊢ δ
+-/
+#guard_msgs in
+example {α β γ δ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : γ → δ) (h₄ : α) : δ := by
+  saturate? 2 [*]
+
+/--
+info: Try this:
+  have fwd : γ := h₂ h₄
+  have fwd_1 : β := h₁ h₄
+---
+error: unsolved goals
+α β γ δ : Prop
+h₁ : α → β
+h₂ : α → γ
+h₃ : β → γ → δ
+h₄ : α
+fwd : γ
+fwd_1 : β
+⊢ δ
+-/
+#guard_msgs in
+example {α β γ δ : Prop} (h₁ : α → β) (h₂ : α → γ) (h₃ : β → γ → δ) (h₄ : α) : δ := by
+  saturate? 1 [*]
+
+example {P : Nat → Prop} (hP : P 0) (hPn : ∀ n, P n → P (n + 1)) : P 20 := by
+  saturate 20 [*]
+  assumption
+
 section
 
 axiom A : Type
@@ -61,6 +135,16 @@ axiom ab : A → B
 
 @[local aesop norm forward]
 axiom bc : B → C
+
+/--
+info: Try this:
+have fwd : P := rule P (Q ∧ R) h
+-/
+#guard_msgs in
+example (rule : ∀ α β, α ∧ β → α) (h : P ∧ Q ∧ R) : P := by
+  forward? [*]
+  guard_hyp fwd : P
+  assumption
 
 /--
 info: Try this:
