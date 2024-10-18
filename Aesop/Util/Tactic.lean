@@ -29,8 +29,6 @@ def replaceFVar (goal : MVarId) (fvarId : FVarId) (type : Expr) (proof : Expr) :
   let (newFVarId, goal) ← intro1Core goal (preserveBinderNames := true)
   return (goal, newFVarId, clearSuccess)
 
-open private getIntrosSize in Lean.MVarId.intros
-
 /-- Introduce as many binders as possible while unfolding definitions with the
 ambient transparency. -/
 partial def introsUnfolding (mvarId : MVarId) : MetaM (Array FVarId × MVarId) :=

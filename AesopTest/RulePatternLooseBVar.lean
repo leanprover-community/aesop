@@ -9,7 +9,7 @@ Authors: Son Ho, Jannis Limperg
 
 import Aesop
 
-inductive ScalarTy :=
+inductive ScalarTy
 | U32
 
 @[simp]

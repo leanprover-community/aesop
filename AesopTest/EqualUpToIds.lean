@@ -57,7 +57,9 @@ Tactic 2:
   case zero
   n : Nat
   ⊢ True
-  case succ n n✝ : Nat ⊢ True
+  case succ
+  n n✝ : Nat
+  ⊢ True
 -/
 #guard_msgs in
 example (n m : Nat) : True := by

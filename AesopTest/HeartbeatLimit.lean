@@ -24,7 +24,8 @@ example : Even 10 := by
   aesop
 
 /--
-error: aesop: error in norm simp: (deterministic) timeout at `simp`, maximum number of heartbeats (1) has been reached
+error: aesop: error in norm simp: tactic 'simp' failed, nested error:
+(deterministic) timeout at `simp`, maximum number of heartbeats (1) has been reached
 Use `set_option maxHeartbeats <num>` to set the limit.
 Additional diagnostic information may be available using the `set_option diagnostics true` command.
 -/
