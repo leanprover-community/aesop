@@ -57,33 +57,6 @@ def RulePatternInstantiation.toArray : RulePatternInstantiation → Array Expr :
 instance : EmptyCollection RulePatternInstantiation :=
   ⟨.empty⟩
 
-section
-
-variable {ω : Type} {m : Type → Type} [STWorld ω m] [MonadLiftT (ST ω) m]
-    [Monad m] [MonadControlT MetaM m] [MonadLiftT MetaM m]
-
-def forEachExprInGoalCore (mvarId : MVarId) (g : Expr → m Bool) :
-    MonadCacheT Expr Unit m Unit :=
-  mvarId.withContext do
-    for ldecl in ← show MetaM _ from getLCtx do
-      if ldecl.isImplementationDetail then
-        continue
-      ForEachExpr.visit g ldecl.toExpr
-      ForEachExpr.visit g ldecl.type
-      if let some value := ldecl.value? then
-        ForEachExpr.visit g value
-    ForEachExpr.visit g (← mvarId.getType)
-
-@[inline, always_inline]
-def forEachExprInGoal' (mvarId : MVarId) (g : Expr → m Bool) : m Unit :=
-  forEachExprInGoalCore mvarId g |>.run
-
-@[inline, always_inline]
-def forEachExprInGoal (mvarId : MVarId) (g : Expr → m Unit) : m Unit :=
-  forEachExprInGoal' mvarId λ e => do g e; return true
-
-end
-
 def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
     (mvarId : MVarId) :
     StateRefT (Std.HashMap RuleName (Std.HashSet RulePatternInstantiation)) MetaM Unit :=

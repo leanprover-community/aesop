@@ -187,6 +187,62 @@ def containsDecl (thms : SimpTheorems) (decl : Name) : Bool :=
 end SimpTheorems
 
 
+section ForEachExpr
+
+variable {ω : Type} {m : Type → Type} [STWorld ω m] [MonadLiftT (ST ω) m]
+    [Monad m] [MonadControlT MetaM m] [MonadLiftT MetaM m]
+
+def forEachExprInLDeclCore (ldecl : LocalDecl) (g : Expr → m Bool) :
+    MonadCacheT Expr Unit m Unit := do
+  if ! ldecl.isImplementationDetail then
+    ForEachExpr.visit g ldecl.toExpr
+    ForEachExpr.visit g ldecl.type
+    if let some value := ldecl.value? then
+      ForEachExpr.visit g value
+
+@[inline, always_inline]
+def forEachExprInLDecl' (ldecl : LocalDecl) (g : Expr → m Bool) :
+    m Unit :=
+  forEachExprInLDeclCore ldecl g |>.run
+
+@[inline, always_inline]
+def forEachExprInLDecl (ldecl : LocalDecl) (g : Expr → m Unit) :
+    m Unit :=
+  forEachExprInLDeclCore ldecl (λ e => do g e; return true) |>.run
+
+@[inline, always_inline]
+def forEachExprInLCtxCore (lctx : LocalContext) (g : Expr → m Bool) :
+    MonadCacheT Expr Unit m Unit :=
+  for ldecl in lctx do
+    forEachExprInLDeclCore ldecl g
+
+@[inline, always_inline]
+def forEachExprInLCtx' (mvarId : MVarId) (g : Expr → m Bool) : m Unit :=
+  mvarId.withContext do
+    forEachExprInLCtxCore (← mvarId.getDecl).lctx g |>.run
+
+@[inline, always_inline]
+def forEachExprInLCtx (mvarId : MVarId) (g : Expr → m Unit) : m Unit :=
+  forEachExprInLCtx' mvarId (λ e => do g e; return true)
+
+@[inline, always_inline]
+def forEachExprInGoalCore (mvarId : MVarId) (g : Expr → m Bool) :
+    MonadCacheT Expr Unit m Unit :=
+  mvarId.withContext do
+    forEachExprInLCtxCore (← mvarId.getDecl).lctx g
+    ForEachExpr.visit g (← mvarId.getType)
+
+@[inline, always_inline]
+def forEachExprInGoal' (mvarId : MVarId) (g : Expr → m Bool) : m Unit :=
+  forEachExprInGoalCore mvarId g |>.run
+
+@[inline, always_inline]
+def forEachExprInGoal (mvarId : MVarId) (g : Expr → m Unit) : m Unit :=
+  forEachExprInGoal' mvarId λ e => do g e; return true
+
+end ForEachExpr
+
+
 @[inline]
 def setThe (σ) {m} [MonadStateOf σ m] (s : σ) : m PUnit :=
   MonadStateOf.set s
