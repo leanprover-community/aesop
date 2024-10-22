@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Rule.Name
 import Aesop.Tracing
+import Aesop.Index.DiscrTreeConfig
 
 open Lean Lean.Meta
 
@@ -38,6 +39,10 @@ structure RulePattern where
   instantiation `tⱼ` of `yⱼ` should be substituted for `xᵢ`.
   -/
   argMap : Array (Option Nat)
+  /--
+  Discrimination tree keys for `p`.
+  -/
+  discrTreeKeys : Array DiscrTree.Key
   deriving Inhabited
 
 namespace RulePattern
@@ -56,46 +61,6 @@ def RulePatternInstantiation.toArray : RulePatternInstantiation → Array Expr :
 
 instance : EmptyCollection RulePatternInstantiation :=
   ⟨.empty⟩
-
-def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
-    (mvarId : MVarId) :
-    StateRefT (Std.HashMap RuleName (Std.HashSet RulePatternInstantiation)) MetaM Unit :=
-  withNewMCtxDepth do -- TODO use (allowLevelAssignments := true)?
-    let openPats ← pats.mapM λ (name, pat) => return (name, ← pat.open)
-    let initialState ← show MetaM _ from saveState
-    forEachExprInGoal mvarId λ e => do
-      if e.hasLooseBVars then
-        -- We don't visit subexpressions with loose bvars. Instantiations
-        -- derived from such subexpressions would not be valid in the goal's
-        -- context. E.g. if a rule `(x : T) → P x` has pattern `x` and we
-        -- have the expression `λ (y : T), y` in the goal, then it makes no
-        -- sense to match `y` and generate `P y`.
-        return
-      for (name, mvarIds, p) in openPats do
-        initialState.restore
-        -- The many `isDefEq` checks here are quite expensive. Perhaps a better
-        -- strategy would be to reducibly normalise the goal once and for all.
-        -- Then we could use a variant of `isDefEq` that only checks for
-        -- syntactic equality up to mvars.
-        if ← isDefEq e p then
-          let instances ← mvarIds.mapM λ mvarId => do
-            let mvar := .mvar mvarId
-            let result ← instantiateMVars mvar
-            if result == mvar then
-              initialState.restore
-              throwError "matchRulePatterns: while matching pattern '{p}' against expression '{e}': expected metavariable ?{(← mvarId.getDecl).userName} ({mvarId.name}) to be assigned"
-            pure result
-          modify λ m =>
-            -- TODO loss of linearity?
-            if let some instanceSet := m[name]? then
-              m.insert name (instanceSet.insert instances)
-            else
-              m.insert name (.empty |>.insert instances)
-
-def matchRulePatterns (pats : Array (RuleName × RulePattern))
-    (mvarId : MVarId) :
-    MetaM (Std.HashMap RuleName (Std.HashSet RulePatternInstantiation)) :=
-  (·.snd) <$> (matchRulePatternsCore pats mvarId |>.run ∅)
 
 namespace RulePattern
 
@@ -149,10 +114,11 @@ def «elab» (stx : Term) (ruleType : Expr) : TermElabM RulePattern :=
     forallTelescope ruleType λ fvars _ => do
       let pat := (← elabPattern stx).consumeMData
       let (pat, mvarIds) ← fvarsToMVars fvars pat
+      let discrTreeKeys ← mkDiscrTreePath pat
       let (pat, mvarIdToPatternPos) ← abstractMVars' pat
       let argMap := mvarIds.map (mvarIdToPatternPos[·]?)
       aesop_trace[debug] "pattern '{stx}' elaborated into '{pat.expr}'"
-      return { pattern := pat, argMap }
+      return { pattern := pat, argMap, discrTreeKeys }
 where
   fvarsToMVars (fvars : Array Expr) (e : Expr) :
       MetaM (Expr × Array MVarId) := do

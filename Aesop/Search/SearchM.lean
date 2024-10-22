@@ -32,10 +32,15 @@ structure Context where
   statsRef : StatsRef
   deriving Nonempty
 
+structure Cache where
+  rulePatterns : RulePatternCache := {}
+  deriving Inhabited
+
 structure State (Q) [Aesop.Queue Q] where
   iteration : Iteration
   queue : Q
   maxRuleApplicationDepthReached : Bool
+  cache : Cache
   deriving Inhabited
 
 end SearchM
@@ -102,6 +107,7 @@ protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     queue := ← Queue.init' #[rootGoal]
     iteration := Iteration.one
     maxRuleApplicationDepthReached := false
+    cache := {}
   }
   x.run' ctx state t
 
@@ -138,5 +144,11 @@ def setMaxRuleApplicationDepthReached : SearchM Q Unit :=
 
 def wasMaxRuleApplicationDepthReached : SearchM Q Bool :=
   return (← get).maxRuleApplicationDepthReached
+
+def getResetRulePatternCache : SearchM Q RulePatternCache :=
+  modifyGet λ s => (s.cache.rulePatterns, { s with cache.rulePatterns := {} })
+
+def setRulePatternCache (cache : RulePatternCache): SearchM Q Unit :=
+  modify λ s => { s with cache.rulePatterns := cache }
 
 end Aesop

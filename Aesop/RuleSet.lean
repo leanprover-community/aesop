@@ -50,6 +50,12 @@ structure BaseRuleSet where
   -- HACK to be removed once we switch fully to stateful forward reasoning.
   forwardRuleNames : PHashSet RuleName
   /--
+  An index for the rule patterns associated with rules contained in this rule
+  set. When rules are removed from the rule set, their patterns are not removed
+  from this index.
+  -/
+  rulePatterns : RulePatternIndex
+  /--
   The set of rules that were erased from `normRules`, `unsafeRules`, `safeRules`
   and `forwardRules`. When we erase a rule which is present in any of these four
   indices, the rule is not removed from the indices but just added to this set.
@@ -277,6 +283,7 @@ def BaseRuleSet.merge (rs₁ rs₂ : BaseRuleSet) : BaseRuleSet where
   safeRules := rs₁.safeRules.merge rs₂.safeRules
   forwardRules := rs₁.forwardRules.merge rs₂.forwardRules
   forwardRuleNames := rs₁.forwardRuleNames.merge rs₂.forwardRuleNames
+  rulePatterns := rs₁.rulePatterns.merge rs₂.rulePatterns
   unfoldRules := rs₁.unfoldRules.mergeWith rs₂.unfoldRules
     λ _ unfoldThm?₁ _ => unfoldThm?₁
   ruleNames :=
@@ -294,7 +301,6 @@ def BaseRuleSet.merge (rs₁ rs₂ : BaseRuleSet) : BaseRuleSet where
           if ns.contains n then x else x.insert n
     go rs₂ rs₁ $ go rs₁ rs₂ {}
 
-
 def BaseRuleSet.add (rs : BaseRuleSet) (r : BaseRuleSetMember) :
     BaseRuleSet :=
   let erased := rs.erased.erase r.name
@@ -306,11 +312,14 @@ def BaseRuleSet.add (rs : BaseRuleSet) (r : BaseRuleSetMember) :
   let rs := { rs with erased, ruleNames }
   match r with
   | .normRule r =>
-    { rs with normRules := rs.normRules.add r r.indexingMode }
+    let rs := { rs with normRules := rs.normRules.add r r.indexingMode }
+    addRulePattern r.name r.pattern? rs
   | .unsafeRule r =>
-    { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
+    let rs := { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
+    addRulePattern r.name r.pattern? rs
   | .safeRule r =>
-    { rs with safeRules := rs.safeRules.add r r.indexingMode }
+    let rs := { rs with safeRules := rs.safeRules.add r r.indexingMode }
+    addRulePattern r.name r.pattern? rs
   | .unfoldRule r =>
     { rs with unfoldRules := rs.unfoldRules.insert r.decl r.unfoldThm? }
   | .normForwardRule r₁ r₂ => {
@@ -331,6 +340,12 @@ def BaseRuleSet.add (rs : BaseRuleSet) (r : BaseRuleSetMember) :
       forwardRuleNames := rs.forwardRuleNames.insert r₁.name
       safeRules := rs.safeRules.add r₂ r₂.indexingMode
     }
+where
+  addRulePattern (n : RuleName) (pat? : Option RulePattern)
+      (rs : BaseRuleSet) : BaseRuleSet :=
+    match pat? with
+    | none => rs
+    | some pat => { rs with rulePatterns := rs.rulePatterns.add n pat }
 
 def LocalRuleSet.add (rs : LocalRuleSet) :
     LocalRuleSetMember → LocalRuleSet
@@ -433,43 +448,53 @@ private def rulePredicate (opts : Lean.Options) (rs : LocalRuleSet)
   else
     λ r => include? r && ! rs.isErased r.name
 
+variable [Monad m] [MonadRulePatternCache m] [MonadLiftT MetaM m]
+  [MonadControlT MetaM m]
+
+local instance : MonadOptions m where
+  getOptions := (getOptions : MetaM _)
+
 def applicableNormalizationRulesWith (rs : LocalRuleSet)
     (fms : ForwardRuleMatches) (goal : MVarId)
-    (include? : NormRule → Bool) : MetaM (Array (IndexMatchResult NormRule)) := do
+    (include? : NormRule → Bool) : m (Array (IndexMatchResult NormRule)) := do
   let opts ← getOptions
   let normFwdRules := fms.normRules.filter (fwdRulePredicate opts rs include?)
-  rs.normRules.applicableRules goal normFwdRules
+  let patInstMap ← rs.rulePatterns.getInGoal goal
+  rs.normRules.applicableRules goal patInstMap normFwdRules
     (rulePredicate opts rs include?)
 
 @[inline, always_inline]
 def applicableNormalizationRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
-    (goal : MVarId) : MetaM (Array (IndexMatchResult NormRule)) :=
+    (goal : MVarId) : m (Array (IndexMatchResult NormRule)) :=
   rs.applicableNormalizationRulesWith fms goal (include? := λ _ => true)
 
 def applicableUnsafeRulesWith (rs : LocalRuleSet) (fms : ForwardRuleMatches)
     (goal : MVarId) (include? : UnsafeRule → Bool) :
-    MetaM (Array (IndexMatchResult UnsafeRule)) := do
+    m (Array (IndexMatchResult UnsafeRule)) := do
   let opts ← getOptions
   let unsafeFwdRules :=
     fms.unsafeRules.filter (fwdRulePredicate opts rs include?)
-  rs.unsafeRules.applicableRules goal unsafeFwdRules
+  let patInstMap ← rs.rulePatterns.getInGoal goal
+  rs.unsafeRules.applicableRules goal patInstMap unsafeFwdRules
     (rulePredicate opts rs include?)
 
 @[inline, always_inline]
 def applicableUnsafeRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
-    (goal : MVarId) : MetaM (Array (IndexMatchResult UnsafeRule)) :=
+    (goal : MVarId) : m (Array (IndexMatchResult UnsafeRule)) :=
   rs.applicableUnsafeRulesWith fms goal (include? := λ _ => true)
 
 def applicableSafeRulesWith (rs : LocalRuleSet) (fms : ForwardRuleMatches)
-    (goal : MVarId) (include? : SafeRule → Bool) := do
+    (goal : MVarId) (include? : SafeRule → Bool) :
+    m (Array (IndexMatchResult SafeRule)) := do
   let opts ← getOptions
   let safeFwdRules := fms.safeRules.filter (fwdRulePredicate opts rs include?)
-  rs.safeRules.applicableRules goal safeFwdRules
+  let patInstMap ← rs.rulePatterns.getInGoal goal
+  rs.safeRules.applicableRules goal patInstMap safeFwdRules
     (rulePredicate opts rs include?)
 
 @[inline, always_inline]
 def applicableSafeRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
-    (goal : MVarId) : MetaM (Array (IndexMatchResult SafeRule)) :=
+    (goal : MVarId) : m (Array (IndexMatchResult SafeRule)) :=
   rs.applicableSafeRulesWith fms goal (include? := λ _ => true)
 
 def applicableForwardRulesWith (rs : LocalRuleSet) (e : Expr)

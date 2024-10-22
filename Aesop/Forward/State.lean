@@ -67,7 +67,7 @@ instance : ToMessageData InstMap where
             let hs : Array MessageData :=
               hs.fold (init := #[]) λ hs (h : Hyp) =>
                 hs.push (Expr.fvar h.fvarId)
-            (ppPHashSet ms, hs)
+            m!"{(ppPHashSet ms, hs)}"
 
 /-- Returns the set of matches and hypotheses associated with a slot `slot`
 with instantiation `inst`. -/

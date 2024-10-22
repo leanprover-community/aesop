@@ -28,6 +28,7 @@ structure Context where
 structure State where
   forwardState : ForwardState
   forwardRuleMatches : ForwardRuleMatches
+  rulePatternCache : RulePatternCache
   deriving Inhabited
 
 end NormM
@@ -37,6 +38,13 @@ abbrev NormM := ReaderT NormM.Context $ StateRefT NormM.State MetaM
 instance : MonadStats NormM where
   readStatsRef := return (← read).statsRef
 
+instance (priority := low) : MonadStateOf RulePatternCache NormM where
+  get := return (← get).rulePatternCache
+  set c := modify λ s => { s with rulePatternCache := c }
+  modifyGet f := modifyGet λ s =>
+    let (a, c) := f s.rulePatternCache
+    (a, { s with rulePatternCache := c })
+
 def getForwardState : NormM ForwardState :=
   return (← get).forwardState
 
@@ -45,7 +53,7 @@ def getResetForwardState : NormM ForwardState := do
 
 def updateForwardState (fs : ForwardState) (newMatches : Array ForwardRuleMatch)
     (erasedHyps : Std.HashSet FVarId) : NormM Unit :=
-  modify λ s => {
+  modify λ s => { s with
     forwardState := fs
     forwardRuleMatches :=
       s.forwardRuleMatches.eraseHyps erasedHyps |>.insertMany newMatches
@@ -411,10 +419,12 @@ def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
   let normState := {
     forwardState := g.forwardState
     forwardRuleMatches := g.forwardRuleMatches
+    rulePatternCache := ← getResetRulePatternCache
   }
-  let ((normResult, { forwardState, forwardRuleMatches }), postState) ←
+  let ((normResult, { forwardState, forwardRuleMatches, rulePatternCache }), postState) ←
     g.runMetaMInParentState do
       normalizeGoalMVar preGoal g.mvars |>.run normCtx |>.run normState
+  setRulePatternCache rulePatternCache
   match normResult with
   | .changed postGoal script? =>
     gref.modify λ g =>
