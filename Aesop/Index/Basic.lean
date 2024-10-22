@@ -12,10 +12,6 @@ open Lean Lean.Meta
 
 namespace Aesop
 
--- This value controls whether we use 'powerful' reductions, e.g. iota, when
--- indexing Aesop rules. See the `DiscrTree` docs for details.
-def discrTreeConfig : WhnfCoreConfig := { iota := false }
-
 inductive IndexingMode : Type
   | unindexed
   | target (keys : Array DiscrTree.Key)

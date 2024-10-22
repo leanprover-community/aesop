@@ -21,8 +21,29 @@ def isForwardOrDestructRuleName (n : RuleName) : Bool :=
 
 structure SaturateM.Context where
   options : Aesop.Options'
+  deriving Inhabited
 
-abbrev SaturateM := ReaderT SaturateM.Context ScriptM
+structure SaturateM.State where
+  rulePatternCache : RulePatternCache := {}
+  deriving Inhabited
+
+abbrev SaturateM :=
+  ReaderT SaturateM.Context $ StateRefT SaturateM.State ScriptM
+
+namespace SaturateM
+
+instance (priority := low) : MonadStateOf RulePatternCache SaturateM where
+  get := return (← get).rulePatternCache
+  set c := modify λ s => { s with rulePatternCache := c }
+  modifyGet f := modifyGet λ s =>
+    let (a, c) := f s.rulePatternCache
+    (a, { s with rulePatternCache := c })
+
+def run (options : Aesop.Options') (x : SaturateM α) :
+    MetaM (α × Array Script.LazyStep) :=
+  ReaderT.run x { options } |>.run' {} |>.run
+
+end SaturateM
 
 def getSingleGoal [Monad m] [MonadError m] (o : RuleTacOutput) :
     m (MVarId × Meta.SavedState × Option (Array Script.LazyStep)) := do
@@ -156,7 +177,7 @@ def saturateMain (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') 
       Stateful.saturateCore rs goal options
     else
       saturateCore rs goal
-  doSaturate.run { options } |>.run
+  doSaturate.run options
 
 def saturate (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') :
     MetaM MVarId := do

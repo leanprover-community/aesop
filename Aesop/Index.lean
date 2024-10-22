@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Forward.Match
 import Aesop.Index.Basic
+import Aesop.Index.RulePattern
 import Aesop.RulePattern
 import Aesop.Rule.Basic
 import Aesop.Tracing
@@ -134,7 +135,8 @@ private def applicableUnindexedRules (ri : Index α) (include? : Rule α → Boo
 -- Returns the rules in the order given by the `Ord α` instance.
 @[specialize]
 def applicableRules (ri : Index α) (goal : MVarId)
-    (additionalRules : Array (Rule α)) (include? : Rule α → Bool) :
+    (patInstMap : RulePatternInstMap) (additionalRules : Array (Rule α))
+    (include? : Rule α → Bool) :
     MetaM (Array (IndexMatchResult (Rule α))) := do
   withConstAesopTraceNode .debug (return "rule selection") do
   goal.instantiateMVars
@@ -148,19 +150,15 @@ def applicableRules (ri : Index α) (goal : MVarId)
     (applicableUnindexedRules ri include?)
   ruleMap := additionalRules.foldl (init := ruleMap) λ ruleMap r =>
     ruleMap.insert r #[] -- NOTE: additional rules are not checked with include?
-  aesop_trace[debug] "selected rules before pattern check:{indentD $ flip MessageData.joinSep "\n" $ ruleMap.toList.map (toMessageData ·.fst.name)}"
   let mut patterns := Array.mkEmpty ruleMap.size
   for (rule, _) in ruleMap do
     if let some pattern := rule.pattern? then
       patterns := patterns.push (rule.name, pattern)
-  aesop_trace[debug] "patterns:{indentD $ flip MessageData.joinSep "\n" $ patterns.map (λ (name, pat) => m!"{name}: {pat.pattern.expr}") |>.toList}"
-  let patternInstsMap ← matchRulePatterns patterns goal
-  aesop_trace[debug] "found pattern instantiations:{indentD $ flip MessageData.joinSep "\n" $ patternInstsMap.toList.map λ (name, insts) => m!"{name}: {insts.toArray.map (·.toArray)}"}"
   let mut result := Array.mkEmpty ruleMap.size
   for (rule, locs) in ruleMap do
     let locations := (∅ : Std.HashSet _).insertMany locs
     if rule.pattern?.isSome then
-      if let some patternInstantiations := patternInstsMap[rule.name]? then
+      if let some patternInstantiations := patInstMap[rule.name]? then
         result := result.push { rule, locations, patternInstantiations }
     else
       result := result.push { rule, locations, patternInstantiations := ∅ }
