@@ -76,4 +76,9 @@ instance : Ord ForwardRule :=
 instance : ToString ForwardRule where
   toString r := s!"[{r.prio}] {r.name}"
 
+/-- The number of premise indexes used by the rule. Hence, the rule uses only
+premise indexes in the interval `[0, numPremiseIndexes-1]`. -/
+def numPremiseIndexes (r : ForwardRule) : Nat :=
+  r.numPremises
+
 end Aesop.ForwardRule
