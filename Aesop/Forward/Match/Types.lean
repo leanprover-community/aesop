@@ -1,5 +1,6 @@
 import Aesop.Forward.PremiseIndex
 import Aesop.Forward.SlotIndex
+import Aesop.Forward.Substitution
 import Aesop.Rule.Forward
 import Lean
 
@@ -8,16 +9,6 @@ set_option linter.missingDocs true
 namespace Aesop
 
 open Lean
-
-/-- A substitution maps premise indices to assignments. -/
-abbrev Substitution := AssocList PremiseIndex Expr
-
-instance : ToMessageData Substitution where
-  toMessageData s :=
-    let xs :=
-      s.toList.mergeSort (λ (i₁, _) (i₂, _) => i₁ < i₂)
-        |>.map λ (i, e) => m!"{i} ↦ {e}"
-    .bracket "{" (.joinSep xs ", ") "}"
 
 /-- A match associates hypotheses to (a prefix of) the slots of a slot
 cluster. -/
@@ -32,7 +23,7 @@ structure Match where
   subst : Substitution
 
 instance : Inhabited Match :=
-  ⟨{ revHyps := [default], subst := ∅ }⟩
+  ⟨{ revHyps := [default], subst := default }⟩
 
 instance : BEq Match where
   beq m₁ m₂ := m₁.revHyps == m₂.revHyps

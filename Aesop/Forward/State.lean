@@ -126,7 +126,7 @@ def eraseHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id.
     let maps := imap.map.find! i
     let maps := maps.foldl (init := maps) fun m e (ms, hs) =>
       let ms := PersistentHashSet.filter (·.revHyps.contains hyp) ms
-      m.insert e (ms, hs.erase { fvarId := hyp, subst := ∅ })
+      m.insert e (ms, hs.erase { fvarId := hyp, subst := default })
     imaps := imaps.insert i maps
   return { map := imaps }
 
@@ -278,7 +278,7 @@ def matchPremise? (premises : Array MVarId) (cs : ClusterState)
       because, among other issues, `slot.common` is empty in the first slot. Even though
       we don't have dependencies, we still need to keep track of the subs of hyp.
       Otherwise, we would trigger the first panic in `AddHypothesis`.-/
-      let mut subst : Substitution := ∅
+      let mut subst : Substitution := .empty premises.size
       for var in slot.deps do
         let some varMVarId := premises[var.toNat]?
           | throwError "aesop: internal error: matchPremise?: dependency with index {var}, but only {premises.size} premises"

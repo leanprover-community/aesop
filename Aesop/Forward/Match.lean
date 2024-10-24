@@ -28,17 +28,6 @@ def elabForwardRuleTerm (goal : MVarId) : RuleTerm → MetaM Expr
   | .term stx =>
     (withFullElaboration $ elabRuleTermForApplyLikeMetaM goal stx).run'
 
-namespace Substitution
-
-/-- Merge two substitutions. Precondition: the substitutions are compatible, so
-if `s₁[x]` and `s₂[x]` are both defined, they must be the same value. -/
-def mergeCompatible (s₁ s₂ : Substitution) : Substitution :=
-  s₂.foldl (init := s₁) λ s k v =>
-    assert! let r? := s.find? k; r?.isNone || r? == some v
-    s.insert k v
-
-end Substitution
-
 namespace Match
 
 /--
@@ -68,7 +57,7 @@ def reconstructArgs (r : ForwardRule) (m : CompleteMatch) :
         | panic! s!"match for rule {r.name} is not complete: no hyp for slot with premise index {slot.premiseIndex} in cluster {i}"
       slotHyps := slotHyps.insert slot.premiseIndex hyp
 
-  let mut subst : Substitution := ∅
+  let mut subst : Substitution := .empty r.numPremiseIndexes
   for m in m.clusterMatches do
     subst := subst.mergeCompatible m.subst
 
