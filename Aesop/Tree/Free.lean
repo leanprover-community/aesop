@@ -51,6 +51,6 @@ def MVarClusterRef.free (cref : MVarClusterRef) : BaseIO Unit := do
   freeMVarClusterRef dgref dcref cref
 
 def freeTree : TreeM Unit := do
-  (← get).root.free
+  (← getThe Tree).root.free
 
 end Aesop

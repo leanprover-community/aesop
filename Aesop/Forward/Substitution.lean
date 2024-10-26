@@ -62,4 +62,10 @@ def mergeCompatible (s₁ s₂ : Substitution) : Substitution := Id.run do
         result := result.insert ⟨i⟩ e
   return result
 
+/-- Returns `true` if any expression in the codomain of `s` contains `hyp`. -/
+def containsHyp (hyp : FVarId) (s : Substitution) : Bool :=
+  s.toArray.any λ
+    | none => false
+    | some e => e.containsFVar hyp
+
 end Aesop.Substitution

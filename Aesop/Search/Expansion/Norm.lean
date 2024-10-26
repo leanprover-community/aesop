@@ -3,6 +3,8 @@ Copyright (c) 2023 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+
+import Aesop.Forward.State.ApplyGoalDiff
 import Aesop.RuleTac
 import Aesop.RuleTac.ElabRuleTerm
 import Aesop.Script.SpecificTactics
@@ -59,13 +61,13 @@ def updateForwardState (fs : ForwardState) (newMatches : Array ForwardRuleMatch)
       s.forwardRuleMatches.eraseHyps erasedHyps |>.insertMany newMatches
   }
 
-def eraseForwardRuleMatch (m : ForwardRuleMatch) : NormM Unit :=
+def eraseForwardRuleMatch (m : ForwardRuleMatch) : NormM Unit := do
   modify λ s => { s with forwardRuleMatches := s.forwardRuleMatches.erase m }
 
 def applyDiffToForwardState (newGoal : MVarId) (diff : GoalDiff) :
     NormM Unit := do
   let fs ← getResetForwardState
-  let (fs, ms) ← fs.applyGoalDiff (← read).ruleSet.forwardRules newGoal diff
+  let (fs, ms) ← fs.applyGoalDiff (← read).ruleSet newGoal diff
   updateForwardState fs ms diff.removedFVars
 
 inductive NormRuleResult
@@ -105,11 +107,11 @@ def withNormTraceNode (ruleName : DisplayRuleName)
 new forward rule matches. If `rule` corresponds to a forward rule match,
 returns that match as well. -/
 def runNormRuleTac (rule : NormRule) (input : RuleTacInput) (fs : ForwardState)
-    (idx : ForwardIndex) :
-    MetaM $
+    (rs : LocalRuleSet) :
+    NormM $
       Option (NormRuleResult × ForwardState × Array ForwardRuleMatch × Std.HashSet FVarId) ×
       Option ForwardRuleMatch := do
-  let preMetaState ← saveState
+  let preMetaState ← show MetaM _ from saveState
   let result? ← runRuleTac rule.tac.run rule.name preMetaState input
   let forwardRuleMatch? := rule.tac.forwardRuleMatch?
   match result? with
@@ -119,12 +121,12 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) (fs : ForwardState)
   | Sum.inr result =>
     let #[rapp] := result.applications
       | err m!"rule did not produce exactly one rule application."
-    restoreState rapp.postState
+    show MetaM _ from restoreState rapp.postState
     if rapp.goals.isEmpty then
       return (some (.proved rapp.scriptSteps?, fs, #[], ∅), forwardRuleMatch?)
     let (#[{ mvarId := g, diff }]) := rapp.goals
       | err m!"rule produced more than one subgoal."
-    let (fs, ms) ← fs.applyGoalDiff idx g diff
+    let (fs, ms) ← fs.applyGoalDiff rs g diff
     if ← Check.rules.isEnabled then
       let mvars := .ofArray input.mvars.toArray
       let actualMVars ← rapp.postState.runMetaM' g.getMVarDependencies
@@ -148,7 +150,7 @@ def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     withNormTraceNode (.ruleName rule.rule.name) do
       let fs ← getForwardState
       let (result?, consumedForwardRuleMatch?) ←
-        runNormRuleTac rule.rule ruleInput fs (← read).ruleSet.forwardRules
+        runNormRuleTac rule.rule ruleInput fs (← read).ruleSet
       if let some m := consumedForwardRuleMatch? then
         eraseForwardRuleMatch m
       let (some (result, fs, ms, removedFVars)) := result?

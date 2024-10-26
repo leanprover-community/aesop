@@ -4,9 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.RuleTac.GoalDiff
 import Aesop.Index.Basic
 import Aesop.RulePattern
+import Aesop.RuleTac.GoalDiff
 import Batteries.Lean.Meta.DiscrTree
 
 set_option linter.missingDocs true
@@ -33,6 +33,20 @@ def insertArray (xs : Array (RuleName × RulePatternInstantiation))
     match m[r]? with
     | none => m.insert r $ (∅ : Std.HashSet _).insert inst
     | some insts => m.insert r $ insts.insert inst
+
+/-- Build a rule instantiation map from an array of instantiations. -/
+def ofArray (xs : Array (RuleName × RulePatternInstantiation)) :
+    RulePatternInstMap :=
+  (∅ : RulePatternInstMap).insertArray xs
+
+/-- Convert a rule instantiation map to a flat array of instantiations. -/
+def toFlatArray (m : RulePatternInstMap) :
+    Array (RuleName × RulePatternInstantiation) := Id.run do
+  let mut result := #[]
+  for (r, patInsts) in m do
+    for patInst in patInsts do
+      result := result.push (r, patInst)
+  return result
 
 end RulePatternInstMap
 
@@ -127,8 +141,9 @@ def getSingle  (e : Expr) (idx : RulePatternIndex) :
         return acc
 
 /-- Get all instantiations of the rule patterns that match a subexpression of
-`e`. Subexpressions containing bound variables are not considered. -/
-def get (e : Expr) (idx : RulePatternIndex) :
+`e`. Subexpressions containing bound variables are not considered. The returned
+array may contain duplicates. -/
+def getCore (e : Expr) (idx : RulePatternIndex) :
     m (Array (RuleName × RulePatternInstantiation)) := do
   let e ← instantiateMVars e
   checkCache e λ _ => (·.snd) <$> (e.forEach getSubexpr |>.run #[])
@@ -145,6 +160,27 @@ where
     let ms ← idx.getSingle e
     modify (· ++ ms)
 
+@[inherit_doc getCore]
+def get (e : Expr) (idx : RulePatternIndex) : m RulePatternInstMap :=
+  .ofArray <$> idx.getCore e
+
+/-- Get all instantiations of the rule patterns that match a subexpression of
+the given local declaration. Subexpressions containing bound variables are not
+considered. -/
+def getInLocalDeclCore (acc : RulePatternInstMap) (ldecl : LocalDecl)
+    (idx : RulePatternIndex) : m RulePatternInstMap := do
+  let mut result := acc
+  result := result.insertArray $ ← idx.getCore ldecl.toExpr
+  result := result.insertArray $ ← idx.getCore ldecl.type
+  if let some val := ldecl.value? then
+    result := result.insertArray $ ← idx.getCore val
+  return result
+
+@[inherit_doc getInLocalDeclCore]
+def getInLocalDecl (ldecl : LocalDecl) (idx : RulePatternIndex) :
+    m RulePatternInstMap :=
+  idx.getInLocalDeclCore ∅ ldecl
+
 /-- Get all instantiations of the rule patterns that match a subexpression of
 a hypothesis or the target. Subexpressions containing bound variables are not
 considered. -/
@@ -152,11 +188,9 @@ def getInGoal (goal : MVarId) (idx : RulePatternIndex) : m RulePatternInstMap :=
   goal.withContext do
     let mut result := ∅
     for ldecl in (← goal.getDecl).lctx do
-      result := result.insertArray $ ← idx.get ldecl.toExpr
-      result := result.insertArray $ ← idx.get ldecl.type
-      if let some val := ldecl.value? then
-        result := result.insertArray $ ← idx.get val
-    result := result.insertArray $ ← idx.get (← goal.getType)
+      unless ldecl.isImplementationDetail do
+        result ← idx.getInLocalDeclCore result ldecl
+    result := result.insertArray $ ← idx.getCore (← goal.getType)
     return result
 
 end Get

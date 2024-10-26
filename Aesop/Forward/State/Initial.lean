@@ -11,17 +11,24 @@ open Lean Lean.Meta
 
 namespace Aesop.LocalRuleSet
 
+variable [Monad m] [MonadRulePatternCache m] [MonadControlT MetaM m]
+  [MonadLiftT MetaM m]
+
+-- FIXME rule pattern instantiation from the target are currently not
+-- considered.
+
 def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
-    MetaM (ForwardState × Array ForwardRuleMatch) :=
+    m (ForwardState × Array ForwardRuleMatch) :=
   goal.withContext do
     let mut fs := ∅
     let mut ruleMatches := #[]
-    for ldecl in ← getLCtx do
+    for ldecl in ← show MetaM _ from getLCtx do
       if ldecl.isImplementationDetail then
         continue
       let rules ← rs.applicableForwardRules ldecl.type
+      let patInsts ← rs.forwardRulePatternInstantiationsInLocalDecl ldecl
       let (fs', ruleMatches') ←
-        fs.addHypCore ruleMatches goal ldecl.fvarId rules
+        fs.addHypWithPatInstsCore ruleMatches goal ldecl.fvarId rules patInsts
       fs := fs'
       ruleMatches := ruleMatches'
     return (fs, ruleMatches)

@@ -151,6 +151,7 @@ def finishIfProven : SearchM Q Bool := do
   traceTree
   return true
 
+-- TODO move to Tree directory
 /--
 This function detects whether the search has made progress, meaning that the
 remaining goals after safe prefix expansion are different from the initial goal.
@@ -183,7 +184,7 @@ def treeHasProgress : TreeM Bool := do
         resultRef.set true
         return false)
     (λ _ => return true)
-    (.mvarCluster (← get).root)
+    (.mvarCluster (← getThe Tree).root)
   resultRef.get
 
 def throwAesopEx (mvarId : MVarId) (remainingSafeGoals : Array MVarId)

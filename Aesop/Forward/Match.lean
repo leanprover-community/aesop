@@ -30,12 +30,25 @@ def elabForwardRuleTerm (goal : MVarId) : RuleTerm → MetaM Expr
 
 namespace Match
 
-/--
-The level of a match `m` is the greatest slot index `i` such that `m` associates
-a hypothesis to slot `i`.
--/
-def level (m : Match) : SlotIndex :=
-  ⟨m.revHyps.length - 1⟩
+/-- Create a one-element match. -/
+def initial (hyp? : Option FVarId) (subst : Substitution) : Match where
+  revElems := [.ofHypAndSubst hyp? subst]
+  subst := subst
+  level := ⟨0⟩
+
+/-- Add a hyp or pattern instantiation to the match. -/
+def addHypOrPatternInst (hyp? : Option FVarId) (subst : Substitution)
+    (m : Match) : Match where
+  revElems := .ofHypAndSubst hyp? subst :: m.revElems
+  subst := m.subst.mergeCompatible subst
+  level := m.level + 1
+
+/-- Returns `true` if the match contains the given hyp or a pattern
+instantiation in which the given hyp appears. -/
+def containsHyp (hyp : FVarId) (m : Match) : Bool :=
+  m.revElems.any λ
+    | .patInst subst => subst.containsHyp hyp
+    | .hyp hyp' => hyp == hyp'
 
 end Match
 
@@ -50,12 +63,13 @@ def reconstructArgs (r : ForwardRule) (m : CompleteMatch) :
     let cluster := r.slotClusters[i]
     let some m := m.clusterMatches[i]?
       | panic! s!"match for rule {r.name} is not complete: no cluster match for cluster {i}"
-    let hyps := m.revHyps.toArray.reverse
+    let hyps := m.revElems.toArray.reverse
     for h' : j in [:cluster.size] do
       let slot := cluster[j]
-      let some hyp := hyps[j]?
-        | panic! s!"match for rule {r.name} is not complete: no hyp for slot with premise index {slot.premiseIndex} in cluster {i}"
-      slotHyps := slotHyps.insert slot.premiseIndex hyp
+      let some hyp? := hyps[j]?
+        | panic! s!"match for rule {r.name} is not complete: no hyp or pattern instantiation for slot with premise index {slot.premiseIndex} in cluster {i}"
+      if let .hyp hyp := hyp? then
+        slotHyps := slotHyps.insert slot.premiseIndex hyp
 
   let mut subst : Substitution := .empty r.numPremiseIndexes
   for m in m.clusterMatches do
@@ -85,11 +99,16 @@ protected def le (m₁ m₂ : ForwardRuleMatch) : Bool :=
 /-- Fold over the hypotheses contained in a match. -/
 def foldHyps (f : σ → FVarId → σ) (init : σ) (m : ForwardRuleMatch) : σ :=
   m.match.clusterMatches.foldl (init := init) λ s cm =>
-    cm.revHyps.foldl (init := s) f
+    cm.revElems.foldr (init := s) λ
+      | .patInst .., s => s
+      | .hyp hyp, s => f s hyp
 
 /-- Returns `true` if any hypothesis contained in `m` satisfies `f`. -/
 def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
-  m.match.clusterMatches.any (·.revHyps.any f)
+  m.match.clusterMatches.any λ m =>
+    m.revElems.any λ
+      | .patInst .. => false
+      | .hyp hyp => f hyp
 
 /-- Construct the proof of the new hypothesis represented by `m`. -/
 def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM Expr :=

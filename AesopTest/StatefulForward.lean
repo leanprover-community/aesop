@@ -392,3 +392,18 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
   aesop (add safe [forward r₁], 90% destruct r₂)
+
+/--
+warning: aesop: failed to prove the goal after exhaustive search.
+---
+error: unsolved goals
+α β γ : Prop
+h₁ : α
+h₂ : β
+fwd : γ
+⊢ False
+-/
+#guard_msgs in
+example {α β γ : Prop} (h : α → β → γ) (h₁ : α) (h₂ : β) : False := by
+  aesop (add norm -1 forward h)
+  -- TODO with `safe` instead of `norm`, exposes an error in local rule handling.
