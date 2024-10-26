@@ -40,6 +40,8 @@ structure BaseRuleSet where
   represents a declaration `decl` which should be unfolded. `unfoldThm?` should
   be the output of `getUnfoldEqnFor? decl` and is cached here for efficiency.
   -/
+  -- TODO Don't cache equation name; this may lead to bugs and the performance
+  -- cost is negligible.
   unfoldRules : PHashMap Name (Option Name)
   /--
   Forward rules. There's a special procedure for applying forward rules, so we
@@ -322,24 +324,30 @@ def BaseRuleSet.add (rs : BaseRuleSet) (r : BaseRuleSetMember) :
     addRulePattern r.name r.pattern? rs
   | .unfoldRule r =>
     { rs with unfoldRules := rs.unfoldRules.insert r.decl r.unfoldThm? }
-  | .normForwardRule r₁ r₂ => {
+  | .normForwardRule r₁ r₂ =>
+    let rs := {
       rs with
       forwardRules := rs.forwardRules.insert r₁
       forwardRuleNames := rs.forwardRuleNames.insert r₁.name
       normRules := rs.normRules.add r₂ r₂.indexingMode
     }
-  | .unsafeForwardRule r₁ r₂ => {
+    addRulePattern r₂.name r₂.pattern? rs
+  | .unsafeForwardRule r₁ r₂ =>
+    let rs := {
       rs with
       forwardRules := rs.forwardRules.insert r₁
       forwardRuleNames := rs.forwardRuleNames.insert r₁.name
       unsafeRules := rs.unsafeRules.add r₂ r₂.indexingMode
     }
-  | .safeForwardRule r₁ r₂ => {
+    addRulePattern r₂.name r₂.pattern? rs
+  | .safeForwardRule r₁ r₂ =>
+    let rs := {
       rs with
       forwardRules := rs.forwardRules.insert r₁
       forwardRuleNames := rs.forwardRuleNames.insert r₁.name
       safeRules := rs.safeRules.add r₂ r₂.indexingMode
     }
+    addRulePattern r₂.name r₂.pattern? rs
 where
   addRulePattern (n : RuleName) (pat? : Option RulePattern)
       (rs : BaseRuleSet) : BaseRuleSet :=
@@ -507,6 +515,27 @@ def applicableForwardRulesWith (rs : LocalRuleSet) (e : Expr)
 def applicableForwardRules (rs : LocalRuleSet) (e : Expr) :
     MetaM (Array (ForwardRule × PremiseIndex)) :=
   rs.applicableForwardRulesWith e (include? := λ _ => true)
+
+section ForwardRulePattern
+
+variable [Monad m] [MonadRulePatternCache m]
+
+private def postprocessPatInstMap (rs : LocalRuleSet) (m : RulePatternInstMap) :
+    Array (ForwardRule × RulePatternInstantiation) :=
+  m.toFlatArray.filterMap λ (n, patInst) =>
+    rs.forwardRules.getRuleWithName? n |>.map (·, patInst)
+
+def forwardRulePatternInstantiationsInExpr (rs : LocalRuleSet) (e : Expr) :
+    m (Array (ForwardRule × RulePatternInstantiation)) := do
+  let ms ← rs.rulePatterns.get e
+  return postprocessPatInstMap rs ms
+
+def forwardRulePatternInstantiationsInLocalDecl (rs : LocalRuleSet)
+    (ldecl : LocalDecl) : m (Array (ForwardRule × RulePatternInstantiation)) := do
+  let ms ← rs.rulePatterns.getInLocalDecl ldecl
+  return postprocessPatInstMap rs ms
+
+end ForwardRulePattern
 
 -- NOTE: only non-forward norm/safe/unsafe rules can be unindexed.
 def unindex (rs : LocalRuleSet) (p : RuleName → Bool) : LocalRuleSet := {

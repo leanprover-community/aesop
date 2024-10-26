@@ -76,9 +76,12 @@ instance : Ord ForwardRule :=
 instance : ToString ForwardRule where
   toString r := s!"[{r.prio}] {r.name}"
 
-/-- The number of premise indexes used by the rule. Hence, the rule uses only
-premise indexes in the interval `[0, numPremiseIndexes-1]`. -/
+/-- The number of premise indexes used by the rule. Data structures related to
+the rule use only premise indexes in the interval `[0, numPremiseIndexes)`. -/
 def numPremiseIndexes (r : ForwardRule) : Nat :=
-  r.numPremises
+  if r.rulePatternInfo?.isSome then
+    r.numPremises + 1
+  else
+    r.numPremises
 
 end Aesop.ForwardRule

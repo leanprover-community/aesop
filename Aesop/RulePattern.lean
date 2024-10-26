@@ -47,6 +47,13 @@ structure RulePattern where
 
 namespace RulePattern
 
+def boundPremises (pat : RulePattern) : Array Nat := Id.run do
+  let mut result := Array.mkEmpty pat.argMap.size
+  for h : i in [:pat.argMap.size] do
+    if pat.argMap[i].isSome then
+      result := result.push i
+  return result
+
 def «open» (pat : RulePattern) : MetaM (Array MVarId × Expr) := do
   let (mvarIds, _, p) ← openAbstractMVarsResult pat.pattern
   return (mvarIds.map (·.mvarId!), p)
@@ -54,7 +61,7 @@ def «open» (pat : RulePattern) : MetaM (Array MVarId × Expr) := do
 end RulePattern
 
 def RulePatternInstantiation := Array Expr
-  deriving Inhabited, BEq, Hashable
+  deriving Inhabited, BEq, Hashable, ToMessageData
 
 def RulePatternInstantiation.toArray : RulePatternInstantiation → Array Expr :=
   id
@@ -152,4 +159,16 @@ where
       { paramNames := s.paramNames, numMVars := s.fvars.size, expr := e }
     return (result, mvarIdToPos)
 
-end Aesop.RulePattern
+end RulePattern
+
+def openRuleType (patAndInst? : Option (RulePattern × RulePatternInstantiation))
+    (type : Expr) :
+    MetaM (Array Expr × Array BinderInfo × Expr × Std.HashSet MVarId) := do
+  match patAndInst? with
+  | some (pat, inst) => do
+    pat.openRuleType inst type
+  | none =>
+    let (premises, binfos, conclusion) ← forallMetaTelescopeReducing type
+    return (premises, binfos, conclusion, ∅)
+
+end Aesop

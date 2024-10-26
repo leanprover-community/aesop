@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Check
+import Aesop.Forward.State.ApplyGoalDiff
 import Aesop.Tree.Traversal
 import Aesop.Tree.TreeM
 import Aesop.Util.UnionFind
@@ -18,6 +19,15 @@ structure AddRapp extends RuleApplication where
   parent : GoalRef
   appliedRule : RegularRule
   successProbability : Percent
+
+namespace AddRapp
+
+def consumedForwardRuleMatch? (r : AddRapp) : Option ForwardRuleMatch :=
+  match r.appliedRule.tac with
+  | .forwardMatch m => some m
+  | _ => none
+
+end AddRapp
 
 def findPathForAssignedMVars (assignedMVars : UnorderedArraySet MVarId)
     (start : GoalRef) : TreeM (Array RappRef × Std.HashSet GoalId) := do
@@ -84,8 +94,12 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
     let mvars ← parentMetaState.runMetaM' $
       .ofHashSet <$> g.preNormGoal.getMVarDependencies
     let rs := (← read).ruleSet
-    let (forwardState, ms) ← parentMetaState.runMetaM' do
-      rs.mkInitialForwardState g.preNormGoal -- FIXME do something more clever
+    let rulePatternCache ← getResetRulePatternCache
+    let ((forwardState, ms), rulePatternCache) ← parentMetaState.runMetaM' do
+      let go : StateRefT RulePatternCache MetaM _ :=
+        rs.mkInitialForwardState g.preNormGoal -- FIXME do something more clever
+      go |>.run rulePatternCache
+    setRulePatternCache rulePatternCache
     return Goal.mk {
       id := ← getAndIncrementNextGoalId
       parent := unsafeCast () -- will be filled in later
@@ -111,16 +125,23 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
 def makeInitialGoal (goal : Subgoal) (mvars : UnorderedArraySet MVarId)
     (parent : MVarClusterRef) (parentMetaState : Meta.SavedState)
     (parentForwardState : ForwardState)
-    (parentForwardMatches : ForwardRuleMatches) (depth : Nat)
+    (parentForwardMatches : ForwardRuleMatches)
+    (consumedForwardRuleMatch? : Option ForwardRuleMatch) (depth : Nat)
     (successProbability : Percent) (origin : GoalOrigin) : TreeM Goal := do
   let rs := (← read).ruleSet
-  let (forwardState, forwardRuleMatches) ← parentMetaState.runMetaM' do
-    let (fs, newMatches) ←
-      parentForwardState.applyGoalDiff rs.forwardRules goal.mvarId goal.diff
-    let ms :=
+  let rulePatternCache ← getResetRulePatternCache
+  let (forwardState, forwardRuleMatches, rulePatternCache) ← parentMetaState.runMetaM' do
+    let go : StateRefT RulePatternCache MetaM _ :=
+      parentForwardState.applyGoalDiff rs goal.mvarId goal.diff
+    let ((fs, newMatches), rulePatternCache) ←
+      go |>.run rulePatternCache
+    let mut ms :=
       parentForwardMatches.insertMany newMatches
         |>.eraseHyps goal.diff.removedFVars
-    pure (fs, ms)
+    if let some m := consumedForwardRuleMatch? then
+      ms := ms.erase m
+    pure (fs, ms, rulePatternCache)
+  setRulePatternCache rulePatternCache
   return Goal.mk {
     id := ← getAndIncrementNextGoalId
     children := #[]
@@ -230,8 +251,8 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
           .subgoal
       try
         makeInitialGoal goal mvars (unsafeCast ()) r.postState
-          parentGoal.forwardState parentGoal.forwardRuleMatches goalDepth
-          r.successProbability origin
+          parentGoal.forwardState parentGoal.forwardRuleMatches
+          r.consumedForwardRuleMatch? goalDepth r.successProbability origin
           -- The parent (`unsafeCast ()`) will be patched up later.
       catch e =>
         throwError "in rapp for rule {r.appliedRule.name}:{indentD e.toMessageData}"
@@ -254,7 +275,7 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   -- Get the introduced mvars. An mvar counts as introduced by this rapp if it
   -- appears in a subgoal, but not in the parent goal.
   let mut introducedMVars : UnorderedArraySet MVarId := ∅
-  let mut allIntroducedMVars ← modifyGet λ t =>
+  let mut allIntroducedMVars ← modifyGetThe Tree λ t =>
     (t.allIntroducedMVars, { t with allIntroducedMVars := ∅ })
     -- We set `allIntroducedMVars := ∅` to make sure that the hash set is used
     -- linearly.
@@ -264,7 +285,7 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
          ! allIntroducedMVars.contains mvarId then
         introducedMVars := introducedMVars.insert mvarId
         allIntroducedMVars := allIntroducedMVars.insert mvarId
-  modify λ t => { t with allIntroducedMVars }
+  modifyThe Tree λ t => { t with allIntroducedMVars }
 
   -- Patch up more information we left out earlier.
   rref.modify λ r =>

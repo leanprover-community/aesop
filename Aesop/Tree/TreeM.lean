@@ -33,6 +33,12 @@ def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : MetaM Tree := do
     state := NodeState.unknown
   }
   let (forwardState, ms) ← withConstAesopTraceNode .forward (return m!"building initial forward state") do
+    -- NOTE we don't cache rule pattern lookups here. It would be possible to do
+    -- so, but doesn't seem worth the trouble.
+    have : MonadRulePatternCache MetaM := {
+      findCached? := λ _ => return none
+      cache := λ _ _ => return
+    }
     rs.mkInitialForwardState goal
   let rootGoalRef ← IO.mkRef $ Goal.mk {
     id := GoalId.zero
@@ -70,7 +76,11 @@ structure TreeM.Context where
   currentIteration : Iteration
   ruleSet : LocalRuleSet
 
-abbrev TreeM := ReaderT TreeM.Context $ StateRefT Tree MetaM
+structure TreeM.State where
+  tree : Tree
+  rulePatternCache : RulePatternCache
+
+abbrev TreeM := ReaderT TreeM.Context $ StateRefT TreeM.State MetaM
 
 namespace TreeM
 
@@ -79,20 +89,27 @@ namespace TreeM
 instance : Monad TreeM :=
   { inferInstanceAs (Monad TreeM) with }
 
+instance (priority := low) : MonadStateOf Tree TreeM where
+  get := return (← get).tree
+  set tree := modify ({ · with tree })
+  modifyGet f := modifyGet λ s =>
+    let (a, tree) := f s.tree
+    (a, { s with tree })
+
 instance : Inhabited (TreeM α) where
   default := failure
 
-def run' (ctx : TreeM.Context) (t : Tree) (x : TreeM α) :
-    MetaM (α × Tree) :=
-  ReaderT.run x ctx |>.run t
+def run' (ctx : TreeM.Context) (tree : Tree) (x : TreeM α) :
+    MetaM (α × TreeM.State) :=
+  ReaderT.run x ctx |>.run { tree, rulePatternCache := ∅ }
 
 end TreeM
 
 def getRootMVarCluster : TreeM MVarClusterRef :=
-  return (← get).root
+  return (← get).tree.root
 
 def getRootMetaState : TreeM Meta.SavedState :=
-  return (← get).rootMetaState
+  return (← get).tree.rootMetaState
 
 def getRootGoal : TreeM GoalRef := do
   let cref ← getRootMVarCluster
@@ -107,22 +124,29 @@ def getRootMVarId : TreeM MVarId := do
   return (← gref.get).preNormGoal
 
 def incrementNumGoals (increment := 1) : TreeM Unit := do
-  modify λ s => { s with numGoals := s.numGoals + increment }
+  modify λ s => { s with tree.numGoals := s.tree.numGoals + increment }
 
 def incrementNumRapps (increment := 1) : TreeM Unit := do
-  modify λ s => { s with numRapps := s.numRapps + increment }
+  modify λ s => { s with tree.numRapps := s.tree.numRapps + increment }
 
 def getAllIntroducedMVars : TreeM (Std.HashSet MVarId) :=
-  return (← get).allIntroducedMVars
+  return (← get).tree.allIntroducedMVars
 
 def getAndIncrementNextGoalId : TreeM GoalId := do
   modifyGet λ t =>
-    let curr := t.nextGoalId
-    (curr, { t with nextGoalId := curr.succ })
+    let curr := t.tree.nextGoalId
+    (curr, { t with tree.nextGoalId := curr.succ })
 
 def getAndIncrementNextRappId : TreeM RappId := do
   modifyGet λ t =>
-    let curr := t.nextRappId
-    (curr, { t with nextRappId := curr.succ })
+    let curr := t.tree.nextRappId
+    (curr, { t with tree.nextRappId := curr.succ })
+
+def getResetRulePatternCache : TreeM RulePatternCache :=
+  modifyGet λ s => (s.rulePatternCache, { s with rulePatternCache := ∅ })
+
+def setRulePatternCache (cache : RulePatternCache): TreeM Unit :=
+  modify λ s => { s with rulePatternCache := cache }
+
 
 end Aesop

@@ -23,14 +23,9 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
     MetaM (Array (Expr × Nat) × Array FVarId) :=
   withNewMCtxDepth (allowLevelAssignments := true) do
     let type ← inferType e
-    let (argMVars, binderInfos, patInstantiatedMVars) ←
-      if let some pat := pat? then
-        let (argMVars, binderInfos, _, patInstantiatedMVars) ←
-          pat.openRuleType patInst type
-        pure (argMVars, binderInfos, patInstantiatedMVars)
-      else
-        let (argMVars, binderInfos, _) ← forallMetaTelescopeReducing type
-        pure (argMVars, binderInfos, ∅)
+    let patAndInst? := pat?.map (·, patInst)
+    let (argMVars, binderInfos, _, patInstantiatedMVars) ←
+      openRuleType patAndInst? type
     let app := mkAppN e argMVars
     let mut instMVars := Array.mkEmpty argMVars.size
     let mut immediateMVars := Array.mkEmpty argMVars.size

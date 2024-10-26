@@ -242,8 +242,8 @@ example {P Q R : α → α → Prop} (h₁ : ∀ a b, P a b → Q b a → R a b)
 
 /--
 info: Try this:
-  have fwd : R b c := h₁ b a d c h₄ h₅
-  have fwd_1 : R c c := h₁ c d d c h₂ h₅
+  have fwd : R c c := h₁ c d d c h₂ h₅
+  have fwd_1 : R b c := h₁ b a d c h₄ h₅
   have fwd_2 : R b b := h₁ b a a b h₄ h₃
   have fwd_3 : R c b := h₁ c d a b h₂ h₃
 ---
@@ -256,8 +256,8 @@ h₂ : P c d
 h₃ : Q a b
 h₄ : P b a
 h₅ : Q d c
-fwd : R b c
-fwd_1 : R c c
+fwd : R c c
+fwd_1 : R b c
 fwd_2 : R b b
 fwd_3 : R c b
 ⊢ R c b
@@ -392,3 +392,18 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
   aesop (add safe [forward r₁], 90% destruct r₂)
+
+/--
+warning: aesop: failed to prove the goal after exhaustive search.
+---
+error: unsolved goals
+α β γ : Prop
+h₁ : α
+h₂ : β
+fwd : γ
+⊢ False
+-/
+#guard_msgs in
+example {α β γ : Prop} (h : α → β → γ) (h₁ : α) (h₂ : β) : False := by
+  aesop (add norm -1 forward h)
+  -- TODO with `safe` instead of `norm`, exposes an error in local rule handling.

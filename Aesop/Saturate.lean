@@ -139,7 +139,7 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
     go ∅ fs queue goal
 where
   go (hypDepths : Std.HashMap FVarId Nat) (fs : ForwardState) (queue : Queue)
-      (goal : MVarId) : ScriptM MVarId := do
+      (goal : MVarId) : SaturateM MVarId := do
     withIncRecDepth do
     goal.withContext do
       if let some (m, queue) := queue.deleteMin then
@@ -161,7 +161,10 @@ where
             go hypDepths fs queue goal
           else
             let rules ← rs.applicableForwardRules type
-            let (fs, ruleMatches) ← fs.addHyp goal hyp rules
+            let patInsts ←
+              rs.forwardRulePatternInstantiationsInLocalDecl (← hyp.getDecl)
+            let (fs, ruleMatches) ←
+              fs.addHypWithPatInsts goal hyp rules patInsts
             let queue :=
               ruleMatches.foldl (init := queue) λ queue m => queue.insert m
             go hypDepths fs queue goal

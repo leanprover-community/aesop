@@ -31,21 +31,17 @@ structure Context where
   statsRef : StatsRef
   deriving Nonempty
 
-structure Cache where
-  rulePatterns : RulePatternCache := {}
-  deriving Inhabited
-
 structure State (Q) [Aesop.Queue Q] where
   iteration : Iteration
   queue : Q
   maxRuleApplicationDepthReached : Bool
-  cache : Cache
   deriving Inhabited
 
 end SearchM
 
 abbrev SearchM Q [Aesop.Queue Q] :=
-  ReaderT SearchM.Context $ StateRefT (SearchM.State Q) $ StateRefT Tree MetaM
+  ReaderT SearchM.Context $ StateRefT (SearchM.State Q) $
+    StateRefT TreeM.State MetaM
 
 variable [Aesop.Queue Q]
 
@@ -79,11 +75,11 @@ instance : MonadLift TreeM (SearchM Q) where
     }
     liftM $ ReaderT.run x ctx
 
-protected def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (t : Tree)
+protected def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (tree : Tree)
     (x : SearchM Q α) : MetaM (α × SearchM.State Q × Tree × Stats) := do
   let ((a, σ), t) ←
-    x.run ctx |>.run σ |>.run t
-  return (a, σ, t, ← ctx.statsRef.get)
+    x.run ctx |>.run σ |>.run { tree, rulePatternCache := ∅ }
+  return (a, σ, t.tree, ← ctx.statsRef.get)
 
 protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     (simpConfig : Simp.Config) (simpConfigStx? : Option Term)
@@ -108,7 +104,6 @@ protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     queue := ← Queue.init' #[rootGoal]
     iteration := Iteration.one
     maxRuleApplicationDepthReached := false
-    cache := {}
   }
   x.run' ctx state t
 
@@ -145,11 +140,5 @@ def setMaxRuleApplicationDepthReached : SearchM Q Unit :=
 
 def wasMaxRuleApplicationDepthReached : SearchM Q Bool :=
   return (← get).maxRuleApplicationDepthReached
-
-def getResetRulePatternCache : SearchM Q RulePatternCache :=
-  modifyGet λ s => (s.cache.rulePatterns, { s with cache.rulePatterns := {} })
-
-def setRulePatternCache (cache : RulePatternCache): SearchM Q Unit :=
-  modify λ s => { s with cache.rulePatterns := cache }
 
 end Aesop

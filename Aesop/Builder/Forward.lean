@@ -100,13 +100,14 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
     MetaM (Option ForwardRule) := do
   withConstAesopTraceNode .forward (return m!"building forward rule for {t}") do
   -- TODO support all these options
-  if immediate?.isSome || pat?.isSome || imode?.isSome || md != .default ||
+  -- TODO support instance premises
+  if immediate?.isSome || imode?.isSome || md != .default ||
      indexMd != .reducible || isDestruct then
     aesop_trace[forward] "unsupported builder option"
     return none
   let expr ← t.expr
   let name ← t.name
-  let info ← ForwardRuleInfo.ofExpr expr
+  let info ← ForwardRuleInfo.ofExpr expr pat?
   aesop_trace[forward] "rule type: {← inferType expr}"
   withConstAesopTraceNode .forward (return m!"slot clusters") do
     aesop_trace[forward] do
