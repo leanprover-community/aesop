@@ -58,7 +58,8 @@ def updateForwardState (fs : ForwardState) (newMatches : Array ForwardRuleMatch)
   modify λ s => { s with
     forwardState := fs
     forwardRuleMatches :=
-      s.forwardRuleMatches.eraseHyps erasedHyps |>.insertMany newMatches
+      s.forwardRuleMatches.update newMatches erasedHyps
+        (consumedForwardRuleMatch? := none) -- We erase the consumed matches separately.
   }
 
 def eraseForwardRuleMatch (m : ForwardRuleMatch) : NormM Unit := do

@@ -80,6 +80,22 @@ where
 def eraseHyp (h : FVarId) (ms : ForwardRuleMatches) : ForwardRuleMatches :=
   ms.eraseHyps {h}
 
+/-- Update the `ForwardRuleMatches` of a goal so that they are suitable for a
+child goal. `newMatches` are new forward rule matches obtained by updating the
+old goal's `ForwardState` with new hypotheses from the new goal. `erasedHyps`
+are the hypotheses from the old goal that no longer appear in the new goal.
+`consumedForwardRuleMatch?` is a forward rule match that was applied as a rule
+to transform the old goal into the new goal. -/
+def update (newMatches : Array ForwardRuleMatch)
+    (erasedHyps : Std.HashSet FVarId)
+    (consumedForwardRuleMatch? : Option ForwardRuleMatch)
+    (forwardRuleMatches : ForwardRuleMatches) : ForwardRuleMatches := Id.run do
+  let mut ms :=
+   forwardRuleMatches.insertMany newMatches |>.eraseHyps erasedHyps
+  if let some m := consumedForwardRuleMatch? then
+    ms := ms.erase m
+  return ms
+
 private def foldRules! (ms : PHashSet ForwardRuleMatch)
     (f : ForwardRuleMatch → Option α) (g : σ → α → σ) (init : σ) : σ :=
   have : Inhabited σ := ⟨init⟩

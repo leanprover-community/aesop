@@ -90,15 +90,20 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
   let toCopy ← getGoalsToCopy assignedMVars start
   toCopy.mapM λ gref => do
     let g ← gref.get
-    have : Ord MVarId := ⟨λ m₁ m₂ => m₁.name.quickCmp m₂.name⟩
-    let mvars ← parentMetaState.runMetaM' $
-      .ofHashSet <$> g.preNormGoal.getMVarDependencies
     let rs := (← read).ruleSet
     let rulePatternCache ← getResetRulePatternCache
-    let ((forwardState, ms), rulePatternCache) ← parentMetaState.runMetaM' do
-      let go : StateRefT RulePatternCache MetaM _ :=
-        rs.mkInitialForwardState g.preNormGoal -- FIXME do something more clever
-      go |>.run rulePatternCache
+    let (forwardState, forwardRuleMatches, rulePatternCache, mvars) ←
+      parentMetaState.runMetaM' do
+        let start ← start.get
+        let diff ← diffGoals start.currentGoal g.preNormGoal ∅
+        let go : StateRefT RulePatternCache MetaM _ :=
+          start.forwardState.applyGoalDiff rs g.preNormGoal diff
+        let ((forwardState, ms), rulePatternCache) ← go |>.run rulePatternCache
+        let forwardRuleMatches :=
+          start.forwardRuleMatches.update ms diff.removedFVars
+            (consumedForwardRuleMatch? := none) -- TODO unsure whether this is correct
+        let mvars ← .ofHashSet <$> g.preNormGoal.getMVarDependencies
+        pure (forwardState, forwardRuleMatches, rulePatternCache, mvars)
     setRulePatternCache rulePatternCache
     return Goal.mk {
       id := ← getAndIncrementNextGoalId
@@ -113,7 +118,7 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
       normalizationState := NormalizationState.notNormal
       mvars
       forwardState
-      forwardRuleMatches := .ofArray ms
+      forwardRuleMatches
       successProbability := parentSuccessProbability
       addedInIteration := (← read).currentIteration
       lastExpandedInIteration := Iteration.none
@@ -135,11 +140,9 @@ def makeInitialGoal (goal : Subgoal) (mvars : UnorderedArraySet MVarId)
       parentForwardState.applyGoalDiff rs goal.mvarId goal.diff
     let ((fs, newMatches), rulePatternCache) ←
       go |>.run rulePatternCache
-    let mut ms :=
-      parentForwardMatches.insertMany newMatches
-        |>.eraseHyps goal.diff.removedFVars
-    if let some m := consumedForwardRuleMatch? then
-      ms := ms.erase m
+    let ms :=
+      parentForwardMatches.update newMatches goal.diff.removedFVars
+        consumedForwardRuleMatch?
     pure (fs, ms, rulePatternCache)
   setRulePatternCache rulePatternCache
   return Goal.mk {
