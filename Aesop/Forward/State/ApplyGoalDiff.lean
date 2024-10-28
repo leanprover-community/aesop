@@ -14,8 +14,7 @@ open Lean Lean.Meta
 variable [Monad m] [MonadRulePatternCache m] [MonadControlT MetaM m]
   [MonadLiftT MetaM m]
 
--- FIXME rule pattern instantiation from the target are currently not
--- considered.
+-- FIXME rule pattern erasure.
 
 /-- Apply a goal diff to the state, adding and removing hypotheses as indicated
 by the diff. `goal` must be the post-goal of `diff`. -/
@@ -34,6 +33,11 @@ def ForwardState.applyGoalDiff (rs : LocalRuleSet) (goal : MVarId)
       let patInsts ← rs.forwardRulePatternInstantiationsInLocalDecl (← h.getDecl)
       let (fs', ruleMatches') ←
         fs.addHypWithPatInstsCore ruleMatches goal h rules patInsts
+      fs := fs'
+      ruleMatches := ruleMatches'
+    if diff.targetMaybeChanged then
+      let patInsts ← rs.forwardRulePatternInstantiationsInExpr (← goal.getType)
+      let (fs', ruleMatches') ← fs.addPatInstsCore ruleMatches goal patInsts
       fs := fs'
       ruleMatches := ruleMatches'
     return (fs, ruleMatches)

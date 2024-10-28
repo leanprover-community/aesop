@@ -14,13 +14,12 @@ namespace Aesop.LocalRuleSet
 variable [Monad m] [MonadRulePatternCache m] [MonadControlT MetaM m]
   [MonadLiftT MetaM m]
 
--- FIXME rule pattern instantiation from the target are currently not
--- considered.
+-- FIXME rule pattern erasure.
 
 def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
     m (ForwardState × Array ForwardRuleMatch) :=
   goal.withContext do
-    let mut fs := ∅
+    let mut fs : ForwardState := ∅
     let mut ruleMatches := #[]
     for ldecl in ← show MetaM _ from getLCtx do
       if ldecl.isImplementationDetail then
@@ -31,7 +30,7 @@ def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
         fs.addHypWithPatInstsCore ruleMatches goal ldecl.fvarId rules patInsts
       fs := fs'
       ruleMatches := ruleMatches'
-    return (fs, ruleMatches)
-
+    let patInsts ← rs.forwardRulePatternInstantiationsInExpr (← goal.getType)
+    fs.addPatInstsCore ruleMatches goal patInsts
 
 end Aesop.LocalRuleSet

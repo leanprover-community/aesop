@@ -142,6 +142,7 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
       addedFVars
       removedFVars := ∅
       fvarSubst := ∅
+      targetMaybeChanged := false
     }
     if clear then
       let (goal', removedFVars) ← tryClearManyS goal usedHyps
@@ -187,7 +188,12 @@ def forward (t : RuleTerm) (pat? : Option RulePattern)
 def forwardMatch (m : ForwardRuleMatch) :
     RuleTac := SingleRuleTac.toRuleTac λ input => do
   let ((goal, hyp), steps) ← m.apply input.goal |>.run
-  let diff := { addedFVars := {hyp}, removedFVars := ∅, fvarSubst := ∅ }
+  let diff := {
+    addedFVars := {hyp}
+    removedFVars := ∅
+    fvarSubst := ∅
+    targetMaybeChanged := false
+  }
   return (#[{ mvarId := goal, diff }], some steps, none)
 
 end Aesop.RuleTac
