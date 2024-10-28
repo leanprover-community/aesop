@@ -59,12 +59,18 @@ structure GoalDiff where
   have not otherwise been modified).
   -/
   fvarSubst : FVarIdSubst
+  /--
+  If `true`, the old goal's target is possibly not α-equal to the new goal's
+  target (after mvar instantiations).
+  -/
+  targetMaybeChanged : Bool
   deriving Inhabited
 
 protected def GoalDiff.empty : GoalDiff where
   addedFVars := ∅
   removedFVars := ∅
   fvarSubst := ∅
+  targetMaybeChanged := true
 
 instance : EmptyCollection GoalDiff :=
   ⟨.empty⟩
@@ -76,6 +82,10 @@ def getNewFVars (oldLCtx newLCtx : LocalContext) : Std.HashSet FVarId :=
     else
       newFVars
 
+private def getTarget (goal : MVarId) : MetaM Expr :=
+  goal.withContext do
+    instantiateMVars (← goal.getType)
+
 /--
 Diff two goals.
 -/
@@ -83,10 +93,11 @@ def diffGoals (old new : MVarId) (fvarSubst : FVarIdSubst) :
     MetaM GoalDiff := do
   let oldLCtx := (← old.getDecl).lctx
   let newLCtx := (← new.getDecl).lctx
+  let targetMaybeChanged := (← getTarget old) != (← getTarget new)
   return {
     addedFVars := getNewFVars oldLCtx newLCtx
     removedFVars := getNewFVars newLCtx oldLCtx
-    fvarSubst
+    fvarSubst, targetMaybeChanged
   }
 
 namespace GoalDiff
@@ -110,6 +121,7 @@ def comp (diff₁ diff₂ : GoalDiff) : GoalDiff where
       else
         removedFVars.insert fvarId
   fvarSubst := diff₁.fvarSubst.append diff₂.fvarSubst
+  targetMaybeChanged := diff₁.targetMaybeChanged || diff₂.targetMaybeChanged
 
 def checkCore (diff : GoalDiff) (old new : MVarId) :
     MetaM (Option MessageData) := do
@@ -172,6 +184,14 @@ def checkCore (diff : GoalDiff) (old new : MVarId) :
       isDefeqLocalDecl (diff.fvarSubst.applyToLocalDecl oldLDecl) newLDecl
     unless equalLDecls do
       return some m!"fvarSubst maps hypothesis {oldLDecl.userName} to {newLDecl.userName} but these hypotheses are not defeq"
+
+  -- Check the target
+  let oldTgt ← getTarget old
+  let newTgt ← getTarget new
+  if oldTgt != newTgt && ! diff.targetMaybeChanged then
+    let oldTgt ← old.withContext do addMessageContext m!"{oldTgt}"
+    let newTgt ← new.withContext do addMessageContext m!"{newTgt}"
+    return some m!"diff says target did not change, but old target{indentD oldTgt}\nis not equal to new target{indentD newTgt}"
 
   return none
 where

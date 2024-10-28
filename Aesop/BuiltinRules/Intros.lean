@@ -22,7 +22,12 @@ def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
       throwError "nothing to introduce"
     let addedFVars := newFVarIds.foldl (init := ∅) λ set fvarId =>
       set.insert fvarId
-    let diff := { addedFVars, removedFVars := ∅, fvarSubst := ∅ }
+    let diff := {
+      addedFVars
+      removedFVars := ∅
+      fvarSubst := ∅
+      targetMaybeChanged := true
+    }
     return (#[{ mvarId := goal, diff }], steps, none)
 
 end Aesop.BuiltinRules
