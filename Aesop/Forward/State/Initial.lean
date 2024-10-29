@@ -14,8 +14,6 @@ namespace Aesop.LocalRuleSet
 variable [Monad m] [MonadRulePatternCache m] [MonadControlT MetaM m]
   [MonadLiftT MetaM m]
 
--- FIXME rule pattern erasure.
-
 def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
     m (ForwardState × Array ForwardRuleMatch) :=
   goal.withContext do

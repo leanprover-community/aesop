@@ -140,22 +140,39 @@ def insertMatch (imap : InstMap) (var : PremiseIndex) (m : Match) :
     | panic! s!"variable {var} is not assigned in substitution"
   imap.insertMatchCore m.level inst m
 
-/-- Remove `hyp` from slots starting at `slot`. For each mapping
-`s ↦ e ↦ (ms, hs)` in `imap`, if `s ≥ slot`, then `hyp` is removed from `hs` and
-any matches containing `hyp` are removed from `ms`. -/
-def eraseHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) : InstMap := Id.run do
+/-- Modify the maps for slot `slot` and all later slots. -/
+def modifyMapsForSlotsFrom (imap : InstMap) (slot : SlotIndex)
+    (f : PHashSet Match → PHashSet Hyp → (PHashSet Match × PHashSet Hyp)) :
+    InstMap := Id.run do
   let mut imaps := imap.map
-  let nextSlots : List SlotIndex :=
-    imap.map.foldl (init := []) λ acc slot' _ =>
-      if slot ≤ slot' then slot' :: acc else acc
+  -- TODO Could remove this fold by passing the number of slots to this function.
+  let nextSlots : Array SlotIndex :=
+    imap.map.foldl (init := #[]) λ acc slot' _ =>
+      if slot ≤ slot' then acc.push slot' else acc
   for i in nextSlots do
-    let maps := imap.map.find! i
-    let maps := maps.foldl (init := maps) fun m e (ms, hs) =>
-      let ms := PersistentHashSet.filter (·.containsHyp hyp) ms
-      let hs := PersistentHashSet.filter (·.containsHyp hyp) hs
-      m.insert e (ms, hs)
+    let maps := imap.map.find! i |>.map λ (ms, hs) => f ms hs
     imaps := imaps.insert i maps
   return { map := imaps }
+
+/-- Remove `hyp` from `slot` and all later slots. For each mapping
+`s ↦ e ↦ (ms, hs)` in `imap`, if `s ≥ slot`, then `hyp` is removed from `hs` and
+any matches containing `hyp` are removed from `ms`. -/
+def eraseHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) :
+    InstMap :=
+  imap.modifyMapsForSlotsFrom slot λ ms hs =>
+    let ms := PersistentHashSet.filter (·.containsHyp hyp) ms
+    let hs := hs.erase { fvarId? := hyp, subst := default }
+    (ms, hs)
+
+/-- Remove the pattern instantiation `subst` from `slot` and all later slots.
+For each mapping `s ↦ e ↦ (ms, hs)` in `imap`, if `s ≥ slot`, then `subst` is
+removed from `hs` and any matches containing `subst` are removed from `ms`. -/
+def erasePatInst (imap : InstMap) (subst : Substitution) (slot : SlotIndex) :
+    InstMap :=
+  imap.modifyMapsForSlotsFrom slot λ ms hs =>
+    let ms := PersistentHashSet.filter (·.containsPatInst subst) ms
+    let hs := hs.erase { fvarId? := none, subst }
+    (ms, hs)
 
 end InstMap
 
@@ -215,10 +232,15 @@ def addMatch (vmap : VariableMap) (nextSlot : Slot) (m : Match) :
     let (vmap, changed') := vmap.modify var (·.insertMatch var m)
     (vmap, changed || changed')
 
-/-- Remove a hyp from `slot` and all following slots. -/
+/-- Remove a hyp from `slot` and all later slots. -/
 def eraseHyp (vmap : VariableMap) (hyp : FVarId) (slot : SlotIndex) :
     VariableMap :=
   ⟨vmap.map.map (·.eraseHyp hyp slot)⟩
+
+/-- Remove the pattern instantiation `subst` from `slot` and all later slots. -/
+def erasePatInst (vmap : VariableMap) (subst : Substitution) (slot : SlotIndex) :
+    VariableMap :=
+  ⟨vmap.map.map (·.erasePatInst subst slot)⟩
 
 /-- Find matches in slot `slot - 1` whose substitutions are compatible with
 `subst`. Preconditions: `slot.index` is nonzero, `slot.common` is nonempty and
@@ -410,7 +432,23 @@ def eraseHyp (h : FVarId) (pi : PremiseIndex) (cs : ClusterState) :
     | return cs
   { cs with variableMap := cs.variableMap.eraseHyp h slot.index }
 
+/-- Erase a pattern instantiation from the cluster state. -/
+def erasePatInst (subst : Substitution) (pi : PremiseIndex) (cs : ClusterState) :
+    ClusterState := Id.run do
+  let some slot := cs.findSlot? pi
+    | return cs
+  { cs with variableMap := cs.variableMap.erasePatInst subst slot.index }
+
 end ClusterState
+
+/-- The source of a pattern instantiation. The same pattern instantiation can
+have multiple sources. -/
+inductive PatInstSource
+  /-- The pattern instantiation came from the given hypothesis. -/
+  | hyp (fvarId : FVarId)
+  /-- The pattern instantiation came from the goal's target. -/
+  | target
+  deriving Inhabited, Hashable, BEq
 
 /-- Forward state for one rule. -/
 structure RuleState where
@@ -418,6 +456,10 @@ structure RuleState where
   rule : ForwardRule
   /-- States for each of the rule's slot clusters. -/
   clusterStates : Array ClusterState
+  /-- The sources of all pattern instantiations present in the
+  `clusterStates`. Invariant: each pattern instantiation in the cluster states
+  is associated with a nonempty set. -/
+  patInstSources : PHashMap RulePatternInstantiation (PHashSet PatInstSource)
   deriving Inhabited
 
 instance : ToMessageData RuleState where
@@ -430,7 +472,7 @@ instance : ToMessageData RuleState where
 def ForwardRule.initialRuleState (r : ForwardRule) : RuleState :=
   let clusterStates := r.slotClusters.map λ slots =>
     { slots, variableMap := ∅, completeMatches := {} }
-  { rule := r, clusterStates }
+  { rule := r, clusterStates, patInstSources := {} }
 
 namespace RuleState
 
@@ -489,12 +531,33 @@ where
             { clusterMatches := completeMatch.clusterMatches.push clusterMatch }
       return newCompleteMatches
 
+/--  -/
+def erasePatInst (inst : RulePatternInstantiation) (source : PatInstSource)
+    (rs : RuleState) : RuleState := Id.run do
+  let some sources := rs.patInstSources[inst]
+    | panic! s!"unknown pattern instantiation {inst.toArray} for rule {rs.rule.name}"
+  let sources := sources.erase source
+  if sources.isEmpty then
+    let some (pat, patPremiseIdx) := rs.rule.rulePatternInfo?
+      | panic! s!"rule {rs.rule.name} does not have a pattern"
+    let .ok subst := inst.toSubstitution pat rs.rule.numPremiseIndexes
+      | panic! s!"failed to convert pattern instantiation {inst.toArray} to substitution for rule {rs.rule.name}"
+    let some csIdx := rs.clusterStates.findIdx? λ cs =>
+      cs.findSlot? patPremiseIdx |>.isSome
+      | panic! s!"pattern slot {patPremiseIdx} not found for rule {rs.rule.name}"
+    return {
+      rs with
+      clusterStates := rs.clusterStates.modify csIdx λ cs =>
+        cs.erasePatInst subst patPremiseIdx
+      patInstSources := rs.patInstSources.erase inst
+    }
+  else
+    return { rs with patInstSources := rs.patInstSources.insert inst sources }
+
 /-- Erase a hypothesis from the rule state. -/
-def eraseHyp (h : FVarId) (pi : PremiseIndex) (rs : RuleState) :
-    RuleState := Id.run do
-  let clusterStates ← rs.clusterStates.mapM λ cs =>
-     cs.eraseHyp h pi
-  return { rs with clusterStates }
+def eraseHyp (h : FVarId) (pi : PremiseIndex) (rs : RuleState) : RuleState :=
+  let clusterStates := rs.clusterStates.map (·.eraseHyp h pi)
+  { rs with clusterStates }
 
 end RuleState
 
@@ -509,6 +572,8 @@ structure ForwardState where
   names in `hyps[h]`. Furthermore, `h` only appears in slots with premise
   indices greater than or equal to those in `hyps[h]`. -/
   hyps : PHashMap FVarId (PArray (RuleName × PremiseIndex))
+  /-- The pattern instantiations present in the rule states. -/
+  patInsts : PHashMap PatInstSource (PArray (RuleName × RulePatternInstantiation))
  deriving Inhabited
 
 namespace ForwardState
@@ -567,20 +632,11 @@ def addPatInstCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
     let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState
     let some (pat, patSlotPremiseIdx) := r.rulePatternInfo?
       | throwError "aesop: internal error: addPatInstCore: rule {r.name} does not have a rule pattern"
-    let subst ← mkPatternSubst r.numPremiseIndexes pat patInst
+    let subst ← ofExcept $ patInst.toSubstitution pat r.numPremiseIndexes
     let (rs, newRuleMatches) ← rs.addHypOrPatInst goal (.inr subst) patSlotPremiseIdx
     let fs := { fs with ruleStates := fs.ruleStates.insert r.name rs }
     let ms ← addForwardRuleMatches ruleMatches r newRuleMatches
     return (fs, ms)
-where
-  mkPatternSubst (numPremiseIndexes : Nat) (pat : RulePattern)
-      (patInst : RulePatternInstantiation) : MetaM Substitution := do
-    let mut subst := .empty numPremiseIndexes
-    for i in pat.boundPremises do
-      let some inst ← pat.getInstantiation patInst i
-        | throwError "aesop: internal error: pattern instantiation {patInst} does not contain an instantiation for premise {i}"
-      subst := subst.insert ⟨i⟩ inst
-    return subst
 
 @[inherit_doc addPatInstCore]
 def addPatInst (goal : MVarId) (r : ForwardRule)
@@ -617,12 +673,16 @@ def addHypWithPatInsts (goal : MVarId) (h : FVarId)
     (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) :=
   fs.addHypWithPatInstsCore #[] goal h ms patInsts
 
--- FIXME Erasure of rule pattern instantiations is not implemented yet. We need
--- to consider:
---
--- 1. Erasing rule patterns whose source is a hyp that has since been erased.
--- 2. Erasing rule patterns whose source is the target, when the target has
---    changed.
+/-- Erase pattern instantiations with the given source. -/
+def erasePatInsts (source : PatInstSource) (fs : ForwardState) :
+    ForwardState := Id.run do
+  let mut ruleStates := fs.ruleStates
+  for (r, inst) in fs.patInsts[source].getD {} do
+    let some rs := ruleStates.find? r
+      | panic! s!"patInsts entry for rule {r}, but no rule state"
+    let rs := rs.erasePatInst inst source
+    ruleStates := ruleStates.insert r rs
+  return { fs with patInsts := fs.patInsts.erase source, ruleStates }
 
 /-- Remove a hypothesis from the forward state. If `fs` represents a local
 context `lctx`, then `fs.eraseHyp h ms` represents `lctx` with `h` removed. `ms`
@@ -634,6 +694,29 @@ def eraseHyp (h : FVarId) (fs : ForwardState) : ForwardState := Id.run do
       | panic! s!"hyps entry for rule {r}, but no rule state"
     let rs := rs.eraseHyp h i
     ruleStates := ruleStates.insert r rs
-  return { fs with hyps := fs.hyps.erase h, ruleStates }
+  let fs := { fs with hyps := fs.hyps.erase h, ruleStates }
+  fs.erasePatInsts (.hyp h)
+
+/-- Erase all pattern instantiations whose source is the target. -/
+def eraseTargetPatInsts (fs : ForwardState) : ForwardState :=
+  fs.erasePatInsts .target
+
+/-- Update the pattern instantiations after the goal's target changed.
+`goal` is the new goal. `newPatInsts` are the new target's pattern
+instantiations. -/
+def updateTargetPatInstsCore (ruleMatches : Array ForwardRuleMatch)
+    (goal : MVarId)
+    (newPatInsts : Array (ForwardRule × RulePatternInstantiation))
+    (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) :=
+  -- TODO Instead of erasing all target pattern instantiations, erase only those
+  -- not present in the new target.
+  let fs := fs.eraseTargetPatInsts
+  fs.addPatInstsCore ruleMatches goal newPatInsts
+
+@[inherit_doc updateTargetPatInstsCore]
+def updateTargetPatInsts (goal : MVarId)
+    (newPatInsts : Array (ForwardRule × RulePatternInstantiation))
+    (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) :=
+  fs.updateTargetPatInstsCore #[] goal newPatInsts
 
 end Aesop.ForwardState
