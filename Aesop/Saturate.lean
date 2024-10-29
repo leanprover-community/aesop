@@ -146,7 +146,8 @@ where
         if m.rule.name.phase == .unsafe then
           return ← go hypDepths fs queue goal
         trace[saturate] "goal:{indentD goal}"
-        let (goal, hyp) ← m.apply goal
+        let some (goal, hyp) ← m.apply goal
+          | return ← go hypDepths fs queue goal
         goal.withContext do
           let type ← inferType (.fvar hyp)
           let mut depth := 0

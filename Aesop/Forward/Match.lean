@@ -60,9 +60,9 @@ end Match
 namespace CompleteMatch
 
 /-- Given a complete match `m` for `r`, get arguments to `r` contained in the
-match's slots and substitution. -/
+match's slots and substitution. For non-immediate arguments, we return `none`. -/
 def reconstructArgs (r : ForwardRule) (m : CompleteMatch) :
-    Array Expr := Id.run do
+    Array (Option Expr) := Id.run do
   let mut slotHyps : Std.HashMap PremiseIndex FVarId := ∅
   for h : i in [:r.slotClusters.size] do
     let cluster := r.slotClusters[i]
@@ -83,17 +83,25 @@ def reconstructArgs (r : ForwardRule) (m : CompleteMatch) :
   let mut args := Array.mkEmpty r.numPremises
   for i in [:r.numPremises] do
     if let some hyp := slotHyps.get? ⟨i⟩ then
-      args := args.push (.fvar hyp)
+      args := args.push $ some (.fvar hyp)
     else if let some inst := subst.find? ⟨i⟩ then
-      args := args.push inst
+      args := args.push $ some inst
     else
-      panic! s!"match for rule {r.name} is not complete: no hyp or instantiation for premise {i}"
+      args := args.push none
 
   return args
+
+set_option linter.missingDocs false in
+protected def toMessageData (r : ForwardRule) (m : CompleteMatch) :
+    MessageData :=
+  m!"{m.reconstructArgs r |>.map λ | none => m!"_" | some e => m!"{e}"}"
 
 end CompleteMatch
 
 namespace ForwardRuleMatch
+
+instance : ToMessageData ForwardRuleMatch where
+  toMessageData m := m!"{m.rule} {m.match.toMessageData m.rule}"
 
 /-- Compare two queue entries by rule priority and rule name. Higher-priority
 rules are considered less (since the queues are min-queues). -/
@@ -116,33 +124,38 @@ def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
       | .hyp hyp => f hyp
 
 /-- Construct the proof of the new hypothesis represented by `m`. -/
-def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM Expr :=
+def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
   withConstAesopTraceNode .forward (return m!"proof construction for forward rule match") do
   goal.withContext do
   withNewMCtxDepth do
     aesop_trace[forward] "rule: {m.rule.name}"
     let e ← elabForwardRuleTerm goal m.rule.term
     aesop_trace[forward] "term: {e} : {← inferType e}"
-    let (argMVars, _, _) ← forallMetaTelescope (← inferType e)
+    let (argMVars, binderInfos, _) ← forallMetaTelescope (← inferType e)
     let args := m.match.reconstructArgs m.rule
-    aesop_trace[forward] "args: {args}"
-    for arg in args, mvar in argMVars do
-      if ! (← isDefEq arg mvar) then
-        throwError "type mismatch during reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\n: expected{indentExpr (← inferType mvar)}\nbut got{indentExpr arg} : {← inferType arg}"
-    let result ← instantiateMVars $ mkAppN e argMVars
-    if ← hasAssignableMVar result then
-      -- NOTE This prevents applications of forward rules where a universe
-      -- param occurs only in the codomain.
-      throwError "reconstruction of complete match for forward rule{indentD m!"{m.rule.name}"}\nhas mvars:{indentExpr result}"
+    aesop_trace[forward] "args: {args.map λ | none => m!"_" | some e => m!"{e}"}"
+    for arg? in args, mvar in argMVars do
+      if let some arg := arg? then
+        if ! (← isDefEq arg mvar) then
+          throwError "type mismatch during reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\n: expected{indentExpr (← inferType mvar)}\nbut got{indentExpr arg} : {← inferType arg}"
+    try
+      synthAppInstances `aesop goal argMVars binderInfos
+        (synthAssignedInstances := false) (allowSynthFailures := false)
+    catch _ =>
+      aesop_trace[forward] "instance synthesis failed"
+      return none
+    let result := (← abstractMVars $ mkAppN e argMVars).expr
     aesop_trace[forward] "result: {result}"
     return result
 
 /-- Apply a forward rule match to a goal. This adds the hypothesis corresponding
 to the match to the local context. -/
-def apply (goal : MVarId) (m : ForwardRuleMatch) : ScriptM (MVarId × FVarId) :=
+def apply (goal : MVarId) (m : ForwardRuleMatch) :
+    ScriptM (Option (MVarId × FVarId)) :=
   goal.withContext do
     let name ← getUnusedUserName forwardHypPrefix
-    let prf ← m.getProof goal
+    let some prf ← m.getProof goal
+      | return none
     let type ← inferType prf
     let hyp := { userName := name, value := prf, type }
     let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)

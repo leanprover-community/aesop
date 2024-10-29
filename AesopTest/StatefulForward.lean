@@ -9,7 +9,7 @@ import Aesop
 set_option aesop.check.all true
 set_option aesop.dev.statefulForward true
 set_option aesop.smallErrorMessages true
-set_option pp.mvars true
+set_option pp.mvars false
 
 /--
 info: Try this:
@@ -243,8 +243,8 @@ example {P Q R : α → α → Prop} (h₁ : ∀ a b, P a b → Q b a → R a b)
 
 /--
 info: Try this:
-  have fwd : R b c := h₁ b a d c h₄ h₅
-  have fwd_1 : R c c := h₁ c d d c h₂ h₅
+  have fwd : R c c := h₁ c d d c h₂ h₅
+  have fwd_1 : R b c := h₁ b a d c h₄ h₅
   have fwd_2 : R b b := h₁ b a a b h₄ h₃
   have fwd_3 : R c b := h₁ c d a b h₂ h₃
 ---
@@ -257,8 +257,8 @@ h₂ : P c d
 h₃ : Q a b
 h₄ : P b a
 h₅ : Q d c
-fwd : R b c
-fwd_1 : R c c
+fwd : R c c
+fwd_1 : R b c
 fwd_2 : R b b
 fwd_3 : R c b
 ⊢ R c b
@@ -423,8 +423,8 @@ example {P Q : α → Prop} (h₁ : ∀ a, P a → Q a → X) (h₂ : P (rid a))
 
 /--
 error: unsolved goals
-α : Sort ?u.27629
-X : Sort ?u.27644
+α : Sort _
+X : Sort _
 a : α
 P Q : α → Prop
 h₁ : (a : α) → P a → Q a → X
@@ -437,3 +437,86 @@ example {P Q : α → Prop} (h₁ : ∀ a, P a → Q a → X) (h₂ : P (id a)) 
   saturate [h₁]
 
 end Computation
+
+namespace Immediate
+
+axiom α : Type
+axiom P : α → Prop
+axiom Q : α → Prop
+axiom R : α → Prop
+
+@[aesop safe forward (immediate := [h₂])]
+axiom foo : ∀ a (h₁ : P a) (h₂ : Q a), R a
+
+/--
+error: unsolved goals
+a : α
+h : Q a
+fwd : P a → R a
+⊢ False
+-/
+#guard_msgs in
+example (h : Q a) : False := by
+  saturate
+
+end Immediate
+
+namespace Instance
+
+class Foo (α : Type) : Prop
+
+axiom β : Type
+
+@[aesop safe forward]
+axiom foo : ∀ (α : Type) (a : α) [Foo α], β
+
+/--
+error: unsolved goals
+α : Type
+inst✝ : Foo α
+a : α
+fwd : β
+⊢ False
+-/
+#guard_msgs in
+example [Foo α] (a : α) : False := by
+  saturate
+
+axiom γ : Type
+
+instance : Foo γ where
+
+/--
+error: unsolved goals
+c : γ
+fwd : β
+⊢ False
+-/
+#guard_msgs in
+example (c : γ) : False := by
+  saturate
+
+@[aesop safe forward (immediate := [a])]
+axiom bar : ∀ α β (a : α) (b : β) [Foo β], γ
+
+/--
+error: unsolved goals
+α : Sort u_1
+a : α
+⊢ False
+-/
+#guard_msgs in
+example (a : α) : False := by
+  saturate
+
+/--
+error: unsolved goals
+c : γ
+fwd : β
+⊢ False
+-/
+#guard_msgs in
+example (c : γ) : False := by
+  saturate
+
+end Instance
