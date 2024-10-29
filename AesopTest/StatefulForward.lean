@@ -9,6 +9,7 @@ import Aesop
 set_option aesop.check.all true
 set_option aesop.dev.statefulForward true
 set_option aesop.smallErrorMessages true
+set_option pp.mvars true
 
 /--
 info: Try this:
@@ -242,8 +243,8 @@ example {P Q R : α → α → Prop} (h₁ : ∀ a b, P a b → Q b a → R a b)
 
 /--
 info: Try this:
-  have fwd : R c c := h₁ c d d c h₂ h₅
-  have fwd_1 : R b c := h₁ b a d c h₄ h₅
+  have fwd : R b c := h₁ b a d c h₄ h₅
+  have fwd_1 : R c c := h₁ c d d c h₂ h₅
   have fwd_2 : R b b := h₁ b a a b h₄ h₃
   have fwd_3 : R c b := h₁ c d a b h₂ h₃
 ---
@@ -256,8 +257,8 @@ h₂ : P c d
 h₃ : Q a b
 h₄ : P b a
 h₅ : Q d c
-fwd : R c c
-fwd_1 : R b c
+fwd : R b c
+fwd_1 : R c c
 fwd_2 : R b b
 fwd_3 : R c b
 ⊢ R c b
@@ -407,3 +408,32 @@ fwd : γ
 example {α β γ : Prop} (h : α → β → γ) (h₁ : α) (h₂ : β) : False := by
   aesop (add norm -1 forward h)
   -- TODO with `safe` instead of `norm`, exposes an error in local rule handling.
+
+section Computation
+
+-- Stateful forward reasoning sees through `reducible` definitions...
+
+abbrev rid (x : α) : α := x
+
+example {P Q : α → Prop} (h₁ : ∀ a, P a → Q a → X) (h₂ : P (rid a)) (h₃ : Q a) : X := by
+  saturate [h₁]
+  exact fwd
+
+-- ... but not through semireducible ones.
+
+/--
+error: unsolved goals
+α : Sort ?u.27629
+X : Sort ?u.27644
+a : α
+P Q : α → Prop
+h₁ : (a : α) → P a → Q a → X
+h₂ : P (id a)
+h₃ : Q a
+⊢ X
+-/
+#guard_msgs in
+example {P Q : α → Prop} (h₁ : ∀ a, P a → Q a → X) (h₂ : P (id a)) (h₃ : Q a) : X := by
+  saturate [h₁]
+
+end Computation
