@@ -71,15 +71,15 @@ instance : EmptyCollection RulePatternInstantiation :=
 
 namespace RulePattern
 
-def getInstantiation [Monad m] [MonadError m] (pat : RulePattern)
-    (inst : RulePatternInstantiation) (argIndex : Nat) : m (Option Expr) := do
+def getInstantiation (pat : RulePattern) (inst : RulePatternInstantiation)
+    (argIndex : Nat) : Except String (Option Expr) := do
   -- It's possible that `argMap[argIndex]? = none` if the rule type is
   -- syntactically `∀ (x₁ : T₁) ... (xₙ : Tₙ) = U` and `U` is a `forall` up to
   -- the rule's transparency.
   let some (some instIndex) := pat.argMap[argIndex]?
     | return none
   let some inst := inst.toArray[instIndex]?
-    | throwError "getInstantiation: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
+    | throw s!"getInstantiation: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
   return some inst
 
 def openRuleType (pat : RulePattern) (inst : RulePatternInstantiation)
@@ -88,7 +88,7 @@ def openRuleType (pat : RulePattern) (inst : RulePatternInstantiation)
   let (mvars, binfos, body) ← forallMetaTelescopeReducing type
   let mut assigned := ∅
   for h : i in [:mvars.size] do
-    if let some inst ← pat.getInstantiation inst i then
+    if let some inst ← ofExcept $ pat.getInstantiation inst i then
       let mvarId := mvars[i]'h.2 |>.mvarId!
       -- We use `isDefEq` to make sure that universe metavariables occurring in
       -- the type of `mvarId` are assigned.
@@ -105,7 +105,7 @@ def specializeRule (pat : RulePattern) (inst : RulePatternInstantiation)
       let mut args := Array.mkEmpty fvarIds.size
       let mut remainingFVarIds := Array.mkEmpty fvarIds.size
       for h : i in [:fvarIds.size] do
-        if let some inst ← pat.getInstantiation inst i then
+        if let some inst ← ofExcept $ pat.getInstantiation inst i then
           args := args.push $ some inst
         else
           let fvarId := fvarIds[i]'h.2

@@ -43,12 +43,17 @@ def addHypOrPatternInst (hyp? : Option FVarId) (subst : Substitution)
   subst := m.subst.mergeCompatible subst
   level := m.level + 1
 
-/-- Returns `true` if the match contains the given hyp or a pattern
-instantiation in which the given hyp appears. -/
+/-- Returns `true` if the match contains the given hyp. -/
 def containsHyp (hyp : FVarId) (m : Match) : Bool :=
   m.revElems.any λ
-    | .patInst subst => subst.containsHyp hyp
     | .hyp hyp' => hyp == hyp'
+    | .patInst .. => false
+
+/-- Returns `true` if the match contains the given pattern instantiation. -/
+def containsPatInst (subst : Substitution) (m : Match) : Bool :=
+  m.revElems.any λ
+    | .patInst subst' => subst == subst'
+    | .hyp .. => false
 
 end Match
 

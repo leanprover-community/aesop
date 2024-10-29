@@ -5,7 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Forward.PremiseIndex
-import Lean
+import Aesop.RulePattern
 
 namespace Aesop
 
@@ -68,4 +68,21 @@ def containsHyp (hyp : FVarId) (s : Substitution) : Bool :=
     | none => false
     | some e => e.containsFVar hyp
 
-end Aesop.Substitution
+end Substitution
+
+namespace RulePatternInstantiation
+
+/-- Convert a rule pattern instantiation to a substitution. `pat` is the rule
+pattern that was instantiated and `numPremiseIndexes` is the rule to which this
+pattern belongs. -/
+def toSubstitution (pat : RulePattern) (numPremiseIndexes : Nat)
+    (patInst : RulePatternInstantiation) :
+    Except String Substitution := do
+  let mut subst := .empty numPremiseIndexes
+  for i in pat.boundPremises do
+    let some inst ← pat.getInstantiation patInst i
+      | throw s!"pattern instantiation {patInst.toArray} does not contain an instantiation for premise {i}"
+    subst := subst.insert ⟨i⟩ inst
+  return subst
+
+end Aesop.RulePatternInstantiation
