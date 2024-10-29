@@ -18,8 +18,9 @@ open Lean.Meta
 namespace Aesop.RuleTac
 
 partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
-    (patInst : RulePatternInstantiation) (immediate : UnorderedArraySet Nat)
-    (maxDepth? : Option Nat) (forwardHypData : ForwardHypData) :
+    (patInst : RulePatternInstantiation)
+    (immediate : UnorderedArraySet PremiseIndex) (maxDepth? : Option Nat)
+    (forwardHypData : ForwardHypData) :
     MetaM (Array (Expr × Nat) × Array FVarId) :=
   withNewMCtxDepth (allowLevelAssignments := true) do
     let type ← inferType e
@@ -33,7 +34,7 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
       let mvarId := argMVars[i]'h.2 |>.mvarId!
       if patInstantiatedMVars.contains mvarId then
         continue
-      if immediate.contains i then
+      if immediate.contains ⟨i⟩ then
         immediateMVars := immediateMVars.push mvarId
       else if binderInfos[i]!.isInstImplicit then
         instMVars := instMVars.push mvarId
@@ -107,7 +108,7 @@ where
 
 def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     (patInsts : Std.HashSet RulePatternInstantiation)
-    (immediate : UnorderedArraySet Nat) (clear : Bool)
+    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
     (md : TransparencyMode) (maxDepth? : Option Nat) : ScriptM Subgoal :=
   withTransparency md $ goal.withContext do
     let forwardHypData ← getForwardHypData
@@ -158,8 +159,8 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
 
 @[inline]
 def forwardExpr (e : Expr) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
-    RuleTac :=
+    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
+    (md : TransparencyMode) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => input.goal.withContext do
     let (goal, steps) ←
       applyForwardRule input.goal e pat? input.patternInstantiations immediate
@@ -167,28 +168,29 @@ def forwardExpr (e : Expr) (pat? : Option RulePattern)
     return (#[goal], steps, none)
 
 def forwardConst (decl : Name) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
-    RuleTac := λ input => do
+    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
+    (md : TransparencyMode) : RuleTac := λ input => do
   let e ← mkConstWithFreshMVarLevels decl
   forwardExpr e pat? immediate (clear := clear) md input
 
 def forwardTerm (stx : Term) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
-    RuleTac := λ input =>
+    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
+    (md : TransparencyMode) : RuleTac := λ input =>
   input.goal.withContext do
     let e ← elabRuleTermForApplyLikeMetaM input.goal stx
     forwardExpr e pat? immediate (clear := clear) md input
 
 def forward (t : RuleTerm) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet Nat) (clear : Bool) (md : TransparencyMode) :
-    RuleTac :=
+    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
+    (md : TransparencyMode) : RuleTac :=
   match t with
   | .const decl => forwardConst decl pat? immediate clear md
   | .term tm => forwardTerm tm pat? immediate clear md
 
 def forwardMatch (m : ForwardRuleMatch) :
     RuleTac := SingleRuleTac.toRuleTac λ input => do
-  let ((goal, hyp), steps) ← m.apply input.goal |>.run
+  let (some (goal, hyp), steps) ← m.apply input.goal |>.run
+    | throwError "synthesis of instance arguments failed"
   let diff := {
     addedFVars := {hyp}
     removedFVars := ∅

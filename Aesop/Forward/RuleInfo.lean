@@ -64,8 +64,8 @@ structure ForwardRuleInfo where
 namespace ForwardRuleInfo
 
 /-- Construct a `ForwardRuleInfo` for the theorem `thm`. -/
-def ofExpr (thm : Expr) (rulePattern? : Option RulePattern) :
-    MetaM ForwardRuleInfo :=
+def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
+    (immediate : UnorderedArraySet PremiseIndex) : MetaM ForwardRuleInfo :=
   withNewMCtxDepth do
   let e ← inferType thm
   let (premises, _, _) ← forallMetaTelescope e
@@ -98,7 +98,8 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern) :
     rulePattern?.map (.ofArray $ ·.boundPremises.map (⟨·⟩)) |>.getD ∅
   slots := slots.filter λ s =>
     let idx := s.premiseIndex
-    ! allDeps.contains idx && ! patBoundPremises.contains idx
+    ! allDeps.contains idx && ! patBoundPremises.contains idx &&
+    immediate.contains idx
   -- If the rule has a pattern, an additional slot is created for the rule
   -- pattern instantiation. Again, we update `index` and `common` with correct
   -- info later.

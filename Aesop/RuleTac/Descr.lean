@@ -9,7 +9,7 @@ inductive RuleTacDescr
   | apply (term : RuleTerm) (md : TransparencyMode) (pat? : Option RulePattern)
   | constructors (constructorNames : Array Name) (md : TransparencyMode)
   | forward (term : RuleTerm) (pat? : Option RulePattern)
-      (immediate : UnorderedArraySet Nat) (isDestruct : Bool)
+      (immediate : UnorderedArraySet PremiseIndex) (isDestruct : Bool)
       (md : TransparencyMode)
   | cases (target : CasesTarget) (md : TransparencyMode)
       (isRecursiveType : Bool) (ctorNames : Array CtorNames)

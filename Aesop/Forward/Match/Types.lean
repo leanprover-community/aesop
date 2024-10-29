@@ -68,9 +68,6 @@ structure CompleteMatch where
   clusterMatches : Array Match
   deriving Inhabited, BEq, Hashable
 
-instance : ToMessageData CompleteMatch where
-  toMessageData m := toMessageData m.clusterMatches
-
 -- TODO hash as a computed field
 
 /-- An entry in the forward state queues. Represents a complete match. -/
@@ -80,8 +77,5 @@ structure ForwardRuleMatch where
   /-- The match. -/
   «match» : CompleteMatch
   deriving Inhabited, BEq, Hashable
-
-instance : ToMessageData ForwardRuleMatch where
-  toMessageData m := m!"{m.rule} {m.match}"
 
 end Aesop
