@@ -347,6 +347,7 @@ def matchPremise? (premises : Array MVarId) (numPremiseIndexes : Nat)
           throwError "aesop: internal error: matchPremise?: while matching hyp {hyp.name}: no assignment for variable {var}"
         if ← hasAssignableMVar assignment then
           throwError "aesop: internal error: matchPremise?: assignment has mvar:{indentExpr assignment}"
+        let assignment ← withReducible $ reduceAll assignment
         subst := subst.insert var assignment
       aesop_trace[forward] "substitution: {subst}"
       return subst

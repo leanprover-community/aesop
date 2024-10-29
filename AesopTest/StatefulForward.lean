@@ -9,6 +9,7 @@ import Aesop
 set_option aesop.check.all true
 set_option aesop.dev.statefulForward true
 set_option aesop.smallErrorMessages true
+set_option pp.mvars true
 
 /--
 info: Try this:
@@ -407,3 +408,32 @@ fwd : γ
 example {α β γ : Prop} (h : α → β → γ) (h₁ : α) (h₂ : β) : False := by
   aesop (add norm -1 forward h)
   -- TODO with `safe` instead of `norm`, exposes an error in local rule handling.
+
+section Computation
+
+-- Stateful forward reasoning sees through `reducible` definitions...
+
+abbrev rid (x : α) : α := x
+
+example {P Q : α → Prop} (h₁ : ∀ a, P a → Q a → X) (h₂ : P (rid a)) (h₃ : Q a) : X := by
+  saturate [h₁]
+  exact fwd
+
+-- ... but not through semireducible ones.
+
+/--
+error: unsolved goals
+α : Sort ?u.27629
+X : Sort ?u.27644
+a : α
+P Q : α → Prop
+h₁ : (a : α) → P a → Q a → X
+h₂ : P (id a)
+h₃ : Q a
+⊢ X
+-/
+#guard_msgs in
+example {P Q : α → Prop} (h₁ : ∀ a, P a → Q a → X) (h₂ : P (id a)) (h₃ : Q a) : X := by
+  saturate [h₁]
+
+end Computation
