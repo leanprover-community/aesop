@@ -68,7 +68,7 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
     (immediate : UnorderedArraySet PremiseIndex) : MetaM ForwardRuleInfo :=
   withNewMCtxDepth do
   let e ← inferType thm
-  let (premises, _, _) ← forallMetaTelescope e
+  let (premises, _, _) ← withReducible $ forallMetaTelescope e
   let premises := premises.map (·.mvarId!)
   let mut premiseToIdx : Std.HashMap MVarId PremiseIndex := ∅
   for h : i in [:premises.size] do

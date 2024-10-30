@@ -485,7 +485,8 @@ def addHypOrPatInst (goal : MVarId) (h : Sum FVarId Substitution)
   withNewMCtxDepth do
     let some ruleExpr ← observing? $ elabForwardRuleTerm goal rs.rule.term
       | return (rs, #[])
-    let (premises, _, _) ← forallMetaTelescope (← inferType ruleExpr)
+    let (premises, _, _) ←
+      withReducible $ forallMetaTelescope (← inferType ruleExpr)
     let premises := premises.map (·.mvarId!)
     let mut rs := rs
     let mut clusterStates := rs.clusterStates
