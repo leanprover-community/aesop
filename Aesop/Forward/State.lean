@@ -596,7 +596,7 @@ private def addForwardRuleMatches (acc : Array ForwardRuleMatch)
       ruleMatches.push { rule := r, «match» }
   aesop_trace[forward] do
     for m in ruleMatches do
-      aesop_trace![forward] "new complete match for {m.rule.name}: {m.match.toMessageData m.rule}"
+      aesop_trace![forward] "new complete match for {m.rule.name}:{indentD $ toMessageData m}"
   return ruleMatches
 
 /-- Add a hypothesis to the forward state. If `fs` represents a local context

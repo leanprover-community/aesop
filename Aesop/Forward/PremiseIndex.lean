@@ -8,7 +8,7 @@ namespace Aesop
 
 structure PremiseIndex where
   toNat : Nat
-  deriving Inhabited, BEq, Hashable, DecidableEq
+  deriving Inhabited, BEq, Hashable, DecidableEq, Ord
 
 instance : LT PremiseIndex where
   lt i j := i.toNat < j.toNat
