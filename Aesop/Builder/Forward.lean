@@ -14,7 +14,7 @@ namespace Aesop
 namespace RuleBuilderOptions
 
 def forwardTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
-  opts.transparency?.getD .default
+  opts.transparency?.getD .reducible
 
 def forwardIndexTransparency (opts : RuleBuilderOptions) : TransparencyMode :=
   opts.indexTransparency?.getD .reducible
@@ -101,8 +101,7 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
     MetaM (Option ForwardRule) := do
   withConstAesopTraceNode .forward (return m!"building forward rule for {t}") do
   -- TODO support all these options
-  -- TODO support instance premises
-  if imode?.isSome || md != .default || indexMd != .reducible || isDestruct then
+  if imode?.isSome || md != .reducible || indexMd != .reducible || isDestruct then
     aesop_trace[forward] "unsupported builder option"
     return none
   let expr ← t.expr
@@ -119,6 +118,7 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
           for s in cluster do
             aesop_trace[forward] "slot {s.index} (premise {s.premiseIndex}, deps {s.deps.toArray.qsortOrd}, common {s.common.toArray.qsortOrd})"
   if info.numPremises == 0 then
+    aesop_trace[forward] "constant forward rule currently unsupported"
     return none -- TODO Constant forward rules currently don't work.
   let prio :=
     match phase with

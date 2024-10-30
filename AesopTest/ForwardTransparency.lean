@@ -21,7 +21,7 @@ example (h : T) (u : Unit) : α := by
   aesop (config := { terminal := true })
 
 example (h : T) (u : Unit) : α := by
-  aesop (add forward safe h)
+  aesop (add forward (transparency := default) safe h)
 
 def U := Unit
 
@@ -52,4 +52,4 @@ example (h : Unit → Empty) (u : V) : α := by
   aesop (config := { terminal := true })
 
 example (h : Unit → Empty) (u : V) : α := by
-  aesop (add forward (transparency := reducible) safe h)
+  aesop (add forward safe h)
