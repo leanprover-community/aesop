@@ -8,7 +8,7 @@ namespace Aesop
 
 structure SlotIndex where
   toNat : Nat
-  deriving Inhabited, BEq, Hashable, DecidableEq
+  deriving Inhabited, BEq, Hashable, DecidableEq, Ord
 
 instance : LT SlotIndex where
   lt i j := i.toNat < j.toNat

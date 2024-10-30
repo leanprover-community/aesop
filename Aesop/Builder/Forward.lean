@@ -110,14 +110,14 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
   let immediate ←
     getImmediatePremises (← inferType expr) pat? .default immediate?
   let info ← ForwardRuleInfo.ofExpr expr pat? immediate
-  aesop_trace[forward] "rule type: {← inferType expr}"
+  aesop_trace[forward] "rule type:{indentExpr $ ← inferType expr}"
   withConstAesopTraceNode .forward (return m!"slot clusters") do
     aesop_trace[forward] do
       for h : i in [:info.slotClusters.size] do
         let cluster := info.slotClusters[i]
         withConstAesopTraceNode .forward (return m!"cluster {i}") do
           for s in cluster do
-            aesop_trace[forward] "slot {s.index} (premise {s.premiseIndex}, deps {s.deps.toArray}, common {s.common.toArray})"
+            aesop_trace[forward] "slot {s.index} (premise {s.premiseIndex}, deps {s.deps.toArray.qsortOrd}, common {s.common.toArray.qsortOrd})"
   if info.numPremises == 0 then
     return none -- TODO Constant forward rules currently don't work.
   let prio :=
