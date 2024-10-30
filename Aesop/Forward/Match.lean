@@ -131,7 +131,8 @@ def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
     aesop_trace[forward] "rule: {m.rule.name}"
     let e ← elabForwardRuleTerm goal m.rule.term
     aesop_trace[forward] "term: {e} : {← inferType e}"
-    let (argMVars, binderInfos, _) ← forallMetaTelescope (← inferType e)
+    let (argMVars, binderInfos, _) ←
+      withReducible $ forallMetaTelescope (← inferType e)
     let args := m.match.reconstructArgs m.rule
     aesop_trace[forward] "args: {args.map λ | none => m!"_" | some e => m!"{e}"}"
     for arg? in args, mvar in argMVars do
