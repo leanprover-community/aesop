@@ -77,11 +77,10 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
   let mut allDeps : Std.HashSet PremiseIndex := ∅
   for h : i in [:premises.size] do
     let mvarId := premises[i]
-    let type ← mvarId.getType
-    let typeDiscrTreeKeys ← DiscrTree.mkPath type discrTreeConfig
+    let typeDiscrTreeKeys ← DiscrTree.mkPath (← mvarId.getType) discrTreeConfig
     let mut deps : Std.HashSet PremiseIndex := ∅
-    for mvarId in ← getMVars type do
-      if let some idx := premiseToIdx[mvarId]? then
+    for dep in ← mvarId.getMVarDependencies do
+      if let some idx := premiseToIdx[dep]? then
         deps := deps.insert idx
     -- We update `index` and `common` with correct info later.
     slots := slots.push {
