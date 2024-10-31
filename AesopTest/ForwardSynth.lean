@@ -6,6 +6,8 @@ Authors: Jannis Limperg, Xavier Généreux
 
 import Aesop
 
+set_option aesop.dev.statefulForward true
+
 inductive SNat where
   | zero
   | succ (n : SNat)
@@ -20,4 +22,31 @@ elab "snat%" n:num : term => do
   reduceAll (.app (.const ``Nat.toSNat []) n)
 
 example (P : SNat → Prop) (h : P (snat% 50)) : True :=
+  trivial
+
+open Lean Lean.Elab.Command Lean.Elab.Term Lean.Parser in
+elab "test₁ " "by " ts:tacticSeq : command => do
+  let nPs := 10
+  let mut pNames := Array.mkEmpty nPs
+  for i in [:nPs] do
+    pNames := pNames.push (Name.mkSimple $ "P" ++ toString i)
+  for pName in pNames do
+    elabCommand $ ← `(command| axiom $(mkIdent pName) : SNat → Prop)
+  elabCommand $ ← `(command| axiom $(mkIdent `Q) : Prop)
+  let binders : TSyntaxArray ``Term.bracketedBinder ←
+    pNames.mapIdxM λ i pName => do
+      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident (snat% 0)))
+  let sig : Term ← `(∀ $binders:bracketedBinder*, $(mkIdent `Q) → True)
+  let nLemmas := 100
+  for i in [:nLemmas] do
+    elabCommand $ ← `(command|
+      @[aesop safe forward]
+      axiom $(mkIdent $ .mkSimple $ "l" ++ toString i):ident : $sig:term
+    )
+  elabCommand $ ← `(command|
+    theorem $(mkIdent `t₁) $binders:bracketedBinder* : True := by $ts
+  )
+
+test₁ by
+  saturate
   trivial
