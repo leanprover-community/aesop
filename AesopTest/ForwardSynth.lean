@@ -17,7 +17,7 @@ def Nat.toSNat : Nat → SNat
   | succ n => .succ n.toSNat
 
 open Lean Lean.Meta Lean.Elab.Term in
-elab "snat%" n:num : term => do
+elab "snat% " n:num : term => do
   let n ← elabTerm n (some $ .const ``Nat [])
   reduceAll (.app (.const ``Nat.toSNat []) n)
 
@@ -35,14 +35,17 @@ elab "test₁ " "by " ts:tacticSeq : command => do
   elabCommand $ ← `(command| axiom $(mkIdent `Q) : Prop)
   let binders : TSyntaxArray ``Term.bracketedBinder ←
     pNames.mapIdxM λ i pName => do
-      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident (snat% 0)))
-  let sig : Term ← `(∀ $binders:bracketedBinder*, $(mkIdent `Q) → True)
+      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident $(mkIdent `n)))
+  let sig : Term ← `(∀ $(mkIdent `n) $binders:bracketedBinder*, $(mkIdent `Q) → True)
   let nLemmas := 100
   for i in [:nLemmas] do
     elabCommand $ ← `(command|
       @[aesop safe forward]
       axiom $(mkIdent $ .mkSimple $ "l" ++ toString i):ident : $sig:term
     )
+  let binders : TSyntaxArray ``Term.bracketedBinder ←
+    pNames.mapIdxM λ i pName => do
+      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident (snat% 0)))
   elabCommand $ ← `(command|
     theorem $(mkIdent `t₁) $binders:bracketedBinder* : True := by $ts
   )
