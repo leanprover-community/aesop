@@ -8,11 +8,9 @@ import Aesop
 
 set_option aesop.check.all true
 
--- FIXME: the tombstone in the "try this" suggestion below appeared in nightly-2024-11-03,
--- presumably because of https://github.com/leanprover/lean4/pull/5898
 /--
 info: Try this:
-simp_all (config✝ := { }) only
+simp_all (config := { }) only
 -/
 #guard_msgs in
 example : True := by
