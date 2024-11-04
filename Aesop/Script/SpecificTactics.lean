@@ -180,14 +180,14 @@ def simpAllOrSimpAtStar (simpAll : Bool) (inGoal : MVarId)
         return (map.insert origin thm, size + 1)
   let stx ←
     match ← simpAllOrSimpAtStarOnlyStx simpAll inGoal configStx? { map, size } with
-    | `(tactic| simp_all $[$cfg:config]? only [$lems,*]) =>
-      `(tactic| simp_all $[$cfg]? [$lems,*])
-    | `(tactic| simp $[$cfg:config]? only [$lems,*] at *) =>
-      `(tactic| simp $[$cfg]? [$lems,*] at *)
-    | `(tactic| simp_all $[$cfg:config]? only) =>
-      `(tactic| simp_all $[$cfg]?)
-    | `(tactic| simp $[$cfg:config]? only at *) =>
-      `(tactic| simp $[$cfg]? at *)
+    | `(tactic| simp_all $cfg:optConfig only [$lems,*]) =>
+      `(tactic| simp_all $cfg:optConfig [$lems,*])
+    | `(tactic| simp $cfg:optConfig only [$lems,*] at *) =>
+      `(tactic| simp $cfg:optConfig [$lems,*] at *)
+    | `(tactic| simp_all $cfg:optConfig only) =>
+      `(tactic| simp_all $cfg:optConfig)
+    | `(tactic| simp $cfg:optConfig only at *) =>
+      `(tactic| simp $cfg:optConfig at *)
     | stx => throwError "simp tactic builder: unexpected syntax:{indentD stx}"
   return .unstructured ⟨stx⟩
 

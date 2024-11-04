@@ -175,11 +175,11 @@ end Stats
 
 abbrev StatsRef := IO.Ref Stats
 
-class MonadStats (m) extends
-    MonadLiftT (ST IO.RealWorld) m,
-    MonadLiftT BaseIO m,
-    MonadOptions m where
+class MonadStats (m) extends MonadOptions m where
+  [instLift : MonadLiftT BaseIO m]
   readStatsRef : m StatsRef
+
+instance [MonadStats m] : MonadLift BaseIO m := ⟨MonadStats.instLift.monadLift⟩
 
 export MonadStats (readStatsRef)
 
