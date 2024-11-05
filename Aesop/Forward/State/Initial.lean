@@ -18,7 +18,11 @@ def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
     m (ForwardState × Array ForwardRuleMatch) :=
   goal.withContext do
     let mut fs : ForwardState := ∅
-    let mut ruleMatches := #[]
+    let mut ruleMatches := rs.constForwardRuleMatches
+    show MetaM _ from do
+      aesop_trace[forward] do
+        for m in ruleMatches do
+          aesop_trace![forward] "match for constant rule {m.rule.name}"
     for ldecl in ← show MetaM _ from getLCtx do
       if ldecl.isImplementationDetail then
         continue

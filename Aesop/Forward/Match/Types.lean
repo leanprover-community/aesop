@@ -70,6 +70,9 @@ structure CompleteMatch where
 
 -- TODO hash as a computed field
 
+instance : EmptyCollection CompleteMatch :=
+  ⟨{ clusterMatches := ∅ }⟩
+
 /-- An entry in the forward state queues. Represents a complete match. -/
 structure ForwardRuleMatch where
   /-- The rule to which this match belongs. -/

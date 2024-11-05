@@ -516,6 +516,9 @@ def applicableForwardRules (rs : LocalRuleSet) (e : Expr) :
     MetaM (Array (ForwardRule × PremiseIndex)) :=
   rs.applicableForwardRulesWith e (include? := λ _ => true)
 
+def constForwardRuleMatches (rs : LocalRuleSet) : Array ForwardRuleMatch :=
+  rs.forwardRules.getConstRuleMatches
+
 section ForwardRulePattern
 
 variable [Monad m] [MonadRulePatternCache m]
