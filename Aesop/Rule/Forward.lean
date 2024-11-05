@@ -84,4 +84,8 @@ def numPremiseIndexes (r : ForwardRule) : Nat :=
   else
     r.numPremises
 
+/-- Is this rule a `destruct` rule (i.e., should we clear matched hyps)? -/
+def destruct (r : ForwardRule) : Bool :=
+  r.name.builder matches .destruct
+
 end Aesop.ForwardRule

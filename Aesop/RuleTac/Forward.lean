@@ -190,13 +190,13 @@ def forward (t : RuleTerm) (pat? : Option RulePattern)
 
 def forwardMatch (m : ForwardRuleMatch) :
     RuleTac := SingleRuleTac.toRuleTac λ input => do
-  let (some (goal, hyp), steps) ← m.apply input.goal |>.run
+  let (some (goal, hyp, removedFVars), steps) ← m.apply input.goal |>.run
     | throwError "synthesis of instance arguments failed"
   let diff := {
     addedFVars := {hyp}
-    removedFVars := ∅
     fvarSubst := ∅
     targetMaybeChanged := false
+    removedFVars := .ofArray removedFVars
   }
   return (#[{ mvarId := goal, diff }], some steps, none)
 

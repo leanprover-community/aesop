@@ -381,6 +381,77 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
   aesop? (add safe [forward r₁, forward (immediate := [a]) r₂])
 
+-- `destruct` rules only clear propositional hypotheses. So this succeeds:
+
+example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
+    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+  aesop (add safe [destruct r₁, destruct (immediate := [a]) r₂])
+    (config := { enableSimp := false, terminal := true })
+
+-- ... but this fails:
+
+/-- error: tactic 'aesop' failed, failed to prove the goal after exhaustive search. -/
+#guard_msgs in
+example {α : Prop} (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
+    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+  aesop (add safe [destruct r₁, destruct (immediate := [a]) r₂])
+    (config := { enableSimp := false, terminal := true })
+
+-- Same examples with `saturate`. Note: We currently can't make local `saturate`
+-- rules into `destruct` rules.
+
+namespace SaturateEx₁
+
+axiom α : Type
+axiom β : Type
+axiom γ₁ : Prop
+axiom γ₂ : Prop
+axiom δ₁ : Prop
+axiom δ₂ : Prop
+@[aesop safe destruct]
+axiom r₁ : α → β → γ₁ ∧ γ₂
+@[aesop safe destruct]
+axiom r₂ : α → δ₁ ∧ δ₂
+
+/--
+error: unsolved goals
+a : α
+b : β
+fwd : γ₁ ∧ γ₂
+fwd_1 : δ₁ ∧ δ₂
+⊢ γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂
+-/
+#guard_msgs in
+example (a : α) (b : β) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+  saturate
+
+end SaturateEx₁
+
+namespace SaturateEx₂
+
+axiom α : Prop
+axiom β : Type
+axiom γ₁ : Prop
+axiom γ₂ : Prop
+axiom δ₁ : Prop
+axiom δ₂ : Prop
+@[aesop safe destruct]
+axiom r₁ : α → β → γ₁ ∧ γ₂
+@[aesop safe destruct]
+axiom r₂ : α → δ₁ ∧ δ₂
+
+/--
+error: unsolved goals
+b : β
+fwd : γ₁ ∧ γ₂
+⊢ γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂
+-/
+#guard_msgs in
+example (a : α) (b : β) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+  saturate
+
+end SaturateEx₂
+
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
   aesop (add safe [forward r₁], 90% destruct r₂)

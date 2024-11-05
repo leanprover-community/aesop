@@ -101,7 +101,7 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
     MetaM (Option ForwardRule) := do
   withConstAesopTraceNode .forward (return m!"building forward rule for {t}") do
   -- TODO support all these options
-  if imode?.isSome || md != .reducible || indexMd != .reducible || isDestruct then
+  if imode?.isSome || md != .reducible || indexMd != .reducible then
     aesop_trace[forward] "unsupported builder option"
     return none
   let expr ← t.expr
@@ -125,11 +125,12 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
     | .safe info => .normSafe info.penalty
     | .norm info => .normSafe info.penalty
     | .unsafe info => .unsafe info.successProbability
+  let builder := if isDestruct then .destruct else .forward
+  let name := { phase := phase.phase, name, scope := t.scope, builder }
   return some {
     toForwardRuleInfo := info
-    name := { phase := phase.phase, name, scope := t.scope, builder := .forward }
     term := t.toRuleTerm
-    prio
+    name, prio
   }
 
 def forwardCore (t : ElabRuleTerm) (immediate? : Option (Array Name))
