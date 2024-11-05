@@ -146,10 +146,12 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
       targetMaybeChanged := false
     }
     if clear then
-      let (goal', removedFVars) ← tryClearManyS goal usedHyps
+      let usedPropHyps ← goal.withContext do
+        usedHyps.filterM λ fvarId => isProof (.fvar fvarId)
+      let (goal', removedFVars) ← tryClearManyS goal usedPropHyps
       let removedFVars := removedFVars.foldl (init := ∅) λ set fvarId =>
         set.insert fvarId
-      diff := { diff with removedFVars := removedFVars }
+      diff := { diff with removedFVars }
       goal := goal'
     return { mvarId := goal, diff }
   where
