@@ -20,14 +20,12 @@ info: Try this:
     cases h with
     | dummy p =>
       have fwd : False := Aesop.BuiltinRules.empty_false p
-      clear p
       simp_all only
     | and a b => simp_all only
   ·
     cases h with
     | dummy p =>
       have fwd : False := Aesop.BuiltinRules.empty_false p
-      clear p
       simp_all only
     | and a b => simp_all only
 -/

@@ -212,14 +212,21 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
   aesop? (add safe [forward r₁, forward (immediate := [a]) r₂])
 
-/--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
--/
-#guard_msgs in
+-- `destruct` rules only clear propositional hypotheses. So this succeeds:
+
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
   aesop (add safe [destruct r₁, destruct (immediate := [a]) r₂])
-    (config := { terminal := true })
+    (config := { enableSimp := false, terminal := true })
+
+-- ... but this fails:
+
+/-- error: tactic 'aesop' failed, failed to prove the goal after exhaustive search. -/
+#guard_msgs in
+example {α : Prop} (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
+    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+  aesop (add safe [destruct r₁, destruct (immediate := [a]) r₂])
+    (config := { enableSimp := false, terminal := true })
 
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
