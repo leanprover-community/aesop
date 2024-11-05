@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
 
+import Aesop.Forward.Match.Types
 import Aesop.Rule.Forward
 import Batteries.Lean.Meta.DiscrTree
 
@@ -13,22 +14,23 @@ open Lean Lean.Meta
 
 namespace Aesop
 
-set_option linter.missingDocs false in
-/--
-Maps expressions `T` to all tuples `(r, i)` where `r : ForwardRule`,
-`i : PremiseIndex` and the `i`-th argument of the type of `r.expr` (counting
-from zero) likely unifies with `T`. The `nameToRule` map indexes the forward
-rules contained in `tree` by name.
--/
+/-- Index for forward rules. -/
 structure ForwardIndex where
+  /-- Maps expressions `T` to all tuples `(r, i)` where `r : ForwardRule`,
+  `i : PremiseIndex` and the `i`-th argument of the type of `r.expr` (counting
+  from zero) likely unifies with `T`. -/
   tree : DiscrTree (ForwardRule × PremiseIndex)
+  /-- Indexes the forward rules contained in `tree` by name. -/
   nameToRule : PHashMap RuleName ForwardRule
+  /-- Constant forward rules, i.e. forward rules that have no premises and no
+  rule pattern. -/
+  constRules : PHashSet ForwardRule
   deriving Inhabited
 
 namespace ForwardIndex
 
-instance : EmptyCollection ForwardIndex :=
-  ⟨⟨{}, {}⟩⟩
+instance : EmptyCollection ForwardIndex := by
+  refine' ⟨{..}⟩ <;> exact {}
 
 /-- Trace the rules contained in `idx` if `traceOpt` is enabled. -/
 protected def trace (traceOpt : TraceOption) (idx : ForwardIndex) : CoreM Unit := do
@@ -44,17 +46,25 @@ protected def trace (traceOpt : TraceOption) (idx : ForwardIndex) : CoreM Unit :
 def merge (idx₁ idx₂ : ForwardIndex) : ForwardIndex where
   tree := idx₁.tree.mergePreservingDuplicates idx₂.tree
   nameToRule := idx₁.nameToRule.mergeWith idx₂.nameToRule λ _ r₁ _ => r₁
+  constRules := idx₂.constRules.fold (init := idx₁.constRules) λ s r => s.insert r
 
 /-- Insert a forward rule into the `ForwardIndex`. -/
 def insert (r : ForwardRule) (idx : ForwardIndex) : ForwardIndex := Id.run do
-  let mut tree := idx.tree
-  for cluster in r.slotClusters do
-    for slot in cluster do
-      let some discrTreeKeys := slot.typeDiscrTreeKeys?
-        | continue
-      tree := tree.insertCore discrTreeKeys (r, slot.premiseIndex)
-  let nameToRule := idx.nameToRule.insert r.name r
-  return { tree, nameToRule }
+  if r.numPremiseIndexes == 0 then
+    return {
+      idx with
+      constRules := idx.constRules.insert r
+      nameToRule := idx.nameToRule.insert r.name r
+    }
+  else
+    let mut tree := idx.tree
+    for cluster in r.slotClusters do
+      for slot in cluster do
+        let some discrTreeKeys := slot.typeDiscrTreeKeys?
+          | continue
+        tree := tree.insertCore discrTreeKeys (r, slot.premiseIndex)
+    let nameToRule := idx.nameToRule.insert r.name r
+    return { idx with tree, nameToRule }
 
 /-- Get the forward rules whose maximal premises likely unify with `e`.
 Each returned pair `(r, i)` contains a rule `r` and the index `i` of the premise
@@ -66,5 +76,12 @@ def get (idx : ForwardIndex) (e : Expr) :
 /-- Get the forward rule with the given rule name. -/
 def getRuleWithName? (n : RuleName) (idx : ForwardIndex) : Option ForwardRule :=
   idx.nameToRule[n]
+
+/-- Get forward rule matches for the constant forward rules (i.e., those with no
+premises and no rule pattern). Accordingly, the returned matches contain no
+hypotheses. -/
+def getConstRuleMatches (idx : ForwardIndex) : Array ForwardRuleMatch :=
+  idx.constRules.fold (init := #[]) λ ms r =>
+    ms.push { rule := r, «match» := ∅ }
 
 end Aesop.ForwardIndex

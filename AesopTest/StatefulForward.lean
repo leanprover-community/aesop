@@ -582,3 +582,23 @@ example (c : γ) : False := by
   saturate
 
 end Instance
+
+namespace ConstForwardRule
+
+axiom α : Type
+@[aesop safe forward]
+axiom a : α
+
+noncomputable example : α := by
+  aesop
+
+/--
+error: unsolved goals
+fwd : α
+⊢ α
+-/
+#guard_msgs in
+noncomputable example : α := by
+  saturate
+
+end ConstForwardRule

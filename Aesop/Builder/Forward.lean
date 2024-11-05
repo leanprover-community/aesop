@@ -117,9 +117,6 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
         withConstAesopTraceNode .forward (return m!"cluster {i}") do
           for s in cluster do
             aesop_trace[forward] "slot {s.index} (premise {s.premiseIndex}, deps {s.deps.toArray.qsortOrd}, common {s.common.toArray.qsortOrd})"
-  if info.numPremises == 0 then
-    aesop_trace[forward] "constant forward rule currently unsupported"
-    return none -- TODO Constant forward rules currently don't work.
   let prio :=
     match phase with
     | .safe info => .normSafe info.penalty

@@ -76,14 +76,6 @@ instance : Ord ForwardRule :=
 instance : ToString ForwardRule where
   toString r := s!"[{r.prio}] {r.name}"
 
-/-- The number of premise indexes used by the rule. Data structures related to
-the rule use only premise indexes in the interval `[0, numPremiseIndexes)`. -/
-def numPremiseIndexes (r : ForwardRule) : Nat :=
-  if r.rulePatternInfo?.isSome then
-    r.numPremises + 1
-  else
-    r.numPremises
-
 /-- Is this rule a `destruct` rule (i.e., should we clear matched hyps)? -/
 def destruct (r : ForwardRule) : Bool :=
   r.name.builder matches .destruct

@@ -63,6 +63,14 @@ structure ForwardRuleInfo where
 
 namespace ForwardRuleInfo
 
+/-- The number of premise indexes used by the rule. Data structures related to
+the rule use only premise indexes in the interval `[0, numPremiseIndexes)`. -/
+def numPremiseIndexes (r : ForwardRuleInfo) : Nat :=
+  if r.rulePatternInfo?.isSome then
+    r.numPremises + 1
+  else
+    r.numPremises
+
 /-- Construct a `ForwardRuleInfo` for the theorem `thm`. -/
 def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
     (immediate : UnorderedArraySet PremiseIndex) : MetaM ForwardRuleInfo :=
