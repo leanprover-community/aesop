@@ -110,11 +110,16 @@ protected def le (m₁ m₂ : ForwardRuleMatch) : Bool :=
   (m₁.rule.prio == m₂.rule.prio && (m₁.rule.name.compare m₂.rule.name).isLE)
 
 /-- Fold over the hypotheses contained in a match. -/
-def foldHyps (f : σ → FVarId → σ) (init : σ) (m : ForwardRuleMatch) : σ :=
-  m.match.clusterMatches.foldl (init := init) λ s cm =>
-    cm.revElems.foldr (init := s) λ
-      | .patInst .., s => s
+def foldHypsM [Monad M] (f : σ → FVarId → M σ) (init : σ)
+    (m : ForwardRuleMatch) : M σ :=
+  m.match.clusterMatches.foldlM (init := init) λ s cm =>
+    cm.revElems.foldrM (init := s) λ
+      | .patInst .., s => pure s
       | .hyp hyp, s => f s hyp
+
+/-- Fold over the hypotheses contained in a match. -/
+def foldHyps (f : σ → FVarId → σ) (init : σ) (m : ForwardRuleMatch) : σ :=
+  m.foldHypsM (M := Id) f init
 
 /-- Returns `true` if any hypothesis contained in `m` satisfies `f`. -/
 def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
@@ -122,6 +127,11 @@ def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
     m.revElems.any λ
       | .patInst .. => false
       | .hyp hyp => f hyp
+
+/-- Get the hypotheses from the match whose types are propositions.  -/
+def getPropHyps (m : ForwardRuleMatch) : MetaM (Array FVarId) :=
+  m.foldHypsM (init := Array.mkEmpty m.rule.numPremises) λ hs h => do
+    if ← isProof (.fvar h) then return hs.push h else return hs
 
 /-- Construct the proof of the new hypothesis represented by `m`. -/
 def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
@@ -150,9 +160,11 @@ def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
     return result
 
 /-- Apply a forward rule match to a goal. This adds the hypothesis corresponding
-to the match to the local context. -/
+to the match to the local context. Returns the new goal, the added hypothesis
+and the hypotheses that were removed (if any). Hypotheses may be removed if the
+match is for a `destruct` rule. -/
 def apply (goal : MVarId) (m : ForwardRuleMatch) :
-    ScriptM (Option (MVarId × FVarId)) :=
+    ScriptM (Option (MVarId × FVarId × Array FVarId)) :=
   goal.withContext do
     let name ← getUnusedUserName forwardHypPrefix
     let some prf ← m.getProof goal
@@ -161,7 +173,11 @@ def apply (goal : MVarId) (m : ForwardRuleMatch) :
     let hyp := { userName := name, value := prf, type }
     let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
       | unreachable!
-    return (goal, hyp)
+    if ! m.rule.destruct then
+      return some (goal, hyp, #[])
+    let usedPropHyps ← goal.withContext $ m.getPropHyps
+    let (goal, _) ← tryClearManyS goal usedPropHyps
+    return some (goal, hyp, usedPropHyps)
 
 /-- Convert a forward rule match to a rule tactic description. -/
 def toRuleTacDescr (m : ForwardRuleMatch) : RuleTacDescr :=

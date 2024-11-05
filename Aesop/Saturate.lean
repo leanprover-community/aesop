@@ -136,20 +136,22 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
     goal.checkNotAssigned `saturate
     let (fs, ruleMatches) ← rs.mkInitialForwardState goal
     let queue := ruleMatches.foldl (init := ∅) λ queue m => queue.insert m
-    go ∅ fs queue goal
+    go ∅ fs queue ∅ goal
 where
   go (hypDepths : Std.HashMap FVarId Nat) (fs : ForwardState) (queue : Queue)
-      (goal : MVarId) : SaturateM MVarId := do
+      (erasedHyps : Std.HashSet FVarId) (goal : MVarId) : SaturateM MVarId := do
     withIncRecDepth do
     goal.withContext do
       if let some (m, queue) := queue.deleteMin then
-        if m.rule.name.phase == .unsafe then
-          return ← go hypDepths fs queue goal
+        if m.rule.name.phase == .unsafe || m.anyHyp erasedHyps.contains then
+          return ← go hypDepths fs queue erasedHyps goal
         trace[saturate] "goal:{indentD goal}"
-        let some (goal, hyp) ← m.apply goal
-          | return ← go hypDepths fs queue goal
+        let some (goal, hyp, removedHyps) ← m.apply goal
+          | return ← go hypDepths fs queue erasedHyps goal
         goal.withContext do
-          let type ← inferType (.fvar hyp)
+          let fs := removedHyps.foldl (init := fs) λ fs h => fs.eraseHyp h
+          let erasedHyps := erasedHyps.insertMany removedHyps
+          let type ← hyp.getType
           let mut depth := 0
           let mut hypDepths := hypDepths
           let maxDepth? := options.forwardMaxDepth?
@@ -159,7 +161,7 @@ where
             hypDepths := hypDepths.insert hyp depth
           trace[saturate] "added hyp (depth {depth}) {Expr.fvar hyp} : {type}"
           if maxDepth?.isSome && depth ≥ maxDepth?.get! then
-            go hypDepths fs queue goal
+            go hypDepths fs queue erasedHyps goal
           else
             let rules ← rs.applicableForwardRules type
             let patInsts ←
@@ -168,7 +170,7 @@ where
               fs.addHypWithPatInsts goal hyp rules patInsts
             let queue :=
               ruleMatches.foldl (init := queue) λ queue m => queue.insert m
-            go hypDepths fs queue goal
+            go hypDepths fs queue erasedHyps goal
       else
         return goal
 
