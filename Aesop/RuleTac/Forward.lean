@@ -84,10 +84,10 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
           let usedHypsAcc := usedHypsAcc ++ currentUsedHyps
           return (proofsAcc, usedHypsAcc, proofTypesAcc)
 
-def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (depth : Nat)
-    (md : TransparencyMode) : ScriptM (FVarId × MVarId) := do
+def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (depth : Nat) :
+    ScriptM (FVarId × MVarId) := do
   withScriptStep goal (λ (_, g) => #[g]) (λ _ => true) tacticBuilder do
-  withTransparency md do
+  withReducible do
     let hyp := {
       hyp with
       binderInfo := .default
@@ -103,13 +103,13 @@ def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (depth : Nat)
       | throwError "aesop: internal error in assertForwardHyp: unexpected number of asserted fvars"
     return (fvarId, goal)
 where
-  tacticBuilder _ := Script.TacticBuilder.assertHypothesis goal hyp md
+  tacticBuilder _ := Script.TacticBuilder.assertHypothesis goal hyp .reducible
 
 def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     (patInsts : Std.HashSet RulePatternInstantiation)
     (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
-    (md : TransparencyMode) (maxDepth? : Option Nat) : ScriptM Subgoal :=
-  withTransparency md $ goal.withContext do
+    (maxDepth? : Option Nat) : ScriptM Subgoal :=
+  withReducible $ goal.withContext do
     let forwardHypData ← getForwardHypData
     let mut newHypProofs := #[]
     let mut usedHyps := ∅
@@ -136,7 +136,7 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     let mut goal := goal
     let mut addedFVars := ∅
     for (newHyp, depth) in newHyps do
-      let (fvarId, goal') ← assertForwardHyp goal newHyp depth md
+      let (fvarId, goal') ← assertForwardHyp goal newHyp depth
       goal := goal'
       addedFVars := addedFVars.insert fvarId
     let mut diff := {
@@ -160,33 +160,31 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
 
 @[inline]
 def forwardExpr (e : Expr) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
-    (md : TransparencyMode) : RuleTac :=
+    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => input.goal.withContext do
     let (goal, steps) ←
       applyForwardRule input.goal e pat? input.patternInstantiations immediate
-        (clear := clear) md input.options.forwardMaxDepth? |>.run
+        (clear := clear) input.options.forwardMaxDepth? |>.run
     return (#[goal], steps, none)
 
 def forwardConst (decl : Name) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
-    (md : TransparencyMode) : RuleTac := λ input => do
+    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool) :
+    RuleTac := λ input => do
   let e ← mkConstWithFreshMVarLevels decl
-  forwardExpr e pat? immediate (clear := clear) md input
+  forwardExpr e pat? immediate (clear := clear) input
 
 def forwardTerm (stx : Term) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
-    (md : TransparencyMode) : RuleTac := λ input =>
+    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool) :
+    RuleTac := λ input =>
   input.goal.withContext do
     let e ← elabRuleTermForApplyLikeMetaM input.goal stx
-    forwardExpr e pat? immediate (clear := clear) md input
+    forwardExpr e pat? immediate (clear := clear) input
 
 def forward (t : RuleTerm) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
-    (md : TransparencyMode) : RuleTac :=
+    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool) : RuleTac :=
   match t with
-  | .const decl => forwardConst decl pat? immediate clear md
-  | .term tm => forwardTerm tm pat? immediate clear md
+  | .const decl => forwardConst decl pat? immediate clear
+  | .term tm => forwardTerm tm pat? immediate clear
 
 def forwardMatch (m : ForwardRuleMatch) :
     RuleTac := SingleRuleTac.toRuleTac λ input => do

@@ -18,26 +18,26 @@ syntax (name := forward) "t_forward " ident (" [" ident* "]")? : tactic
 syntax (name := elim)    "t_elim "    ident (" [" ident* "]")? : tactic
 
 def forwardTac (goal : MVarId) (id : Ident) (immediate : Option (Array Syntax))
-    (clear : Bool) (md : TransparencyMode) : MetaM (List MVarId) := do
+    (clear : Bool) : MetaM (List MVarId) := do
   let userName := id.getId
   let ldecl ← getLocalDeclFromUserName userName
-  let immediate ← RuleBuilder.getImmediatePremises ldecl.type none md
+  let immediate ← RuleBuilder.getImmediatePremises ldecl.type none
     (immediate.map (·.map (·.getId)))
   let (goal, _) ←
     RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) none ∅ immediate clear
-      md (maxDepth? := none) |>.run
+      (maxDepth? := none) |>.run
   return [goal.mvarId]
 
 @[tactic forward]
 def evalForward : Tactic
   | `(tactic| t_forward $t:ident $[[ $immediate:ident* ]]?) =>
-    liftMetaTactic (forwardTac · t immediate (clear := false) .default)
+    liftMetaTactic (forwardTac · t immediate (clear := false))
   | _ => unreachable!
 
 @[tactic elim]
 def evalElim : Tactic
   | `(tactic| t_elim $t:ident $[[ $immediate:ident* ]]?) =>
-    liftMetaTactic (forwardTac · t immediate (clear := true) .default)
+    liftMetaTactic (forwardTac · t immediate (clear := true))
   | _ => unreachable!
 
 example (rule : (a : α) → (b : β) → γ) (h₁ : α) (h₂ : β) : γ := by

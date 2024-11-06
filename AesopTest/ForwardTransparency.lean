@@ -9,6 +9,8 @@ import Aesop
 set_option aesop.check.all true
 set_option aesop.smallErrorMessages true
 
+-- Forward rules always operate at reducible transparency.
+
 def T := Unit → Empty
 
 variable {α : Type}
@@ -19,9 +21,6 @@ error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 #guard_msgs in
 example (h : T) (u : Unit) : α := by
   aesop (config := { terminal := true })
-
-example (h : T) (u : Unit) : α := by
-  aesop (add forward (transparency := default) safe h)
 
 def U := Unit
 
@@ -38,9 +37,6 @@ error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 #guard_msgs in
 example (h : T) (u : U) : α := by
   aesop (add forward safe h) (config := { terminal := true })
-
-example (h : T) (u : U) : α := by
-  aesop (add forward (transparency! := default) safe h)
 
 abbrev V := Unit
 
