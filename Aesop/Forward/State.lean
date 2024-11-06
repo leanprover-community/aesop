@@ -533,7 +533,7 @@ where
             { clusterMatches := completeMatch.clusterMatches.push clusterMatch }
       return newCompleteMatches
 
-/--  -/
+/-- Erase a pattern instantiation that was obtained from the given source. -/
 def erasePatInst (inst : RulePatternInstantiation) (source : PatInstSource)
     (rs : RuleState) : RuleState := Id.run do
   let some sources := rs.patInstSources[inst]
@@ -574,7 +574,9 @@ structure ForwardState where
   names in `hyps[h]`. Furthermore, `h` only appears in slots with premise
   indices greater than or equal to those in `hyps[h]`. -/
   hyps : PHashMap FVarId (PArray (RuleName × PremiseIndex))
-  /-- The pattern instantiations present in the rule states. -/
+  /-- The pattern instantiations present in the rule states. Invariant:
+  `patInsts` maps the source `s` to a rule name `r` and pattern instantiation `i`
+  iff the rule state of `r` contains `i` with source `s`. -/
   patInsts : PHashMap PatInstSource (PArray (RuleName × RulePatternInstantiation))
  deriving Inhabited
 
