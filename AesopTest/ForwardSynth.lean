@@ -25,7 +25,7 @@ example (P : SNat → Prop) (h : P (snat% 50)) : True :=
   trivial
 
 open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser in
-elab "test₁ " nPremises:num nLemmas:num "by " ts:tacticSeq : command => do
+elab "test₁ " nPremises:num nLemmas:num " by " ts:tacticSeq : command => do
   let some nPs := nPremises.raw.isNatLit?
     | throwUnsupportedSyntax
   let some nLemmas := nLemmas.raw.isNatLit?
@@ -33,13 +33,17 @@ elab "test₁ " nPremises:num nLemmas:num "by " ts:tacticSeq : command => do
   let mut pNames := Array.mkEmpty nPs
   for i in [:nPs] do
     pNames := pNames.push (Name.mkSimple $ "P" ++ toString i)
+  -- Create `axiom Pi : SNat → Prop` for i ∈ [0..nPs - 1]
   for pName in pNames do
     elabCommand $ ← `(command| axiom $(mkIdent pName) : SNat → Prop)
+  -- Create `axiom Q : Prop`
   elabCommand $ ← `(command| axiom $(mkIdent `Q) : Prop)
   let binders : TSyntaxArray ``Term.bracketedBinder ←
     pNames.mapIdxM λ i pName => do
       `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident $(mkIdent `n)))
   let sig : Term ← `(∀ $(mkIdent `n) $binders:bracketedBinder*, $(mkIdent `Q) → True)
+  -- Create `axiom li : ∀ n (p1 : P1 n) ... (pm : Pm n), Q → True` for
+  -- i ∈ [0..nLemmas - 1] and m = nPs
   for i in [:nLemmas] do
     elabCommand $ ← `(command|
       @[aesop safe forward]
@@ -48,6 +52,8 @@ elab "test₁ " nPremises:num nLemmas:num "by " ts:tacticSeq : command => do
   let binders : TSyntaxArray ``Term.bracketedBinder ←
     pNames.mapIdxM λ i pName => do
       `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident (snat% 0)))
+  -- Create `theorem t1 (p1 : P1 (snat% 0)) ... (pm : Pm (snat% 0)) : True := by ts`
+  -- where m = nPs.
   elabCommand $ ← `(command|
     theorem $(mkIdent `t₁) $binders:bracketedBinder* : True := by $ts
   )
