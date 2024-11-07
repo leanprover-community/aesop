@@ -42,6 +42,9 @@ structure Slot where
   deps : Std.HashSet PremiseIndex
   /-- Common variables shared between this slot and the previous slots. -/
   common : Std.HashSet PremiseIndex
+  /-- The forward dependencies of this slot. These are all the premises that
+  appear in slots *after* this one. -/
+  forwardDeps : Array PremiseIndex
   deriving Inhabited
 
 local instance : BEq Slot :=
@@ -57,6 +60,8 @@ structure ForwardRuleInfo where
   /-- Slots representing the maximal premises of the forward rule, partitioned
   into metavariable clusters. -/
   slotClusters : Array (Array Slot)
+  /-- The premises that appear in the rule's conclusion. -/
+  conclusionDeps : Array PremiseIndex
   /-- The rule's rule pattern and the premise index that was assigned to it. -/
   rulePatternInfo? : Option (RulePattern × PremiseIndex)
   deriving Inhabited
@@ -76,7 +81,7 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
     (immediate : UnorderedArraySet PremiseIndex) : MetaM ForwardRuleInfo :=
   withNewMCtxDepth do
   let e ← inferType thm
-  let (premises, _, _) ← withReducible $ forallMetaTelescope e
+  let (premises, _, conclusion) ← withReducible $ forallMetaTelescope e
   let premises := premises.map (·.mvarId!)
   let mut premiseToIdx : Std.HashMap MVarId PremiseIndex := ∅
   for h : i in [:premises.size] do
@@ -90,12 +95,13 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
     for dep in ← mvarId.getMVarDependencies do
       if let some idx := premiseToIdx[dep]? then
         deps := deps.insert idx
-    -- We update `index` and `common` with correct info later.
+    -- We update the `default` fields with correct info later.
     slots := slots.push {
       typeDiscrTreeKeys? := typeDiscrTreeKeys
       index := default
       premiseIndex := ⟨i⟩
       common := default
+      forwardDeps := default
       deps
     }
     allDeps := allDeps.insertMany deps
@@ -108,7 +114,7 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
     ! allDeps.contains idx && ! patBoundPremises.contains idx &&
     immediate.contains idx
   -- If the rule has a pattern, an additional slot is created for the rule
-  -- pattern instantiation. Again, we update `index` and `common` with correct
+  -- pattern instantiation. Again, we update the `default` fields with correct
   -- info later.
   if rulePattern?.isSome then
     slots := slots.push {
@@ -117,6 +123,7 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
       premiseIndex := ⟨premises.size⟩
       common := default
       deps := patBoundPremises
+      forwardDeps := default
     }
   -- Slots are clustered into metavariable clusters and sorted as indicated
   -- below.
@@ -125,8 +132,12 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
   -- slot has some variables in common with the previous slots.
   assert! ! slotClusters.any λ cluster => cluster.any λ slot =>
     slot.index.toNat > 0 && slot.common.isEmpty
+  let conclusionDeps := (← getMVars conclusion).filterMap (premiseToIdx[·]?)
   let rulePatternInfo? := rulePattern?.map (·, ⟨premises.size⟩)
-  return { slotClusters, numPremises := premises.size, rulePatternInfo? }
+  return {
+    numPremises := premises.size
+    slotClusters, rulePatternInfo?, conclusionDeps
+  }
 where
   /-- Sort slots such that each slot has at least one variable in common with
   the previous slots. -/
@@ -135,19 +146,32 @@ where
       panic! "empty slot cluster"
     have : Ord Slot := ⟨compareOn (·.deps.size)⟩
     let firstSlot := slots.maxI
+    let mut unseen := Std.HashSet.ofArray slots |>.erase firstSlot
+    let firstSlotForwardDeps : Std.HashSet PremiseIndex :=
+      unseen.fold (init := ∅) λ deps s => deps.insertMany s.deps
+    let firstSlot := {
+      firstSlot with
+      index := ⟨0⟩
+      common := ∅
+      forwardDeps := firstSlotForwardDeps.toArray
+    }
     let mut newSlots := Array.mkEmpty slots.size |>.push firstSlot
-    let mut seen := (∅ : Std.HashSet Slot).insert firstSlot
-    let mut previousDeps : Std.HashSet PremiseIndex := firstSlot.deps
+    let mut previousDeps := firstSlot.deps
     let mut i := 1
     while newSlots.size != slots.size do
-      let slot? :=
-        slots.find? λ slot =>
-          ! seen.contains slot && slot.deps.any (previousDeps.contains ·)
+      let mut slot? := none
+      for slot in unseen do
+        if slot.deps.any (previousDeps.contains ·) then
+          slot? := some slot
+          break
       let some slot := slot?
         | panic! "not enough suitable slots"
+      unseen := unseen.erase slot
       let common := previousDeps.filter (slot.deps.contains ·)
-      newSlots := newSlots.push { slot with index := ⟨i⟩, common }
-      seen := seen.insert slot
+      let forwardDeps : Std.HashSet PremiseIndex :=
+        unseen.fold (init := ∅) λ deps s => deps.insertMany s.deps
+      let forwardDeps := forwardDeps.toArray
+      newSlots := newSlots.push { slot with index := ⟨i⟩, common, forwardDeps }
       previousDeps := previousDeps.insertMany slot.deps
       i := i + 1
     return newSlots

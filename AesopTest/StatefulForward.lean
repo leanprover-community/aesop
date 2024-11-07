@@ -368,6 +368,63 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
     (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
   aesop (add safe [forward r₁, forward (immediate := [a]) r₂])
 
+section MatchRedundancy
+
+-- Complete matches are considered redundant (and hence do not produce new
+-- hypotheses) if they agree on all variables that appear in the conclusion.
+
+/--
+error: unsolved goals
+γ : Sort u_1
+α : Prop
+β : Type
+r : α → β → γ
+a₁ a₂ : α
+b₁ b₂ : β
+fwd : γ
+⊢ True
+-/
+#guard_msgs in
+example {α : Prop} {β : Type} (r : α → β → γ) (a₁ a₂ : α) (b₁ b₂ : β) : True := by
+  saturate [r]
+  -- Only one new hypothesis.
+
+/--
+error: unsolved goals
+α : Sort u_1
+a₁ a₂ : α
+P Q : α → Prop
+r : ∀ (a : α), P a → Q a
+p₁ : P a₁
+p₂ p₂' : P a₂
+fwd : Q a₂
+fwd_1 : Q a₁
+⊢ True
+-/
+#guard_msgs in
+example {P Q : α → Prop} (r : ∀ a, P a → Q a) (p₁ : P a₁) (p₂ : P a₂)
+    (p₂' : P a₂) : True := by
+  saturate [r]
+  -- Two new hypotheses, one for `a₁` and one for `a₂` (but not two).
+
+-- However, different rules may still produce the same conclusion multiple times.
+
+/--
+error: unsolved goals
+α : Sort u_1
+β : Sort u_2
+r₁ r₂ : α → β
+a₁ a₂ : α
+fwd fwd_1 : β
+⊢ True
+-/
+#guard_msgs in
+example (r₁ r₂ : α → β) (a₁ a₂ : α) : True := by
+  saturate [r₁, r₂]
+  -- Two new hypotheses (but not four).
+
+end MatchRedundancy
+
 /--
 info: Try this:
   have fwd : γ₁ ∧ γ₂ := r₁ a b

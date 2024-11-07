@@ -98,7 +98,8 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
         let cluster := info.slotClusters[i]
         withConstAesopTraceNode .forward (return m!"cluster {i}") do
           for s in cluster do
-            aesop_trace[forward] "slot {s.index} (premise {s.premiseIndex}, deps {s.deps.toArray.qsortOrd}, common {s.common.toArray.qsortOrd})"
+            aesop_trace![forward] "slot {s.index} (premise {s.premiseIndex}, deps {s.deps.toArray.qsortOrd}, common {s.common.toArray.qsortOrd}, forward deps {s.forwardDeps.qsortOrd})"
+  aesop_trace[forward] "conclusion deps: {info.conclusionDeps}"
   let prio :=
     match phase with
     | .safe info => .normSafe info.penalty

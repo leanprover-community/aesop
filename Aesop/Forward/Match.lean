@@ -30,18 +30,27 @@ def elabForwardRuleTerm (goal : MVarId) : RuleTerm → MetaM Expr
 
 namespace Match
 
-/-- Create a one-element match. -/
-def initial (hyp? : Option FVarId) (subst : Substitution) : Match where
+/-- Create a one-element match. `forwardDeps` are the forward dependencies of
+slot 0. `conclusionDeps` are the conclusion dependencies of the rule to which
+this match belongs. -/
+def initial (hyp? : Option FVarId) (subst : Substitution)
+    (forwardDeps conclusionDeps : Array PremiseIndex) : Match where
   revElems := [.ofHypAndSubst hyp? subst]
   subst := subst
   level := ⟨0⟩
+  forwardDeps := forwardDeps
+  conclusionDeps := conclusionDeps
 
-/-- Add a hyp or pattern instantiation to the match. -/
+/-- Add a hyp or pattern instantiation to the match. `forwardDeps` are the
+forward dependencies of the slot of the extended match, i.e. slot
+`m.level + 1`. -/
 def addHypOrPatternInst (hyp? : Option FVarId) (subst : Substitution)
-    (m : Match) : Match where
+    (m : Match) (forwardDeps : Array PremiseIndex) : Match where
   revElems := .ofHypAndSubst hyp? subst :: m.revElems
   subst := m.subst.mergeCompatible subst
   level := m.level + 1
+  forwardDeps := forwardDeps
+  conclusionDeps := m.conclusionDeps
 
 /-- Returns `true` if the match contains the given hyp. -/
 def containsHyp (hyp : FVarId) (m : Match) : Bool :=
