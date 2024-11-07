@@ -52,8 +52,6 @@ structure RuleTacInput where
 
 /-- A subgoal produced by a rule. -/
 structure Subgoal where
-  /-- The goal mvar. -/
-  mvarId : MVarId
   /--
   A diff between the goal the rule was run on and this goal. Many `MetaM`
   tactics report information that allows you to easily construct a `GoalDiff`.
@@ -63,9 +61,16 @@ structure Subgoal where
   diff : GoalDiff
   deriving Inhabited
 
+namespace Subgoal
+
+def mvarId (g : Subgoal) : MVarId :=
+  g.diff.newGoal
+
+end Subgoal
+
 def mvarIdToSubgoal (parentMVarId mvarId : MVarId) (fvarSubst : FVarIdSubst) :
     MetaM Subgoal :=
-  return { mvarId, diff := ← diffGoals parentMVarId mvarId fvarSubst }
+  return { diff := ← diffGoals parentMVarId mvarId fvarSubst }
 
 /--
 A single rule application, representing the application of a tactic to the input

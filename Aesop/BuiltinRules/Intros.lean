@@ -30,6 +30,6 @@ def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
       fvarSubst := ∅
       targetMaybeChanged := true
     }
-    return (#[{ mvarId := goal, diff }], steps, none)
+    return (#[{ diff }], steps, none)
 
 end Aesop.BuiltinRules

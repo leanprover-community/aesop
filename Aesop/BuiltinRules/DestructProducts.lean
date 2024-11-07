@@ -122,7 +122,6 @@ partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let (goal, steps) ← destructProductsCore input.goal md
   -- TODO we can construct a better diff here, and it would be important to do
   -- so because `destructProducts` often renames hypotheses.
-  let goal := { mvarId := goal, diff := ← diffGoals input.goal goal ∅ }
-  return (#[goal], steps, none)
+  return (#[{ diff := ← diffGoals input.goal goal ∅ }], steps, none)
 
 end Aesop.BuiltinRules
