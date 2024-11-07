@@ -526,7 +526,25 @@ fwd : γ
 #guard_msgs in
 example {α β γ : Prop} (h : α → β → γ) (h₁ : α) (h₂ : β) : False := by
   aesop (add norm -1 forward h)
-  -- TODO with `safe` instead of `norm`, exposes an error in local rule handling.
+
+-- In the following example, `h` does not apply because `simp_all` discharges
+-- the premises `α` and `β`. The stateful implementation of forward reasoning
+-- can't reasonably deal with local rules whose types change during the course
+-- of the search; the best we can do is try to detect when this happens.
+
+/--
+warning: aesop: failed to prove the goal after exhaustive search.
+---
+error: unsolved goals
+α β γ : Prop
+h : γ
+h₁ : α
+h₂ : β
+⊢ False
+-/
+#guard_msgs in
+example {α β γ : Prop} (h : α → β → γ) (h₁ : α) (h₂ : β) : False := by
+  aesop (add safe forward h)
 
 section Computation
 
