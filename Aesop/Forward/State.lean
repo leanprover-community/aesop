@@ -297,6 +297,9 @@ end VariableMap
 structure ClusterState where
   /-- The cluster's slots. -/
   slots : Array Slot
+  /-- The premises that appear in the rule's conclusion. These are the same for
+  all cluster states of a rule, but are stored here for convenience. -/
+  conclusionDeps : Array PremiseIndex
   /-- The variable map for this cluster. -/
   variableMap : VariableMap
   /-- Complete matches for this cluster. -/
@@ -349,6 +352,7 @@ def matchPremise? (premises : Array MVarId) (numPremiseIndexes : Nat)
           throwError "aesop: internal error: matchPremise?: assignment has mvar:{indentExpr assignment}"
         let assignment ← withReducible $ reduceAll assignment
         subst := subst.insert var assignment
+      subst := subst.insert slot.premiseIndex (.fvar hyp)
       aesop_trace[forward] "substitution: {subst}"
       return subst
     else
@@ -357,11 +361,12 @@ def matchPremise? (premises : Array MVarId) (numPremiseIndexes : Nat)
 /-- Add a match to the cluster state. Returns the new cluster state and any new
 complete matches for this cluster. -/
 partial def addMatchCore (newCompleteMatches : Array Match) (cs : ClusterState)
-    (m : Match) : M (ClusterState × Array Match) := do
+     (m : Match) : M (ClusterState × Array Match) := do
   let mut cs := cs
   let slotIdx := m.level
   if slotIdx.toNat == cs.slots.size - 1 then
     if cs.completeMatches.contains m then
+      aesop_trace[forward] "complete match {m} with subst {m.subst} already present"
       return (cs, newCompleteMatches)
     else
       cs := { cs with completeMatches := cs.completeMatches.insert m }
@@ -371,12 +376,12 @@ partial def addMatchCore (newCompleteMatches : Array Match) (cs : ClusterState)
     aesop_trace[forward] "add match {m} for slot {slotIdx} with subst {m.subst}"
     let (vmap, changed) := cs.variableMap.addMatch nextSlot m  -- This is correct; VariableMap.addMatch needs the next slot.
     if ! changed then
-      aesop_trace[forward] "already present"
+      aesop_trace[forward] "match already present"
       return (cs, newCompleteMatches)
     cs := { cs with variableMap := vmap }
     let mut newCompleteMatches := newCompleteMatches
     for hyp in cs.variableMap.findHyps nextSlot m.subst do
-      let m := m.addHypOrPatternInst hyp.fvarId? hyp.subst
+      let m := m.addHypOrPatternInst hyp.fvarId? hyp.subst nextSlot.forwardDeps
       let (cs', newCompleteMatches') ← cs.addMatchCore newCompleteMatches m
       cs := cs'
       newCompleteMatches := newCompleteMatches'
@@ -392,17 +397,19 @@ def addHypCore (newCompleteMatches : Array Match) (cs : ClusterState)
     (slot : Slot) (h : Hyp) : M (ClusterState × Array Match) := do
   aesop_trace[forward] "add {match h.fvarId? with | none => m!"pattern instantiation" | some fvarId => m!"hyp {Expr.fvar fvarId}"} for slot {slot.index} with substitution {h.subst}"
   if slot.index.toNat == 0 then
-    let m := Match.initial h.fvarId? h.subst
+    let m :=
+      Match.initial h.fvarId? h.subst (forwardDeps := slot.forwardDeps)
+        (conclusionDeps := cs.conclusionDeps)
     cs.addMatchCore newCompleteMatches m
   else
     let (vmap, changed) := cs.variableMap.addHyp slot h
     if ! changed then
-      aesop_trace[forward] "already present"
+      aesop_trace[forward] "hyp already present"
       return (cs, newCompleteMatches)
     let mut cs := { cs with variableMap := vmap }
     let mut newCompleteMatches := newCompleteMatches
     for pm in cs.variableMap.findMatches slot h.subst do
-      let m := pm.addHypOrPatternInst h.fvarId? h.subst
+      let m := pm.addHypOrPatternInst h.fvarId? h.subst slot.forwardDeps
       let (cs', newCompleteMatches') ← cs.addMatchCore newCompleteMatches m
       cs := cs'
       newCompleteMatches := newCompleteMatches'
@@ -420,8 +427,8 @@ def addHyp (premises : Array MVarId) (numPremiseIndexes : Nat)
   addHypCore #[] cs slot { fvarId? := h, subst }
 
 /-- Add a pattern instantiation to the cluster state. -/
-def addPatInst (cs : ClusterState) (i : PremiseIndex)
-    (subst : Substitution) : M (ClusterState × Array Match) := do
+def addPatInst (cs : ClusterState) (i : PremiseIndex) (subst : Substitution) :
+    M (ClusterState × Array Match) := do
   let some slot := cs.findSlot? i
     | return (cs, #[])
   addHypCore #[] cs slot { fvarId? := none, subst }
@@ -471,8 +478,12 @@ instance : ToMessageData RuleState where
 
 /-- The initial (empty) rule state for a given forward rule. -/
 def ForwardRule.initialRuleState (r : ForwardRule) : RuleState :=
-  let clusterStates := r.slotClusters.map λ slots =>
-    { slots, variableMap := ∅, completeMatches := {} }
+  let clusterStates := r.slotClusters.map λ slots => {
+    variableMap := ∅
+    completeMatches := {}
+    conclusionDeps := r.conclusionDeps
+    slots
+  }
   { rule := r, clusterStates, patInstSources := {} }
 
 namespace RuleState
