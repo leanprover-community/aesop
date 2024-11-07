@@ -124,9 +124,10 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) (fs : ForwardState)
     show MetaM _ from restoreState rapp.postState
     if rapp.goals.isEmpty then
       return (some (.proved rapp.scriptSteps?, fs, #[], ∅), forwardRuleMatch?)
-    let (#[{ mvarId := g, diff }]) := rapp.goals
+    let (#[{ diff }]) := rapp.goals
       | err m!"rule produced more than one subgoal."
     let (fs, ms) ← fs.applyGoalDiff rs diff
+    let g := diff.newGoal
     if ← Check.rules.isEnabled then
       let mvars := .ofArray input.mvars.toArray
       let actualMVars ← rapp.postState.runMetaM' g.getMVarDependencies

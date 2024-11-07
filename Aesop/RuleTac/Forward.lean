@@ -156,7 +156,7 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
         set.insert fvarId
       goal := goal'
       diff := { diff with newGoal := goal, removedFVars }
-    return { mvarId := goal, diff }
+    return { diff }
   where
     err {α} : MetaM α := throwError
       "found no instances of {e} (other than possibly those which had been previously added by forward rules)"
@@ -201,6 +201,6 @@ def forwardMatch (m : ForwardRuleMatch) :
     targetMaybeChanged := false
     removedFVars := .ofArray removedFVars
   }
-  return (#[{ mvarId := goal, diff }], some steps, none)
+  return (#[{ diff }], some steps, none)
 
 end Aesop.RuleTac

@@ -214,7 +214,8 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     copyGoals assignedOrDroppedMVars r.parent r.postState
       r.successProbability goalDepth
   let copiedSubgoals : Array Subgoal :=
-    copiedGoals.map λ g => { mvarId := g.preNormGoal, diff := default }
+    copiedGoals.map λ g =>
+      { diff := { (default : GoalDiff) with newGoal := g.preNormGoal } }
     -- The diff is irrelevant because we later add `g` to the tree (and the
     -- forward state of `g` is already up to date).
 
@@ -232,7 +233,7 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
       unless ← (pure $ originalSubgoalAndCopiedGoalMVars.contains mvarId) <||>
                mvarId.isAssignedOrDelayedAssigned do
         let diff ← diffGoals parentGoal.currentGoal mvarId ∅
-        droppedMVars := droppedMVars.push { mvarId, diff }
+        droppedMVars := droppedMVars.push { diff }
     pure droppedMVars
 
   -- Partition the subgoals into 'proper goals' and 'proper mvars'. A proper

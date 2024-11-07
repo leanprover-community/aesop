@@ -79,7 +79,7 @@ partial def cases (target : CasesTarget) (md : TransparencyMode)
           -- using the fvarSubst reported by `cases`. Restore this once
           -- ForwardState.applyGoalDiff can deal with nonempty fvarSubsts.
           let diff ← diffGoals initialGoal g.mvarId ∅
-          newGoals := newGoals.push { mvarId := g.mvarId, diff }
+          newGoals := newGoals.push { diff }
       return some newGoals
 
 end Aesop.RuleTac
