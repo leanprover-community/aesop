@@ -46,34 +46,29 @@ optimisation, so rules should strive to generate accurate substitutions whenever
 possible.
 -/
 structure GoalDiff where
-  /--
-  `FVarId`s that appear in the new goal, but not in the old goal.
-  -/
+  /-- The old goal. -/
+  oldGoal : MVarId
+  /-- The new goal. -/
+  newGoal : MVarId
+  /-- `FVarId`s that appear in the new goal, but not in the old goal. -/
   addedFVars : Std.HashSet FVarId
-  /--
-  `FVarId`s that appear in the old goal, but not in the new goal.
-  -/
+  /-- `FVarId`s that appear in the old goal, but not in the new goal. -/
   removedFVars : Std.HashSet FVarId
-  /--
-  An `FVarId` substitution that tracks hypotheses which have been renamed (but
-  have not otherwise been modified).
-  -/
+  /-- An `FVarId` substitution that tracks hypotheses which have been renamed (but
+  have not otherwise been modified). -/
   fvarSubst : FVarIdSubst
-  /--
-  If `true`, the old goal's target is possibly not α-equal to the new goal's
-  target (after mvar instantiations).
-  -/
+  /-- If `true`, the old goal's target is possibly not α-equal to the new goal's
+  target (after mvar instantiations). -/
   targetMaybeChanged : Bool
   deriving Inhabited
 
-protected def GoalDiff.empty : GoalDiff where
+protected def GoalDiff.empty (oldGoal newGoal : MVarId) : GoalDiff := {
   addedFVars := ∅
   removedFVars := ∅
   fvarSubst := ∅
   targetMaybeChanged := true
-
-instance : EmptyCollection GoalDiff :=
-  ⟨.empty⟩
+  oldGoal, newGoal
+}
 
 def getNewFVars (oldLCtx newLCtx : LocalContext) : Std.HashSet FVarId :=
   newLCtx.foldl (init := ∅) λ newFVars ldecl =>
@@ -95,6 +90,8 @@ def diffGoals (old new : MVarId) (fvarSubst : FVarIdSubst) :
   let newLCtx := (← new.getDecl).lctx
   let targetMaybeChanged := (← getTarget old) != (← getTarget new)
   return {
+    oldGoal := old
+    newGoal := new
     addedFVars := getNewFVars oldLCtx newLCtx
     removedFVars := getNewFVars newLCtx oldLCtx
     fvarSubst, targetMaybeChanged
@@ -108,6 +105,8 @@ difference between `g₂` and `g₃`, then `diff₁.comp diff₂` is the differe
 between `g₁` and `g₃`.
 -/
 def comp (diff₁ diff₂ : GoalDiff) : GoalDiff where
+  oldGoal := diff₁.oldGoal
+  newGoal := diff₂.newGoal
   addedFVars :=
     diff₁.addedFVars.fold (init := diff₂.addedFVars) λ addedFVars fvarId =>
       if diff₂.removedFVars.contains fvarId then
@@ -125,6 +124,11 @@ def comp (diff₁ diff₂ : GoalDiff) : GoalDiff where
 
 def checkCore (diff : GoalDiff) (old new : MVarId) :
     MetaM (Option MessageData) := do
+  if diff.oldGoal != old then
+    return some m!"incorrect old goal: expected {old.name}, got {diff.oldGoal.name}"
+  if diff.newGoal != new then
+    return some m!"incorrect new goal: expected {new.name}, got {diff.newGoal.name}"
+
   let oldLCtx := (← old.getDecl).lctx
   let newLCtx := (← new.getDecl).lctx
 

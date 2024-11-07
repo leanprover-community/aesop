@@ -65,10 +65,9 @@ def updateForwardState (fs : ForwardState) (newMatches : Array ForwardRuleMatch)
 def eraseForwardRuleMatch (m : ForwardRuleMatch) : NormM Unit := do
   modify λ s => { s with forwardRuleMatches := s.forwardRuleMatches.erase m }
 
-def applyDiffToForwardState (newGoal : MVarId) (diff : GoalDiff) :
-    NormM Unit := do
+def applyDiffToForwardState (diff : GoalDiff) : NormM Unit := do
   let fs ← getResetForwardState
-  let (fs, ms) ← fs.applyGoalDiff (← read).ruleSet newGoal diff
+  let (fs, ms) ← fs.applyGoalDiff (← read).ruleSet diff
   updateForwardState fs ms diff.removedFVars
 
 inductive NormRuleResult
@@ -127,7 +126,7 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) (fs : ForwardState)
       return (some (.proved rapp.scriptSteps?, fs, #[], ∅), forwardRuleMatch?)
     let (#[{ mvarId := g, diff }]) := rapp.goals
       | err m!"rule produced more than one subgoal."
-    let (fs, ms) ← fs.applyGoalDiff rs g diff
+    let (fs, ms) ← fs.applyGoalDiff rs diff
     if ← Check.rules.isEnabled then
       let mvars := .ofArray input.mvars.toArray
       let actualMVars ← rapp.postState.runMetaM' g.getMVarDependencies
@@ -237,8 +236,7 @@ def normSimpCore (goal : MVarId) (goalMVars : Std.HashSet MVarId) :
     | .simplified newGoal usedTheorems => do
       let step ←
         mkNormSimpScriptStep goal newGoal preState postState usedTheorems
-      let diff ← diffGoals goal newGoal ∅
-      applyDiffToForwardState newGoal diff
+      applyDiffToForwardState (← diffGoals goal newGoal ∅)
       return some $ .succeeded newGoal #[step]
 where
   addLocalRules (localRules : Array LocalNormSimpRule) (ctx : Simp.Context)
@@ -291,8 +289,7 @@ def normUnfoldCore (goal : MVarId) : NormM (Option NormRuleResult) := do
     aesop_trace[steps] "nothing to unfold"
     return none
   | some newGoal =>
-    let diff ← diffGoals goal newGoal ∅
-    applyDiffToForwardState newGoal diff
+    applyDiffToForwardState (← diffGoals goal newGoal ∅)
     return some $ .succeeded newGoal steps
 
 def normUnfold (goal : MVarId) : NormM (Option NormRuleResult) := do

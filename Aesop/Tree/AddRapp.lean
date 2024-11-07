@@ -97,7 +97,7 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
         let start ← start.get
         let diff ← diffGoals start.currentGoal g.preNormGoal ∅
         let go : StateRefT RulePatternCache MetaM _ :=
-          start.forwardState.applyGoalDiff rs g.preNormGoal diff
+          start.forwardState.applyGoalDiff rs diff
         let ((forwardState, ms), rulePatternCache) ← go |>.run rulePatternCache
         let forwardRuleMatches :=
           start.forwardRuleMatches.update ms diff.removedFVars
@@ -137,7 +137,7 @@ def makeInitialGoal (goal : Subgoal) (mvars : UnorderedArraySet MVarId)
   let rulePatternCache ← getResetRulePatternCache
   let (forwardState, forwardRuleMatches, rulePatternCache) ← parentMetaState.runMetaM' do
     let go : StateRefT RulePatternCache MetaM _ :=
-      parentForwardState.applyGoalDiff rs goal.mvarId goal.diff
+      parentForwardState.applyGoalDiff rs goal.diff
     let ((fs, newMatches), rulePatternCache) ←
       go |>.run rulePatternCache
     let ms :=
@@ -214,7 +214,7 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     copyGoals assignedOrDroppedMVars r.parent r.postState
       r.successProbability goalDepth
   let copiedSubgoals : Array Subgoal :=
-    copiedGoals.map λ g => { mvarId := g.preNormGoal, diff := ∅ }
+    copiedGoals.map λ g => { mvarId := g.preNormGoal, diff := default }
     -- The diff is irrelevant because we later add `g` to the tree (and the
     -- forward state of `g` is already up to date).
 

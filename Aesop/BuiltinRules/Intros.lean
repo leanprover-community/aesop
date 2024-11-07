@@ -23,6 +23,8 @@ def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
     let addedFVars := newFVarIds.foldl (init := ∅) λ set fvarId =>
       set.insert fvarId
     let diff := {
+      oldGoal := input.goal
+      newGoal := goal
       addedFVars
       removedFVars := ∅
       fvarSubst := ∅
