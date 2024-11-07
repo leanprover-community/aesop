@@ -498,6 +498,9 @@ def addHypOrPatInst (goal : MVarId) (h : Sum FVarId Substitution)
       | return (rs, #[])
     let (premises, _, _) ←
       withReducible $ forallMetaTelescope (← inferType ruleExpr)
+    if premises.size != rs.rule.numPremises then
+      aesop_trace[forward] "failed to add hyp or pat inst:\n  rule term '{rs.rule.term}' does not have expected number of premises {rs.rule.numPremises}"
+      return (rs, #[])
     let premises := premises.map (·.mvarId!)
     let mut rs := rs
     let mut clusterStates := rs.clusterStates
