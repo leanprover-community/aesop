@@ -407,7 +407,7 @@ example {P Q : α → Prop} (r : ∀ a, P a → Q a) (p₁ : P a₁) (p₂ : P a
   saturate [r]
   -- Two new hypotheses, one for `a₁` and one for `a₂` (but not two).
 
--- However, different rules may still produce the same conclusion multiple times.
+-- When a hypothesis already exists in the context, it is not added again.
 
 /--
 error: unsolved goals
@@ -415,7 +415,7 @@ error: unsolved goals
 β : Sort u_2
 r₁ r₂ : α → β
 a₁ a₂ : α
-fwd fwd_1 : β
+fwd : β
 ⊢ True
 -/
 #guard_msgs in

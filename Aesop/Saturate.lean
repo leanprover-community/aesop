@@ -146,7 +146,7 @@ where
         if m.rule.name.phase == .unsafe || m.anyHyp erasedHyps.contains then
           return ← go hypDepths fs queue erasedHyps goal
         trace[saturate] "goal:{indentD goal}"
-        let some (goal, hyp, removedHyps) ← m.apply goal
+        let some (goal, hyp, removedHyps) ← m.apply goal (skipExisting := true)
           | return ← go hypDepths fs queue erasedHyps goal
         goal.withContext do
           let fs := removedHyps.foldl (init := fs) λ fs h => fs.eraseHyp h
