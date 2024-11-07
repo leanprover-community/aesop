@@ -187,7 +187,7 @@ register_option aesop.dev.generateScript : Bool := {
 -/
 register_option aesop.dev.statefulForward : Bool := {
   descr := "(aesop) Only for use by Aesop developers. Enables the new stateful forward reasoning engine."
-  defValue := false
+  defValue := true
 }
 
 /--
