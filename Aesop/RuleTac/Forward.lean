@@ -111,6 +111,7 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
     (maxDepth? : Option Nat) : ScriptM Subgoal :=
   withReducible $ goal.withContext do
+    let initialGoal := goal
     let forwardHypData ← getForwardHypData
     let mut newHypProofs := #[]
     let mut usedHyps := ∅
@@ -141,6 +142,8 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
       goal := goal'
       addedFVars := addedFVars.insert fvarId
     let mut diff := {
+      oldGoal := initialGoal
+      newGoal := goal
       addedFVars
       removedFVars := ∅
       fvarSubst := ∅
@@ -152,8 +155,8 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
       let (goal', removedFVars) ← tryClearManyS goal usedPropHyps
       let removedFVars := removedFVars.foldl (init := ∅) λ set fvarId =>
         set.insert fvarId
-      diff := { diff with removedFVars }
       goal := goal'
+      diff := { diff with newGoal := goal, removedFVars }
     return { mvarId := goal, diff }
   where
     err {α} : MetaM α := throwError
@@ -192,6 +195,8 @@ def forwardMatch (m : ForwardRuleMatch) :
   let (some (goal, hyp, removedFVars), steps) ← m.apply input.goal |>.run
     | throwError "synthesis of instance arguments failed"
   let diff := {
+    oldGoal := input.goal
+    newGoal := goal
     addedFVars := {hyp}
     fvarSubst := ∅
     targetMaybeChanged := false

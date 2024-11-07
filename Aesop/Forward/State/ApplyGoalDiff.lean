@@ -15,10 +15,11 @@ variable [Monad m] [MonadRulePatternCache m] [MonadControlT MetaM m]
   [MonadLiftT MetaM m]
 
 /-- Apply a goal diff to the state, adding and removing hypotheses as indicated
-by the diff. `goal` must be the post-goal of `diff`. -/
-def ForwardState.applyGoalDiff (rs : LocalRuleSet) (goal : MVarId)
+by the diff. -/
+def ForwardState.applyGoalDiff (rs : LocalRuleSet)
     (diff : GoalDiff) (fs : ForwardState) :
     m (ForwardState × Array ForwardRuleMatch) :=
+  let goal := diff.newGoal
   goal.withContext do
     if ! diff.fvarSubst.isEmpty then
       show MetaM _ from throwError "aesop: internal error: non-empty FVarSubst in GoalDiff is currently not supported"
