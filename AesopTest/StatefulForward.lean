@@ -243,8 +243,8 @@ example {P Q R : α → α → Prop} (h₁ : ∀ a b, P a b → Q b a → R a b)
 
 /--
 info: Try this:
-  have fwd : R c c := h₁ c d d c h₂ h₅
-  have fwd_1 : R b c := h₁ b a d c h₄ h₅
+  have fwd : R b c := h₁ b a d c h₄ h₅
+  have fwd_1 : R c c := h₁ c d d c h₂ h₅
   have fwd_2 : R b b := h₁ b a a b h₄ h₃
   have fwd_3 : R c b := h₁ c d a b h₂ h₃
 ---
@@ -257,8 +257,8 @@ h₂ : P c d
 h₃ : Q a b
 h₄ : P b a
 h₅ : Q d c
-fwd : R c c
-fwd_1 : R b c
+fwd : R b c
+fwd_1 : R c c
 fwd_2 : R b b
 fwd_3 : R c b
 ⊢ R c b
@@ -407,7 +407,7 @@ example {P Q : α → Prop} (r : ∀ a, P a → Q a) (p₁ : P a₁) (p₂ : P a
   saturate [r]
   -- Two new hypotheses, one for `a₁` and one for `a₂` (but not two).
 
--- However, different rules may still produce the same conclusion multiple times.
+-- When a hypothesis already exists in the context, it is not added again.
 
 /--
 error: unsolved goals
@@ -415,7 +415,7 @@ error: unsolved goals
 β : Sort u_2
 r₁ r₂ : α → β
 a₁ a₂ : α
-fwd fwd_1 : β
+fwd : β
 ⊢ True
 -/
 #guard_msgs in

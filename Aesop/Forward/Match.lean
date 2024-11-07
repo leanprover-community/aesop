@@ -171,14 +171,22 @@ def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
 /-- Apply a forward rule match to a goal. This adds the hypothesis corresponding
 to the match to the local context. Returns the new goal, the added hypothesis
 and the hypotheses that were removed (if any). Hypotheses may be removed if the
-match is for a `destruct` rule. -/
-def apply (goal : MVarId) (m : ForwardRuleMatch) :
+match is for a `destruct` rule. If `skipExisting` is true, the new hypothesis
+is only added if there is no hypothesis with a reducibly defeq type already in
+the context. -/
+def apply (goal : MVarId) (m : ForwardRuleMatch) (skipExisting : Bool) :
     ScriptM (Option (MVarId × FVarId × Array FVarId)) :=
   goal.withContext do
     let name ← getUnusedUserName forwardHypPrefix
     let some prf ← m.getProof goal
       | return none
     let type ← inferType prf
+    if skipExisting then
+      for ldecl in ← getLCtx do
+        if ldecl.isImplementationDetail then
+          continue
+        if ← withReducible $ withNewMCtxDepth $ isDefEq type ldecl.type then
+          return none
     let hyp := { userName := name, value := prf, type }
     let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
       | unreachable!

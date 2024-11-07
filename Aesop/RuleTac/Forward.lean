@@ -192,8 +192,9 @@ def forward (t : RuleTerm) (pat? : Option RulePattern)
 
 def forwardMatch (m : ForwardRuleMatch) :
     RuleTac := SingleRuleTac.toRuleTac λ input => do
-  let (some (goal, hyp, removedFVars), steps) ← m.apply input.goal |>.run
-    | throwError "synthesis of instance arguments failed"
+  let (some (goal, hyp, removedFVars), steps) ←
+    m.apply input.goal (skipExisting := true) |>.run
+    | throwError "hyp already exists or synthesis of instance arguments failed"
   let diff := {
     oldGoal := input.goal
     newGoal := goal
