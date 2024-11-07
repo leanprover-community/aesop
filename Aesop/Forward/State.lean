@@ -39,7 +39,7 @@ structure Hyp where
   /-- The substitution that results from matching the hypothesis against a
   premise, or the substitution corresponding to the pattern instantiation. -/
   subst : Substitution
-  deriving Inhabited, Hashable
+  deriving Inhabited
 
 namespace Hyp
 
@@ -49,6 +49,12 @@ instance : BEq Hyp where
     | some h₁, some h₂ => h₁ == h₂
     | none, none => h₁.subst == h₂.subst
     | _, _ => false
+
+instance : Hashable Hyp where
+  hash h :=
+    match h.fvarId? with
+    | some h => hash h
+    | none => hash h.subst
 
 /-- Returns `true` if `h` is the hyp `fvarId` or is a pattern substitution
 containing `fvarId`. -/
