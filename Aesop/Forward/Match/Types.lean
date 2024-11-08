@@ -9,30 +9,6 @@ namespace Aesop
 
 open Lean
 
-/-- An element of a match. This is either a hypothesis or a pattern
-instantiation. -/
-inductive MatchElem
-  /-- A hypothesis. -/
-  | hyp (fvarId : FVarId)
-  /-- A pattern instantiation with the given substitution. -/
-  | patInst (subst : Substitution)
-  deriving Inhabited, Hashable, BEq
-
-namespace MatchElem
-
-instance : ToMessageData MatchElem where
-  toMessageData
-    | .hyp fvarId => m!"{Expr.fvar fvarId}"
-    | .patInst subst => m!"<pat inst {subst}>"
-
-/-- Create a match element for a hyp or pattern substitution. -/
-def ofHypAndSubst (hyp? : Option FVarId) (subst : Substitution) : MatchElem :=
-  match hyp? with
-  | none => .patInst subst
-  | some fvarId => .hyp fvarId
-
-end MatchElem
-
 /-- A match associates hypotheses to (a prefix of) the slots of a slot
 cluster. -/
 structure Match where
