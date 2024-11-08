@@ -30,39 +30,40 @@ def elabForwardRuleTerm (goal : MVarId) : RuleTerm → MetaM Expr
 
 namespace Match
 
-/-- Create a one-element match. `forwardDeps` are the forward dependencies of
-slot 0. `conclusionDeps` are the conclusion dependencies of the rule to which
-this match belongs. -/
-def initial (hyp? : Option FVarId) (subst : Substitution)
+/-- Create a one-element match. `subst` is the substitution that results from
+matching a hypothesis against slot 0, or from a pattern instantiation.
+`isPatInst` is `true` if the substitution resulted from a pattern instantiation.
+`forwardDeps` are the forward dependencies of slot 0. `conclusionDeps` are the
+conclusion dependencies of the rule to which this match belongs. -/
+def initial (subst : Substitution) (isPatInst : Bool)
     (forwardDeps conclusionDeps : Array PremiseIndex) : Match where
-  revElems := [.ofHypAndSubst hyp? subst]
   subst := subst
+  patInstSubsts := if isPatInst then #[subst] else #[]
   level := ⟨0⟩
   forwardDeps := forwardDeps
   conclusionDeps := conclusionDeps
 
-/-- Add a hyp or pattern instantiation to the match. `forwardDeps` are the
-forward dependencies of the slot of the extended match, i.e. slot
+/-- Add a hyp or pattern instantiation to the match. `subst` is the substitution
+that results from matching a hypothesis against slot `m.level + 1`, or from the
+pattern instantiation. `isPatInst` is `true` if the substitution resulted from
+a pattern instantiation. `forwardDeps` are the forward dependencies of slot
 `m.level + 1`. -/
-def addHypOrPatternInst (hyp? : Option FVarId) (subst : Substitution)
-    (m : Match) (forwardDeps : Array PremiseIndex) : Match where
-  revElems := .ofHypAndSubst hyp? subst :: m.revElems
+def addHypOrPatternInst (subst : Substitution) (isPatInst : Bool)
+    (forwardDeps : Array PremiseIndex) (m : Match) : Match where
   subst := m.subst.mergeCompatible subst
+  patInstSubsts :=
+    if isPatInst then m.patInstSubsts.push subst else m.patInstSubsts
   level := m.level + 1
   forwardDeps := forwardDeps
   conclusionDeps := m.conclusionDeps
 
 /-- Returns `true` if the match contains the given hyp. -/
 def containsHyp (hyp : FVarId) (m : Match) : Bool :=
-  m.revElems.any λ
-    | .hyp hyp' => hyp == hyp'
-    | .patInst .. => false
+  m.subst.toArray.any (· == some (.fvar hyp))
 
 /-- Returns `true` if the match contains the given pattern instantiation. -/
 def containsPatInst (subst : Substitution) (m : Match) : Bool :=
-  m.revElems.any λ
-    | .patInst subst' => subst == subst'
-    | .hyp .. => false
+  m.patInstSubsts.any (· == subst)
 
 end Match
 
@@ -72,32 +73,13 @@ namespace CompleteMatch
 match's slots and substitution. For non-immediate arguments, we return `none`. -/
 def reconstructArgs (r : ForwardRule) (m : CompleteMatch) :
     Array (Option Expr) := Id.run do
-  let mut slotHyps : Std.HashMap PremiseIndex FVarId := ∅
-  for h : i in [:r.slotClusters.size] do
-    let cluster := r.slotClusters[i]
-    let some m := m.clusterMatches[i]?
-      | panic! s!"match for rule {r.name} is not complete: no cluster match for cluster {i}"
-    let hyps := m.revElems.toArray.reverse
-    for h' : j in [:cluster.size] do
-      let slot := cluster[j]
-      let some hyp? := hyps[j]?
-        | panic! s!"match for rule {r.name} is not complete: no hyp or pattern instantiation for slot with premise index {slot.premiseIndex} in cluster {i}"
-      if let .hyp hyp := hyp? then
-        slotHyps := slotHyps.insert slot.premiseIndex hyp
-
+  assert! m.clusterMatches.size == r.slotClusters.size
   let mut subst : Substitution := .empty r.numPremiseIndexes
   for m in m.clusterMatches do
     subst := subst.mergeCompatible m.subst
-
   let mut args := Array.mkEmpty r.numPremises
   for i in [:r.numPremises] do
-    if let some hyp := slotHyps.get? ⟨i⟩ then
-      args := args.push $ some (.fvar hyp)
-    else if let some inst := subst.find? ⟨i⟩ then
-      args := args.push $ some inst
-    else
-      args := args.push none
-
+    args := args.push $ subst.find? ⟨i⟩
   return args
 
 set_option linter.missingDocs false in
@@ -122,9 +104,9 @@ protected def le (m₁ m₂ : ForwardRuleMatch) : Bool :=
 def foldHypsM [Monad M] (f : σ → FVarId → M σ) (init : σ)
     (m : ForwardRuleMatch) : M σ :=
   m.match.clusterMatches.foldlM (init := init) λ s cm =>
-    cm.revElems.foldrM (init := s) λ
-      | .patInst .., s => pure s
-      | .hyp hyp, s => f s hyp
+    cm.subst.toArray.foldrM (init := s) λ
+      | some (.fvar hyp), s => f s hyp
+      | _, s => pure s
 
 /-- Fold over the hypotheses contained in a match. -/
 def foldHyps (f : σ → FVarId → σ) (init : σ) (m : ForwardRuleMatch) : σ :=
@@ -133,9 +115,9 @@ def foldHyps (f : σ → FVarId → σ) (init : σ) (m : ForwardRuleMatch) : σ 
 /-- Returns `true` if any hypothesis contained in `m` satisfies `f`. -/
 def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
   m.match.clusterMatches.any λ m =>
-    m.revElems.any λ
-      | .patInst .. => false
-      | .hyp hyp => f hyp
+    m.subst.toArray.any λ
+      | some (.fvar hyp) => f hyp
+      | _ => false
 
 /-- Get the hypotheses from the match whose types are propositions.  -/
 def getPropHyps (m : ForwardRuleMatch) : MetaM (Array FVarId) :=

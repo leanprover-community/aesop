@@ -36,16 +36,14 @@ end MatchElem
 /-- A match associates hypotheses to (a prefix of) the slots of a slot
 cluster. -/
 structure Match where
-  /-- Hyps or pattern instantiations for each slot, in reverse order.
-  If there are `n` slots, the `i`th element in `revHyps` is the hyp or pattern
-  instantiation associated with the slot with index `n - i`. -/
-  -- TODO why do we even collect these? Isn't the substitution enough?
-  revElems : List MatchElem
-  /-- The substitution induced by the assignment of the hyps in `hyps` to the
-  rule's slots (or, for rule pattern slots, by the pattern instantiation). -/
+  /-- The substitution induced by the hyps or pattern instantiations added to
+  the slots. -/
   subst : Substitution
-  /-- The match's level is the maximal slot index that has a corresponding
-  element in `revElems`. -/
+  /-- The substitutions corresponding to pattern instantiations that have been
+  added to the match. -/
+  patInstSubsts : Array Substitution
+  /-- The match's level is the index of the maximal slot for which a hyp or
+  pattern instantiation has been added to the match. -/
   level : SlotIndex
   /-- Premises that appear in slots which are as yet unassigned in this match
   (i.e., in slots with index greater than `level`). This is a property of the
@@ -91,10 +89,7 @@ instance : Hashable Match where
     m.conclusionDeps.foldl (init := h) λ h p => mixHash h $ hash (m.subst.find? p)
 
 instance : ToMessageData Match where
-  toMessageData m := toMessageData $
-    m.revElems.reverse.map λ
-      | .hyp fvarId => m!"{Expr.fvar fvarId}"
-      | .patInst subst => m!"<pattern inst {subst}>"
+  toMessageData m := m!"{m.subst}"
 
 end Match
 
