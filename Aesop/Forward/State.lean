@@ -90,7 +90,7 @@ instance : ToMessageData InstMap where
                 match h.fvarId? with
                 | none => hs.push m!"{h.subst}"
                 | some fvarId => hs.push m!"{Expr.fvar fvarId}"
-            (ppPHashSet ms, hs)
+            m!"{(ppPHashSet ms, hs)}"
 
 /-- Returns the set of matches and hypotheses associated with a slot `slot`
 with instantiation `inst`. -/

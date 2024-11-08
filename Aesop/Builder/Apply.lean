@@ -34,7 +34,7 @@ def checkNoIff (type : Expr) : MetaM Unit := do
   if aesop.warn.applyIff.get (← getOptions) then
     forallTelescope type λ _ conclusion => do
       if ← testHelper conclusion λ e => return e.isAppOf' ``Iff then
-        logWarning m!"Apply builder was used for a theorem with conclusion A ↔ B. You probably want to use the simp builder.\nUse `set_option aesop.warn.applyIff false` to disable this warning."
+        logWarning m!"Apply builder was used for a theorem with conclusion A ↔ B.\nYou probably want to use the simp builder or create an alias that applies the theorem in one direction.\nUse `set_option aesop.warn.applyIff false` to disable this warning."
 
 def applyCore (t : ElabRuleTerm) (pat? : Option RulePattern)
     (imode? : Option IndexingMode) (md indexMd : TransparencyMode)

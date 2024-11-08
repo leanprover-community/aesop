@@ -9,7 +9,6 @@ import Aesop.Util.Tactic.Ext
 import Aesop.Util.Tactic.Unfold
 import Aesop.Script.CtorNames
 import Aesop.Script.ScriptM
-import Batteries.Lean.Meta.Clear
 import Batteries.Lean.Meta.Inaccessible
 
 open Lean
@@ -140,11 +139,11 @@ private def simpAllOrSimpAtStarStx [Monad m] [MonadQuotation m] (simpAll : Bool)
   if simpAll then
     match configStx? with
     | none => `(tactic| simp_all)
-    | some cfg => `(tactic| simp_all (config := $cfg))
+    | some cfg => `(tactic| simp_all ($(mkIdent `config):ident := $cfg))
   else
     match configStx? with
     | none => `(tactic| simp at *)
-    | some cfg => `(tactic| simp (config := $cfg) at *)
+    | some cfg => `(tactic| simp ($(mkIdent `config):ident := $cfg) at *)
 
 private def simpAllOrSimpAtStarOnlyStx (simpAll : Bool) (inGoal : MVarId)
     (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
@@ -181,14 +180,14 @@ def simpAllOrSimpAtStar (simpAll : Bool) (inGoal : MVarId)
         return (map.insert origin thm, size + 1)
   let stx ←
     match ← simpAllOrSimpAtStarOnlyStx simpAll inGoal configStx? { map, size } with
-    | `(tactic| simp_all $[$cfg:config]? only [$lems,*]) =>
-      `(tactic| simp_all $[$cfg]? [$lems,*])
-    | `(tactic| simp $[$cfg:config]? only [$lems,*] at *) =>
-      `(tactic| simp $[$cfg]? [$lems,*] at *)
-    | `(tactic| simp_all $[$cfg:config]? only) =>
-      `(tactic| simp_all $[$cfg]?)
-    | `(tactic| simp $[$cfg:config]? only at *) =>
-      `(tactic| simp $[$cfg]? at *)
+    | `(tactic| simp_all $cfg:optConfig only [$lems,*]) =>
+      `(tactic| simp_all $cfg:optConfig [$lems,*])
+    | `(tactic| simp $cfg:optConfig only [$lems,*] at *) =>
+      `(tactic| simp $cfg:optConfig [$lems,*] at *)
+    | `(tactic| simp_all $cfg:optConfig only) =>
+      `(tactic| simp_all $cfg:optConfig)
+    | `(tactic| simp $cfg:optConfig only at *) =>
+      `(tactic| simp $cfg:optConfig at *)
     | stx => throwError "simp tactic builder: unexpected syntax:{indentD stx}"
   return .unstructured ⟨stx⟩
 

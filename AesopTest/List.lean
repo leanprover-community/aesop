@@ -94,10 +94,6 @@ theorem mem_none : a ∈ none ↔ False := by
   aesop
 
 @[simp]
-theorem mem_some : a ∈ some b ↔ a = b := by
-  aesop
-
-@[simp]
 def iget [Inhabited α] : Option α → α
   | none => default
   | some a => a
@@ -110,7 +106,7 @@ namespace List
 -- is not particularly helpful for this file.
 attribute [-aesop] Aesop.BuiltinRules.ext
 
-attribute [simp] map List.bind
+attribute [simp] map List.flatMap
 
 instance : Pure List where
   pure x := [x]
@@ -318,43 +314,43 @@ theorem X.forall_mem_map_iff {f : α → β} {l : List α} {P : β → Prop} :
   (∀ i, i ∈ l.map f → P i) ↔ ∀ j, j ∈ l → P (f j) := by
   aesop
 
-attribute [-simp] map_eq_nil
+-- attribute [-simp] map_eq_nil
 @[simp] theorem X.map_eq_nil {f : α → β} {l : List α} : map f l = [] ↔ l = [] := by
   aesop (add 1% cases List)
 
--- attribute [-simp] mem_join
-@[simp] theorem X.mem_join {a : α} : ∀ {L : List (List α)}, a ∈ join L ↔ ∃ l, l ∈ L ∧ a ∈ l := by
+attribute [-simp] mem_flatten
+@[simp] theorem X.mem_flatten {a : α} : ∀ {L : List (List α)}, a ∈ flatten L ↔ ∃ l, l ∈ L ∧ a ∈ l := by
   intro L; induction L <;> aesop
 
--- attribute [-simp] exists_of_mem_join
-theorem X.exists_of_mem_join {a : α} {L : List (List α)} : a ∈ join L → ∃ l, l ∈ L ∧ a ∈ l := by
+-- attribute [-simp] exists_of_mem_flatten
+theorem X.exists_of_mem_flatten {a : α} {L : List (List α)} : a ∈ flatten L → ∃ l, l ∈ L ∧ a ∈ l := by
   aesop
 
--- attribute [-simp] mem_join_of_mem
-theorem X.mem_join_of_mem {a : α} {L : List (List α)} {l} (lL : l ∈ L) (al : a ∈ l) : a ∈ join L := by
+-- attribute [-simp] mem_flatten_of_mem
+theorem X.mem_flatten_of_mem {a : α} {L : List (List α)} {l} (lL : l ∈ L) (al : a ∈ l) : a ∈ flatten L := by
   aesop
 
--- attribute [-simp] mem_bind
-@[simp] theorem X.mem_bind {b : β} {l : List α} {f : α → List β} : b ∈ l.bind f ↔ ∃ a, a ∈ l ∧ b ∈ f a := by
+-- attribute [-simp] mem_flatMap
+@[simp] theorem X.mem_flatMap {b : β} {l : List α} {f : α → List β} : b ∈ l.flatMap f ↔ ∃ a, a ∈ l ∧ b ∈ f a := by
   induction l <;> aesop
 
--- attribute [-simp] exists_of_mem_bind
-theorem X.exists_of_mem_bind {l : List α} :
-    b ∈ l.bind f → ∃ a, a ∈ l ∧ b ∈ f a := by
+-- attribute [-simp] exists_of_mem_flatMap
+theorem X.exists_of_mem_flatMap {l : List α} :
+    b ∈ l.flatMap f → ∃ a, a ∈ l ∧ b ∈ f a := by
   aesop
 
--- attribute [-simp] mem_bind_of_mem
-theorem X.mem_bind_of_mem {l : List α} :
-    (∃ a, a ∈ l ∧ b ∈ f a) → b ∈ l.bind f := by
+-- attribute [-simp] mem_flatMap_of_mem
+theorem X.mem_flatMap_of_mem {l : List α} :
+    (∃ a, a ∈ l ∧ b ∈ f a) → b ∈ l.flatMap f := by
   induction l <;> aesop
 
--- attribute [-simp] bind_map
-theorem X.bind_map {g : α → List β} {f : β → γ} :
-  ∀ l : List α, map f (l.bind g) = l.bind (λa => (g a).map f) := by
+-- attribute [-simp] flatMap_map
+theorem X.flatMap_map {g : α → List β} {f : β → γ} :
+  ∀ l : List α, map f (l.flatMap g) = l.flatMap (λa => (g a).map f) := by
   intro l; induction l <;> aesop
 
-theorem map_bind' (g : β → List γ) (f : α → β) :
-  ∀ l : List α, (map f l).bind g = l.bind (λ a => g (f a)) := by
+theorem map_flatMap' (g : β → List γ) (f : α → β) :
+  ∀ l : List α, (map f l).flatMap g = l.flatMap (λ a => g (f a)) := by
   intro l; induction l <;> aesop
 
 -- theorem range_map (f : α → β) : set.range (map f) = {l | ∀ x ∈ l, x ∈ set.range f} :=
@@ -548,14 +544,17 @@ attribute [-simp] append_eq_nil
 @[simp] theorem X.append_eq_nil {p q : List α} : (p ++ q) = [] ↔ p = [] ∧ q = [] := by
   aesop (add 1% cases List)
 
-@[simp] theorem nil_eq_append_iff {a b : List α} : [] = a ++ b ↔ a = [] ∧ b = [] := by
+-- attribute [-simp] nil_eq_append_iff
+@[simp] theorem X.nil_eq_append_iff {a b : List α} : [] = a ++ b ↔ a = [] ∧ b = [] := by
   induction a <;> aesop
 
-theorem append_eq_cons_iff {a b c : List α} {x : α} :
+-- attribute [-simp] append_eq_cons_iff
+theorem X.append_eq_cons_iff {a b c : List α} {x : α} :
   a ++ b = x :: c ↔ (a = [] ∧ b = x :: c) ∨ (∃a', a = x :: a' ∧ c = a' ++ b) := by
   aesop (add 1% cases List)
 
-theorem cons_eq_append_iff {a b c : List α} {x : α} :
+-- attribute [-simp] cons_eq_append_iff
+theorem X.cons_eq_append_iff {a b c : List α} {x : α} :
     (x :: c : List α) = a ++ b ↔ (a = [] ∧ b = x :: c) ∨ (∃a', a = x :: a' ∧ c = a' ++ b) := by
   aesop (add norm simp [append_eq_cons_iff, eq_comm])
 
@@ -672,6 +671,8 @@ theorem replicate_subset_singleton (a : α) (n) : replicate n a ⊆ [a] := by
 theorem subset_singleton_iff {a : α} {L : List α} : L ⊆ [a] ↔ ∃ n, L = replicate n a :=
   ADMIT -- Nontrivial existential.
 
+attribute [-simp] map_const
+-- attribute [-simp] map_const'
 @[simp] theorem map_const'' (l : List α) (b : β) : map (λ _ => b) l = replicate l.length b := by
   induction l <;> aesop
 
@@ -679,13 +680,16 @@ theorem eq_of_mem_map_const {b₁ b₂ : β} {l : List α} (h : b₁ ∈ map (λ
   b₁ = b₂ := by
   aesop
 
+attribute [-simp] map_replicate
 @[simp] theorem map_replicate' (f : α → β) (a : α) (n) : map f (replicate n a) = replicate n (f a) := by
   induction n <;> aesop
 
+attribute [-simp] tail_replicate
 @[simp] theorem tail_replicate' (a : α) (n) : tail (replicate n a) = replicate n.pred a := by
   aesop (add 1% cases Nat)
 
-@[simp] theorem join_replicate_nil' (n : Nat) : join (replicate n []) = @nil α := by
+attribute [-simp] flatten_replicate_nil
+@[simp] theorem flatten_replicate_nil' (n : Nat) : flatten (replicate n []) = @nil α := by
   induction n <;> aesop
 
 theorem replicate_left_injective {n : Nat} (hn : n ≠ 0) :
@@ -707,39 +711,39 @@ theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) :
 
 /-! ### pure -/
 
-@[simp]
-theorem mem_pure {α} (x y : α) :
+@[simp] theorem mem_pure {α} (x y : α) :
     x ∈ (pure y : List α) ↔ x = y := by
   aesop (add norm simp pure)
 
-/-! ### bind -/
+/-! ### flatMap -/
 
 instance : Bind List where
-  bind l f := List.bind l f
+  bind l f := List.flatMap l f
 
-@[simp] theorem bind_eq_bind {α β} (f : α → List β) (l : List α) :
-    l >>= f = l.bind f := rfl
+@[simp] theorem bind_eq_flatMap {α β} (f : α → List β) (l : List α) :
+    l >>= f = l.flatMap f := rfl
 
-attribute [-simp] bind_append
-theorem X.bind_append (f : α → List β) (l₁ l₂ : List α) :
-  (l₁ ++ l₂).bind f = l₁.bind f ++ l₂.bind f := by
+attribute [-simp] flatMap_append
+theorem X.flatMap_append (f : α → List β) (l₁ l₂ : List α) :
+  (l₁ ++ l₂).flatMap f = l₁.flatMap f ++ l₂.flatMap f := by
   induction l₁ <;> aesop
 
-@[simp] theorem bind_singleton'' (f : α → List β) (x : α) : [x].bind f = f x := by
+attribute [-simp] flatMap_singleton'
+@[simp] theorem X.flatMap_singleton' (f : α → List β) (x : α) : [x].flatMap f = f x := by
   aesop
 
-@[simp] theorem bind_singleton''' (l : List α) : l.bind (λ x => [x]) = l := by
+@[simp] theorem X.flatMap_singleton'' (l : List α) : l.flatMap (λ x => [x]) = l := by
   induction l <;> aesop
 
-theorem map_eq_bind' {α β} (f : α → β) (l : List α) : map f l = l.bind (λ x => [f x]) := by
+theorem map_eq_flatMap' {α β} (f : α → β) (l : List α) : map f l = l.flatMap (λ x => [f x]) := by
   induction l <;> aesop
 
-theorem bind_assoc' {α β γ : Type u} (l : List α) (f : α → List β) (g : β → List γ) :
-    (l.bind f).bind g = l.bind (λ x => (f x).bind g) :=
+theorem flatMap_assoc' {α β γ : Type u} (l : List α) (f : α → List β) (g : β → List γ) :
+    (l.flatMap f).flatMap g = l.flatMap (λ x => (f x).flatMap g) :=
   ADMIT
-  -- have aux {δ : Type u} (xs ys : List (List δ)) : join (xs ++ ys) = join xs ++ join ys := by
+  -- have aux {δ : Type u} (xs ys : List (List δ)) : flatten (xs ++ ys) = flatten xs ++ flatten ys := by
   --   induction xs <;> aesop
-  -- induction l <;> aesop (add norm [simp [bind_append], unfold [bind]])
+  -- induction l <;> aesop (add norm [simp [flatMap_append], unfold [flatMap]])
 
 /-! ### concat -/
 
@@ -771,6 +775,7 @@ attribute [simp] append_assoc
 theorem X.concat_append (a : α) (l₁ l₂ : List α) : concat l₁ a ++ l₂ = l₁ ++ a :: l₂ := by
   aesop
 
+-- attribute [-simp] length_concat
 theorem X.length_concat (a : α) (l : List α) : length (concat l a) = .succ (length l) := by
   aesop
 
@@ -791,9 +796,8 @@ attribute [-simp] reverse_cons
   -- aesop (add norm unfold reverse)
 
 -- Note: reverse_core is called reverseAux in Lean 4.
--- attribute [-simp] reverseAux_eq
-@[simp]
-theorem reverse_core_eq (l₁ l₂ : List α) : reverseAux l₁ l₂ = reverse l₁ ++ l₂ := by
+attribute [-simp] reverseAux_eq
+@[simp] theorem X.reverseAux_eq (l₁ l₂ : List α) : reverseAux l₁ l₂ = reverse l₁ ++ l₂ := by
   induction l₁ generalizing l₂ <;> aesop
 
 theorem reverse_cons' (a : α) (l : List α) : reverse (a::l) = concat (reverse l) a := by
@@ -802,9 +806,10 @@ theorem reverse_cons' (a : α) (l : List α) : reverse (a::l) = concat (reverse 
 @[simp] theorem reverse_singleton (a : α) : reverse [a] = [a] := rfl
 
 -- TODO: after nightly-2024-08-27, `aesop` can not prove this anymore!
--- attribute [-simp] reverse_append in
--- @[simp] theorem X.reverse_append (s t : List α) : reverse (s ++ t) = (reverse t) ++ (reverse s) := by
---   induction s <;> aesop
+attribute [-simp] reverse_append in
+@[simp] theorem X.reverse_append (s t : List α) : reverse (s ++ t) = (reverse t) ++ (reverse s) :=
+  ADMIT
+  -- induction s <;> aesop
 
 -- attribute [-simp] reverse_concat
 theorem X.reverse_concat (l : List α) (a : α) : reverse (concat l a) = a :: reverse l := by
@@ -916,90 +921,88 @@ theorem last_replicate_succ (a m : Nat) :
   a := by
   induction m <;> aesop
 
-/-! ### last' -/
+/-! ### getLast? -/
 
-section last'
-set_option linter.deprecated false
--- TODO `last'` has been deprecated in favour of `getLast?`
--- unfortunately a simple replacement breaks the tests below.
+section getLast?
 
-@[simp] theorem last'_is_none :
+@[simp] theorem getLast?_is_none :
   ∀ {l : List α}, (getLast? l).isNone ↔ l = []
   | [] => by aesop
   | [a] => by aesop
   | a :: a' :: as => by
-    have ih := last'_is_none (l := a' :: as)
+    have ih := getLast?_is_none (l := a' :: as)
     aesop
 
-@[simp] theorem last'_is_some : ∀ {l : List α}, l.last'.isSome ↔ l ≠ []
+@[simp] theorem getLast?_is_some : ∀ {l : List α}, l.getLast?.isSome ↔ l ≠ []
   | [] => by aesop
   | [a] => by aesop
   | a :: a' :: as => by
-    have ih := last'_is_some (l := a' :: as)
+    have ih := getLast?_is_some (l := a' :: as)
     aesop
 
-theorem mem_last'_eq_last : ∀ {l : List α} {x : α}, x ∈ l.last' → ∃ h, x = last l h
+theorem mem_getLast?_eq_last : ∀ {l : List α} {x : α}, x ∈ l.getLast? → ∃ h, x = last l h
   | [], _, h => by aesop
   | [_], _, h => by aesop
   | a :: a' :: as, x, h => by
-    have ih := mem_last'_eq_last (l := a' :: as) (x := x)
-    aesop (add norm simp last')
+    have ih := mem_getLast?_eq_last (l := a' :: as) (x := x)
+    aesop (add norm simp getLast?)
 
-theorem last'_eq_last_of_ne_nil : ∀ {l : List α} (h : l ≠ []), l.last' = some (l.last h)
+theorem getLast?_eq_last_of_ne_nil : ∀ {l : List α} (h : l ≠ []), l.getLast? = some (l.last h)
   | [], h => by aesop
   | [a], _ => by aesop
   | _ :: b :: l, _ => by
-    have ih := last'_eq_last_of_ne_nil (l := b :: l)
+    have ih := getLast?_eq_last_of_ne_nil (l := b :: l)
     aesop
 
-theorem mem_last'_cons {x y : α} : ∀ {l : List α} (_ : x ∈ l.last'), x ∈ (y :: l).last' := by
+theorem mem_getLast?_cons {x y : α} : ∀ {l : List α} (_ : x ∈ l.getLast?), x ∈ (y :: l).getLast? := by
   intro l; induction l <;> aesop
 
-theorem mem_of_mem_last' {l : List α} {a : α} (ha : a ∈ l.last') : a ∈ l := by
+-- attribute [-simp] mem_of_mem_getLast?
+theorem X.mem_of_mem_getLast? {l : List α} {a : α} (ha : a ∈ l.getLast?) : a ∈ l := by
   match l with
   | [] => aesop
   | [_] => aesop
   | x :: y :: zs =>
-    have ih := mem_of_mem_last' (l := y :: zs) (a := a)
+    have ih := X.mem_of_mem_getLast? (l := y :: zs) (a := a)
     aesop
 
-theorem init_append_last' : ∀ {l : List α} {a}, a ∈ l.last' → init l ++ [a] = l
+theorem init_append_getLast? : ∀ {l : List α} {a}, a ∈ l.getLast? → init l ++ [a] = l
   | [], _ => by aesop
   | [_], _ => by aesop
   | x :: y :: zs, a => by
-    have ih := init_append_last' (l := y :: zs) (a := a)
+    have ih := init_append_getLast? (l := y :: zs) (a := a)
     aesop (add norm simp init)
 
-theorem ilast_eq_last' [Inhabited α] : ∀ l : List α, l.ilast = l.last'.iget
+theorem ilast_eq_getLast? [Inhabited α] : ∀ l : List α, l.ilast = l.getLast?.iget
   | [] => by aesop
   | [a] => by aesop
   | [_, _] => by aesop
   | [_, _, _] => by aesop
   | (_ :: _ :: c :: l) => by
-    have ih := ilast_eq_last' (c :: l)
+    have ih := ilast_eq_getLast? (c :: l)
     aesop
 
-@[simp] theorem last'_append_cons : ∀ (l₁ : List α) (a : α) (l₂ : List α),
-  last' (l₁ ++ a :: l₂) = last' (a :: l₂)
+@[simp] theorem getLast?_append_cons : ∀ (l₁ : List α) (a : α) (l₂ : List α),
+  getLast? (l₁ ++ a :: l₂) = getLast? (a :: l₂)
   | [], a, l₂ => by aesop
   | [_], a, l₂ => by aesop
   | _ :: c :: l₁, a, l₂ =>
-    have ih := last'_append_cons (c :: l₁) a
+    have ih := getLast?_append_cons (c :: l₁) a
     by aesop
 
 @[simp] theorem getLast?_cons_cons' (x y : α) (l : List α) :
   getLast? (x :: y :: l) = getLast? (y :: l) := rfl
 
-theorem last'_append_of_ne_nil (l₁ : List α) : ∀ {l₂ : List α} (_ : l₂ ≠ []),
-  last' (l₁ ++ l₂) = last' l₂
+theorem getLast?_append_of_ne_nil (l₁ : List α) : ∀ {l₂ : List α} (_ : l₂ ≠ []),
+  getLast? (l₁ ++ l₂) = getLast? l₂
   | [], hl₂ => by aesop
   | b :: l₂, _ => by aesop
 
-theorem last'_append {l₁ l₂ : List α} {x : α} (h : x ∈ l₂.last') :
-  x ∈ (l₁ ++ l₂).last' := by
+theorem getLast?_append' {l₁ l₂ : List α} {x : α} (h : x ∈ l₂.getLast?) :
+  x ∈ (l₁ ++ l₂).getLast? := by
   aesop (add 1% cases List)
 
-end last'
+end getLast?
 
 /-! ### head(') and tail -/
 

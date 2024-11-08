@@ -3,7 +3,6 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-import Batteries.Data.Array.Basic
 import Batteries.Data.Array.Merge
 import Lean.Message
 
@@ -92,7 +91,7 @@ def foldM [Monad m] (f : σ → α → m σ) (init : σ) (s : UnorderedArraySet 
   s.rep.foldlM f init
 
 instance : ForIn m (UnorderedArraySet α) α where
-  forIn s := s.rep.forIn
+  forIn s := forIn s.rep
 
 /-- O(n) -/
 def fold (f : σ → α → σ) (init : σ) (s : UnorderedArraySet α) : σ :=
@@ -130,9 +129,6 @@ def allM [Monad m] (p : α → m Bool) (s : UnorderedArraySet α) (start := 0)
 def all (p : α → Bool) (s : UnorderedArraySet α) (start := 0) (stop := s.size) :
     Bool :=
   s.rep.all p start stop
-
-instance : BEq (UnorderedArraySet α) where
-  beq s t := s.rep.equalSet t.rep
 
 instance [ToString α] : ToString (UnorderedArraySet α) where
   toString s := toString s.rep
