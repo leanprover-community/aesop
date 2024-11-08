@@ -61,6 +61,10 @@ containing `fvarId`. -/
 def containsHyp (fvarId : FVarId) (h : Hyp) : Bool :=
   h.fvarId? == some fvarId || h.subst.containsHyp fvarId
 
+/-- Does this `Hyp` represent a pattern instantiation? -/
+def isPatInst (h : Hyp) : Bool :=
+  h.fvarId?.isSome
+
 end Hyp
 
 set_option linter.missingDocs false in
@@ -387,7 +391,7 @@ partial def addMatchCore (newCompleteMatches : Array Match) (cs : ClusterState)
     cs := { cs with variableMap := vmap }
     let mut newCompleteMatches := newCompleteMatches
     for hyp in cs.variableMap.findHyps nextSlot m.subst do
-      let m := m.addHypOrPatternInst hyp.fvarId? hyp.subst nextSlot.forwardDeps
+      let m := m.addHypOrPatternInst hyp.subst hyp.isPatInst nextSlot.forwardDeps
       let (cs', newCompleteMatches') ← cs.addMatchCore newCompleteMatches m
       cs := cs'
       newCompleteMatches := newCompleteMatches'
@@ -404,7 +408,7 @@ def addHypCore (newCompleteMatches : Array Match) (cs : ClusterState)
   aesop_trace[forward] "add {match h.fvarId? with | none => m!"pattern instantiation" | some fvarId => m!"hyp {Expr.fvar fvarId}"} for slot {slot.index} with substitution {h.subst}"
   if slot.index.toNat == 0 then
     let m :=
-      Match.initial h.fvarId? h.subst (forwardDeps := slot.forwardDeps)
+      Match.initial h.subst h.isPatInst (forwardDeps := slot.forwardDeps)
         (conclusionDeps := cs.conclusionDeps)
     cs.addMatchCore newCompleteMatches m
   else
@@ -415,7 +419,7 @@ def addHypCore (newCompleteMatches : Array Match) (cs : ClusterState)
     let mut cs := { cs with variableMap := vmap }
     let mut newCompleteMatches := newCompleteMatches
     for pm in cs.variableMap.findMatches slot h.subst do
-      let m := pm.addHypOrPatternInst h.fvarId? h.subst slot.forwardDeps
+      let m := pm.addHypOrPatternInst h.subst h.isPatInst slot.forwardDeps
       let (cs', newCompleteMatches') ← cs.addMatchCore newCompleteMatches m
       cs := cs'
       newCompleteMatches := newCompleteMatches'
