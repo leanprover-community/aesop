@@ -377,7 +377,7 @@ def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleFilter) :
       if SimpTheorems.containsDecl simpTheorems decl then
         let origin := .decl decl (inv := false)
         simpTheoremsArray' :=
-          ⟨simpTheoremsArray'.fst.set ⟨i, i_valid⟩
+          ⟨simpTheoremsArray'.fst.set i
             (name, simpTheorems.eraseCore origin),
            by simp [simpTheoremsArray'.snd, Array.size_set]⟩
         anyErased := true
