@@ -398,7 +398,7 @@ Currently available builders are:
 - **`apply`**: generates a rule which acts like the `apply` tactic.
 - **`forward`**: when applied to a term of type `A₁ → ... Aₙ → B`, generates a
   rule which looks for hypotheses `h₁ : A₁`, ..., `hₙ : Aₙ` in the goal and, if
-  they are found, adds a new hypothesis `h : B`. As an example, consider the
+  they are found, adds a new hypothesis `fwd : B`. As an example, consider the
   lemma `even_or_odd`:
 
   ```lean
@@ -438,17 +438,12 @@ Currently available builders are:
   except for instance arguments and dependent arguments (i.e. those that can be
   inferred from the types of later arguments).
 
-  When a forward rule is successful, Aesop remembers the type of the hypothesis
-  added by the rule, say `T`. If a forward rule (possibly the same one) is
-  subsequently applied to a subgoal and wants to add another hypothesis of type
-  `T`, this is forbidden and the rule fails. Without this restriction, forward
-  rules would in many cases be applied infinitely often. However, note that the
-  rule is still executed on its own subgoals (and their subgoals, etc.), which
-  can become a performance issue. You should therefore prefer `destruct` rules
-  where possible.
+  A forward rules will never add a hypothesis to the context if another
+  hypothesis of the same type already exists.
 - **`destruct`**: works like `forward`, but after the rule has been applied,
-  hypotheses that were used as immediate arguments are cleared. This is useful
-  when you want to eliminate a hypothesis. E.g. the rule
+  propositional hypotheses (i.e., hypotheses whose types are `Prop`s) that were
+  used as immediate arguments are cleared. This is useful when you want to
+  eliminate a hypothesis. E.g. the rule
   ```
   @[aesop norm destruct]
   theorem and_elim_right : α ∧ β → α := ...
@@ -464,14 +459,10 @@ Currently available builders are:
   h₂ : δ
   ```
 
-  Unlike with `forward` rules, when an `destruct` rule is successfully applied,
-  it may be applied again to the resulting subgoals (and their subgoals, etc.).
-  There is less danger of infinite cycles because the original hypothesis is
-  cleared.
-
-  However, if the hypothesis or hypotheses to which the `destruct` rule is
-  applied have dependencies, they are not cleared. In this case, you'll probably
-  get an infinite cycle.
+  If a hypothesis `h` is used as an immediate argument for a `destruct` rule
+  and another hypothesis `h'` depends on `h`, but is not also an immediate
+  argument for the same rule, then `h` is not cleared. This is because we can't
+  clear `h` without also clearing `h'`.
 - **`constructors`**: when applied to an inductive type or structure `T`,
   generates a rule which tries to apply each constructor of `T` to the target.
   This is a multi-rule, so if multiple constructors apply, they are considered
@@ -536,11 +527,11 @@ Currently available builders are:
 
 #### Transparency Options
 
-The rule builders `apply`, `forward`, `destruct`, `constructors` and `cases`
-each have a `transparency` option. This option controls the transparency at
-which the rule is executed. For example, registering a rule with the builder
-`apply (transparency := reducible)` makes the rule act like the tactic
-`with_reducible apply`.
+The rule builders `apply`, `constructors` and `cases` each have a
+`transparency` option. This option controls the transparency at which the rule
+is executed. For example, registering a rule with the builder `apply
+(transparency := reducible)` makes the rule act like the tactic `with_reducible
+apply`.
 
 However, even if you change the transparency of a rule, it is still indexed at
 `reducible` transparency (since the data structure we use for indexing only
