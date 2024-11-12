@@ -117,7 +117,7 @@ private partial def filterTrieM [Monad m] [Inhabited σ] (f : σ → α → m σ
       if h : i < children.size then
         let (key, t) := children[i]'h
         let (t, acc) ← filterTrieM f p acc t
-        go acc (i + 1) (children.set ⟨i, h⟩ (key, t))
+        go acc (i + 1) (children.set i (key, t))
       else
         return (children, acc)
 
