@@ -383,7 +383,7 @@ def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleFilter) :
         anyErased := true
   let simpTheoremsArray := simpTheoremsArray'.fst
   let simpTheoremsArrayNonempty : 0 < simpTheoremsArray.size := by
-    simp [simpTheoremsArray'.snd, rs.simpTheoremsArrayNonempty]
+    simp -index only [simpTheoremsArray'.snd, rs.simpTheoremsArrayNonempty]
   let rs := { rs with
     localNormSimpRules, simpTheoremsArray, simpTheoremsArrayNonempty
   }
