@@ -7,9 +7,8 @@ Authors: Jannis Limperg, Kaiyu Yang
 import Aesop.RuleTac.Basic
 import Aesop.Script.Step
 
-open Lean
-open Lean.Meta
-open Lean.Elab.Tactic (TacticM evalTactic run)
+open Lean Lean.Meta Lean.Elab.Tactic
+open Lean.Elab.Tactic (TacticM evalTactic withoutRecover)
 
 namespace Aesop.RuleTac
 
@@ -17,7 +16,7 @@ namespace Aesop.RuleTac
 unsafe def tacticMImpl (decl : Name) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
     let tac ← evalConst (TacticM Unit) decl
-    let goals ← run input.goal tac |>.run'
+    let goals ← Elab.Tactic.run input.goal tac |>.run'
     let goals ← goals.mapM (mvarIdToSubgoal (parentMVarId := input.goal) · ∅)
     return (goals.toArray, none, none)
 
@@ -51,7 +50,8 @@ kind `tactic` or `tacticSeq`.
 def tacticStx (stx : Syntax) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
     let preState ← saveState
-    let postGoals := (← run input.goal (evalTactic stx) |>.run').toArray
+    let tac := withoutRecover $ evalTactic stx
+    let postGoals := (← Elab.Tactic.run input.goal tac |>.run').toArray
     let postState ← saveState
     let tacticBuilder : Script.TacticBuilder := do
       if stx.isOfKind `tactic then

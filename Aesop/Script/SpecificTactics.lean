@@ -139,11 +139,11 @@ private def simpAllOrSimpAtStarStx [Monad m] [MonadQuotation m] (simpAll : Bool)
   if simpAll then
     match configStx? with
     | none => `(tactic| simp_all)
-    | some cfg => `(tactic| simp_all (config := $cfg))
+    | some cfg => `(tactic| simp_all ($(mkIdent `config):ident := $cfg))
   else
     match configStx? with
     | none => `(tactic| simp at *)
-    | some cfg => `(tactic| simp (config := $cfg) at *)
+    | some cfg => `(tactic| simp ($(mkIdent `config):ident := $cfg) at *)
 
 private def simpAllOrSimpAtStarOnlyStx (simpAll : Bool) (inGoal : MVarId)
     (configStx? : Option Term) (usedTheorems : Simp.UsedSimps) :
