@@ -71,6 +71,10 @@ initialize forward : TraceOption ←
   registerTraceOption `forward
     "(aesop) Trace forward reasoning."
 
+initialize forwardDebug : TraceOption ←
+  registerTraceOption `forward.debug
+    "(aesop) Trace more information about forward reasoning. Mostly intended for performance analysis."
+
 end TraceOption
 
 section

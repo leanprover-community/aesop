@@ -14,7 +14,8 @@ set_option linter.missingDocs true
 namespace Aesop
 
 variable [Monad M] [MonadTrace M] [MonadOptions M] [MonadRef M]
-  [AddMessageContext M] [MonadLiftT IO M]
+  [AddMessageContext M] [MonadLiftT IO M] [MonadLiftT BaseIO M]
+  [MonadAlwaysExcept Exception M]
 
 private def ppPHashMap [BEq α] [Hashable α] [ToMessageData α]
     [ToMessageData β] (indent : Bool) (m : PHashMap α β) : MessageData :=
@@ -345,28 +346,37 @@ def matchPremise? (premises : Array MVarId) (numPremiseIndexes : Nat)
   let inputHypType ← slotPremise.getType
   let hypType ← hyp.getType
   withAesopTraceNodeBefore .forward (return m!"match against premise {premiseIdx}: {hypType} ≟ {inputHypType}") do
-    if ← isDefEq inputHypType hypType then
+    let isDefEq ←
+      withConstAesopTraceNode .forwardDebug (return m!"defeq check") do
+        isDefEq inputHypType hypType
+    if isDefEq then
       /- Note: This was over `slot.common` and not `slot.deps`. We need `slot.deps`
       because, among other issues, `slot.common` is empty in the first slot. Even though
       we don't have dependencies, we still need to keep track of the subs of hyp.
       Otherwise, we would trigger the first panic in `AddHypothesis`.-/
       let mut subst : Substitution := .empty numPremiseIndexes
       for var in slot.deps do
-        let some varMVarId := premises[var.toNat]?
-          | throwError "aesop: internal error: matchPremise?: dependency with index {var}, but only {premises.size} premises"
-        let mvar := .mvar varMVarId
-        let assignment ← instantiateMVars mvar
-        if assignment == mvar then
-          throwError "aesop: internal error: matchPremise?: while matching hyp {hyp.name}: no assignment for variable {var}"
-        if ← hasAssignableMVar assignment then
-          throwError "aesop: internal error: matchPremise?: assignment has mvar:{indentExpr assignment}"
-        let assignment ← withReducible $ reduceAll assignment
-        subst := subst.insert var assignment
+        subst ← updateSubst premises var subst
       subst := subst.insert slot.premiseIndex (.fvar hyp)
       aesop_trace[forward] "substitution: {subst}"
       return subst
     else
       return none
+where
+  updateSubst (premises : Array MVarId) (var : PremiseIndex)
+      (subst : Substitution) : MetaM Substitution :=
+    withConstAesopTraceNode .forwardDebug (return m!"update var {var}") do
+      let some varMVarId := premises[var.toNat]?
+        | throwError "aesop: internal error: matchPremise?: dependency with index {var}, but only {premises.size} premises"
+      let mvar := .mvar varMVarId
+      let assignment ← instantiateMVars mvar
+      if assignment == mvar then
+        throwError "aesop: internal error: matchPremise?: while matching hyp {hyp.name}: no assignment for variable {var}"
+      if ← hasAssignableMVar assignment then
+        throwError "aesop: internal error: matchPremise?: assignment has mvar:{indentExpr assignment}"
+      let assignment ← withConstAesopTraceNode .forwardDebug (return m!"reduction") do
+        withReducible $ reduceAll assignment
+      return subst.insert var assignment
 
 /-- Add a match to the cluster state. Returns the new cluster state and any new
 complete matches for this cluster. -/
@@ -405,7 +415,7 @@ def addMatch (cs : ClusterState) (m : Match) : M (ClusterState × Array Match) :
 that results from applying `h` to `slot`. -/
 def addHypCore (newCompleteMatches : Array Match) (cs : ClusterState)
     (slot : Slot) (h : Hyp) : M (ClusterState × Array Match) := do
-  aesop_trace[forward] "add {match h.fvarId? with | none => m!"pattern instantiation" | some fvarId => m!"hyp {Expr.fvar fvarId}"} for slot {slot.index} with substitution {h.subst}"
+  withConstAesopTraceNode .forward (return m!"add hyp or pattern inst for slot {slot.index} with substitution {h.subst}") do
   if slot.index.toNat == 0 then
     let m :=
       Match.initial h.subst h.isPatInst (forwardDeps := slot.forwardDeps)
@@ -504,10 +514,14 @@ def addHypOrPatInst (goal : MVarId) (h : Sum FVarId Substitution)
     (pi : PremiseIndex) (rs : RuleState) :
     MetaM (RuleState × Array CompleteMatch) :=
   withNewMCtxDepth do
-    let some ruleExpr ← observing? $ elabForwardRuleTerm goal rs.rule.term
+    let some ruleExpr ←
+      withConstAesopTraceNode .forwardDebug (return m!"elab rule term") do
+        observing? $ elabForwardRuleTerm goal rs.rule.term
       | return (rs, #[])
     let (premises, _, _) ←
-      withReducible $ forallMetaTelescope (← inferType ruleExpr)
+      withConstAesopTraceNode .forwardDebug (return m!"open rule term") do
+      withReducible do
+        forallMetaTelescope (← inferType ruleExpr)
     if premises.size != rs.rule.numPremises then
       aesop_trace[forward] "failed to add hyp or pat inst:\n  rule term '{rs.rule.term}' does not have expected number of premises {rs.rule.numPremises}"
       return (rs, #[])
@@ -519,12 +533,15 @@ def addHypOrPatInst (goal : MVarId) (h : Sum FVarId Substitution)
       let cs := clusterStates[i]!
       let (cs, newCompleteMatches) ←
         match h with
-        | .inl h => cs.addHyp premises rs.rule.numPremiseIndexes pi h
+        | .inl h =>
+          withConstAesopTraceNode .forwardDebug (return m!"add hyp to cluster state {i}") do
+            cs.addHyp premises rs.rule.numPremiseIndexes pi h
         | .inr subst => cs.addPatInst pi subst
       clusterStates := clusterStates.set! i cs
-      completeMatches :=
-        completeMatches ++
-        getCompleteMatches clusterStates i newCompleteMatches
+      completeMatches ←
+        withConstAesopTraceNode .forwardDebug (return m!"construct new complete matches") do
+          return completeMatches ++
+                 getCompleteMatches clusterStates i newCompleteMatches
     return ({ rs with clusterStates }, completeMatches)
 where
   getCompleteMatches (clusterStates : Array ClusterState) (clusterIdx : Nat)
