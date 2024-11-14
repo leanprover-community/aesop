@@ -27,10 +27,7 @@ namespace Substitution
 /-- The empty substitution for a rule with the given number of premise
 indexes. -/
 def empty (numPremiseIndexes : Nat) : Substitution := Id.run do
-  let mut xs := Array.mkEmpty numPremiseIndexes
-  for _ in [:numPremiseIndexes] do
-    xs := xs.push none
-  return ⟨xs⟩
+  return ⟨mkArray numPremiseIndexes none⟩
 
 /-- Insert the mapping `pi ↦ inst` into the substitution `s`. Precondition: `pi`
 is in the domain of `s`. -/
