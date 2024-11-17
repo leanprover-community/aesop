@@ -78,11 +78,11 @@ open DiscrTree
 
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
 -- `n` stars).
-def getConclusionDiscrTreeKeys (type : Expr) (config : WhnfCoreConfig) :
+def getConclusionDiscrTreeKeys (type : Expr) (config : ConfigWithKey) :
     MetaM (Array Key) :=
   withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
-    mkPath conclusion config
+    withConfigWithKey config <| mkPath conclusion
     -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
     -- turn into `Key.star`) but not fvars.
 
