@@ -32,15 +32,15 @@ elab "test₁ " nPremises:num nLemmas:num " by " ts:tacticSeq : command => do
     | throwUnsupportedSyntax
   let mut pNames := Array.mkEmpty nPs
   for i in [:nPs] do
-    pNames := pNames.push (Name.mkSimple $ "P" ++ toString i)
+    pNames := pNames.push (Name.mkSimple $ "Bm" ++ toString nPs ++ "P" ++ toString i)
   -- Create `axiom Pi : SNat → Prop` for i ∈ [0..nPs - 1]
   for pName in pNames do
     elabCommand $ ← `(command| axiom $(mkIdent pName) : SNat → Prop)
   -- Create `axiom Q : Prop`
-  elabCommand $ ← `(command| axiom $(mkIdent `A) : SNat → SNat → Prop)
+  elabCommand $ ← `(command| axiom $(mkIdent $ .mkSimple $ "A" ++ toString nPs) : SNat → SNat → Prop)
   let binders : TSyntaxArray ``Term.bracketedBinder ←
     pNames.mapIdxM λ i pName => do
-      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident $(mkIdent `n)))
+      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "Bm" ++ toString nPs ++ "p" ++ toString i) : $(mkIdent pName):ident $(mkIdent `n)))
   let sig : Term ← `(∀ $(mkIdent `n) $binders:bracketedBinder*, True)
   --  ($(mkIdent $ .mkSimple $ "a") : $(mkIdent `A):ident $(mkIdent `n) $(mkIdent `n))
   -- Create `axiom li : ∀ n (p1 : P1 n) ... (pm : Pm n), Q → True` for
@@ -50,16 +50,16 @@ elab "test₁ " nPremises:num nLemmas:num " by " ts:tacticSeq : command => do
   for i in [:nLemmas] do
     elabCommand $ ← `(command|
       @[aesop safe forward]
-      axiom $(mkIdent $ .mkSimple $ "l" ++ toString i):ident : $sig:term
+      axiom $(mkIdent $ .mkSimple $ "Bm" ++ toString nPs ++ "l" ++ toString i):ident : $sig:term
     )
   let binders : TSyntaxArray ``Term.bracketedBinder ←
     --pNames.mapIdxM λ i pName => do
-    (pNames.filter (fun a ↦ false /-a != pNames[8]!-/)).mapIdxM λ i pName => do
-      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident (snat% 0)))
+    (pNames.filter (fun a ↦ true /-a != pNames[8]!-/)).mapIdxM λ i pName => do
+      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "Bm" ++ toString nPs ++ "p" ++ toString i) : $(mkIdent pName):ident (snat% 0)))
   -- Create `theorem t1 (p1 : P1 (snat% 0)) ... (pm : Pm (snat% 0)) : True := by ts`
   -- where m = nPs.
   elabCommand $ ← `(command|
-    theorem $(mkIdent `t₁) $binders:bracketedBinder*
+    theorem $(mkIdent $ .mkSimple $ "Bm" ++ toString nPs ++ "thm") $binders:bracketedBinder*
       --($(mkIdent $ .mkSimple $ "a") : $(mkIdent `A):ident (snat% 0) (snat% 0))
       : True := by $ts
   )
@@ -99,7 +99,7 @@ test₁ 10 400 by
   trivial
 
 
-#check l0
+--#check l0
 /-
 # nPremises = 100
 
