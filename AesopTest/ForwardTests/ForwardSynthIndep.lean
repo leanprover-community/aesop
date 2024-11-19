@@ -74,7 +74,7 @@ elab "bmIndep " nPs:num nRules:num : command => do
     elabCommand $ ← `(testIndep $nPs $inum by
       set_option maxHeartbeats 5000000 in
       set_option aesop.dev.statefulForward true in
-      set_option trace.profiler true in
+      -- set_option trace.profiler true in
       --set_option trace.aesop.forward true in
       --set_option trace.saturate true in
       --set_option profiler true in
