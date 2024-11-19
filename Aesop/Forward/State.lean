@@ -343,18 +343,14 @@ def matchPremise? (premises : Array MVarId) (numPremiseIndexes : Nat)
   let premiseIdx := slot.premiseIndex.toNat
   let some slotPremise := premises[premiseIdx]?
     | throwError "aesop: internal error: matchPremise?: slot with premise index {premiseIdx}, but only {premises.size} premises"
-  let inputHypType ← slotPremise.getType
+  let premiseType ← slotPremise.getType
   let hypType ← hyp.getType
-  withAesopTraceNodeBefore .forward (return m!"match against premise {premiseIdx}: {hypType} ≟ {inputHypType}") do
+  withAesopTraceNodeBefore .forward (return m!"match against premise {premiseIdx}: {hypType} ≟ {premiseType}") do
     let isDefEq ←
       withConstAesopTraceNode .forwardDebug (return m!"defeq check") do
-        isDefEq inputHypType hypType
+        isDefEq premiseType hypType
     if isDefEq then
-      /- Note: This was over `slot.common` and not `slot.deps`. We need `slot.deps`
-      because, among other issues, `slot.common` is empty in the first slot. Even though
-      we don't have dependencies, we still need to keep track of the subs of hyp.
-      Otherwise, we would trigger the first panic in `AddHypothesis`.-/
-      let mut subst : Substitution := .empty numPremiseIndexes
+      let mut subst := .empty numPremiseIndexes
       for var in slot.deps do
         subst ← updateSubst premises var subst
       subst := subst.insert slot.premiseIndex (.fvar hyp)
