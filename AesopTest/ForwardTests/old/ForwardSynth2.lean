@@ -57,14 +57,14 @@ elab "test₁ " nPremises:num nQs:num nLemmas:num remStart:num remStop:num " by 
 
   /- Rule that we are able to complete. -/
   let mut mNames' := pNames.zipWithIndex
-  mNames' := mNames'.filter (fun ⟨name, i⟩ => if i < remStart ∨ remStop < i then true else false)
+  mNames' := mNames'.filter (fun ⟨name, i⟩ => i < remStart ∨ remStop < i)
   let mNames := mNames'.unzip.1
   let bindersM : TSyntaxArray ``Term.bracketedBinder ←
     (mNames).mapIdxM λ i pName => do
       `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident $(mkIdent `n)))
   let sigM : Term ← `(∀ $(mkIdent `n) $bindersM:bracketedBinder*, True)
   elabCommand $ ← `(command|
-      @[aesop safe]
+      @[aesop safe forward]
       axiom $(mkIdent $ .mkSimple $ "lM"):ident : $sigM:term
     )
 
@@ -110,7 +110,8 @@ Notes :
 
 /-
 Basic test for **Inactive premises**
-We always have `1` active premises and `5 * 2 ^ n` inactives ones.
+We always have `10` active premises and `5 * 2 ^ n` inactives ones.
+See `ForwardSynth3` for a test without active premises.
 
 -/
 
@@ -118,7 +119,7 @@ namespace t0
 /-
 Meaning of options (`rem` is for remove):
 `nPs` `nQs` `nLemmas` `remStart` `remStop` -/
-test₁ 6 0 100 0 4 by
+test₁ 21 0 100 0 0 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
   set_option trace.profiler true in
@@ -134,7 +135,7 @@ namespace t1
 /-
 Meaning of options (`rem` is for remove):
 `nPs` `nQs` `nLemmas` `remStart` `remStop` -/
-test₁ 11 0 100 0 9 by
+test₁ 15 0 100 0 4 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
   set_option trace.profiler true in
@@ -150,7 +151,7 @@ namespace t2
 /-
 Meaning of options (`rem` is for remove):
 `nPs` `nQs` `nLemmas` `remStart` `remStop` -/
-test₁ 21 0 100 0 19 by
+test₁ 20 0 100 0 9 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
   set_option trace.profiler true in
@@ -166,7 +167,7 @@ namespace t3
 /-
 Meaning of options (`rem` is for remove):
 `nPs` `nQs` `nLemmas` `remStart` `remStop` -/
-test₁ 41 0 100 0 39 by
+test₁ 30 0 100 0 19 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
   set_option trace.profiler true in
@@ -182,7 +183,7 @@ namespace t4
 /-
 Meaning of options (`rem` is for remove):
 `nPs` `nQs` `nLemmas` `remStart` `remStop` -/
-test₁ 81 0 100 0 79 by
+test₁ 50 0 100 0 39 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
   set_option trace.profiler true in
@@ -198,7 +199,7 @@ namespace t5
 /-
 Meaning of options (`rem` is for remove):
 `nPs` `nQs` `nLemmas` `remStart` `remStop` -/
-test₁ 161 0 100 0 159 by
+test₁ 100 0 100 0 79 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
   set_option trace.profiler true in
@@ -214,7 +215,7 @@ namespace t6
 /-
 Meaning of options (`rem` is for remove):
 `nPs` `nQs` `nLemmas` `remStart` `remStop` -/
-test₁ 321 0 100 0 319 by
+test₁ 180 0 100 0 159 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
   set_option trace.profiler true in
