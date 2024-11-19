@@ -12,7 +12,8 @@ namespace Aesop
 open Lean Lean.Meta
 
 variable [Monad m] [MonadRulePatternCache m] [MonadControlT MetaM m]
-  [MonadLiftT MetaM m]
+  [MonadLiftT MetaM m] [MonadTrace m] [MonadLiftT BaseIO m] [MonadLiftT IO m]
+  [MonadRef m] [AddMessageContext m] [MonadAlwaysExcept Exception m]
 
 /-- Apply a goal diff to the state, adding and removing hypotheses as indicated
 by the diff. -/
