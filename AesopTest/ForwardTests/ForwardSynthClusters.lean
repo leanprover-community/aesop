@@ -84,7 +84,7 @@ elab "bmClusters " nTPs:num nRules:num : command => do
     elabCommand $ ← `(testCluster $inum $nRules $inuminv by
       set_option maxHeartbeats 5000000 in
       set_option aesop.dev.statefulForward false in
-      set_option trace.profiler true in
+      -- set_option trace.profiler true in
       --set_option trace.aesop.forward true in
       --set_option trace.saturate true in
       --set_option profiler true in

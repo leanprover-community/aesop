@@ -122,12 +122,9 @@ Meaning of options (`rem` is for remove):
 test₁ 21 0 100 0 0 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
-
-#check l0
-#check lM
 
 end t0
 
@@ -138,12 +135,9 @@ Meaning of options (`rem` is for remove):
 test₁ 15 0 100 0 4 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
-
-#check l0
-#check lM
 
 end t1
 
@@ -154,12 +148,9 @@ Meaning of options (`rem` is for remove):
 test₁ 20 0 100 0 9 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
-
-#check l0
-#check lM
 
 end t2
 
@@ -170,12 +161,9 @@ Meaning of options (`rem` is for remove):
 test₁ 30 0 100 0 19 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
-
-#check l0
-#check lM
 
 end t3
 
@@ -186,12 +174,9 @@ Meaning of options (`rem` is for remove):
 test₁ 50 0 100 0 39 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
-
-#check l0
-#check lM
 
 end t4
 
@@ -202,12 +187,9 @@ Meaning of options (`rem` is for remove):
 test₁ 100 0 100 0 79 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
-
-#check l0
-#check lM
 
 end t5
 
@@ -218,11 +200,8 @@ Meaning of options (`rem` is for remove):
 test₁ 180 0 100 0 159 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
-
-#check l0
-#check lM
 
 end t6

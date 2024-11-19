@@ -122,7 +122,7 @@ Meaning of options (`rem` is for remove):
 test₁ 6 0 100 0 4 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
 
@@ -138,7 +138,7 @@ Meaning of options (`rem` is for remove):
 test₁ 11 0 100 0 9 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
 
@@ -154,7 +154,7 @@ Meaning of options (`rem` is for remove):
 test₁ 21 0 100 0 19 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
 
@@ -170,7 +170,7 @@ Meaning of options (`rem` is for remove):
 test₁ 41 0 100 0 39 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
 
@@ -186,7 +186,7 @@ Meaning of options (`rem` is for remove):
 test₁ 81 0 100 0 79 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
 
@@ -202,7 +202,7 @@ Meaning of options (`rem` is for remove):
 test₁ 161 0 100 0 159 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
 
@@ -218,7 +218,7 @@ Meaning of options (`rem` is for remove):
 test₁ 321 0 100 0 319 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
 

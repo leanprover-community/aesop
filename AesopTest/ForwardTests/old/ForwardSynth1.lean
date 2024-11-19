@@ -94,7 +94,7 @@ Aim of this file :
 test₁ 10 400 by
   set_option maxHeartbeats 5000000 in
   set_option aesop.dev.statefulForward true in
-  set_option trace.profiler true in
+  -- set_option trace.profiler true in
   saturate
   trivial
 
