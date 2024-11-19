@@ -158,17 +158,14 @@ is only added if there is no hypothesis with a reducibly defeq type already in
 the context. -/
 def apply (goal : MVarId) (m : ForwardRuleMatch) (skipExisting : Bool) :
     ScriptM (Option (MVarId × FVarId × Array FVarId)) :=
+  withConstAesopTraceNode .forward (return m!"apply complete match") do
   goal.withContext do
     let name ← getUnusedUserName forwardHypPrefix
     let some prf ← m.getProof goal
       | return none
     let type ← inferType prf
-    if skipExisting then
-      for ldecl in ← getLCtx do
-        if ldecl.isImplementationDetail then
-          continue
-        if ← withReducible $ withNewMCtxDepth $ isDefEq type ldecl.type then
-          return none
+    if ← pure skipExisting <&&> isDuplicate type then
+      return none
     let hyp := { userName := name, value := prf, type }
     let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
       | unreachable!
@@ -177,6 +174,17 @@ def apply (goal : MVarId) (m : ForwardRuleMatch) (skipExisting : Bool) :
     let usedPropHyps ← goal.withContext $ m.getPropHyps
     let (goal, _) ← tryClearManyS goal usedPropHyps
     return some (goal, hyp, usedPropHyps)
+where
+  isDuplicate (type : Expr) : MetaM Bool := do
+    withConstAesopTraceNode .forwardDebug (return m!"check whether new hyp is already present in the context") do
+    withNewMCtxDepth do
+      for ldecl in ← getLCtx do
+        if ldecl.isImplementationDetail then
+          continue
+        if ← withReducible $ isDefEq type ldecl.type then
+          aesop_trace[forwardDebug] "hyp already present, skipping"
+          return true
+      return false
 
 /-- Convert a forward rule match to a rule tactic description. -/
 def toRuleTacDescr (m : ForwardRuleMatch) : RuleTacDescr :=
