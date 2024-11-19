@@ -12,7 +12,8 @@ open Lean Lean.Meta
 namespace Aesop.LocalRuleSet
 
 variable [Monad m] [MonadRulePatternCache m] [MonadControlT MetaM m]
-  [MonadLiftT MetaM m]
+  [MonadLiftT MetaM m] [MonadTrace m] [MonadLiftT BaseIO m] [MonadLiftT IO m]
+  [MonadRef m] [AddMessageContext m] [MonadAlwaysExcept Exception m]
 
 def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
     m (ForwardState × Array ForwardRuleMatch) :=

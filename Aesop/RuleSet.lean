@@ -507,9 +507,17 @@ def applicableSafeRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
 
 def applicableForwardRulesWith (rs : LocalRuleSet) (e : Expr)
     (include? : ForwardRule → Bool) :
-    MetaM (Array (ForwardRule × PremiseIndex)) := do
-  let rules ← rs.forwardRules.get e
-  return rules.filter λ (rule, _) => include? rule && !rs.isErased rule.name
+    MetaM (Array (ForwardRule × PremiseIndex)) :=
+  withConstAesopTraceNode .forward (return m!"selected forward rules:") do
+    let rules ← rs.forwardRules.get e
+    let rules := rules.filter λ (rule, _) =>
+      include? rule && !rs.isErased rule.name
+    aesop_trace[forward] do
+      for (r, i) in rules do
+        aesop_trace![forward] mkMsg r i
+    return rules
+  where
+    mkMsg r i := m!"{r}, premise {i}" -- Inlining this triggers a Lean bug.
 
 @[inline, always_inline]
 def applicableForwardRules (rs : LocalRuleSet) (e : Expr) :
@@ -521,7 +529,9 @@ def constForwardRuleMatches (rs : LocalRuleSet) : Array ForwardRuleMatch :=
 
 section ForwardRulePattern
 
-variable [Monad m] [MonadRulePatternCache m]
+variable [Monad m] [MonadRulePatternCache m] [MonadTrace m] [MonadLiftT BaseIO m]
+  [MonadLiftT IO m] [MonadRef m] [AddMessageContext m]
+  [MonadAlwaysExcept Exception m]
 
 private def postprocessPatInstMap (rs : LocalRuleSet) (m : RulePatternInstMap) :
     Array (ForwardRule × RulePatternInstantiation) :=
@@ -530,13 +540,23 @@ private def postprocessPatInstMap (rs : LocalRuleSet) (m : RulePatternInstMap) :
 
 def forwardRulePatternInstantiationsInExpr (rs : LocalRuleSet) (e : Expr) :
     m (Array (ForwardRule × RulePatternInstantiation)) := do
-  let ms ← rs.rulePatterns.get e
-  return postprocessPatInstMap rs ms
+  withConstAesopTraceNode .forward (return m!"rule patterns in expr {e}:") do
+    let ms ← rs.rulePatterns.get e
+    let ms := postprocessPatInstMap rs ms
+    aesop_trace[forward] do
+      for (r, inst) in ms do
+        aesop_trace![forward] m!"{r}, {inst}"
+    return ms
 
 def forwardRulePatternInstantiationsInLocalDecl (rs : LocalRuleSet)
     (ldecl : LocalDecl) : m (Array (ForwardRule × RulePatternInstantiation)) := do
-  let ms ← rs.rulePatterns.getInLocalDecl ldecl
-  return postprocessPatInstMap rs ms
+  withConstAesopTraceNode .forward (return m!"rule patterns in hyp {ldecl.userName}:") do
+    let ms ← rs.rulePatterns.getInLocalDecl ldecl
+    let ms := postprocessPatInstMap rs ms
+    aesop_trace[forward] do
+      for (r, inst) in ms do
+        aesop_trace![forward] m!"{r}, {inst}"
+    return ms
 
 end ForwardRulePattern
 
