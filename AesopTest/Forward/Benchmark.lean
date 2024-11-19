@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Xavier Généreux
 -/
 import Aesop
-import AesopTest.Forward.ForwardSynth
+import AesopTest.Forward.Synth
 
 set_option aesop.dev.statefulForward true
 
