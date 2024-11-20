@@ -372,7 +372,7 @@ def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleFilter) :
   if let some decl := f.matchesSimpTheorem? then
     for h : i in [:rs.simpTheoremsArray.size] do
       have i_valid : i < simpTheoremsArray'.fst.size := by
-        simp_all [Membership.mem, simpTheoremsArray'.snd]
+        simp_all +zetaDelta [Membership.mem, simpTheoremsArray'.snd]
       let (name, simpTheorems) := simpTheoremsArray'.fst[i]
       if SimpTheorems.containsDecl simpTheorems decl then
         let origin := .decl decl (inv := false)
@@ -383,7 +383,7 @@ def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleFilter) :
         anyErased := true
   let simpTheoremsArray := simpTheoremsArray'.fst
   let simpTheoremsArrayNonempty : 0 < simpTheoremsArray.size := by
-    simp [simpTheoremsArray'.snd, rs.simpTheoremsArrayNonempty]
+    simp +zetaDelta [simpTheoremsArray'.snd, rs.simpTheoremsArrayNonempty]
   let rs := { rs with
     localNormSimpRules, simpTheoremsArray, simpTheoremsArrayNonempty
   }
