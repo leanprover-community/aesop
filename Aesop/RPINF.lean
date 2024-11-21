@@ -203,20 +203,22 @@ def rpinf' (e : Expr) : MetaM RPINF :=
 variable [MonadCache Expr Expr m]
 
 @[specialize]
-partial def rpinfNoHashCore (e : Expr) : m Expr :=
+partial def rpinfNoHashCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
   withIncRecDepth do
   checkCache e λ _ => do
-    if ← isProof e then
+    let (isPrf, nanos) ← (time $ isProof e : MetaM _)
+    statsRef.modify (· + nanos)
+    if isPrf then
       return .mdata (mdataSetIsProof {}) e
     let e ← whnf e
     match e with
     | .app .. =>
-        let f ← rpinfNoHashCore e.getAppFn'
+        let f ← rpinfNoHashCore statsRef e.getAppFn'
         let mut args := e.getAppArgs'
         for i in [:args.size] do
           let arg := args[i]!
           args := args.set! i default -- prevent nonlinear access to args[i]
-          let arg ← rpinfNoHashCore arg
+          let arg ← rpinfNoHashCore statsRef arg
           args := args.set! i arg
         if f.isConstOf ``Nat.succ && args.size == 1 && args[0]!.isRawNatLit then
           return mkRawNatLit (args[0]!.rawNatLit?.get! + 1)
@@ -225,13 +227,13 @@ partial def rpinfNoHashCore (e : Expr) : m Expr :=
     | .lam .. =>
       -- TODO disable cache?
       lambdaTelescope e λ xs e => withNewFVars xs do
-        mkLambdaFVars xs (← rpinfNoHashCore e)
+        mkLambdaFVars xs (← rpinfNoHashCore statsRef e)
     | .forallE .. =>
       -- TODO disable cache?
       forallTelescope e λ xs e => withNewFVars xs do
-        mkForallFVars xs (← rpinfNoHashCore e)
+        mkForallFVars xs (← rpinfNoHashCore statsRef e)
     | .proj t i e =>
-      return .proj t i (← rpinfNoHashCore e)
+      return .proj t i (← rpinfNoHashCore statsRef e)
     | .sort .. | .mvar .. | .lit .. | .const .. | .fvar .. =>
       return e
     | .letE .. | .mdata .. | .bvar .. => unreachable!
@@ -241,15 +243,16 @@ where
     for fvar in fvars do
       let fvarId := fvar.fvarId!
       let ldecl ← fvarId.getDecl
-      let ldecl := ldecl.setType $ ← rpinfNoHashCore ldecl.type
+      let ldecl := ldecl.setType $ ← rpinfNoHashCore statsRef ldecl.type
       lctx := lctx.modifyLocalDecl fvarId λ _ => ldecl
     withLCtx lctx (← getLocalInstances) k
 
-def rpinfNoHash (e : Expr) : m Expr :=
-  withReducible do rpinfNoHashCore (← instantiateMVars e)
+def rpinfNoHash (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
+  withReducible do
+    rpinfNoHashCore statsRef (← instantiateMVars e)
 
-def rpinfNoHash' (e : Expr) : MetaM Expr :=
-  (rpinfNoHash e : MonadCacheT Expr Expr MetaM _).run
+def rpinfNoHash' (statsRef : IO.Ref Nanos) (e : Expr) : MetaM Expr :=
+  (rpinfNoHash statsRef e : MonadCacheT Expr Expr MetaM _).run
 
 partial def rpinfHashCore (e : Expr) : MonadCacheT UInt64 UInt64 BaseIO UInt64 :=
   checkCache e.hash λ _ => do
@@ -272,13 +275,13 @@ partial def rpinfHashCore (e : Expr) : MonadCacheT UInt64 UInt64 BaseIO UInt64 :
 def rpinfHash (e : Expr) : IO UInt64 :=
   rpinfHashCore e |>.run
 
-def rpinfSeparateHash (e : Expr) : m RPINF :=
+def rpinfSeparateHash (statsRef : IO.Ref Nanos) (e : Expr) : m RPINF :=
   withReducible do
-    let expr ← rpinfNoHashCore (← instantiateMVars e)
+    let expr ← rpinfNoHashCore statsRef (← instantiateMVars e)
     let hash ← (rpinfHash expr : MetaM _)
     return { expr, hash }
 
-def rpinfSeparateHash' (e : Expr) : MetaM RPINF :=
-  (rpinfSeparateHash e : MonadCacheT Expr Expr MetaM _).run
+def rpinfSeparateHash' (statsRef : IO.Ref Nanos) (e : Expr) : MetaM RPINF :=
+  (rpinfSeparateHash statsRef e : MonadCacheT Expr Expr MetaM _).run
 
 end Aesop
