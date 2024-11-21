@@ -281,4 +281,24 @@ def rpinfSeparateHash (e : Expr) : m RPINF :=
 def rpinfSeparateHash' (e : Expr) : MetaM RPINF :=
   (rpinfSeparateHash e : MonadCacheT Expr Expr MetaM _).run
 
+def rpinfSeparateHashShareCommon (e : Expr) : m RPINF :=
+  withReducible do
+    let expr ← rpinfNoHashCore (← instantiateMVars e)
+    let expr := ShareCommon.shareCommon expr
+    let hash ← (rpinfHash expr : MetaM _)
+    return { expr, hash }
+
+def rpinfSeparateHashShareCommon' (e : Expr) : MetaM RPINF :=
+  (rpinfSeparateHashShareCommon e : MonadCacheT Expr Expr MetaM _).run
+
+def rpinfSeparateHashShareCommonQuick (e : Expr) : m RPINF :=
+  withReducible do
+    let expr ← rpinfNoHashCore (← instantiateMVars e)
+    let expr := ShareCommon.shareCommon' expr
+    let hash ← (rpinfHash expr : MetaM _)
+    return { expr, hash }
+
+def rpinfSeparateHashShareCommonQuick' (e : Expr) : MetaM RPINF :=
+  (rpinfSeparateHashShareCommonQuick e : MonadCacheT Expr Expr MetaM _).run
+
 end Aesop
