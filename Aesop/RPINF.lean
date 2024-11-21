@@ -201,4 +201,55 @@ def rpinf (e : Expr) : m RPINF :=
 def rpinf' (e : Expr) : MetaM RPINF :=
   (rpinf e : MonadCacheT Expr RPINF MetaM _).run
 
+variable [MonadCache Expr Expr m]
+
+@[specialize]
+partial def rpinfNoHashCore (e : Expr) : m Expr :=
+  withIncRecDepth do
+  checkCache e λ _ => do
+    if ← isProof e then
+      return .mdata (mdataSetIsProof {}) e
+    let e ← whnf e
+    match e with
+    | .app .. =>
+        let f ← rpinfNoHashCore e.getAppFn'
+        let mut args := e.getAppArgs'
+        for i in [:args.size] do
+          let arg := args[i]!
+          args := args.set! i default -- prevent nonlinear access to args[i]
+          let arg ← rpinfNoHashCore arg
+          args := args.set! i arg
+        if f.isConstOf ``Nat.succ && args.size == 1 && args[0]!.isRawNatLit then
+          return mkRawNatLit (args[0]!.rawNatLit?.get! + 1)
+        else
+          return mkAppN f args
+    | .lam .. =>
+      -- TODO disable cache?
+      lambdaTelescope e λ xs e => withNewFVars xs do
+        mkLambdaFVars xs (← rpinfNoHashCore e)
+    | .forallE .. =>
+      -- TODO disable cache?
+      forallTelescope e λ xs e => withNewFVars xs do
+        mkForallFVars xs (← rpinfNoHashCore e)
+    | .proj t i e =>
+      return .proj t i (← rpinfNoHashCore e)
+    | .sort .. | .mvar .. | .lit .. | .const .. | .fvar .. =>
+      return e
+    | .letE .. | .mdata .. | .bvar .. => unreachable!
+where
+  withNewFVars {α} (fvars : Array Expr) (k : m α) : m α := do
+    let mut lctx ← (getLCtx : MetaM _)
+    for fvar in fvars do
+      let fvarId := fvar.fvarId!
+      let ldecl ← fvarId.getDecl
+      let ldecl := ldecl.setType $ ← rpinfNoHashCore ldecl.type
+      lctx := lctx.modifyLocalDecl fvarId λ _ => ldecl
+    withLCtx lctx (← getLocalInstances) k
+
+def rpinfNoHash (e : Expr) : m Expr :=
+  withReducible do rpinfNoHashCore (← instantiateMVars e)
+
+def rpinfNoHash' (e : Expr) : MetaM Expr :=
+  (rpinfNoHash e : MonadCacheT Expr Expr MetaM _).run
+
 end Aesop
