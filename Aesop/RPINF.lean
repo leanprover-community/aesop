@@ -52,7 +52,7 @@ instance : MonadHashMapCacheAdapter USize UInt64 PIHashM where
 
 partial def piHashCore (e : Expr) : PIHashM UInt64 :=
   withIncRecDepth do
-  checkCache (unsafe ptrAddrUnsafe e) λ _ => do
+  checkCache (unsafe ptrAddrUnsafe e) λ _ => do -- TODO is this correct?
     if ← isProof e then
       return 7
     match e with
@@ -171,13 +171,13 @@ partial def rpinfCore (e : Expr) : StateRefT FVarIdHashSet m RPINF :=
     | .lam .. =>
       -- TODO disable cache?
       lambdaTelescope e λ xs e => do
-        let r ← hashBinders xs e
-        return { r with expr := ← mkLambdaFVars xs e }
+        let (e, h) ← hashBinders xs e
+        return { expr := ← mkLambdaFVars xs e, hash := h }
     | .forallE .. =>
       -- TODO disable cache?
       forallTelescope e λ xs e => do
-        let r ← hashBinders xs e
-        return { r with expr := ← mkForallFVars xs e }
+        let (e, h) ← hashBinders xs e
+        return { expr := ← mkForallFVars xs e, hash := h }
     | .proj t i e =>
       let { expr := e, hash := h } ← rpinfCore e
       let e := .proj t i e
@@ -188,12 +188,12 @@ partial def rpinfCore (e : Expr) : StateRefT FVarIdHashSet m RPINF :=
     | .letE .. | .mdata .. | .bvar .. => unreachable!
 where
   hashBinders (fvars : Array Expr) (body : Expr) :
-      StateRefT FVarIdHashSet m RPINF := do
+      StateRefT FVarIdHashSet m (Expr × UInt64) := do
     modify λ s => fvars.foldl (init := s) λ s fvar => s.insert fvar.fvarId!
     let { expr := e, hash := h } ← rpinfCore body
     let h ← fvars.foldlM (init := h) λ h fvar =>
       return mixHash h (← rpinfCore $ ← fvar.fvarId!.getType).hash
-    return { expr := e, hash := h }
+    return (e, h)
 
 def rpinf (e : Expr) : m RPINF :=
   withReducible do rpinfCore (← instantiateMVars e) |>.run' ∅
