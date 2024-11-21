@@ -86,11 +86,9 @@ where
     let h ← piHashCore body
     fvars.foldlM (init := h) λ h fvar => do
       let ldecl ← fvar.fvarId!.getDecl
-      let typeHash ← piHashCore ldecl.type
-      let ldeclHash ← do
-        match ldecl.value? with
-        | none => pure typeHash
-        | some val => pure $ mixHash typeHash (← piHashCore val)
+      let mut ldeclHash ← piHashCore ldecl.type
+      if let some val := ldecl.value? then
+        ldeclHash := mixHash ldeclHash (← piHashCore val)
       return mixHash h ldeclHash
 
 def piHash (e : Expr) : MetaM UInt64 :=
@@ -187,6 +185,7 @@ partial def rpinfCore (e : Expr) : StateRefT FVarIdHashSet m RPINF :=
       return { expr := e, hash := e.hash }
     | .letE .. | .mdata .. | .bvar .. => unreachable!
 where
+  -- FIXME also need to update fvar ldecls
   hashBinders (fvars : Array Expr) (body : Expr) :
       StateRefT FVarIdHashSet m (Expr × UInt64) := do
     modify λ s => fvars.foldl (init := s) λ s fvar => s.insert fvar.fvarId!
@@ -251,5 +250,35 @@ def rpinfNoHash (e : Expr) : m Expr :=
 
 def rpinfNoHash' (e : Expr) : MetaM Expr :=
   (rpinfNoHash e : MonadCacheT Expr Expr MetaM _).run
+
+partial def rpinfHashCore (e : Expr) : MonadCacheT USize UInt64 IO UInt64 :=
+  checkCache (unsafe ptrAddrUnsafe e) λ _ => do
+    match e with
+    | .app .. =>
+      let h ← rpinfHashCore e.getAppFn
+      e.getAppArgs.foldlM (init := h) λ h arg =>
+        return mixHash h (← rpinfHashCore arg)
+    | .lam _ t b _ | .forallE _ t b _ =>
+      return mixHash (← rpinfHashCore t) (← rpinfHashCore b)
+    | .letE _ t v b _ =>
+      return mixHash (← rpinfHashCore t) $
+        mixHash (← rpinfHashCore v) (← rpinfHashCore b)
+    | .proj t i e =>
+      return mixHash (← rpinfHashCore e) $ mixHash (hash t) (hash i)
+    | .mdata d e => if mdataIsProof d then return 13 else rpinfHashCore e
+    | .sort .. | .mvar .. | .lit .. | .const .. | .fvar .. | .bvar .. =>
+      return e.hash
+
+def rpinfHash (e : Expr) : IO UInt64 :=
+  rpinfHashCore e |>.run
+
+def rpinfSeparateHash (e : Expr) : m RPINF :=
+  withReducible do
+    let expr ← rpinfNoHashCore (← instantiateMVars e)
+    let hash ← (rpinfHash expr : MetaM _)
+    return { expr, hash }
+
+def rpinfSeparateHash' (e : Expr) : MetaM RPINF :=
+  (rpinfSeparateHash e : MonadCacheT Expr Expr MetaM _).run
 
 end Aesop
