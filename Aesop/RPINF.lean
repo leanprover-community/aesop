@@ -35,64 +35,32 @@ mutual
     (unsafe ptrEq x y) || rpinfEqCore x y
 end
 
-namespace PIHashM
-
-structure State where
-  cache : Std.HashMap USize UInt64 := ∅
-  tempFVars : Std.HashSet FVarId := ∅
-  deriving Inhabited
-
-end PIHashM
-
-abbrev PIHashM := StateRefT PIHashM.State MetaM
-
-instance : MonadHashMapCacheAdapter USize UInt64 PIHashM where
-  getCache := return (← get).cache
-  modifyCache f := modify λ s => { s with cache := f s.cache }
-
-partial def piHashCore (e : Expr) : PIHashM UInt64 :=
-  withIncRecDepth do
-  checkCache (unsafe ptrAddrUnsafe e) λ _ => do -- TODO is this correct?
-    if ← isProof e then
-      return 7
+partial def rpinfHashCore (e : Expr) :
+    StateRefT (Std.HashMap UInt64 UInt64) (ST s) UInt64 :=
+  have : MonadHashMapCacheAdapter UInt64 UInt64
+           (StateRefT (Std.HashMap UInt64 UInt64) (ST s)) := {
+    getCache := get
+    modifyCache := modify
+  }
+  checkCache e.hash λ _ => do
     match e with
-    | .fvar fvarId =>
-      if (← get).tempFVars.contains fvarId then
-        return 13
-      else
-        return e.hash
     | .app .. =>
-      let h ← piHashCore e.getAppFn
+      let h ← rpinfHashCore e.getAppFn
       e.getAppArgs.foldlM (init := h) λ h arg =>
-        return mixHash h (← piHashCore arg)
-    | .lam .. => lambdaTelescope e λ xs e => hashBinders xs e
-    | .forallE .. => forallTelescope e λ xs e => hashBinders xs e
-    | .letE .. => lambdaLetTelescope e λ xs e => hashBinders xs e
+        return mixHash h (← rpinfHashCore arg)
+    | .lam _ t b _ | .forallE _ t b _ =>
+      return mixHash (← rpinfHashCore t) (← rpinfHashCore b)
+    | .letE _ t v b _ =>
+      return mixHash (← rpinfHashCore t) $
+        mixHash (← rpinfHashCore v) (← rpinfHashCore b)
     | .proj t i e =>
-      return mixHash (← piHashCore e) $ mixHash (hash t) (hash i)
-    | .mdata _ e => piHashCore e
-    | .bvar .. => unreachable!
-    | .sort .. | .mvar .. | .lit .. | .const .. =>
+      return mixHash (← rpinfHashCore e) $ mixHash (hash t) (hash i)
+    | .mdata d e => if mdataIsProof d then return 13 else rpinfHashCore e
+    | .sort .. | .mvar .. | .lit .. | .const .. | .fvar .. | .bvar .. =>
       return e.hash
-where
-  hashBinders (fvars : Array Expr) (body : Expr) :
-      PIHashM UInt64 := do
-    modify λ s => {
-      s with
-      tempFVars :=
-        fvars.foldl (init := s.tempFVars) λ tempFVars fvar =>
-          tempFVars.insert fvar.fvarId!
-    }
-    let h ← piHashCore body
-    fvars.foldlM (init := h) λ h fvar => do
-      let ldecl ← fvar.fvarId!.getDecl
-      let mut ldeclHash ← piHashCore ldecl.type
-      if let some val := ldecl.value? then
-        ldeclHash := mixHash ldeclHash (← piHashCore val)
-      return mixHash h ldeclHash
 
-def piHash (e : Expr) : MetaM UInt64 :=
-  piHashCore e |>.run' {}
+def rpinfHash (e : Expr) : UInt64 :=
+  runST λ _ => rpinfHashCore e |>.run' ∅
 
 structure RPINF where
   expr : Expr
@@ -113,97 +81,16 @@ instance : ToString RPINF where
 instance : ToMessageData RPINF where
   toMessageData r := toMessageData r.expr
 
-protected def ofRPINFExpr (e : Expr) : MetaM RPINF :=
-  return { expr := e, hash := ← piHash e }
-
 end RPINf
 
 class abbrev MonadRPINF (m : Type → Type) :=
-  MonadCache Expr RPINF m
+  MonadCache Expr Expr m
 
 variable [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] [MonadControlT MetaM m]
   [MonadMCtx m] [MonadLiftT (ST IO.RealWorld) m] [MonadError m] [MonadRecDepth m]
 
-local instance : STWorld IO.RealWorld m where
-
 @[specialize]
-partial def rpinfCore (e : Expr) : StateRefT FVarIdHashSet m RPINF :=
-  have : MonadCache Expr RPINF (StateRefT FVarIdHashSet m) := {
-    findCached? := λ x => (MonadCache.findCached? x : m _)
-    cache := λ a b => (MonadCache.cache a b : m _)
-  }
-  have : AddErrorMessageContext (StateRefT FVarIdHashSet m) := {
-    add := λ ref msg => (AddErrorMessageContext.add ref msg : m _)
-  }
-  withIncRecDepth do
-  checkCache e λ _ => do
-    if ← isProof e then
-      let e := .mdata (mdataSetIsProof {}) e
-      return { expr := e, hash := 7 }
-    let e ← whnf e
-    match e with
-    | .fvar fvarId =>
-      if (← get).contains fvarId then
-        -- All fvars that were earlier substituted for bound variables are hashed
-        -- to the same value. This is needed to ensure that the arbitrarily
-        -- chosen FVarId doesn't matter.
-        return { expr := e, hash := 13 }
-      else
-        return { expr := e, hash := e.hash }
-    | .app .. =>
-        let f := e.getAppFn'
-        let { expr := f, hash := h } ← rpinfCore f
-        let mut h := h
-        let mut args := e.getAppArgs'
-        for i in [:args.size] do
-          let arg := args[i]!
-          args := args.set! i default -- prevent nonlinear access to args[i]
-          let { expr := arg, hash := argHash } ← rpinfCore arg
-          args := args.set! i arg
-          h := mixHash h argHash
-        if f.isConstOf ``Nat.succ && args.size == 1 && args[0]!.isRawNatLit then
-          let e := mkRawNatLit (args[0]!.rawNatLit?.get! + 1)
-          return { expr := e, hash := e.hash }
-        else
-          return { expr := mkAppN f args, hash := h }
-    | .lam .. =>
-      -- TODO disable cache?
-      lambdaTelescope e λ xs e => do
-        let (e, h) ← hashBinders xs e
-        return { expr := ← mkLambdaFVars xs e, hash := h }
-    | .forallE .. =>
-      -- TODO disable cache?
-      forallTelescope e λ xs e => do
-        let (e, h) ← hashBinders xs e
-        return { expr := ← mkForallFVars xs e, hash := h }
-    | .proj t i e =>
-      let { expr := e, hash := h } ← rpinfCore e
-      let e := .proj t i e
-      let h := mixHash h $ mixHash (hash t) (hash i)
-      return { expr := e, hash := h }
-    | .sort .. | .mvar .. | .lit .. | .const .. =>
-      return { expr := e, hash := e.hash }
-    | .letE .. | .mdata .. | .bvar .. => unreachable!
-where
-  -- FIXME also need to update fvar ldecls
-  hashBinders (fvars : Array Expr) (body : Expr) :
-      StateRefT FVarIdHashSet m (Expr × UInt64) := do
-    modify λ s => fvars.foldl (init := s) λ s fvar => s.insert fvar.fvarId!
-    let { expr := e, hash := h } ← rpinfCore body
-    let h ← fvars.foldlM (init := h) λ h fvar =>
-      return mixHash h (← rpinfCore $ ← fvar.fvarId!.getType).hash
-    return (e, h)
-
-def rpinf (e : Expr) : m RPINF :=
-  withReducible do rpinfCore (← instantiateMVars e) |>.run' ∅
-
-def rpinf' (e : Expr) : MetaM RPINF :=
-  (rpinf e : MonadCacheT Expr RPINF MetaM _).run
-
-variable [MonadCache Expr Expr m]
-
-@[specialize]
-partial def rpinfNoHashCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
+partial def rpinfCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
   withIncRecDepth do
   checkCache e λ _ => do
     let (isPrf, nanos) ← (time $ isProof e : MetaM _)
@@ -213,12 +100,12 @@ partial def rpinfNoHashCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
     let e ← whnf e
     match e with
     | .app .. =>
-        let f ← rpinfNoHashCore statsRef e.getAppFn'
+        let f ← rpinfCore statsRef e.getAppFn'
         let mut args := e.getAppArgs'
         for i in [:args.size] do
           let arg := args[i]!
           args := args.set! i default -- prevent nonlinear access to args[i]
-          let arg ← rpinfNoHashCore statsRef arg
+          let arg ← rpinfCore statsRef arg
           args := args.set! i arg
         if f.isConstOf ``Nat.succ && args.size == 1 && args[0]!.isRawNatLit then
           return mkRawNatLit (args[0]!.rawNatLit?.get! + 1)
@@ -227,13 +114,13 @@ partial def rpinfNoHashCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
     | .lam .. =>
       -- TODO disable cache?
       lambdaTelescope e λ xs e => withNewFVars xs do
-        mkLambdaFVars xs (← rpinfNoHashCore statsRef e)
+        mkLambdaFVars xs (← rpinfCore statsRef e)
     | .forallE .. =>
       -- TODO disable cache?
       forallTelescope e λ xs e => withNewFVars xs do
-        mkForallFVars xs (← rpinfNoHashCore statsRef e)
+        mkForallFVars xs (← rpinfCore statsRef e)
     | .proj t i e =>
-      return .proj t i (← rpinfNoHashCore statsRef e)
+      return .proj t i (← rpinfCore statsRef e)
     | .sort .. | .mvar .. | .lit .. | .const .. | .fvar .. =>
       return e
     | .letE .. | .mdata .. | .bvar .. => unreachable!
@@ -243,45 +130,22 @@ where
     for fvar in fvars do
       let fvarId := fvar.fvarId!
       let ldecl ← fvarId.getDecl
-      let ldecl := ldecl.setType $ ← rpinfNoHashCore statsRef ldecl.type
+      let ldecl := ldecl.setType $ ← rpinfCore statsRef ldecl.type
       lctx := lctx.modifyLocalDecl fvarId λ _ => ldecl
     withLCtx lctx (← getLocalInstances) k
 
-def rpinfNoHash (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
+def rpinfExpr (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
   withReducible do
-    rpinfNoHashCore statsRef (← instantiateMVars e)
+    rpinfCore statsRef (← instantiateMVars e)
 
-def rpinfNoHash' (statsRef : IO.Ref Nanos) (e : Expr) : MetaM Expr :=
-  (rpinfNoHash statsRef e : MonadCacheT Expr Expr MetaM _).run
+def rpinfExpr' (statsRef : IO.Ref Nanos) (e : Expr) : MetaM Expr :=
+  (rpinfExpr statsRef e : MonadCacheT Expr Expr MetaM _).run
 
-partial def rpinfHashCore (e : Expr) : MonadCacheT UInt64 UInt64 BaseIO UInt64 :=
-  checkCache e.hash λ _ => do
-    match e with
-    | .app .. =>
-      let h ← rpinfHashCore e.getAppFn
-      e.getAppArgs.foldlM (init := h) λ h arg =>
-        return mixHash h (← rpinfHashCore arg)
-    | .lam _ t b _ | .forallE _ t b _ =>
-      return mixHash (← rpinfHashCore t) (← rpinfHashCore b)
-    | .letE _ t v b _ =>
-      return mixHash (← rpinfHashCore t) $
-        mixHash (← rpinfHashCore v) (← rpinfHashCore b)
-    | .proj t i e =>
-      return mixHash (← rpinfHashCore e) $ mixHash (hash t) (hash i)
-    | .mdata d e => if mdataIsProof d then return 13 else rpinfHashCore e
-    | .sort .. | .mvar .. | .lit .. | .const .. | .fvar .. | .bvar .. =>
-      return e.hash
+def rpinf (statsRef : IO.Ref Nanos) (e : Expr) : m RPINF := do
+  let expr ← rpinfExpr statsRef e
+  return { expr, hash := rpinfHash expr }
 
-def rpinfHash (e : Expr) : IO UInt64 :=
-  rpinfHashCore e |>.run
-
-def rpinfSeparateHash (statsRef : IO.Ref Nanos) (e : Expr) : m RPINF :=
-  withReducible do
-    let expr ← rpinfNoHashCore statsRef (← instantiateMVars e)
-    let hash ← (rpinfHash expr : MetaM _)
-    return { expr, hash }
-
-def rpinfSeparateHash' (statsRef : IO.Ref Nanos) (e : Expr) : MetaM RPINF :=
-  (rpinfSeparateHash statsRef e : MonadCacheT Expr Expr MetaM _).run
+def rpinf' (statsRef : IO.Ref Nanos) (e : Expr) : MetaM RPINF :=
+  (rpinf statsRef e : MonadCacheT Expr Expr MetaM _).run
 
 end Aesop
