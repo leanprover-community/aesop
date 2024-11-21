@@ -152,13 +152,14 @@ partial def rpinfCore (e : Expr) : StateRefT FVarIdHashSet m RPINF :=
         return { expr := e, hash := 13 }
       else
         return { expr := e, hash := e.hash }
-    | .app f e =>
+    | .app .. =>
+        let f := e.getAppFn'
         let { expr := f, hash := h } ← rpinfCore f
         let mut h := h
-        let mut args := e.getAppArgs
+        let mut args := e.getAppArgs'
         for i in [:args.size] do
           let arg := args[i]!
-          args := args.set! i default -- prevent nonlinear access to arg
+          args := args.set! i default -- prevent nonlinear access to args[i]
           let { expr := arg, hash := argHash } ← rpinfCore arg
           args := args.set! i arg
           h := mixHash h argHash
