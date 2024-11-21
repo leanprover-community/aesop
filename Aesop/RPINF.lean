@@ -251,8 +251,8 @@ def rpinfNoHash (e : Expr) : m Expr :=
 def rpinfNoHash' (e : Expr) : MetaM Expr :=
   (rpinfNoHash e : MonadCacheT Expr Expr MetaM _).run
 
-partial def rpinfHashCore (e : Expr) : MonadCacheT USize UInt64 IO UInt64 :=
-  checkCache (unsafe ptrAddrUnsafe e) λ _ => do
+partial def rpinfHashCore (e : Expr) : MonadCacheT UInt64 UInt64 BaseIO UInt64 :=
+  checkCache e.hash λ _ => do
     match e with
     | .app .. =>
       let h ← rpinfHashCore e.getAppFn
