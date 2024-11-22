@@ -85,28 +85,12 @@ end RPINf
 
 structure RPINFCache where
   rpinf : Std.HashMap Expr Expr := ∅
-  prop  : Std.HashMap Expr Bool := ∅
 
 abbrev MonadRPINF m := MonadStateOf RPINFCache m
 
 instance [Monad m] [MonadRPINF m] : MonadHashMapCacheAdapter Expr Expr m where
   getCache := return (← getThe RPINFCache).rpinf
   modifyCache f := modifyThe RPINFCache λ s => { s with rpinf := f s.rpinf }
-
-instance [Monad m] [MonadRPINF m] : MonadHashMapCacheAdapter Expr Bool m where
-  getCache := return (← getThe RPINFCache).prop
-  modifyCache f := modifyThe RPINFCache λ s => { s with prop := f s.prop }
-
-def isPropWithCache [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] (e : Expr) :
-    m Bool :=
-  checkCache e λ _ => isProp e
-
-def isProofWithCache [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] (e : Expr) :
-    m Bool := do
-  match (← isProofQuick e) with
-  | .true  => return true
-  | .false => return false
-  | .undef => isPropWithCache (← inferType e)
 
 abbrev RPINFT m [STWorld ω m] := StateRefT RPINFCache m
 
@@ -118,7 +102,7 @@ variable [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] [MonadControlT MetaM m]
 partial def pinfCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
   withIncRecDepth do
   checkCache e λ _ => do
-    let (isPrf, nanos) ← time $ isProofWithCache e
+    let (isPrf, nanos) ← time $ isProof e
     statsRef.modify (· + nanos)
     if isPrf then
       return .mdata (mdataSetIsProof {}) e
