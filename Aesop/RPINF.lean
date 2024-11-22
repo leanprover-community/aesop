@@ -107,7 +107,7 @@ variable [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] [MonadControlT MetaM m]
   [MonadLiftT BaseIO m]
 
 @[specialize]
-partial def rpinfCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
+partial def pinfCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
   withIncRecDepth do
   checkCache e λ _ => do
     let (isPrf, nanos) ← time $ isProofWithCache e
@@ -117,12 +117,12 @@ partial def rpinfCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
     let e ← whnf e
     match e with
     | .app .. =>
-        let f ← rpinfCore statsRef e.getAppFn'
+        let f ← pinfCore statsRef e.getAppFn'
         let mut args := e.getAppArgs'
         for i in [:args.size] do
           let arg := args[i]!
           args := args.set! i default -- prevent nonlinear access to args[i]
-          let arg ← rpinfCore statsRef arg
+          let arg ← pinfCore statsRef arg
           args := args.set! i arg
         if f.isConstOf ``Nat.succ && args.size == 1 && args[0]!.isRawNatLit then
           return mkRawNatLit (args[0]!.rawNatLit?.get! + 1)
@@ -131,13 +131,13 @@ partial def rpinfCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
     | .lam .. =>
       -- TODO disable cache?
       lambdaTelescope e λ xs e => withNewFVars xs do
-        mkLambdaFVars xs (← rpinfCore statsRef e)
+        mkLambdaFVars xs (← pinfCore statsRef e)
     | .forallE .. =>
       -- TODO disable cache?
       forallTelescope e λ xs e => withNewFVars xs do
-        mkForallFVars xs (← rpinfCore statsRef e)
+        mkForallFVars xs (← pinfCore statsRef e)
     | .proj t i e =>
-      return .proj t i (← rpinfCore statsRef e)
+      return .proj t i (← pinfCore statsRef e)
     | .sort .. | .mvar .. | .lit .. | .const .. | .fvar .. =>
       return e
     | .letE .. | .mdata .. | .bvar .. => unreachable!
@@ -147,13 +147,15 @@ where
     for fvar in fvars do
       let fvarId := fvar.fvarId!
       let ldecl ← fvarId.getDecl
-      let ldecl := ldecl.setType $ ← rpinfCore statsRef ldecl.type
+      let ldecl := ldecl.setType $ ← pinfCore statsRef ldecl.type
       lctx := lctx.modifyLocalDecl fvarId λ _ => ldecl
     withLCtx lctx (← getLocalInstances) k
 
+def pinf (statsRef : IO.Ref Nanos) (e : Expr) : m Expr := do
+  pinfCore statsRef (← instantiateMVars e)
+
 def rpinfExpr (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
-  withReducible do
-    rpinfCore statsRef (← instantiateMVars e)
+  withReducible $ pinf statsRef e
 
 def rpinfExpr' (statsRef : IO.Ref Nanos) (e : Expr) : MetaM Expr :=
   (rpinfExpr statsRef e : RPINFT MetaM _).run' {}
