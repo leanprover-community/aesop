@@ -83,17 +83,34 @@ instance : ToMessageData RPINF where
 
 end RPINf
 
-class abbrev MonadRPINF (m : Type → Type) :=
-  MonadCache Expr Expr m
+structure RPINFCache where
+  rpinf : Std.HashMap Expr Expr := ∅
+  proof : Std.HashMap Expr Bool := ∅
+
+abbrev MonadRPINF m := MonadStateOf RPINFCache m
+
+instance [Monad m] [MonadRPINF m] : MonadHashMapCacheAdapter Expr Expr m where
+  getCache := return (← getThe RPINFCache).rpinf
+  modifyCache f := modifyThe RPINFCache λ s => { s with rpinf := f s.rpinf }
+
+instance [Monad m] [MonadRPINF m] : MonadHashMapCacheAdapter Expr Bool m where
+  getCache := return (← getThe RPINFCache).proof
+  modifyCache f := modifyThe RPINFCache λ s => { s with proof := f s.proof }
+
+def isProofWithCache [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] (e : Expr) : m Bool :=
+  checkCache e λ _ => isProof e
+
+abbrev RPINFT m [STWorld ω m] := StateRefT RPINFCache m
 
 variable [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] [MonadControlT MetaM m]
   [MonadMCtx m] [MonadLiftT (ST IO.RealWorld) m] [MonadError m] [MonadRecDepth m]
+  [MonadLiftT BaseIO m]
 
 @[specialize]
 partial def rpinfCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
   withIncRecDepth do
   checkCache e λ _ => do
-    let (isPrf, nanos) ← (time $ isProof e : MetaM _)
+    let (isPrf, nanos) ← time $ isProofWithCache e
     statsRef.modify (· + nanos)
     if isPrf then
       return .mdata (mdataSetIsProof {}) e
@@ -139,13 +156,13 @@ def rpinfExpr (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
     rpinfCore statsRef (← instantiateMVars e)
 
 def rpinfExpr' (statsRef : IO.Ref Nanos) (e : Expr) : MetaM Expr :=
-  (rpinfExpr statsRef e : MonadCacheT Expr Expr MetaM _).run
+  (rpinfExpr statsRef e : RPINFT MetaM _).run' {}
 
 def rpinf (statsRef : IO.Ref Nanos) (e : Expr) : m RPINF := do
   let expr ← rpinfExpr statsRef e
   return { expr, hash := rpinfHash expr }
 
 def rpinf' (statsRef : IO.Ref Nanos) (e : Expr) : MetaM RPINF :=
-  (rpinf statsRef e : MonadCacheT Expr Expr MetaM _).run
+  (rpinf statsRef e : RPINFT MetaM _).run' {}
 
 end Aesop
