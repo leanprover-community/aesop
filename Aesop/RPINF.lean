@@ -162,6 +162,9 @@ where
 def pinf (statsRef : IO.Ref Nanos) (e : Expr) : m Expr := do
   pinfCore statsRef (← instantiateMVars e)
 
+def pinf' (statsRef : IO.Ref Nanos) (e : Expr) : MetaM Expr := do
+  (pinfCore statsRef (← instantiateMVars e) : RPINFT MetaM _).run' {}
+
 def rpinfExpr (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
   withReducible $ pinf statsRef e
 
