@@ -102,7 +102,7 @@ variable [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] [MonadControlT MetaM m]
 partial def pinfCore (statsRef : IO.Ref Nanos) (e : Expr) : m Expr :=
   withIncRecDepth do
   checkCache e λ _ => do
-    let (isPrf, nanos) ← time $ isProof e
+    let (isPrf, nanos) ← time $ withDefault $ isProof e
     statsRef.modify (· + nanos)
     if isPrf then
       return .mdata (mdataSetIsProof {}) e
