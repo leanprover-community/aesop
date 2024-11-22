@@ -85,7 +85,7 @@ end RPINf
 
 structure RPINFCache where
   rpinf : Std.HashMap Expr Expr := ∅
-  proof : Std.HashMap Expr Bool := ∅
+  prop  : Std.HashMap Expr Bool := ∅
 
 abbrev MonadRPINF m := MonadStateOf RPINFCache m
 
@@ -94,11 +94,19 @@ instance [Monad m] [MonadRPINF m] : MonadHashMapCacheAdapter Expr Expr m where
   modifyCache f := modifyThe RPINFCache λ s => { s with rpinf := f s.rpinf }
 
 instance [Monad m] [MonadRPINF m] : MonadHashMapCacheAdapter Expr Bool m where
-  getCache := return (← getThe RPINFCache).proof
-  modifyCache f := modifyThe RPINFCache λ s => { s with proof := f s.proof }
+  getCache := return (← getThe RPINFCache).prop
+  modifyCache f := modifyThe RPINFCache λ s => { s with prop := f s.prop }
 
-def isProofWithCache [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] (e : Expr) : m Bool :=
-  checkCache e λ _ => isProof e
+def isPropWithCache [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] (e : Expr) :
+    m Bool :=
+  checkCache e λ _ => isProp e
+
+def isProofWithCache [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] (e : Expr) :
+    m Bool := do
+  match (← isProofQuick e) with
+  | .true  => return true
+  | .false => return false
+  | .undef => isPropWithCache (← inferType e)
 
 abbrev RPINFT m [STWorld ω m] := StateRefT RPINFCache m
 
