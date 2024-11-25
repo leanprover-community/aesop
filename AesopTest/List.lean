@@ -298,6 +298,7 @@ theorem X.mem_map_of_mem (f : α → β) {a : α} {l : List α} (h : a ∈ l) : 
 
 theorem mem_map_of_injective {f : α → β} (H : Injective f) {a : α} {l : List α} :
   f a ∈ map f l ↔ a ∈ l := by
+  set_option aesop.check.script false in -- TODO pp.analyze bug?
   aesop
 
 @[simp] theorem _root_.function.involutive.exists_mem_and_apply_eq_iff {f : α → α}
@@ -523,7 +524,12 @@ theorem X.map_subset {l₁ l₂ : List α} (f : α → β) (H : l₁ ⊆ l₂) :
 
 theorem map_subset_iff {l₁ l₂ : List α} (f : α → β) (h : Injective f) :
     map f l₁ ⊆ map f l₂ ↔ l₁ ⊆ l₂ := by
-  induction l₁ <;> induction l₂ <;> aesop
+  induction l₁ <;> induction l₂
+  · aesop
+  · aesop
+  · aesop
+  · set_option aesop.check.script false in
+    aesop -- TODO timeout in script generation
 
 /-! ### append -/
 

@@ -13,9 +13,7 @@ set_option linter.missingDocs true
 
 namespace Aesop
 
-variable [Monad M] [MonadTrace M] [MonadOptions M] [MonadRef M]
-  [AddMessageContext M] [MonadLiftT IO M] [MonadLiftT BaseIO M]
-  [MonadAlwaysExcept Exception M]
+variable [Monad M] [MonadAlwaysExcept Exception M] [MonadRPINF M]
 
 private def ppPHashMap [BEq α] [Hashable α] [ToMessageData α]
     [ToMessageData β] (indent : Bool) (m : PHashMap α β) : MessageData :=
@@ -73,7 +71,7 @@ set_option linter.missingDocs false in
 `s ↦ e ↦ (ms, hs)` indicates that for the instantiation `e` of slot `s`, we have
 partial matches `ms` and hypotheses `hs`. -/
 structure InstMap where
-  map : PHashMap SlotIndex (PHashMap Expr (PHashSet Match × PHashSet Hyp))
+  map : PHashMap SlotIndex (PHashMap RPINF (PHashSet Match × PHashSet Hyp))
   deriving Inhabited
 
 namespace InstMap
@@ -96,7 +94,7 @@ instance : ToMessageData InstMap where
 /-- Returns the set of matches and hypotheses associated with a slot `slot`
 with instantiation `inst`. -/
 @[inline]
-def find? (imap : InstMap) (slot : SlotIndex) (inst : Expr) :
+def find? (imap : InstMap) (slot : SlotIndex) (inst : RPINF) :
     Option (PHashSet Match × PHashSet Hyp) :=
   imap.map.find? slot |>.bind λ slotMap => slotMap.find? inst
 
@@ -104,14 +102,14 @@ def find? (imap : InstMap) (slot : SlotIndex) (inst : Expr) :
 with instantiation `inst`, or `(∅, ∅)` if `slot` and `inst` do not have any
 associated matches. -/
 @[inline]
-def findD (imap : InstMap) (slot : SlotIndex) (inst : Expr) :
+def findD (imap : InstMap) (slot : SlotIndex) (inst : RPINF) :
     PHashSet Match × PHashSet Hyp :=
   imap.find? slot inst |>.getD (∅, ∅)
 
 /-- Applies a transfomation to the data associated to `slot` and `inst`.
 If there is no such data, the transformation is applied to `(∅, ∅)`. Returns the
 new instantiation map and the result of `f`. -/
-def modify (imap : InstMap) (slot : SlotIndex) (inst : Expr)
+def modify (imap : InstMap) (slot : SlotIndex) (inst : RPINF)
     (f : PHashSet Match → PHashSet Hyp → PHashSet Match × PHashSet Hyp × α) :
     InstMap × α :=
   let (ms, hyps) := imap.findD slot inst
@@ -122,7 +120,7 @@ def modify (imap : InstMap) (slot : SlotIndex) (inst : Expr)
 /-- Inserts a hyp associated with slot `slot` and instantiation `inst`.
 The hyp must be a valid assignment for the slot's premise. Returns `true` if
 the hyp was not previously associated with `slot` and `inst`. -/
-def insertHyp (imap : InstMap) (slot : SlotIndex) (inst : Expr) (hyp : Hyp) :
+def insertHyp (imap : InstMap) (slot : SlotIndex) (inst : RPINF) (hyp : Hyp) :
     InstMap × Bool :=
   imap.modify slot inst λ ms hs =>
     if hs.contains hyp then
@@ -133,7 +131,7 @@ def insertHyp (imap : InstMap) (slot : SlotIndex) (inst : Expr) (hyp : Hyp) :
 /-- Inserts a match associated with slot `slot` and instantiation `inst`.
 The match's level must be `slot`. Returns `true` if the match was not previously
 associated with `slot` and `inst`. -/
-def insertMatchCore (imap : InstMap) (slot : SlotIndex) (inst : Expr)
+def insertMatchCore (imap : InstMap) (slot : SlotIndex) (inst : RPINF)
     (m : Match) : InstMap × Bool :=
   imap.modify slot inst λ ms hs =>
     if ms.contains m then
@@ -337,7 +335,7 @@ def findSlot? (cs : ClusterState) (i : PremiseIndex) : Option Slot :=
 must be a valid index). -/
 def matchPremise? (premises : Array MVarId) (numPremiseIndexes : Nat)
     (cs : ClusterState) (slot : SlotIndex) (hyp : FVarId) :
-    MetaM (Option Substitution) := do
+    M (Option Substitution) := do
   let some slot := cs.slots[slot.toNat]?
     | throwError "aesop: internal error: matchPremise?: no slot with index {slot}"
   let premiseIdx := slot.premiseIndex.toNat
@@ -353,14 +351,14 @@ def matchPremise? (premises : Array MVarId) (numPremiseIndexes : Nat)
       let mut subst := .empty numPremiseIndexes
       for var in slot.deps do
         subst ← updateSubst premises var subst
-      subst := subst.insert slot.premiseIndex (.fvar hyp)
+      subst := subst.insert slot.premiseIndex $ ← rpinf (.fvar hyp)
       aesop_trace[forward] "substitution: {subst}"
       return subst
     else
       return none
 where
   updateSubst (premises : Array MVarId) (var : PremiseIndex)
-      (subst : Substitution) : MetaM Substitution :=
+      (subst : Substitution) : M Substitution :=
     withConstAesopTraceNode .forwardDebug (return m!"update var {var}") do
       let some varMVarId := premises[var.toNat]?
         | throwError "aesop: internal error: matchPremise?: dependency with index {var}, but only {premises.size} premises"
@@ -370,8 +368,10 @@ where
         throwError "aesop: internal error: matchPremise?: while matching hyp {hyp.name}: no assignment for variable {var}"
       if ← hasAssignableMVar assignment then
         throwError "aesop: internal error: matchPremise?: assignment has mvar:{indentExpr assignment}"
-      let assignment ← withConstAesopTraceNode .forwardDebug (return m!"reduction") do
-        withReducible $ reduceAll assignment
+      let assignment ← withConstAesopTraceNode .forwardDebug (return m!"rpinf") do
+        let e ← rpinf assignment
+        aesop_trace[forwardDebug] e.expr
+        pure e
       return subst.insert var assignment
 
 /-- Add a match to the cluster state. Returns the new cluster state and any new
@@ -435,7 +435,7 @@ def addHypCore (newCompleteMatches : Array Match) (cs : ClusterState)
 match the premise corresponding to `slot`, then the hypothesis is not added. -/
 def addHyp (premises : Array MVarId) (numPremiseIndexes : Nat)
     (cs : ClusterState) (i : PremiseIndex) (h : FVarId) :
-    MetaM (ClusterState × Array Match) := do
+    M (ClusterState × Array Match) := do
   let some slot := cs.findSlot? i
     | return (cs, #[])
   let some subst ← cs.matchPremise? premises numPremiseIndexes slot.index h
@@ -483,7 +483,7 @@ structure RuleState where
   /-- The sources of all pattern instantiations present in the
   `clusterStates`. Invariant: each pattern instantiation in the cluster states
   is associated with a nonempty set. -/
-  patInstSources : PHashMap RulePatternInstantiation (PHashSet PatInstSource)
+  patInstSources : PHashMap RPINFRulePatternInstantiation (PHashSet PatInstSource)
   deriving Inhabited
 
 instance : ToMessageData RuleState where
@@ -508,11 +508,11 @@ namespace RuleState
 completed matches. If `h` does not match premise `pi`, nothing happens. -/
 def addHypOrPatInst (goal : MVarId) (h : Sum FVarId Substitution)
     (pi : PremiseIndex) (rs : RuleState) :
-    MetaM (RuleState × Array CompleteMatch) :=
+    M (RuleState × Array CompleteMatch) :=
   withNewMCtxDepth do
     let some ruleExpr ←
       withConstAesopTraceNode .forwardDebug (return m!"elab rule term") do
-        observing? $ elabForwardRuleTerm goal rs.rule.term
+        show MetaM _ from observing? $ elabForwardRuleTerm goal rs.rule.term
       | return (rs, #[])
     let (premises, _, _) ←
       withConstAesopTraceNode .forwardDebug (return m!"open rule term") do
@@ -571,7 +571,7 @@ where
       return newCompleteMatches
 
 /-- Erase a pattern instantiation that was obtained from the given source. -/
-def erasePatInst (inst : RulePatternInstantiation) (source : PatInstSource)
+def erasePatInst (inst : RPINFRulePatternInstantiation) (source : PatInstSource)
     (rs : RuleState) : RuleState := Id.run do
   let some sources := rs.patInstSources[inst]
     | panic! s!"unknown pattern instantiation {inst.toArray} for rule {rs.rule.name}"
@@ -614,7 +614,7 @@ structure ForwardState where
   /-- The pattern instantiations present in the rule states. Invariant:
   `patInsts` maps the source `s` to a rule name `r` and pattern instantiation `i`
   iff the rule state of `r` contains `i` with source `s`. -/
-  patInsts : PHashMap PatInstSource (PArray (RuleName × RulePatternInstantiation))
+  patInsts : PHashMap PatInstSource (PArray (RuleName × RPINFRulePatternInstantiation))
  deriving Inhabited
 
 namespace ForwardState
@@ -644,7 +644,7 @@ private def addForwardRuleMatches (acc : Array ForwardRuleMatch)
 overapproximate the rules for which `h` may unify with a maximal premise. -/
 def addHypCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
     (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
-    (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) := do
+    (fs : ForwardState) : M (ForwardState × Array ForwardRuleMatch) := do
   goal.withContext do
   withConstAesopTraceNode .forward (return m!"add hyp {Expr.fvar h}") do
     ms.foldlM (init := (fs, ruleMatches)) λ (fs, ruleMatches) (r, i) => do
@@ -661,13 +661,13 @@ def addHypCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
 @[inherit_doc addHypCore]
 def addHyp (goal : MVarId) (h : FVarId)
     (ms : Array (ForwardRule × PremiseIndex)) (fs : ForwardState) :
-    MetaM (ForwardState × Array ForwardRuleMatch) :=
+    M (ForwardState × Array ForwardRuleMatch) :=
   fs.addHypCore #[] goal h ms
 
 /-- Add a pattern instantiation to the forward state. -/
 def addPatInstCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
-    (r : ForwardRule) (patInst : RulePatternInstantiation) (fs : ForwardState) :
-    MetaM (ForwardState × Array ForwardRuleMatch) :=
+    (r : ForwardRule) (patInst : RPINFRulePatternInstantiation) (fs : ForwardState) :
+    M (ForwardState × Array ForwardRuleMatch) :=
   goal.withContext do
   withConstAesopTraceNode .forward (return m!"add pat inst {patInst} to rule {r.name}") do
     let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState
@@ -681,37 +681,37 @@ def addPatInstCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
 
 @[inherit_doc addPatInstCore]
 def addPatInst (goal : MVarId) (r : ForwardRule)
-    (patInst : RulePatternInstantiation) (fs : ForwardState) :
-    MetaM (ForwardState × Array ForwardRuleMatch) :=
+    (patInst : RPINFRulePatternInstantiation) (fs : ForwardState) :
+    M (ForwardState × Array ForwardRuleMatch) :=
   fs.addPatInstCore #[] goal r patInst
 
 /-- Add multiple pattern instantiations to the forward state. -/
 def addPatInstsCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
-    (patInsts : Array (ForwardRule × RulePatternInstantiation))
-    (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) := do
+    (patInsts : Array (ForwardRule × RPINFRulePatternInstantiation))
+    (fs : ForwardState) : M (ForwardState × Array ForwardRuleMatch) := do
   patInsts.foldlM (init := (fs, ruleMatches)) λ (fs, ruleMatches) (r, patInst) =>
     fs.addPatInstCore ruleMatches goal r patInst
 
 @[inherit_doc addPatInstsCore]
 def addPatInsts (goal : MVarId)
-    (patInsts : Array (ForwardRule × RulePatternInstantiation))
-    (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) :=
+    (patInsts : Array (ForwardRule × RPINFRulePatternInstantiation))
+    (fs : ForwardState) : M (ForwardState × Array ForwardRuleMatch) :=
   fs.addPatInstsCore #[] goal patInsts
 
 /-- Add a hypothesis and to the forward state, along with any rule pattern
 instantiations obtained from it. -/
 def addHypWithPatInstsCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
     (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
-    (patInsts : Array (ForwardRule × RulePatternInstantiation))
-    (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) := do
+    (patInsts : Array (ForwardRule × RPINFRulePatternInstantiation))
+    (fs : ForwardState) : M (ForwardState × Array ForwardRuleMatch) := do
   let (fs, ruleMatches) ← fs.addHypCore ruleMatches goal h ms
   fs.addPatInstsCore ruleMatches goal patInsts
 
 @[inherit_doc addHypWithPatInstsCore]
 def addHypWithPatInsts (goal : MVarId) (h : FVarId)
     (ms : Array (ForwardRule × PremiseIndex))
-    (patInsts : Array (ForwardRule × RulePatternInstantiation))
-    (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) :=
+    (patInsts : Array (ForwardRule × RPINFRulePatternInstantiation))
+    (fs : ForwardState) : M (ForwardState × Array ForwardRuleMatch) :=
   fs.addHypWithPatInstsCore #[] goal h ms patInsts
 
 /-- Erase pattern instantiations with the given source. -/
@@ -747,8 +747,8 @@ def eraseTargetPatInsts (fs : ForwardState) : ForwardState :=
 instantiations. -/
 def updateTargetPatInstsCore (ruleMatches : Array ForwardRuleMatch)
     (goal : MVarId)
-    (newPatInsts : Array (ForwardRule × RulePatternInstantiation))
-    (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) :=
+    (newPatInsts : Array (ForwardRule × RPINFRulePatternInstantiation))
+    (fs : ForwardState) : M (ForwardState × Array ForwardRuleMatch) :=
   -- TODO Instead of erasing all target pattern instantiations, erase only those
   -- not present in the new target.
   let fs := fs.eraseTargetPatInsts
@@ -756,8 +756,8 @@ def updateTargetPatInstsCore (ruleMatches : Array ForwardRuleMatch)
 
 @[inherit_doc updateTargetPatInstsCore]
 def updateTargetPatInsts (goal : MVarId)
-    (newPatInsts : Array (ForwardRule × RulePatternInstantiation))
-    (fs : ForwardState) : MetaM (ForwardState × Array ForwardRuleMatch) :=
+    (newPatInsts : Array (ForwardRule × RPINFRulePatternInstantiation))
+    (fs : ForwardState) : M (ForwardState × Array ForwardRuleMatch) :=
   fs.updateTargetPatInstsCore #[] goal newPatInsts
 
 end Aesop.ForwardState

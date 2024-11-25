@@ -19,7 +19,7 @@ corresponding premises. We represent substitutions as arrays with one element
 for each premise index. Hence, a substitution for a rule `r` must have size
 `r.numPremiseIndexes`. -/
 structure Substitution where
-  toArray : Array (Option Expr)
+  toArray : Array (Option RPINF)
   deriving BEq, Hashable, Inhabited
 
 namespace Substitution
@@ -31,13 +31,13 @@ def empty (numPremiseIndexes : Nat) : Substitution := Id.run do
 
 /-- Insert the mapping `pi ↦ inst` into the substitution `s`. Precondition: `pi`
 is in the domain of `s`. -/
-def insert (pi : PremiseIndex) (inst : Expr) (s : Substitution) :
+def insert (pi : PremiseIndex) (inst : RPINF) (s : Substitution) :
     Substitution :=
   ⟨s.toArray.set! pi.toNat inst ⟩
 
 /-- Get the instantiation associated with premise `pi` in `s`. Precondition:
 `pi` is in the domain of `s`. -/
-def find? (pi : PremiseIndex) (s : Substitution) : Option Expr :=
+def find? (pi : PremiseIndex) (s : Substitution) : Option RPINF :=
   s.toArray[pi.toNat]!
 
 instance : ToMessageData Substitution where
@@ -63,23 +63,23 @@ def mergeCompatible (s₁ s₂ : Substitution) : Substitution := Id.run do
 def containsHyp (hyp : FVarId) (s : Substitution) : Bool :=
   s.toArray.any λ
     | none => false
-    | some e => e.containsFVar hyp
+    | some e => e.expr.containsFVar hyp
 
 end Substitution
 
-namespace RulePatternInstantiation
+namespace RPINFRulePatternInstantiation
 
 /-- Convert a rule pattern instantiation to a substitution. `pat` is the rule
 pattern that was instantiated and `numPremiseIndexes` is the rule to which this
 pattern belongs. -/
 def toSubstitution (pat : RulePattern) (numPremiseIndexes : Nat)
-    (patInst : RulePatternInstantiation) :
+    (patInst : RPINFRulePatternInstantiation) :
     Except String Substitution := do
   let mut subst := .empty numPremiseIndexes
   for i in pat.boundPremises do
-    let some inst ← pat.getInstantiation patInst i
+    let some inst ← pat.getRPINFInstantiation patInst i
       | throw s!"pattern instantiation {patInst.toArray} does not contain an instantiation for premise {i}"
     subst := subst.insert ⟨i⟩ inst
   return subst
 
-end Aesop.RulePatternInstantiation
+end Aesop.RPINFRulePatternInstantiation

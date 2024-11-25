@@ -85,6 +85,10 @@ end RPINf
 
 structure RPINFCache where
   rpinf : Std.HashMap Expr Expr := ∅
+  deriving Inhabited
+
+instance : EmptyCollection RPINFCache :=
+  ⟨{}⟩
 
 class abbrev MonadRPINF (m) :=
   MonadStateOf RPINFCache m
@@ -105,9 +109,25 @@ instance : MonadHashMapCacheAdapter Expr Expr m where
 instance : AddErrorMessageContext m where
   add stx msg := (AddErrorMessageContext.add stx msg : MetaM _)
 
+instance : AddMessageContext m where
+  addMessageContext msg := (AddMessageContext.addMessageContext msg : MetaM _)
+
 instance : MonadMCtx m where
   getMCtx := (getMCtx : MetaM _)
   modifyMCtx f := (modifyMCtx f : MetaM _)
+
+instance : MonadLiftT BaseIO m where
+  monadLift x := (x : MetaM _)
+
+instance : MonadLiftT IO m where
+  monadLift x := (x : MetaM _)
+
+instance : MonadTrace m where
+  getTraceState := (getTraceState : MetaM _)
+  modifyTraceState f := (modifyTraceState f : MetaM _)
+
+instance : MonadOptions m where
+  getOptions := (getOptions : MetaM _)
 
 @[specialize]
 partial def pinfCore (e : Expr) : m Expr :=
@@ -156,19 +176,19 @@ def pinf (e : Expr) : m Expr := do
   pinfCore (← instantiateMVars e)
 
 def pinf' (e : Expr) : MetaM Expr := do
-  (pinfCore (← instantiateMVars e) : RPINFT MetaM _).run' {}
+  (pinfCore (← instantiateMVars e) : RPINFT MetaM _).run' ∅
 
 def rpinfExpr (e : Expr) : m Expr :=
   withReducible $ pinf e
 
 def rpinfExpr' (e : Expr) : MetaM Expr :=
-  (rpinfExpr e : RPINFT MetaM _).run' {}
+  (rpinfExpr e : RPINFT MetaM _).run' ∅
 
 def rpinf (e : Expr) : m RPINF := do
   let expr ← rpinfExpr e
   return { expr, hash := rpinfHash expr }
 
 def rpinf' (e : Expr) : MetaM RPINF :=
-  (rpinf e : RPINFT MetaM _).run' {}
+  (rpinf e : RPINFT MetaM _).run' ∅
 
 end Aesop

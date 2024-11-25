@@ -79,7 +79,7 @@ instance : MonadLift TreeM (SearchM Q) where
 protected def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (tree : Tree)
     (x : SearchM Q α) : MetaM (α × SearchM.State Q × Tree × Stats) := do
   let ((a, σ), t) ←
-    x.run ctx |>.run σ |>.run { tree, rulePatternCache := ∅ }
+    x.run ctx |>.run σ |>.run { tree, rulePatternCache := ∅, rpinfCache := ∅ }
   return (a, σ, t.tree, ← ctx.statsRef.get)
 
 protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')

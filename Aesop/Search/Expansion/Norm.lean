@@ -31,6 +31,7 @@ structure State where
   forwardState : ForwardState
   forwardRuleMatches : ForwardRuleMatches
   rulePatternCache : RulePatternCache
+  rpinfCache : RPINFCache
   deriving Inhabited
 
 end NormM
@@ -47,15 +48,22 @@ instance (priority := low) : MonadStateOf RulePatternCache NormM where
     let (a, c) := f s.rulePatternCache
     (a, { s with rulePatternCache := c })
 
+instance (priority := low) : MonadStateOf RPINFCache NormM where
+  get := return (← get).rpinfCache
+  set c := modify λ s => { s with rpinfCache := c }
+  modifyGet f := modifyGet λ s =>
+    let (a, c) := f s.rpinfCache
+    (a, { s with rpinfCache := c })
+
 def getForwardState : NormM ForwardState :=
-  return (← get).forwardState
+  return (← getThe NormM.State).forwardState
 
 def getResetForwardState : NormM ForwardState := do
-  modifyGet λ s => (s.forwardState, { s with forwardState := ∅ })
+  modifyGetThe NormM.State λ s => (s.forwardState, { s with forwardState := ∅ })
 
 def updateForwardState (fs : ForwardState) (newMatches : Array ForwardRuleMatch)
     (erasedHyps : Std.HashSet FVarId) : NormM Unit :=
-  modify λ s => { s with
+  modifyThe NormM.State λ s => { s with
     forwardState := fs
     forwardRuleMatches :=
       s.forwardRuleMatches.update newMatches erasedHyps
@@ -63,7 +71,7 @@ def updateForwardState (fs : ForwardState) (newMatches : Array ForwardRuleMatch)
   }
 
 def eraseForwardRuleMatch (m : ForwardRuleMatch) : NormM Unit := do
-  modify λ s => { s with forwardRuleMatches := s.forwardRuleMatches.erase m }
+  modifyThe NormM.State λ s => { s with forwardRuleMatches := s.forwardRuleMatches.erase m }
 
 def applyDiffToForwardState (diff : GoalDiff) : NormM Unit := do
   let fs ← getResetForwardState
@@ -335,7 +343,9 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
   let mut anySuccess := false
   while iteration < maxIterations do
     if step.val == 0 then
-      let rules ← selectNormRules ctx.ruleSet (← get).forwardRuleMatches goal
+      let rules ←
+        selectNormRules ctx.ruleSet (← getThe NormM.State).forwardRuleMatches
+          goal
       let (preSimpRules', postSimpRules') :=
         rules.partition λ r => r.rule.extra.penalty < (0 : Int)
       preSimpRules := preSimpRules'
@@ -421,11 +431,13 @@ def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
     forwardState := g.forwardState
     forwardRuleMatches := g.forwardRuleMatches
     rulePatternCache := ← getResetRulePatternCache
+    rpinfCache := ← getResetRPINFCache
   }
-  let ((normResult, { forwardState, forwardRuleMatches, rulePatternCache }), postState) ←
+  let ((normResult, { forwardState, forwardRuleMatches, rulePatternCache, rpinfCache }), postState) ←
     g.runMetaMInParentState do
       normalizeGoalMVar preGoal g.mvars |>.run normCtx |>.run normState
   setRulePatternCache rulePatternCache
+  setRPINFCache rpinfCache
   match normResult with
   | .changed postGoal script? =>
     gref.modify λ g =>
