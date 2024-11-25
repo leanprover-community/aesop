@@ -536,4 +536,8 @@ def withExceptionPrefix [Monad m] [MonadError m] (pre : MessageData) :
     m α → m α :=
   withExceptionTransform (λ msg => pre ++ msg)
 
+def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
+  withOptions (·.setBool `pp.analyze true |>.setBool `pp.proofs true) x
+  -- `pp.proofs` works around lean4#6216
+
 end Aesop

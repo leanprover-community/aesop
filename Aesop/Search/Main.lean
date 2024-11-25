@@ -110,9 +110,6 @@ def checkRootUnprovable : SearchM Q (Option MessageData) := do
 def getProof? : SearchM Q (Option Expr) := do
   getExprMVarAssignment? (← getRootMVarId)
 
-private def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
-  withOptions (·.setBool `pp.analyze true) x
-
 def finalizeProof : SearchM Q Unit := do
   (← getRootMVarId).withContext do
     extractProof
