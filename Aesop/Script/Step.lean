@@ -109,8 +109,9 @@ structure LazyStep where
 
 namespace LazyStep
 
-def runFirstSuccessfulTacticBuilder (s : LazyStep) : MetaM Tactic := do
+def runFirstSuccessfulTacticBuilder (s : LazyStep) : MetaM Tactic :=
   withConstAesopTraceNode .script (return m!"converting lazy step to step") do
+  withPPAnalyze do
     let initialState ← saveState
     for b in s.tacticBuilders[:s.tacticBuilders.size - 1] do
       if let some tactic ← tryTacticBuilder b then
