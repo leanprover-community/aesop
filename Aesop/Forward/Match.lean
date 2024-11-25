@@ -59,7 +59,8 @@ def addHypOrPatternInst (subst : Substitution) (isPatInst : Bool)
 
 /-- Returns `true` if the match contains the given hyp. -/
 def containsHyp (hyp : FVarId) (m : Match) : Bool :=
-  m.subst.toArray.any (· == some (.fvar hyp))
+  let fvar := .fvar hyp
+  m.subst.toArray.any (·.any (·.expr == fvar))
 
 /-- Returns `true` if the match contains the given pattern instantiation. -/
 def containsPatInst (subst : Substitution) (m : Match) : Bool :=
@@ -72,7 +73,7 @@ namespace CompleteMatch
 /-- Given a complete match `m` for `r`, get arguments to `r` contained in the
 match's slots and substitution. For non-immediate arguments, we return `none`. -/
 def reconstructArgs (r : ForwardRule) (m : CompleteMatch) :
-    Array (Option Expr) := Id.run do
+    Array (Option RPINF) := Id.run do
   assert! m.clusterMatches.size == r.slotClusters.size
   let mut subst : Substitution := .empty r.numPremiseIndexes
   for m in m.clusterMatches do
@@ -104,9 +105,10 @@ protected def le (m₁ m₂ : ForwardRuleMatch) : Bool :=
 def foldHypsM [Monad M] (f : σ → FVarId → M σ) (init : σ)
     (m : ForwardRuleMatch) : M σ :=
   m.match.clusterMatches.foldlM (init := init) λ s cm =>
-    cm.subst.toArray.foldrM (init := s) λ
-      | some (.fvar hyp), s => f s hyp
-      | _, s => pure s
+    cm.subst.toArray.foldlM (init := s) λ
+      | s, some { expr, .. } =>
+        if let .fvar hyp := expr.consumeMData then f s hyp else pure s
+      | s, _ => pure s
 
 /-- Fold over the hypotheses contained in a match. -/
 def foldHyps (f : σ → FVarId → σ) (init : σ) (m : ForwardRuleMatch) : σ :=
@@ -116,7 +118,8 @@ def foldHyps (f : σ → FVarId → σ) (init : σ) (m : ForwardRuleMatch) : σ 
 def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
   m.match.clusterMatches.any λ m =>
     m.subst.toArray.any λ
-      | some (.fvar hyp) => f hyp
+      | some { expr, .. } =>
+        if let .fvar hyp := expr.consumeMData then f hyp else false
       | _ => false
 
 /-- Get the hypotheses from the match whose types are propositions.  -/
@@ -138,8 +141,8 @@ def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
     aesop_trace[forward] "args: {args.map λ | none => m!"_" | some e => m!"{e}"}"
     for arg? in args, mvar in argMVars do
       if let some arg := arg? then
-        if ! (← isDefEq arg mvar) then
-          throwError "type mismatch during reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\n: expected{indentExpr (← inferType mvar)}\nbut got{indentExpr arg} : {← inferType arg}"
+        if ! (← isDefEq arg.expr mvar) then
+          throwError "type mismatch during reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\n: expected{indentExpr (← inferType mvar)}\nbut got{indentExpr arg.expr} : {← inferType arg.expr}"
     try
       synthAppInstances `aesop goal argMVars binderInfos
         (synthAssignedInstances := false) (allowSynthFailures := false)

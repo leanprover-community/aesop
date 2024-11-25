@@ -39,6 +39,12 @@ def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : MetaM Tree := do
       findCached? := λ _ => return none
       cache := λ _ _ => return
     }
+    -- Ditto for the RPINF cache
+    have : MonadRPINF MetaM := {
+      get := return default
+      set := λ _ => return default
+      modifyGet := λ f => return f default |>.fst
+    }
     rs.mkInitialForwardState goal
   let rootGoalRef ← IO.mkRef $ Goal.mk {
     id := GoalId.zero
@@ -79,6 +85,7 @@ structure TreeM.Context where
 structure TreeM.State where
   tree : Tree
   rulePatternCache : RulePatternCache
+  rpinfCache : RPINFCache
 
 abbrev TreeM := ReaderT TreeM.Context $ StateRefT TreeM.State MetaM
 
@@ -101,7 +108,7 @@ instance : Inhabited (TreeM α) where
 
 def run' (ctx : TreeM.Context) (tree : Tree) (x : TreeM α) :
     MetaM (α × TreeM.State) :=
-  ReaderT.run x ctx |>.run { tree, rulePatternCache := ∅ }
+  ReaderT.run x ctx |>.run { tree, rulePatternCache := ∅, rpinfCache := ∅ }
 
 end TreeM
 
@@ -148,5 +155,10 @@ def getResetRulePatternCache : TreeM RulePatternCache :=
 def setRulePatternCache (cache : RulePatternCache): TreeM Unit :=
   modify λ s => { s with rulePatternCache := cache }
 
+def getResetRPINFCache : TreeM RPINFCache :=
+  modifyGet λ s => (s.rpinfCache, { s with rpinfCache := ∅ })
+
+def setRPINFCache (cache : RPINFCache): TreeM Unit :=
+  modify λ s => { s with rpinfCache := cache }
 
 end Aesop

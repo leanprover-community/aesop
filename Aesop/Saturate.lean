@@ -25,6 +25,7 @@ structure SaturateM.Context where
 
 structure SaturateM.State where
   rulePatternCache : RulePatternCache := {}
+  rpinfCache : RPINFCache := ∅
   deriving Inhabited
 
 abbrev SaturateM :=
@@ -38,6 +39,13 @@ instance (priority := low) : MonadStateOf RulePatternCache SaturateM where
   modifyGet f := modifyGet λ s =>
     let (a, c) := f s.rulePatternCache
     (a, { s with rulePatternCache := c })
+
+instance (priority := low) : MonadStateOf RPINFCache SaturateM where
+  get := return (← get).rpinfCache
+  set c := modify λ s => { s with rpinfCache := c }
+  modifyGet f := modifyGet λ s =>
+    let (a, c) := f s.rpinfCache
+    (a, { s with rpinfCache := c })
 
 def run (options : Aesop.Options') (x : SaturateM α) :
     MetaM (α × Array Script.LazyStep) :=

@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.RPINF
 import Aesop.Rule.Name
 import Aesop.Tracing
 import Aesop.Index.DiscrTreeConfig
@@ -63,11 +64,37 @@ end RulePattern
 def RulePatternInstantiation := Array Expr
   deriving Inhabited, BEq, Hashable, ToMessageData
 
-def RulePatternInstantiation.toArray : RulePatternInstantiation → Array Expr :=
+def RPINFRulePatternInstantiation := Array RPINF
+  deriving Inhabited, BEq, Hashable, ToMessageData
+
+namespace RulePatternInstantiation
+
+def toArray : RulePatternInstantiation → Array Expr :=
   id
 
 instance : EmptyCollection RulePatternInstantiation :=
   ⟨.empty⟩
+
+variable [Monad m] [MonadRPINF m]
+
+def rpinf (inst : RulePatternInstantiation) : m RPINFRulePatternInstantiation :=
+  inst.mapM Aesop.rpinf
+
+end RulePatternInstantiation
+
+namespace RPINFRulePatternInstantiation
+
+def toArray : RPINFRulePatternInstantiation → Array RPINF :=
+  id
+
+def toRulePatternInstantiation (inst : RPINFRulePatternInstantiation) :
+    RulePatternInstantiation :=
+  inst.map (·.expr)
+
+instance : EmptyCollection RPINFRulePatternInstantiation :=
+  ⟨.empty⟩
+
+end RPINFRulePatternInstantiation
 
 namespace RulePattern
 
@@ -76,6 +103,14 @@ def getInstantiation (pat : RulePattern) (inst : RulePatternInstantiation)
   -- It's possible that `argMap[argIndex]? = none` if the rule type is
   -- syntactically `∀ (x₁ : T₁) ... (xₙ : Tₙ) = U` and `U` is a `forall` up to
   -- the rule's transparency.
+  let some (some instIndex) := pat.argMap[argIndex]?
+    | return none
+  let some inst := inst.toArray[instIndex]?
+    | throw s!"getInstantiation: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
+  return some inst
+
+def getRPINFInstantiation (pat : RulePattern) (inst : RPINFRulePatternInstantiation)
+    (argIndex : Nat) : Except String (Option RPINF) := do
   let some (some instIndex) := pat.argMap[argIndex]?
     | return none
   let some inst := inst.toArray[instIndex]?
