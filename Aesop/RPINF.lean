@@ -86,17 +86,28 @@ end RPINf
 structure RPINFCache where
   rpinf : Std.HashMap Expr Expr := ∅
 
-abbrev MonadRPINF m := MonadStateOf RPINFCache m
-
-instance [Monad m] [MonadRPINF m] : MonadHashMapCacheAdapter Expr Expr m where
-  getCache := return (← getThe RPINFCache).rpinf
-  modifyCache f := modifyThe RPINFCache λ s => { s with rpinf := f s.rpinf }
+class abbrev MonadRPINF (m) :=
+  MonadStateOf RPINFCache m
+  MonadLiftT MetaM m
+  MonadControlT MetaM m
+  MonadExceptOf Exception m
+  MonadRef m
+  MonadRecDepth m
 
 abbrev RPINFT m [STWorld ω m] := StateRefT RPINFCache m
 
 variable [Monad m] [MonadRPINF m] [MonadLiftT MetaM m] [MonadControlT MetaM m]
-  [MonadMCtx m] [MonadLiftT (ST IO.RealWorld) m] [MonadError m] [MonadRecDepth m]
-  [MonadLiftT BaseIO m]
+
+instance : MonadHashMapCacheAdapter Expr Expr m where
+  getCache := return (← getThe RPINFCache).rpinf
+  modifyCache f := modifyThe RPINFCache λ s => { s with rpinf := f s.rpinf }
+
+instance : AddErrorMessageContext m where
+  add stx msg := (AddErrorMessageContext.add stx msg : MetaM _)
+
+instance : MonadMCtx m where
+  getMCtx := (getMCtx : MetaM _)
+  modifyMCtx f := (modifyMCtx f : MetaM _)
 
 @[specialize]
 partial def pinfCore (e : Expr) : m Expr :=
