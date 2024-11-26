@@ -68,9 +68,8 @@ def mvarId (g : Subgoal) : MVarId :=
 
 end Subgoal
 
-def mvarIdToSubgoal (parentMVarId mvarId : MVarId) (fvarSubst : FVarIdSubst) :
-    MetaM Subgoal :=
-  return { diff := ← diffGoals parentMVarId mvarId fvarSubst }
+def mvarIdToSubgoal (parentMVarId mvarId : MVarId) : BaseM Subgoal :=
+  return { diff := ← diffGoals parentMVarId mvarId }
 
 /--
 A single rule application, representing the application of a tactic to the input
@@ -94,8 +93,8 @@ structure RuleApplication where
 namespace RuleApplication
 
 def check (r : RuleApplication) (input : RuleTacInput) :
-    MetaM (Option MessageData) :=
-  r.postState.runMetaM' do
+    BaseM (Option MessageData) :=
+  runInMetaState r.postState do
     for goal in r.goals do
       if ← goal.mvarId.isAssignedOrDelayedAssigned then
         return some m!"subgoal metavariable ?{goal.mvarId.name} is already assigned."
@@ -148,7 +147,7 @@ def RuleTac.ofTacticSyntax (t : RuleTacInput → MetaM Syntax.Tactic) : RuleTac 
       tacticBuilders := #[return .unstructured stx]
       preState, postState, postGoals
     }
-    let postGoals ← postGoals.mapM (mvarIdToSubgoal input.goal · ∅)
+    let postGoals ← postGoals.mapM (mvarIdToSubgoal input.goal ·)
     return (postGoals, some #[step], none)
 
 /--

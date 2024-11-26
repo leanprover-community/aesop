@@ -67,18 +67,19 @@ partial def cases (target : CasesTarget) (md : TransparencyMode)
       let mut newGoals := newGoals
       for h : i in [:goals.size] do
         let g := goals[i]
-        let newDiff ← diffGoals goal g.mvarId ∅
+        let newDiff ← diffGoals goal g.mvarId
         let mut excluded := excluded
         if isRecursiveType then
-          excluded :=
-            excluded.map newDiff.fvarSubst.get ++ newDiff.addedFVars.toArray
+          excluded := excluded.map λ fvarId =>
+            if let .fvar fvarId' := g.subst.get fvarId then fvarId' else fvarId
+          excluded := excluded ++ newDiff.addedFVars.toArray
         match ← go initialGoal newGoals excluded g.mvarId with
         | some newGoals' => newGoals := newGoals'
         | none =>
           -- TODO We used to use a method that produces a more clever goal diff,
           -- using the fvarSubst reported by `cases`. Restore this once
           -- ForwardState.applyGoalDiff can deal with nonempty fvarSubsts.
-          let diff ← diffGoals initialGoal g.mvarId ∅
+          let diff ← diffGoals initialGoal g.mvarId
           newGoals := newGoals.push { diff }
       return some newGoals
 

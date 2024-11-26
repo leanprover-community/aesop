@@ -94,7 +94,7 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
     let (forwardState, forwardRuleMatches, mvars) ←
       runInMetaState parentMetaState do
         let start ← start.get
-        let diff ← diffGoals start.currentGoal g.preNormGoal ∅
+        let diff ← diffGoals start.currentGoal g.preNormGoal
         let (forwardState, ms) ← start.forwardState.applyGoalDiff rs diff
         let forwardRuleMatches :=
           start.forwardRuleMatches.update ms diff.removedFVars
@@ -218,12 +218,12 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   -- Turn the dropped mvars into subgoals. Note: an mvar that was dropped by the
   -- rapp may occur in the copied goals, in which case we don't count it as
   -- dropped any more.
-  let droppedSubgoals : Array Subgoal ← r.postState.runMetaM' do
+  let droppedSubgoals : Array Subgoal ← runInMetaState r.postState do
     let mut droppedMVars := #[]
     for mvarId in parentGoal.mvars do
       unless ← (pure $ originalSubgoalAndCopiedGoalMVars.contains mvarId) <||>
                mvarId.isAssignedOrDelayedAssigned do
-        let diff ← diffGoals parentGoal.currentGoal mvarId ∅
+        let diff ← diffGoals parentGoal.currentGoal mvarId
         droppedMVars := droppedMVars.push { diff }
     pure droppedMVars
 

@@ -226,7 +226,7 @@ def normSimpCore (goal : MVarId) (goalMVars : Std.HashSet MVarId) :
     | .simplified newGoal usedTheorems => do
       let step ←
         mkNormSimpScriptStep goal newGoal preState postState usedTheorems
-      applyDiffToForwardState (← diffGoals goal newGoal ∅)
+      applyDiffToForwardState (← diffGoals goal newGoal)
       return some $ .succeeded newGoal #[step]
 where
   addLocalRules (localRules : Array LocalNormSimpRule) (ctx : Simp.Context)
@@ -279,7 +279,7 @@ def normUnfoldCore (goal : MVarId) : NormM (Option NormRuleResult) := do
     aesop_trace[steps] "nothing to unfold"
     return none
   | some newGoal =>
-    applyDiffToForwardState (← diffGoals goal newGoal ∅)
+    applyDiffToForwardState (← diffGoals goal newGoal)
     return some $ .succeeded newGoal steps
 
 def normUnfold (goal : MVarId) : NormM (Option NormRuleResult) := do

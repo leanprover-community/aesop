@@ -27,7 +27,6 @@ def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
       newGoal := goal
       addedFVars
       removedFVars := ∅
-      fvarSubst := ∅
       targetMaybeChanged := true
     }
     return (#[{ diff }], steps, none)
