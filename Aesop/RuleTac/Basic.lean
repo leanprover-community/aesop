@@ -125,7 +125,7 @@ A `RuleTac` which generates only a single `RuleApplication`.
 -/
 def SingleRuleTac :=
   RuleTacInput →
-  MetaM (Array Subgoal × Option (Array Script.LazyStep) × Option Percent)
+  BaseM (Array Subgoal × Option (Array Script.LazyStep) × Option Percent)
 
 @[inline]
 def SingleRuleTac.toRuleTac (t : SingleRuleTac) : RuleTac := λ input => do

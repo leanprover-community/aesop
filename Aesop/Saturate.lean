@@ -33,9 +33,6 @@ abbrev SaturateM :=
 
 namespace SaturateM
 
-instance : MonadLift ScriptM SaturateM where
-  monadLift x := λ _ _ steps _ => x steps
-
 def run (options : Aesop.Options') (x : SaturateM α) :
     MetaM (α × Array Script.LazyStep) :=
   ReaderT.run x { options } |>.run' {} |>.run.run

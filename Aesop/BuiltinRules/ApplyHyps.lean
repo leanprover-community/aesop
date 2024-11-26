@@ -12,7 +12,7 @@ open Lean
 open Lean.Meta
 
 def applyHyp (hyp : FVarId) (goal : MVarId) (md : TransparencyMode) :
-    MetaM RuleApplication := do
+    BaseM RuleApplication := do
   let (goals, #[step]) ← applyS goal (.fvar hyp) none md |>.run
     | throwError "aesop: internal error in applyHyps: multiple steps"
   return {

@@ -38,7 +38,7 @@ def assumption : RuleTac := λ input => do
     return ⟨applications⟩
   where
     tryHyp (goal : MVarId) (fvarId : FVarId) (md : TransparencyMode) :
-        MetaM (Option (RuleApplication × Bool)) := do
+        BaseM (Option (RuleApplication × Bool)) := do
       let (true, steps) ← tryExactFVarS goal fvarId md |>.run
         | return none
       let #[step] := steps
