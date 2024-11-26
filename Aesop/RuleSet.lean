@@ -456,15 +456,9 @@ private def rulePredicate (opts : Lean.Options) (rs : LocalRuleSet)
   else
     λ r => include? r && ! rs.isErased r.name
 
-variable [Monad m] [MonadRulePatternCache m] [MonadLiftT MetaM m]
-  [MonadControlT MetaM m]
-
-local instance : MonadOptions m where
-  getOptions := (getOptions : MetaM _)
-
 def applicableNormalizationRulesWith (rs : LocalRuleSet)
     (fms : ForwardRuleMatches) (goal : MVarId)
-    (include? : NormRule → Bool) : m (Array (IndexMatchResult NormRule)) := do
+    (include? : NormRule → Bool) : BaseM (Array (IndexMatchResult NormRule)) := do
   let opts ← getOptions
   let normFwdRules := fms.normRules.filter (fwdRulePredicate opts rs include?)
   let patInstMap ← rs.rulePatterns.getInGoal goal
@@ -473,12 +467,12 @@ def applicableNormalizationRulesWith (rs : LocalRuleSet)
 
 @[inline, always_inline]
 def applicableNormalizationRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
-    (goal : MVarId) : m (Array (IndexMatchResult NormRule)) :=
+    (goal : MVarId) : BaseM (Array (IndexMatchResult NormRule)) :=
   rs.applicableNormalizationRulesWith fms goal (include? := λ _ => true)
 
 def applicableUnsafeRulesWith (rs : LocalRuleSet) (fms : ForwardRuleMatches)
     (goal : MVarId) (include? : UnsafeRule → Bool) :
-    m (Array (IndexMatchResult UnsafeRule)) := do
+    BaseM (Array (IndexMatchResult UnsafeRule)) := do
   let opts ← getOptions
   let unsafeFwdRules :=
     fms.unsafeRules.filter (fwdRulePredicate opts rs include?)
@@ -488,12 +482,12 @@ def applicableUnsafeRulesWith (rs : LocalRuleSet) (fms : ForwardRuleMatches)
 
 @[inline, always_inline]
 def applicableUnsafeRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
-    (goal : MVarId) : m (Array (IndexMatchResult UnsafeRule)) :=
+    (goal : MVarId) : BaseM (Array (IndexMatchResult UnsafeRule)) :=
   rs.applicableUnsafeRulesWith fms goal (include? := λ _ => true)
 
 def applicableSafeRulesWith (rs : LocalRuleSet) (fms : ForwardRuleMatches)
     (goal : MVarId) (include? : SafeRule → Bool) :
-    m (Array (IndexMatchResult SafeRule)) := do
+    BaseM (Array (IndexMatchResult SafeRule)) := do
   let opts ← getOptions
   let safeFwdRules := fms.safeRules.filter (fwdRulePredicate opts rs include?)
   let patInstMap ← rs.rulePatterns.getInGoal goal
@@ -502,7 +496,7 @@ def applicableSafeRulesWith (rs : LocalRuleSet) (fms : ForwardRuleMatches)
 
 @[inline, always_inline]
 def applicableSafeRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
-    (goal : MVarId) : m (Array (IndexMatchResult SafeRule)) :=
+    (goal : MVarId) : BaseM (Array (IndexMatchResult SafeRule)) :=
   rs.applicableSafeRulesWith fms goal (include? := λ _ => true)
 
 def applicableForwardRulesWith (rs : LocalRuleSet) (e : Expr)
@@ -529,17 +523,14 @@ def constForwardRuleMatches (rs : LocalRuleSet) : Array ForwardRuleMatch :=
 
 section ForwardRulePattern
 
-variable [Monad M] [MonadRulePatternCache M] [MonadRPINF M]
-  [MonadAlwaysExcept Exception M]
-
 private def postprocessPatInstMap (rs : LocalRuleSet) (m : RulePatternInstMap) :
-    M (Array (ForwardRule × RPINFRulePatternInstantiation)) :=
+    BaseM (Array (ForwardRule × RPINFRulePatternInstantiation)) :=
   m.toFlatArray.filterMapM λ (n, patInst) =>
     rs.forwardRules.getRuleWithName? n |>.mapM λ r =>
       return (r, ← patInst.rpinf)
 
 def forwardRulePatternInstantiationsInExpr (rs : LocalRuleSet) (e : Expr) :
-    M (Array (ForwardRule × RPINFRulePatternInstantiation)) := do
+    BaseM (Array (ForwardRule × RPINFRulePatternInstantiation)) := do
   withConstAesopTraceNode .forward (return m!"rule patterns in expr {e}:") do
     let ms ← rs.rulePatterns.get e
     let ms ← postprocessPatInstMap rs ms
@@ -549,7 +540,8 @@ def forwardRulePatternInstantiationsInExpr (rs : LocalRuleSet) (e : Expr) :
     return ms
 
 def forwardRulePatternInstantiationsInLocalDecl (rs : LocalRuleSet)
-    (ldecl : LocalDecl) : M (Array (ForwardRule × RPINFRulePatternInstantiation)) := do
+    (ldecl : LocalDecl) :
+    BaseM (Array (ForwardRule × RPINFRulePatternInstantiation)) := do
   withConstAesopTraceNode .forward (return m!"rule patterns in hyp {ldecl.userName}:") do
     let ms ← rs.rulePatterns.getInLocalDecl ldecl
     let ms ← postprocessPatInstMap rs ms

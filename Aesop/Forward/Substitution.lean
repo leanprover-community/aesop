@@ -63,7 +63,7 @@ def mergeCompatible (s₁ s₂ : Substitution) : Substitution := Id.run do
 def containsHyp (hyp : FVarId) (s : Substitution) : Bool :=
   s.toArray.any λ
     | none => false
-    | some e => e.expr.containsFVar hyp
+    | some e => e.toExpr.containsFVar hyp
 
 end Substitution
 

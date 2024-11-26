@@ -60,7 +60,7 @@ def addHypOrPatternInst (subst : Substitution) (isPatInst : Bool)
 /-- Returns `true` if the match contains the given hyp. -/
 def containsHyp (hyp : FVarId) (m : Match) : Bool :=
   let fvar := .fvar hyp
-  m.subst.toArray.any (·.any (·.expr == fvar))
+  m.subst.toArray.any (·.any (·.toExpr == fvar))
 
 /-- Returns `true` if the match contains the given pattern instantiation. -/
 def containsPatInst (subst : Substitution) (m : Match) : Bool :=
@@ -106,8 +106,8 @@ def foldHypsM [Monad M] (f : σ → FVarId → M σ) (init : σ)
     (m : ForwardRuleMatch) : M σ :=
   m.match.clusterMatches.foldlM (init := init) λ s cm =>
     cm.subst.toArray.foldlM (init := s) λ
-      | s, some { expr, .. } =>
-        if let .fvar hyp := expr.consumeMData then f s hyp else pure s
+      | s, some { toExpr := e, .. } =>
+        if let .fvar hyp := e.consumeMData then f s hyp else pure s
       | s, _ => pure s
 
 /-- Fold over the hypotheses contained in a match. -/
@@ -118,8 +118,8 @@ def foldHyps (f : σ → FVarId → σ) (init : σ) (m : ForwardRuleMatch) : σ 
 def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
   m.match.clusterMatches.any λ m =>
     m.subst.toArray.any λ
-      | some { expr, .. } =>
-        if let .fvar hyp := expr.consumeMData then f hyp else false
+      | some { toExpr := e, .. } =>
+        if let .fvar hyp := e.consumeMData then f hyp else false
       | _ => false
 
 /-- Get the hypotheses from the match whose types are propositions.  -/
@@ -141,8 +141,8 @@ def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
     aesop_trace[forward] "args: {args.map λ | none => m!"_" | some e => m!"{e}"}"
     for arg? in args, mvar in argMVars do
       if let some arg := arg? then
-        if ! (← isDefEq arg.expr mvar) then
-          throwError "type mismatch during reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\n: expected{indentExpr (← inferType mvar)}\nbut got{indentExpr arg.expr} : {← inferType arg.expr}"
+        if ! (← isDefEq arg.toExpr mvar) then
+          throwError "type mismatch during reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\n: expected{indentExpr (← inferType mvar)}\nbut got{indentExpr arg.toExpr} : {← inferType arg.toExpr}"
     try
       synthAppInstances `aesop goal argMVars binderInfos
         (synthAssignedInstances := false) (allowSynthFailures := false)

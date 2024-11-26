@@ -91,23 +91,16 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
   toCopy.mapM λ gref => do
     let g ← gref.get
     let rs := (← read).ruleSet
-    let rulePatternCache ← getResetRulePatternCache
-    let rpinfCache ← getResetRPINFCache
-    let (forwardState, forwardRuleMatches, rulePatternCache, rpinfCache, mvars) ←
-      parentMetaState.runMetaM' do
+    let (forwardState, forwardRuleMatches, mvars) ←
+      runInMetaState parentMetaState do
         let start ← start.get
         let diff ← diffGoals start.currentGoal g.preNormGoal ∅
-        let go : StateRefT RulePatternCache (StateRefT RPINFCache MetaM) _ :=
-          start.forwardState.applyGoalDiff rs diff
-        let (((forwardState, ms), rulePatternCache), rpinfCache) ←
-          go |>.run rulePatternCache |>.run rpinfCache
+        let (forwardState, ms) ← start.forwardState.applyGoalDiff rs diff
         let forwardRuleMatches :=
           start.forwardRuleMatches.update ms diff.removedFVars
             (consumedForwardRuleMatch? := none) -- TODO unsure whether this is correct
         let mvars ← .ofHashSet <$> g.preNormGoal.getMVarDependencies
-        pure (forwardState, forwardRuleMatches, rulePatternCache, rpinfCache, mvars)
-    setRulePatternCache rulePatternCache
-    setRPINFCache rpinfCache
+        pure (forwardState, forwardRuleMatches, mvars)
     return Goal.mk {
       id := ← getAndIncrementNextGoalId
       parent := unsafeCast () -- will be filled in later
@@ -137,19 +130,12 @@ def makeInitialGoal (goal : Subgoal) (mvars : UnorderedArraySet MVarId)
     (consumedForwardRuleMatch? : Option ForwardRuleMatch) (depth : Nat)
     (successProbability : Percent) (origin : GoalOrigin) : TreeM Goal := do
   let rs := (← read).ruleSet
-  let rulePatternCache ← getResetRulePatternCache
-  let rpinfCache ← getResetRPINFCache
-  let (forwardState, forwardRuleMatches, rulePatternCache, rpinfCache) ← parentMetaState.runMetaM' do
-    let go : StateRefT RulePatternCache (StateRefT RPINFCache MetaM) _ :=
-      parentForwardState.applyGoalDiff rs goal.diff
-    let (((fs, newMatches), rulePatternCache), rpinfCache) ←
-      go |>.run rulePatternCache |>.run rpinfCache
+  let (forwardState, forwardRuleMatches) ← runInMetaState parentMetaState do
+    let (fs, newMatches) ← parentForwardState.applyGoalDiff rs goal.diff
     let ms :=
       parentForwardMatches.update newMatches goal.diff.removedFVars
         consumedForwardRuleMatch?
-    pure (fs, ms, rulePatternCache, rpinfCache)
-  setRulePatternCache rulePatternCache
-  setRPINFCache rpinfCache
+    pure (fs, ms)
   return Goal.mk {
     id := ← getAndIncrementNextGoalId
     children := #[]

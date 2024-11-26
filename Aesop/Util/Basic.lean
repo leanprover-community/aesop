@@ -540,6 +540,11 @@ def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
   withOptions (·.setBool `pp.analyze true |>.setBool `pp.proofs true) x
   -- `pp.proofs` works around lean4#6216
 
+-- TODO upstream
+scoped instance [MonadCache α β m] : MonadCache α β (StateRefT' ω σ m) where
+  findCached? a := MonadCache.findCached? (m := m) a
+  cache a b := MonadCache.cache (m := m) a b
+
 /-- A generalized variant of `Meta.SavedState.runMetaM` -/
 def runInMetaState [Monad m] [MonadLiftT MetaM m] [MonadFinally m]
     (s : Meta.SavedState) (x : m α) : m α := do

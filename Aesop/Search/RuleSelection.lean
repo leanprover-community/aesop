@@ -12,10 +12,8 @@ namespace Aesop
 
 variable [Aesop.Queue Q]
 
-def selectNormRules [Monad m] [MonadStats m] [MonadLiftT MetaM m]
-    [MonadRulePatternCache m] [MonadControlT MetaM m]
-    (rs : LocalRuleSet) (fms : ForwardRuleMatches) (goal : MVarId) :
-    m (Array (IndexMatchResult NormRule)) :=
+def selectNormRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
+    (goal : MVarId) : BaseM (Array (IndexMatchResult NormRule)) :=
   profilingRuleSelection do rs.applicableNormalizationRules fms goal
 
 def preprocessRule : SafeRule where
@@ -40,14 +38,8 @@ def selectSafeRules (g : Goal) :
         patternInstantiations := ∅
       }]
     let ruleSet := (← read).ruleSet
-    let rulePatternCache ← getResetRulePatternCache
-    let (rs, rulePatternCache) ←
-      g.runMetaMInPostNormState' λ postNormGoal =>
-        let go : StateRefT RulePatternCache MetaM _ :=
-          ruleSet.applicableSafeRules g.forwardRuleMatches postNormGoal
-        go.run rulePatternCache
-    setRulePatternCache rulePatternCache
-    return rs
+    g.runMetaMInPostNormState' λ postNormGoal =>
+      ruleSet.applicableSafeRules g.forwardRuleMatches postNormGoal
 
 def selectUnsafeRules (postponedSafeRules : Array PostponedSafeRule)
     (gref : GoalRef) : SearchM Q UnsafeQueue := do
@@ -57,13 +49,9 @@ def selectUnsafeRules (postponedSafeRules : Array PostponedSafeRule)
     | some rules => return rules
     | none => do
       let ruleSet := (← read).ruleSet
-      let rulePatternCache ← getResetRulePatternCache
-      let (unsafeRules, rulePatternCache) ←
+      let unsafeRules ←
         g.runMetaMInPostNormState' λ postNormGoal =>
-          let go : StateRefT RulePatternCache MetaM _ :=
-            ruleSet.applicableUnsafeRules g.forwardRuleMatches postNormGoal
-          go.run rulePatternCache
-      setRulePatternCache rulePatternCache
+          ruleSet.applicableUnsafeRules g.forwardRuleMatches postNormGoal
       let unsafeQueue := UnsafeQueue.initial postponedSafeRules unsafeRules
       gref.set $ g.setUnsafeRulesSelected true |>.setUnsafeQueue unsafeQueue
       return unsafeQueue

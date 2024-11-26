@@ -274,11 +274,12 @@ def search (goal : MVarId) (ruleSet? : Option LocalRuleSet := none)
         mkLocalRuleSet rss options
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
+  let go : SearchM _ _ := do
+    show SearchM Q _ from
+    try searchLoop
+    finally freeTree
   let (goals, _, _, stats) ←
-    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal stats do
-      show SearchM Q _ from
-      try searchLoop
-      finally freeTree
+    go.run ruleSet options simpConfig simpConfigSyntax? goal stats |>.run
   return (goals, stats)
 
 end Aesop

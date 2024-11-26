@@ -6,12 +6,21 @@ Authors: Jannis Limperg
 
 import Aesop.RPINF
 import Aesop.Rule.Name
+import Aesop.RulePattern.Basic
 import Aesop.Tracing
 import Aesop.Index.DiscrTreeConfig
 
 open Lean Lean.Meta
 
 namespace Aesop
+
+namespace RulePatternInstantiation
+
+def rpinf (inst : RulePatternInstantiation) :
+    BaseM RPINFRulePatternInstantiation :=
+  inst.mapM Aesop.rpinf
+
+end RulePatternInstantiation
 
 /--
 A rule pattern. For a rule of type `∀ (x₀ : T₀) ... (xₙ : Tₙ), U`, a valid rule
@@ -61,40 +70,6 @@ def «open» (pat : RulePattern) : MetaM (Array MVarId × Expr) := do
 
 end RulePattern
 
-def RulePatternInstantiation := Array Expr
-  deriving Inhabited, BEq, Hashable, ToMessageData
-
-def RPINFRulePatternInstantiation := Array RPINF
-  deriving Inhabited, BEq, Hashable, ToMessageData
-
-namespace RulePatternInstantiation
-
-def toArray : RulePatternInstantiation → Array Expr :=
-  id
-
-instance : EmptyCollection RulePatternInstantiation :=
-  ⟨.empty⟩
-
-variable [Monad m] [MonadRPINF m]
-
-def rpinf (inst : RulePatternInstantiation) : m RPINFRulePatternInstantiation :=
-  inst.mapM Aesop.rpinf
-
-end RulePatternInstantiation
-
-namespace RPINFRulePatternInstantiation
-
-def toArray : RPINFRulePatternInstantiation → Array RPINF :=
-  id
-
-def toRulePatternInstantiation (inst : RPINFRulePatternInstantiation) :
-    RulePatternInstantiation :=
-  inst.map (·.expr)
-
-instance : EmptyCollection RPINFRulePatternInstantiation :=
-  ⟨.empty⟩
-
-end RPINFRulePatternInstantiation
 
 namespace RulePattern
 

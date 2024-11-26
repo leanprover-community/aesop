@@ -5,7 +5,7 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Index.Basic
-import Aesop.RulePattern
+import Aesop.RulePattern.Basic
 import Aesop.RuleTac.GoalDiff
 import Batteries.Lean.Meta.DiscrTree
 
@@ -50,29 +50,6 @@ def toFlatArray (m : RulePatternInstMap) :
 
 end RulePatternInstMap
 
-set_option linter.missingDocs false in
-/-- A cache for the rule pattern index. -/
-structure RulePatternCache where
-  map : Std.HashMap Expr (Array (RuleName × RulePatternInstantiation))
-  deriving Inhabited
-
-instance : EmptyCollection RulePatternCache :=
-  ⟨⟨∅⟩⟩
-
-/-- Type class for monads with access to a rule pattern cache. -/
-abbrev MonadRulePatternCache m :=
-  MonadCache Expr (Array (RuleName × RulePatternInstantiation)) m
-
-instance [Monad m] [MonadLiftT (ST ω) m] [STWorld ω m]
-    [MonadStateOf RulePatternCache m] :
-    MonadHashMapCacheAdapter Expr (Array (RuleName × RulePatternInstantiation)) m where
-  getCache := return (← getThe RulePatternCache).map
-  modifyCache f := modifyThe RulePatternCache λ s => { s with map := f s.map }
-
--- TODO upstream
-scoped instance [MonadCache α β m] : MonadCache α β (StateRefT' ω σ m) where
-  findCached? a := MonadCache.findCached? (m := m) a
-  cache a b := MonadCache.cache (m := m) a b
 
 /-- An entry of the rule pattern index. -/
 structure RulePatternIndex.Entry where
@@ -110,18 +87,6 @@ def merge (idx₁ idx₂ : RulePatternIndex) : RulePatternIndex :=
 
 section Get
 
-variable [Monad m] [MonadRulePatternCache m] [MonadLiftT MetaM m]
-  [MonadControlT MetaM m]
-
-local instance : STWorld IO.RealWorld m where
-
-local instance : MonadLiftT (ST IO.RealWorld) m where
-  monadLift x := (x : MetaM _)
-
-local instance : MonadMCtx m where
-  getMCtx := (getMCtx : MetaM _)
-  modifyMCtx f := (modifyMCtx f : MetaM _)
-
 /-- Get rule pattern instantiations for the patterns that match `e`. -/
 def getSingle  (e : Expr) (idx : RulePatternIndex) :
     MetaM (Array (RuleName × RulePatternInstantiation)) := do
@@ -144,12 +109,14 @@ def getSingle  (e : Expr) (idx : RulePatternIndex) :
 `e`. Subexpressions containing bound variables are not considered. The returned
 array may contain duplicates. -/
 def getCore (e : Expr) (idx : RulePatternIndex) :
-    m (Array (RuleName × RulePatternInstantiation)) := do
+    BaseM (Array (RuleName × RulePatternInstantiation)) := do
   let e ← instantiateMVars e
-  checkCache e λ _ => (·.snd) <$> (e.forEach getSubexpr |>.run #[])
+  checkCache (β := RulePatternCache.Entry) e λ _ => do
+    let (_, ms) ← e.forEach getSubexpr |>.run #[]
+    return ms
 where
   getSubexpr (e : Expr) :
-      StateRefT (Array (RuleName × RulePatternInstantiation)) m Unit := do
+      StateRefT (Array (RuleName × RulePatternInstantiation)) BaseM Unit := do
     if e.hasLooseBVars then
       -- We don't visit subexpressions with loose bvars. Instantiations
       -- derived from such subexpressions would not be valid in the goal's
@@ -158,17 +125,17 @@ where
       -- sense to match `y` and generate `P y`.
       return
     let ms ← idx.getSingle e
-    modify (· ++ ms)
+    modifyThe (Array _) (· ++ ms)
 
 @[inherit_doc getCore]
-def get (e : Expr) (idx : RulePatternIndex) : m RulePatternInstMap :=
+def get (e : Expr) (idx : RulePatternIndex) : BaseM RulePatternInstMap :=
   .ofArray <$> idx.getCore e
 
 /-- Get all instantiations of the rule patterns that match a subexpression of
 the given local declaration. Subexpressions containing bound variables are not
 considered. -/
 def getInLocalDeclCore (acc : RulePatternInstMap) (ldecl : LocalDecl)
-    (idx : RulePatternIndex) : m RulePatternInstMap := do
+    (idx : RulePatternIndex) : BaseM RulePatternInstMap := do
   let mut result := acc
   result := result.insertArray $ ← idx.getCore ldecl.toExpr
   result := result.insertArray $ ← idx.getCore ldecl.type
@@ -178,13 +145,14 @@ def getInLocalDeclCore (acc : RulePatternInstMap) (ldecl : LocalDecl)
 
 @[inherit_doc getInLocalDeclCore]
 def getInLocalDecl (ldecl : LocalDecl) (idx : RulePatternIndex) :
-    m RulePatternInstMap :=
+    BaseM RulePatternInstMap :=
   idx.getInLocalDeclCore ∅ ldecl
 
 /-- Get all instantiations of the rule patterns that match a subexpression of
 a hypothesis or the target. Subexpressions containing bound variables are not
 considered. -/
-def getInGoal (goal : MVarId) (idx : RulePatternIndex) : m RulePatternInstMap :=
+def getInGoal (goal : MVarId) (idx : RulePatternIndex) :
+    BaseM RulePatternInstMap :=
   goal.withContext do
     let mut result := ∅
     for ldecl in (← goal.getDecl).lctx do

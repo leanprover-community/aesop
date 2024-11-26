@@ -176,12 +176,28 @@ end Stats
 abbrev StatsRef := IO.Ref Stats
 
 class MonadStats (m) extends MonadOptions m where
-  [instLift : MonadLiftT BaseIO m]
-  readStatsRef : m StatsRef
+  modifyGetStats : (Stats → α × Stats) → m α
+  getStats : m Stats :=
+    modifyGetStats λ s => (s, s)
+  modifyStats : (Stats → Stats) → m Unit :=
+    λ f => modifyGetStats λ s => ((), f s)
 
-instance [MonadStats m] : MonadLift BaseIO m := ⟨MonadStats.instLift.monadLift⟩
+export MonadStats (modifyGetStats getStats modifyStats)
 
-export MonadStats (readStatsRef)
+instance [MonadStats m] : MonadStats (StateRefT' ω σ m) where
+  modifyGetStats f := (modifyGetStats f : m _)
+  getStats := (getStats : m _)
+  modifyStats f := (modifyStats f : m _)
+
+instance [MonadStats m] : MonadStats (ReaderT α m) where
+  modifyGetStats f := (modifyGetStats f : m _)
+  getStats := (getStats : m _)
+  modifyStats f := (modifyStats f : m _)
+
+instance [MonadOptions m] [MonadStateOf Stats m] : MonadStats m where
+  modifyGetStats f := modifyGetThe Stats f
+  getStats := getThe Stats
+  modifyStats := modifyThe Stats
 
 variable [Monad m]
 
@@ -197,13 +213,13 @@ def isStatsTracingEnabled [MonadOptions m] : m Bool :=
 def isStatsCollectionOrTracingEnabled [MonadOptions m] : m Bool :=
   isStatsCollectionEnabled <||> isStatsTracingEnabled
 
-variable [MonadStats m]
+variable [MonadStats m] [MonadLiftT BaseIO m]
 
 @[inline, always_inline]
 def profiling (recordStats : Stats → α → Nanos → Stats) (x : m α) : m α := do
   if ← isStatsCollectionOrTracingEnabled then
     let (result, elapsed) ← time x
-    (← readStatsRef).modify (recordStats · result elapsed)
+    modifyStats (recordStats · result elapsed)
     return result
   else
     x
@@ -222,7 +238,7 @@ def profilingRule (rule : DisplayRuleName) (wasSuccessful : α → Bool) :
 
 def modifyCurrentStats (f : Stats → Stats) : m Unit := do
   if ← isStatsCollectionEnabled then
-    (← readStatsRef).modify f
+    modifyStats f
 
 def recordScriptGenerated (x : ScriptGenerated) : m Unit := do
   modifyCurrentStats ({ · with scriptGenerated := x })
