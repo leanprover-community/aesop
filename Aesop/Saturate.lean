@@ -93,6 +93,7 @@ where
       indexMatchLocations := matchResult.locations
       patternInstantiations := matchResult.patternInstantiations
       options := (← read).options
+      hypTypes := ∅ -- unused by non-stateful forward rules
       goal, mvars
     }
     let tacResult ←
@@ -140,12 +141,17 @@ where
         if m.rule.name.phase == .unsafe || m.anyHyp erasedHyps.contains then
           return ← go hypDepths fs queue erasedHyps goal
         trace[saturate] "goal:{indentD goal}"
-        let some (goal, hyp, removedHyps) ← m.apply goal (skipExisting := true)
+        let oldGoal := goal
+        let some (goal, hyp, removedHyps) ←
+          m.apply goal (skip? := some (fs.hypTypes.contains ·))
           | return ← go hypDepths fs queue erasedHyps goal
         goal.withContext do
-          let fs := removedHyps.foldl (init := fs) λ fs h => fs.eraseHyp h
-          let erasedHyps := erasedHyps.insertMany removedHyps
+          -- TODO use applyGoalDiff
+          let fs ← removedHyps.foldlM (init := fs) λ fs h => do
+            let type ← oldGoal.withContext do rpinf (← h.getType)
+            return fs.eraseHyp h type
           let type ← hyp.getType
+          let erasedHyps := erasedHyps.insertMany removedHyps
           let mut depth := 0
           let mut hypDepths := hypDepths
           let maxDepth? := options.forwardMaxDepth?

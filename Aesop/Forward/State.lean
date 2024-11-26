@@ -611,6 +611,9 @@ structure ForwardState where
   `patInsts` maps the source `s` to a rule name `r` and pattern instantiation `i`
   iff the rule state of `r` contains `i` with source `s`. -/
   patInsts : PHashMap PatInstSource (PArray (RuleName × RPINFRulePatternInstantiation))
+  /-- Normalised types of all non-implementation detail hypotheses in the
+  local context. -/
+  hypTypes : PHashSet RPINF
  deriving Inhabited
 
 namespace ForwardState
@@ -643,6 +646,11 @@ def addHypCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
     (fs : ForwardState) : BaseM (ForwardState × Array ForwardRuleMatch) := do
   goal.withContext do
   withConstAesopTraceNode .forward (return m!"add hyp {Expr.fvar h}") do
+    let hTypeRPINF ← rpinf (← h.getType)
+    if (← isProp hTypeRPINF.toExpr) && fs.hypTypes.contains hTypeRPINF then
+      aesop_trace[forward] "a hyp with the same (propositional) type was already added"
+      return (fs,ruleMatches)
+    let fs := { fs with hypTypes := fs.hypTypes.insert hTypeRPINF }
     ms.foldlM (init := (fs, ruleMatches)) λ (fs, ruleMatches) (r, i) => do
       withConstAesopTraceNode .forward (return m!"rule {r.name}, premise {i}") do
         let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState
@@ -722,16 +730,21 @@ def erasePatInsts (source : PatInstSource) (fs : ForwardState) :
   return { fs with patInsts := fs.patInsts.erase source, ruleStates }
 
 /-- Remove a hypothesis from the forward state. If `fs` represents a local
-context `lctx`, then `fs.eraseHyp h ms` represents `lctx` with `h` removed. `ms`
-must contain all rules for which `h` may unify with a maximal premise. -/
-def eraseHyp (h : FVarId) (fs : ForwardState) : ForwardState := Id.run do
+context `lctx`, then `fs.eraseHyp h ms` represents `lctx` with `h` removed.
+`type` must be the normalised type of `h`. `ms` must contain all rules for which
+`h` may unify with a maximal premise. -/
+def eraseHyp (h : FVarId) (type : RPINF) (fs : ForwardState) : ForwardState := Id.run do
   let mut ruleStates := fs.ruleStates
   for (r, i) in fs.hyps[h].getD {} do
     let some rs := ruleStates.find? r
       | panic! s!"hyps entry for rule {r}, but no rule state"
     let rs := rs.eraseHyp h i
     ruleStates := ruleStates.insert r rs
-  let fs := { fs with hyps := fs.hyps.erase h, ruleStates }
+  let fs := {
+    fs with
+    hyps := fs.hyps.erase h, ruleStates
+    hypTypes := fs.hypTypes.erase type
+  }
   fs.erasePatInsts (.hyp h)
 
 /-- Erase all pattern instantiations whose source is the target. -/
