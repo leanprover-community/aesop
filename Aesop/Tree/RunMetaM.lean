@@ -11,7 +11,7 @@ open Lean.Meta
 
 namespace Aesop
 
-/-
+/-!
 The following functions let us run MetaM actions in the context of a rapp or
 goal. Rapps save the metavariable context in which they were run by storing a
 `Meta.SavedState`. When we, for example, apply a rule to a goal, we run the
@@ -30,56 +30,68 @@ once the tactic exits. As a result, rules which modify the environment are
 likely to fail.
 -/
 
-def Rapp.runMetaM (x : MetaM α) (r : Rapp) : MetaM (α × Meta.SavedState) :=
-  r.metaState.runMetaM x
+variable [Monad m] [MonadLiftT MetaM m] [MonadFinally m]
 
-def Rapp.runMetaM' (x : MetaM α) (r : Rapp) : MetaM α :=
-  Prod.fst <$> r.runMetaM x
+local instance : MonadLiftT (ST IO.RealWorld) m where
+  monadLift x := (x : MetaM _)
 
-def Rapp.runMetaMModifying (x : MetaM α) (r : Rapp) : MetaM (α × Rapp) := do
+@[inline, always_inline]
+private def withSaveState (x : m α) : m (α × Meta.SavedState) := do
+  let r ← x
+  let s ← Meta.saveState
+  return (r, s)
+
+def Rapp.runMetaM' (x : m α) (r : Rapp) : m α :=
+  runInMetaState r.metaState x
+
+def Rapp.runMetaM (x : m α) (r : Rapp) : m (α × Meta.SavedState) :=
+  r.runMetaM' do withSaveState x
+
+def Rapp.runMetaMModifying (x : m α) (r : Rapp) : m (α × Rapp) := do
   let (result, finalState) ← r.runMetaM x
   return (result, r |>.setMetaState finalState)
 
-def RappRef.runMetaMModifying (x : MetaM α) (rref : RappRef) : MetaM α := do
+def RappRef.runMetaMModifying (x : m α) (rref : RappRef) : m α := do
   let (result, r) ← (← rref.get).runMetaMModifying x
   rref.set r
   return result
 
-def Goal.runMetaMInPostNormState (x : MVarId → MetaM α) (g : Goal) :
-    MetaM (α × Meta.SavedState) := do
+def Goal.runMetaMInPostNormState' [MonadError m] (x : MVarId → m α) (g : Goal) :
+    m α := do
   let some (postGoal, postState) := g.postNormGoalAndMetaState? | throwError
     "aesop: internal error: expected goal {g.id} to be normalised (but not proven by normalisation)."
-  postState.runMetaM $ x postGoal
+  runInMetaState postState $ x postGoal
 
-def Goal.runMetaMInPostNormState' (x : MVarId → MetaM α) (g : Goal) : MetaM α :=
-  Prod.fst <$> g.runMetaMInPostNormState x
+def Goal.runMetaMInPostNormState [MonadError m] (x : MVarId → m α) (g : Goal) :
+    m (α × Meta.SavedState) :=
+  g.runMetaMInPostNormState' λ g => withSaveState (x g)
 
-def Goal.runMetaMInParentState (x : MetaM α) (g : Goal) :
-    MetaM (α × Meta.SavedState) := do
-  match ← g.parentRapp? with
-  | none => withoutModifyingState' x
-  | some rref => (← rref.get).runMetaM x
+def Goal.runMetaMInParentState' (x : m α) (g : Goal) : m α := do
+  match ← show MetaM _ from g.parentRapp? with
+  | none =>
+    let initialState ← Meta.saveState
+    try
+      x
+    finally
+      initialState.restore
+  | some rref => (← rref.get).runMetaM' x
 
-def Goal.runMetaMInParentState' (x : MetaM α) (g : Goal) :
-    MetaM α :=
-  Prod.fst <$> g.runMetaMInParentState x
+def Goal.runMetaMInParentState (x : m α) (g : Goal) : m (α × Meta.SavedState) :=
+  g.runMetaMInParentState' do withSaveState x
 
-def Goal.runMetaMModifyingParentState (x : MetaM α) (g : Goal) :
-    MetaM α := do
-  match ← g.parentRapp? with
+def Goal.runMetaMModifyingParentState (x : m α) (g : Goal) : m α := do
+  match ← show MetaM _ from g.parentRapp? with
   | none => x
   | some rref => rref.runMetaMModifying x
 
-def Rapp.runMetaMInParentState (x : MetaM α) (r : Rapp) :
-    MetaM (α × Meta.SavedState) := do
+def Rapp.runMetaMInParentState (x : m α) (r : Rapp) :
+    m (α × Meta.SavedState) := do
   (← r.parent.get).runMetaMInParentState x
 
-def Rapp.runMetaMInParentState' (x : MetaM α) (r : Rapp) :
-    MetaM α := do
+def Rapp.runMetaMInParentState' (x : m α) (r : Rapp) : m α := do
   (← r.parent.get).runMetaMInParentState' x
 
-def Rapp.runMetaMModifyingParentState (x : MetaM α) (r : Rapp) :
-    MetaM α := do
+def Rapp.runMetaMModifyingParentState (x : m α) (r : Rapp) : m α := do
   (← r.parent.get).runMetaMModifyingParentState x
 
 end Aesop
