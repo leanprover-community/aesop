@@ -366,10 +366,7 @@ where
         throwError "aesop: internal error: matchPremise?: while matching hyp {hyp.name}: no assignment for variable {var}"
       if ← hasAssignableMVar assignment then
         throwError "aesop: internal error: matchPremise?: assignment has mvar:{indentExpr assignment}"
-      let assignment ← withConstAesopTraceNode .forwardDebug (return m!"rpinf") do
-        let e ← rpinf assignment
-        aesop_trace[forwardDebug] e.toExpr
-        pure e
+      let assignment ← rpinf assignment
       return subst.insert var assignment
 
 /-- Add a match to the cluster state. Returns the new cluster state and any new
