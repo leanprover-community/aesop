@@ -25,7 +25,7 @@ structure Tree where
   -/
   allIntroducedMVars : Std.HashSet MVarId
 
-def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : MetaM Tree := do
+def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : BaseM Tree := do
   let rootClusterRef ← IO.mkRef $ MVarCluster.mk {
     parent? := none
     goals := #[] -- patched up below
@@ -35,16 +35,6 @@ def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : MetaM Tree := do
   let (forwardState, ms) ← withConstAesopTraceNode .forward (return m!"building initial forward state") do
     -- NOTE we don't cache rule pattern lookups here. It would be possible to do
     -- so, but doesn't seem worth the trouble.
-    have : MonadRulePatternCache MetaM := {
-      findCached? := λ _ => return none
-      cache := λ _ _ => return
-    }
-    -- Ditto for the RPINF cache
-    have : MonadRPINF MetaM := {
-      get := return default
-      set := λ _ => return default
-      modifyGet := λ f => return f default |>.fst
-    }
     rs.mkInitialForwardState goal
   let rootGoalRef ← IO.mkRef $ Goal.mk {
     id := GoalId.zero
@@ -84,10 +74,8 @@ structure TreeM.Context where
 
 structure TreeM.State where
   tree : Tree
-  rulePatternCache : RulePatternCache
-  rpinfCache : RPINFCache
 
-abbrev TreeM := ReaderT TreeM.Context $ StateRefT TreeM.State MetaM
+abbrev TreeM := ReaderT TreeM.Context $ StateRefT TreeM.State BaseM
 
 namespace TreeM
 
@@ -97,9 +85,9 @@ instance : Monad TreeM :=
   { inferInstanceAs (Monad TreeM) with }
 
 instance (priority := low) : MonadStateOf Tree TreeM where
-  get := return (← get).tree
-  set tree := modify ({ · with tree })
-  modifyGet f := modifyGet λ s =>
+  get := return (← getThe State).tree
+  set tree := modifyThe State ({ · with tree })
+  modifyGet f := modifyGetThe State λ s =>
     let (a, tree) := f s.tree
     (a, { s with tree })
 
@@ -107,16 +95,16 @@ instance : Inhabited (TreeM α) where
   default := failure
 
 def run' (ctx : TreeM.Context) (tree : Tree) (x : TreeM α) :
-    MetaM (α × TreeM.State) :=
-  ReaderT.run x ctx |>.run { tree, rulePatternCache := ∅, rpinfCache := ∅ }
+    BaseM (α × TreeM.State) :=
+  ReaderT.run x ctx |>.run { tree }
 
 end TreeM
 
 def getRootMVarCluster : TreeM MVarClusterRef :=
-  return (← get).tree.root
+  return (← getThe Tree).root
 
 def getRootMetaState : TreeM Meta.SavedState :=
-  return (← get).tree.rootMetaState
+  return (← getThe Tree).rootMetaState
 
 def getRootGoal : TreeM GoalRef := do
   let cref ← getRootMVarCluster
@@ -131,34 +119,22 @@ def getRootMVarId : TreeM MVarId := do
   return (← gref.get).preNormGoal
 
 def incrementNumGoals (increment := 1) : TreeM Unit := do
-  modify λ s => { s with tree.numGoals := s.tree.numGoals + increment }
+  modifyThe Tree λ s => { s with numGoals := s.numGoals + increment }
 
 def incrementNumRapps (increment := 1) : TreeM Unit := do
-  modify λ s => { s with tree.numRapps := s.tree.numRapps + increment }
+  modifyThe Tree λ s => { s with numRapps := s.numRapps + increment }
 
 def getAllIntroducedMVars : TreeM (Std.HashSet MVarId) :=
-  return (← get).tree.allIntroducedMVars
+  return (← getThe Tree).allIntroducedMVars
 
 def getAndIncrementNextGoalId : TreeM GoalId := do
-  modifyGet λ t =>
-    let curr := t.tree.nextGoalId
-    (curr, { t with tree.nextGoalId := curr.succ })
+  modifyGetThe Tree λ t =>
+    let curr := t.nextGoalId
+    (curr, { t with nextGoalId := curr.succ })
 
 def getAndIncrementNextRappId : TreeM RappId := do
-  modifyGet λ t =>
-    let curr := t.tree.nextRappId
-    (curr, { t with tree.nextRappId := curr.succ })
-
-def getResetRulePatternCache : TreeM RulePatternCache :=
-  modifyGet λ s => (s.rulePatternCache, { s with rulePatternCache := ∅ })
-
-def setRulePatternCache (cache : RulePatternCache): TreeM Unit :=
-  modify λ s => { s with rulePatternCache := cache }
-
-def getResetRPINFCache : TreeM RPINFCache :=
-  modifyGet λ s => (s.rpinfCache, { s with rpinfCache := ∅ })
-
-def setRPINFCache (cache : RPINFCache): TreeM Unit :=
-  modify λ s => { s with rpinfCache := cache }
+  modifyGetThe Tree λ t =>
+    let curr := t.nextRappId
+    (curr, { t with nextRappId := curr.succ })
 
 end Aesop

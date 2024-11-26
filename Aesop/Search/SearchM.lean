@@ -41,7 +41,7 @@ end SearchM
 
 abbrev SearchM Q [Aesop.Queue Q] :=
   ReaderT SearchM.Context $ StateRefT (SearchM.State Q) $
-    StateRefT TreeM.State MetaM
+    StateRefT TreeM.State BaseM
 
 variable [Aesop.Queue Q]
 
@@ -64,9 +64,6 @@ instance : MonadState (State Q) (SearchM Q) :=
 instance : MonadReader Context (SearchM Q) :=
   { inferInstanceAs (MonadReaderOf Context (SearchM Q)) with }
 
-instance : MonadStats (SearchM Q) where
-  readStatsRef := return (← read).statsRef
-
 instance : MonadLift TreeM (SearchM Q) where
   monadLift x := do
     let ctx := {
@@ -76,15 +73,15 @@ instance : MonadLift TreeM (SearchM Q) where
     liftM $ ReaderT.run x ctx
 
 protected def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (tree : Tree)
-    (x : SearchM Q α) : MetaM (α × SearchM.State Q × Tree × Stats) := do
+    (x : SearchM Q α) : BaseM (α × SearchM.State Q × Tree × Stats) := do
   let ((a, σ), t) ←
-    x.run ctx |>.run σ |>.run { tree, rulePatternCache := ∅, rpinfCache := ∅ }
+    x.run ctx |>.run σ |>.run { tree }
   return (a, σ, t.tree, ← ctx.statsRef.get)
 
 protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     (simpConfig : Simp.Config) (simpConfigStx? : Option Term)
     (goal : MVarId) (stats : Stats) (x : SearchM Q α) :
-    MetaM (α × State Q × Tree × Stats) := do
+    BaseM (α × State Q × Tree × Stats) := do
   let t ← mkInitialTree goal ruleSet
   let normSimpContext := {
     config := simpConfig

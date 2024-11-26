@@ -52,7 +52,7 @@ def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
     (indexMatchLocations : Std.HashSet IndexMatchLocation)
     (patternInstantiations : Std.HashSet RulePatternInstantiation)
     (options : Options') :
-    MetaM (Sum Exception RuleTacOutput) := do
+    BaseM (Sum Exception RuleTacOutput) := do
   let some (postNormGoal, postNormState) := goal.postNormGoalAndMetaState? | throwError
     "aesop: internal error during expansion: expected goal {goal.id} to be normalised (but not proven by normalisation)."
   let input := {

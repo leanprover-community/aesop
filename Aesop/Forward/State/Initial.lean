@@ -11,11 +11,8 @@ open Lean Lean.Meta
 
 namespace Aesop.LocalRuleSet
 
-variable [Monad m] [MonadRulePatternCache m] [MonadAlwaysExcept Exception m]
-  [MonadRPINF m]
-
 def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
-    m (ForwardState × Array ForwardRuleMatch) :=
+    BaseM (ForwardState × Array ForwardRuleMatch) :=
   goal.withContext do
     let mut fs : ForwardState := ∅
     let mut ruleMatches := rs.constForwardRuleMatches

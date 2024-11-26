@@ -115,7 +115,7 @@ structure RuleTacOutput where
 /--
 A `RuleTac` is the tactic that is run when a rule is applied to a goal.
 -/
-def RuleTac := RuleTacInput → MetaM RuleTacOutput
+def RuleTac := RuleTacInput → BaseM RuleTacOutput
 
 instance : Inhabited RuleTac := by
   unfold RuleTac; exact inferInstance

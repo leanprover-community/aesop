@@ -13,10 +13,10 @@ namespace Aesop
 
 def runRuleTac (tac : RuleTac) (ruleName : RuleName)
     (preState : Meta.SavedState) (input : RuleTacInput) :
-    MetaM (Sum Exception RuleTacOutput) := do
+    BaseM (Sum Exception RuleTacOutput) := do
   let result ←
     tryCatchRuntimeEx
-      (Sum.inr <$> preState.runMetaM' do
+      (Sum.inr <$> runInMetaState preState do
         withMaxHeartbeats input.options.maxRuleHeartbeats do
           tac input)
       (λ e => return Sum.inl e)

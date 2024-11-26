@@ -18,8 +18,11 @@ def evalAesop : Tactic := λ stx => do
   profileitM Exception "aesop" (← getOptions) do
   let goal ← getMainGoal
   goal.withContext do
-    let statsRef ← IO.mkRef ∅
-    have : MonadStats TacticM := { readStatsRef := return statsRef }
+    let (_, stats) ← go stx goal |>.run ∅
+    recordStatsForCurrentFileIfEnabled stx stats
+    stats.trace .stats
+where
+  go (stx : Syntax) (goal : MVarId) : StateRefT Stats TacticM Unit :=
     profiling (λ s _ t => { s with total := t }) do
       let config ← profiling (λ s _ t => { s with configParsing := t }) do
         Frontend.TacticConfig.parse stx goal
@@ -31,11 +34,8 @@ def evalAesop : Tactic := λ stx => do
       profiling (λ s _ t => { s with search := t }) do
         let (goals, stats) ←
           search goal ruleSet config.options config.simpConfig
-            config.simpConfigSyntax? (← statsRef.get)
+            config.simpConfigSyntax? (← getStats)
         replaceMainGoal goals.toList
-        statsRef.set stats
-    let stats ← statsRef.get
-    recordStatsForCurrentFileIfEnabled stx stats
-    stats.trace .stats
+        modifyStats λ _ => stats
 
 end Aesop

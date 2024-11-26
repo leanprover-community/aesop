@@ -29,27 +29,16 @@ structure SaturateM.State where
   deriving Inhabited
 
 abbrev SaturateM :=
-  ReaderT SaturateM.Context $ StateRefT SaturateM.State ScriptM
+  ReaderT SaturateM.Context $ StateRefT SaturateM.State $ ScriptT BaseM
 
 namespace SaturateM
 
-instance (priority := low) : MonadStateOf RulePatternCache SaturateM where
-  get := return (← get).rulePatternCache
-  set c := modify λ s => { s with rulePatternCache := c }
-  modifyGet f := modifyGet λ s =>
-    let (a, c) := f s.rulePatternCache
-    (a, { s with rulePatternCache := c })
-
-instance (priority := low) : MonadStateOf RPINFCache SaturateM where
-  get := return (← get).rpinfCache
-  set c := modify λ s => { s with rpinfCache := c }
-  modifyGet f := modifyGet λ s =>
-    let (a, c) := f s.rpinfCache
-    (a, { s with rpinfCache := c })
+instance : MonadLift ScriptM SaturateM where
+  monadLift x := λ _ _ steps _ => x steps
 
 def run (options : Aesop.Options') (x : SaturateM α) :
     MetaM (α × Array Script.LazyStep) :=
-  ReaderT.run x { options } |>.run' {} |>.run
+  ReaderT.run x { options } |>.run' {} |>.run.run
 
 end SaturateM
 
