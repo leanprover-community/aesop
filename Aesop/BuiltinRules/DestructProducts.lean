@@ -80,7 +80,7 @@ private def destructProductHyp? (goal : MVarId) (hyp : FVarId)
       return (goal, lName, rName)
 
 partial def destructProductsCore (goal : MVarId) (md : TransparencyMode) :
-    MetaM (MVarId × Array LazyStep) := do
+    BaseM (MVarId × Array LazyStep) := do
   let result ← go 0 goal |>.run
   if result.fst == goal then
     throwError "destructProducts: found no hypothesis with a product-like type"

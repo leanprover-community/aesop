@@ -16,7 +16,7 @@ namespace Aesop.RuleTac
 
 def applyExpr' (goal : MVarId) (e : Expr) (eStx : Term)
     (pat? : Option RulePattern) (patInst : RulePatternInstantiation)
-    (md : TransparencyMode) : MetaM RuleApplication :=
+    (md : TransparencyMode) : BaseM RuleApplication :=
   withTransparency md do
     let e ←
       if let some pat := pat? then
@@ -35,7 +35,7 @@ def applyExpr' (goal : MVarId) (e : Expr) (eStx : Term)
 
 def applyExpr (goal : MVarId) (e : Expr) (eStx : Term)
     (pat? : Option RulePattern) (patInsts : Std.HashSet RulePatternInstantiation)
-    (md : TransparencyMode) : MetaM RuleTacOutput := do
+    (md : TransparencyMode) : BaseM RuleTacOutput := do
   if pat?.isSome then
     let mut rapps := Array.mkEmpty patInsts.size
     let initialState ← saveState
