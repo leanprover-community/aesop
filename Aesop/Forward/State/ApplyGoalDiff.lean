@@ -18,8 +18,6 @@ def ForwardState.applyGoalDiff (rs : LocalRuleSet)
     BaseM (ForwardState × Array ForwardRuleMatch) :=
   let goal := diff.newGoal
   goal.withContext do
-    if ! diff.fvarSubst.isEmpty then
-      throwError "aesop: internal error: non-empty FVarSubst in GoalDiff is currently not supported"
     let fs := diff.removedFVars.fold (init := fs) λ fs h => fs.eraseHyp h
     let (fs, ruleMatches) ←
       diff.addedFVars.foldM (init := (fs, ∅)) λ (fs, ruleMatches) h =>

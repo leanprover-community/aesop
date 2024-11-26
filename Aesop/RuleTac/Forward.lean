@@ -145,7 +145,6 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
       newGoal := goal
       addedFVars
       removedFVars := ∅
-      fvarSubst := ∅
       targetMaybeChanged := false
     }
     if clear then
@@ -198,7 +197,6 @@ def forwardMatch (m : ForwardRuleMatch) :
     oldGoal := input.goal
     newGoal := goal
     addedFVars := {hyp}
-    fvarSubst := ∅
     targetMaybeChanged := false
     removedFVars := .ofArray removedFVars
   }
