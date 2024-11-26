@@ -70,15 +70,10 @@ def getNewFVars (oldGoal newGoal : MVarId) (oldLCtx newLCtx : LocalContext) :
   newLCtx.foldlM (init := ∅) λ newFVars ldecl => do
     if ldecl.isImplementationDetail then
       return newFVars
-    newGoal.withContext do
-      trace[debug] "new: {ldecl.userName} [{ldecl.fvarId.name}] : {ldecl.type}"
     if let some oldLDecl := oldLCtx.find? ldecl.fvarId then
-      oldGoal.withContext do
-        trace[debug] "old: {oldLDecl.userName} [{oldLDecl.fvarId.name}] : {oldLDecl.type}"
       if ← isRPINFEqualLDecl oldGoal newGoal oldLDecl ldecl then
         return newFVars
       else
-        trace[debug] "not RPINF-equal"
         return newFVars.insert ldecl.fvarId
     else
       return newFVars.insert ldecl.fvarId

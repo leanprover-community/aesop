@@ -15,29 +15,32 @@ open Lean Lean.Meta
 by the diff. -/
 def ForwardState.applyGoalDiff (rs : LocalRuleSet)
     (diff : GoalDiff) (fs : ForwardState) :
-    BaseM (ForwardState × Array ForwardRuleMatch) :=
-  let goal := diff.newGoal
-  goal.withContext do
-    let fs := diff.removedFVars.fold (init := fs) λ fs h => fs.eraseHyp h
+    BaseM (ForwardState × Array ForwardRuleMatch) := do
+  let fs ← diff.oldGoal.withContext do
+    diff.removedFVars.foldM (init := fs) λ fs h => do eraseHyp h fs
+  diff.newGoal.withContext do
     let (fs, ruleMatches) ←
-      diff.addedFVars.foldM (init := (fs, ∅)) λ (fs, ruleMatches) h =>
-        addHyp goal h fs ruleMatches
+      diff.addedFVars.foldM (init := (fs, ∅)) λ (fs, ruleMatches) h => do
+        addHyp h fs ruleMatches
     if ← diff.targetChanged' then
-      updateTarget goal fs ruleMatches
+      updateTarget fs ruleMatches
     else
       return (fs, ruleMatches)
 where
-  addHyp (goal : MVarId) (h : FVarId) (fs : ForwardState)
+  eraseHyp (h : FVarId) (fs : ForwardState) : BaseM ForwardState :=
+    return fs.eraseHyp h (← rpinf (← h.getType))
+
+  addHyp (h : FVarId) (fs : ForwardState)
       (ruleMatches : Array ForwardRuleMatch) :
       BaseM (ForwardState × Array ForwardRuleMatch) := do
     let rules ← rs.applicableForwardRules (← h.getType)
     let patInsts ← rs.forwardRulePatternInstantiationsInLocalDecl (← h.getDecl)
-    fs.addHypWithPatInstsCore ruleMatches goal h rules patInsts
+    fs.addHypWithPatInstsCore ruleMatches diff.newGoal h rules patInsts
 
-  updateTarget (goal : MVarId) (fs : ForwardState)
-      (ruleMatches : Array ForwardRuleMatch) :
+  updateTarget (fs : ForwardState) (ruleMatches : Array ForwardRuleMatch) :
       BaseM (ForwardState × Array ForwardRuleMatch) := do
-    let patInsts ← rs.forwardRulePatternInstantiationsInExpr (← goal.getType)
-    fs.updateTargetPatInstsCore ruleMatches goal patInsts
+    let patInsts ←
+      rs.forwardRulePatternInstantiationsInExpr (← diff.newGoal.getType)
+    fs.updateTargetPatInstsCore ruleMatches diff.newGoal patInsts
 
 end Aesop

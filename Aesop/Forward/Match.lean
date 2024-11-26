@@ -156,19 +156,24 @@ def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
 /-- Apply a forward rule match to a goal. This adds the hypothesis corresponding
 to the match to the local context. Returns the new goal, the added hypothesis
 and the hypotheses that were removed (if any). Hypotheses may be removed if the
-match is for a `destruct` rule. If `skipExisting` is true, the new hypothesis
-is only added if there is no hypothesis with a reducibly defeq type already in
-the context. -/
-def apply (goal : MVarId) (m : ForwardRuleMatch) (skipExisting : Bool) :
-    ScriptM (Option (MVarId × FVarId × Array FVarId)) :=
+match is for a `destruct` rule. If the `skip` function, when applied to the
+normalised type of the new hypothesis, returns true, then the hypothesis is not
+added to the local context. -/
+def apply (goal : MVarId) (m : ForwardRuleMatch) (skip? : Option (RPINF → Bool)) :
+    ScriptT BaseM (Option (MVarId × FVarId × Array FVarId)) :=
   withConstAesopTraceNode .forward (return m!"apply complete match") do
   goal.withContext do
     let name ← getUnusedUserName forwardHypPrefix
     let some prf ← m.getProof goal
       | return none
     let type ← inferType prf
-    if ← pure skipExisting <&&> isDuplicate type then
-      return none
+    if let some skip := skip? then
+      let doSkip ← withConstAesopTraceNode .forwardDebug (return m!"check whether hyp already exists") do
+        let result := skip (← rpinf type)
+        aesop_trace[forwardDebug] "already exists: {result}"
+        pure result
+      if doSkip then
+        return none
     let hyp := { userName := name, value := prf, type }
     let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
       | unreachable!
@@ -177,17 +182,6 @@ def apply (goal : MVarId) (m : ForwardRuleMatch) (skipExisting : Bool) :
     let usedPropHyps ← goal.withContext $ m.getPropHyps
     let (goal, _) ← tryClearManyS goal usedPropHyps
     return some (goal, hyp, usedPropHyps)
-where
-  isDuplicate (type : Expr) : MetaM Bool := do
-    withConstAesopTraceNode .forwardDebug (return m!"check whether new hyp is already present in the context") do
-    withNewMCtxDepth do
-      for ldecl in ← getLCtx do
-        if ldecl.isImplementationDetail then
-          continue
-        if ← withReducible $ isDefEq type ldecl.type then
-          aesop_trace[forwardDebug] "hyp already present, skipping"
-          return true
-      return false
 
 /-- Convert a forward rule match to a rule tactic description. -/
 def toRuleTacDescr (m : ForwardRuleMatch) : RuleTacDescr :=
