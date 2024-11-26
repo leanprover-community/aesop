@@ -31,6 +31,15 @@ when the type of a hyp changes to another type that is definitionally equal at
 
 The target is identified by RPINF.
 -/
+-- TODO Lean theoretically has an invariant that the type of an fvar cannot
+-- change without the `FVarId` also changing. However, this invariant is
+-- currently sometimes violated, notably by `simp`:
+--
+--   https://github.com/leanprover/lean4/issues/6226
+--
+-- If we could rely on this invariant, we could greatly simplify the computation
+-- of goal diffs because we could trust that if an fvar is present in the old
+-- and new goal, it has the same type in both.
 structure GoalDiff where
   /-- The old goal. -/
   oldGoal : MVarId
