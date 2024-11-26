@@ -42,15 +42,14 @@ structure GoalDiff where
   /-- `FVarId`s that appear in the old goal, but not (or with a different type)
   in the new goal. -/
   removedFVars : Std.HashSet FVarId
-  /-- If `true`, the old goal's target RPINF is possibly not α-equal to the new
-  goal's target RPINF. -/
-  targetMaybeChanged : Bool
+  /-- Is the old goal's target RPINF equal to the new goal's target RPINF? -/
+  targetChanged : LBool
   deriving Inhabited
 
 protected def GoalDiff.empty (oldGoal newGoal : MVarId) : GoalDiff := {
   addedFVars := ∅
   removedFVars := ∅
-  targetMaybeChanged := true
+  targetChanged := .undef
   oldGoal, newGoal
 }
 
@@ -95,11 +94,21 @@ def diffGoals (old new : MVarId) : BaseM GoalDiff := do
     newGoal := new
     addedFVars := ← getNewFVars old new oldLCtx newLCtx
     removedFVars := ← getNewFVars new old newLCtx oldLCtx
-    targetMaybeChanged :=
-      ! (← isRPINFEqual old new (← old.getType) (← new.getType))
+    targetChanged :=
+      ! (← isRPINFEqual old new (← old.getType) (← new.getType)) |>.toLBool
   }
 
 namespace GoalDiff
+
+def targetChanged' (diff : GoalDiff) : BaseM Bool :=
+  match diff.targetChanged with
+  | .true => return true
+  | .false => return false
+  | .undef => do
+    let eq ←
+      isRPINFEqual diff.oldGoal diff.newGoal (← diff.oldGoal.getType)
+        (← diff.newGoal.getType)
+    return ! eq
 
 /--
 If `diff₁` is the difference between goals `g₁` and `g₂` and `diff₂` is the
@@ -124,7 +133,7 @@ def comp (diff₁ diff₂ : GoalDiff) : GoalDiff where
         removedFVars
       else
         removedFVars.insert fvarId
-  targetMaybeChanged := diff₁.targetMaybeChanged || diff₂.targetMaybeChanged
+  targetChanged := lBoolOr diff₁.targetChanged diff₂.targetChanged
 
 def checkCore (diff : GoalDiff) (old new : MVarId) :
     BaseM (Option MessageData) := do
@@ -181,7 +190,12 @@ def checkCore (diff : GoalDiff) (old new : MVarId) :
   -- Check the target
   let oldTgt ← old.getType
   let newTgt ← new.getType
-  if ← (pure $ ! diff.targetMaybeChanged) <&&>
+  if ← (pure $ diff.targetChanged == .true) <&&>
+     isRPINFEqual old new oldTgt newTgt then
+    let oldTgt ← old.withContext do addMessageContext m!"{oldTgt}"
+    let newTgt ← new.withContext do addMessageContext m!"{newTgt}"
+    return some m!"diff says target changed, but old target{indentD oldTgt}\nis reducibly defeq to new target{indentD newTgt}"
+  if ← (pure $ diff.targetChanged == .false) <&&>
      notM (isRPINFEqual old new oldTgt newTgt) then
     let oldTgt ← old.withContext do addMessageContext m!"{oldTgt}"
     let newTgt ← new.withContext do addMessageContext m!"{newTgt}"

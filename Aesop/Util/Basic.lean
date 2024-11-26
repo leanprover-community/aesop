@@ -554,4 +554,10 @@ def runInMetaState [Monad m] [MonadLiftT MetaM m] [MonadFinally m]
   finally
     initialState.restore
 
+def lBoolOr : (x y : LBool) → LBool
+  | .true, _ => .true
+  | .false, y => y
+  | .undef, .true => .true
+  | .undef, _ => .undef
+
 end Aesop
