@@ -167,6 +167,8 @@ test₁ 30 0 100 0 19 by
 
 end t3
 
+/-
+
 namespace t4
 /-
 Meaning of options (`rem` is for remove):
@@ -205,3 +207,5 @@ test₁ 180 0 100 0 159 by
   trivial
 
 end t6
+
+-/
