@@ -22,7 +22,7 @@ def ForwardState.applyGoalDiff (rs : LocalRuleSet)
     let (fs, ruleMatches) ←
       diff.addedFVars.foldM (init := (fs, ∅)) λ (fs, ruleMatches) h =>
         addHyp goal h fs ruleMatches
-    if diff.targetMaybeChanged then
+    if ← diff.targetChanged' then
       updateTarget goal fs ruleMatches
     else
       return (fs, ruleMatches)
