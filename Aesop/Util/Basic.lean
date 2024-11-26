@@ -540,4 +540,14 @@ def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
   withOptions (·.setBool `pp.analyze true |>.setBool `pp.proofs true) x
   -- `pp.proofs` works around lean4#6216
 
+/-- A generalized variant of `Meta.SavedState.runMetaM` -/
+def runInMetaState [Monad m] [MonadLiftT MetaM m] [MonadFinally m]
+    (s : Meta.SavedState) (x : m α) : m α := do
+  let initialState ← show MetaM _ from saveState
+  try
+    s.restore
+    x
+  finally
+    initialState.restore
+
 end Aesop
