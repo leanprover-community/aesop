@@ -5,33 +5,59 @@ Authors: Jannis Limperg, Xavier Généreux
 -/
 import Aesop
 import AesopTest.Forward.Synth
+import AesopTest.Forward.SynthCascade
+import AesopTest.Forward.SynthIndep
+import AesopTest.Forward.SynthClusters
 
-set_option aesop.dev.statefulForward true
+open Aesop
+open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
 
-open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser in
-elab "bm " nStep:num : command => do
-  let some nStep := nStep.raw.isNatLit?
-    | throwUnsupportedSyntax
-  for i in [:nStep] do
-    let inum := (Lean.Syntax.mkNatLit i)
-    let nnum := (Lean.Syntax.mkNatLit (nStep))
-    elabCommand $ ← `(test $nnum 10 100 $inum by
-      set_option maxHeartbeats 5000000 in
-      set_option aesop.dev.statefulForward true in
-      -- set_option trace.profiler true in
-      --set_option trace.aesop.forward true in
-      --set_option trace.saturate true in
-      --set_option profiler true in
-      saturate
-      trivial)
+abbrev FuncType := Nat → CommandElabM Nanos
+
+def withStatefulForward [MonadWithOptions m] (opt : Bool) (k : m α) : m α :=
+  withOptions (fun opts ↦ aesop.dev.statefulForward.set opts opt) k
+
+local instance : MonadWithOptions CommandElabM where
+  withOptions f x := do
+    let options := f (← getOptions)
+    withScope (fun s ↦ {s with opts := options}) x
+
+elab "bchmk " nIter:num " with " t:term " using " r:term : command => do
+  let mut steps ← liftTermElabM do
+    let t ← elabTerm t (some $ toTypeExpr (List Nat))
+    unsafe Lean.Meta.evalExpr (List Nat) (toTypeExpr (List Nat)) t
+  let nIter := nIter.getNat
+  let func ← liftTermElabM do
+    let r ← withSynthesize $ elabTerm r (some $ .const `FuncType [])
+    unsafe Lean.Meta.evalExpr (Nat → CommandElabM Nanos) (.const `FuncType []) r
+  for b in [true, false] do
+    let mut ltimes : Array Nat := #[]
+    for i in steps do
+      let mut avr : Nat := 0
+      for j in [:nIter] do
+        avr := avr + (← withStatefulForward b $ func i).nanos
+      ltimes := ltimes.push (avr / nIter)
+    IO.println ("StatefulForward: " ++ toString b)
+    IO.println <| (ltimes.map (·.toFloat / 1000000)).toList
+
+def pows (n : Nat) : List Nat := (List.range n).map (2 ^ ·)
+/- The old impl.'s premise order. -/
+def steps (n : Nat) : List Nat := (n - 1) :: (List.range (n - 1)) ++ [n]
 
 /-
-Note :
-- There is interference between each iteration, because we are always adding more rules.
+**Uncomment to reveal parameters**
+#check runTestErase
+#check runTestIndep
+#check runTestCascade
+#check runTestCluster
 -/
 
 /-
-Tests to do
--/
+**Uncomment to run tests**
+local notation "k" => 10
 
-bm 10
+bchmk 30 with steps k using fun n ↦ runTestErase k 0 k n
+bchmk 30 with (pows 5) using fun n ↦ runTestIndep 6 n
+bchmk 30 with (pows 5) using fun n ↦ runTestCascade n
+bchmk 30 with (pows 6) using fun n ↦ runTestCluster n 3 (2 ^ 5 / n)
+-/
