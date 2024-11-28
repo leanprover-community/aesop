@@ -16,6 +16,8 @@ by the diff. -/
 def ForwardState.applyGoalDiff (rs : LocalRuleSet)
     (diff : GoalDiff) (fs : ForwardState) :
     BaseM (ForwardState × Array ForwardRuleMatch) := do
+  if ! aesop.dev.statefulForward.get (← getOptions) then
+    return (fs, #[])
   let fs ← diff.oldGoal.withContext do
     diff.removedFVars.foldM (init := fs) λ fs h => do eraseHyp h fs
   diff.newGoal.withContext do
