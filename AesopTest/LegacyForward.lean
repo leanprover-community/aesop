@@ -28,7 +28,7 @@ def forwardTac (goal : MVarId) (id : Ident) (immediate : Option (Array Syntax))
     (immediate.map (·.map (·.getId)))
   let (goal, _) ←
     RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) none ∅ immediate clear
-      (maxDepth? := none) |>.run.run
+      (maxDepth? := none) ∅ |>.run.run
   return [goal.mvarId]
 
 @[tactic forward]
@@ -217,17 +217,17 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
 
 -- `destruct` rules only clear propositional hypotheses. So this succeeds:
 
-example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
-    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
-  aesop (add safe [destruct r₁, destruct (immediate := [a]) r₂])
+example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ)
+    (r₂ : (a : α) → δ) : γ ∧ δ := by
+  aesop (add 1% [destruct r₁, destruct (immediate := [a]) r₂])
     (config := { enableSimp := false, terminal := true })
 
 -- ... but this fails:
 
 /-- error: tactic 'aesop' failed, failed to prove the goal after exhaustive search. -/
 #guard_msgs in
-example {α : Prop} (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
-    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+example {α : Prop} (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ)
+    (r₂ : (a : α) → δ) : γ ∧ δ := by
   aesop (add safe [destruct r₁, destruct (immediate := [a]) r₂])
     (config := { enableSimp := false, terminal := true })
 
