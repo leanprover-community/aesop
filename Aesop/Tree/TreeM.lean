@@ -33,8 +33,6 @@ def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : BaseM Tree := do
     state := NodeState.unknown
   }
   let (forwardState, ms) ← withConstAesopTraceNode .forward (return m!"building initial forward state") do
-    -- NOTE we don't cache rule pattern lookups here. It would be possible to do
-    -- so, but doesn't seem worth the trouble.
     rs.mkInitialForwardState goal
   let rootGoalRef ← IO.mkRef $ Goal.mk {
     id := GoalId.zero

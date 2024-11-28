@@ -12,7 +12,9 @@ open Lean Lean.Meta
 namespace Aesop.LocalRuleSet
 
 def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
-    BaseM (ForwardState × Array ForwardRuleMatch) :=
+    BaseM (ForwardState × Array ForwardRuleMatch) := do
+  if ! aesop.dev.statefulForward.get (← getOptions) then
+    return (∅, #[])
   goal.withContext do
     let mut fs : ForwardState := ∅
     let mut ruleMatches := rs.constForwardRuleMatches
