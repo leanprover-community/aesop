@@ -46,8 +46,24 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
         (currentUsedHyps : Array FVarId) (usedHypsAcc : Array FVarId)
         (proofTypesAcc : Std.HashSet Expr) :
         MetaM (Array (Expr × Nat) × Array FVarId × Std.HashSet Expr) := do
-      if h : i < immediateMVars.size then
-        let mvarId := immediateMVars[i]
+      if h : immediateMVars.size > 0 ∧ i < immediateMVars.size then
+        -- We go through the immediate mvars back to front. This is more
+        -- efficient because assigning later mvars may already determine the
+        -- assignments of earlier mvars.
+        let mvarId := immediateMVars[immediateMVars.size - 1 - i]
+        if ← mvarId.isAssignedOrDelayedAssigned then
+          -- If the mvar is already assigned, we still need to update and check
+          -- the hyp depth.
+          let mut currentMaxHypDepth := currentMaxHypDepth
+          let (_, fvarIds) ← (← instantiateMVars (.mvar mvarId)).collectFVars |>.run {}
+          for fvarId in fvarIds.fvarIds do
+            let hypDepth := forwardHypData.depths.getD fvarId 0
+            currentMaxHypDepth := max currentMaxHypDepth hypDepth
+          if let some maxDepth := maxDepth? then
+            if currentMaxHypDepth + 1 > maxDepth then
+              return (proofsAcc, usedHypsAcc, proofTypesAcc)
+          return ← loop app instMVars immediateMVars (i + 1) proofsAcc
+            currentMaxHypDepth currentUsedHyps usedHypsAcc proofTypesAcc
         let type ← mvarId.getType
         (← getLCtx).foldlM (init := (proofsAcc, usedHypsAcc, proofTypesAcc)) λ s@(proofsAcc, usedHypsAcc, proofTypesAcc) ldecl => do
           if ldecl.isImplementationDetail then
