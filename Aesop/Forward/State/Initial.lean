@@ -12,16 +12,22 @@ open Lean Lean.Meta
 namespace Aesop.LocalRuleSet
 
 def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
-    BaseM (ForwardState × Array ForwardRuleMatch) := do
-  if ! aesop.dev.statefulForward.get (← getOptions) then
-    return (∅, #[])
+    BaseM (ForwardState × Array ForwardRuleMatch) :=
+  withExceptionPrefix "initial" do
   goal.withContext do
+    if ! aesop.dev.statefulForward.get (← getOptions) then
+      -- We still initialise the hyp types since these are also used by
+      -- stateless forward reasoning.
+      let mut hypTypes := ∅
+      for ldecl in ← getLCtx do
+        if ! ldecl.isImplementationDetail then
+          hypTypes := hypTypes.insert (← rpinf ldecl.type)
+      return ({ (∅ : ForwardState) with hypTypes }, #[])
     let mut fs : ForwardState := ∅
     let mut ruleMatches := rs.constForwardRuleMatches
-    show MetaM _ from do
-      aesop_trace[forward] do
-        for m in ruleMatches do
-          aesop_trace![forward] "match for constant rule {m.rule.name}"
+    aesop_trace[forward] do
+      for m in ruleMatches do
+        aesop_trace![forward] "match for constant rule {m.rule.name}"
     for ldecl in ← show MetaM _ from getLCtx do
       if ldecl.isImplementationDetail then
         continue

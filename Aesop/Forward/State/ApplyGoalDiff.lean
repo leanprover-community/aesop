@@ -13,11 +13,12 @@ open Lean Lean.Meta
 
 /-- Apply a goal diff to the state, adding and removing hypotheses as indicated
 by the diff. -/
-def ForwardState.applyGoalDiff (rs : LocalRuleSet)
-    (diff : GoalDiff) (fs : ForwardState) :
-    BaseM (ForwardState × Array ForwardRuleMatch) := do
+def ForwardState.applyGoalDiff (rs : LocalRuleSet) (diff : GoalDiff)
+    (fs : ForwardState) : BaseM (ForwardState × Array ForwardRuleMatch) := do
   if ! aesop.dev.statefulForward.get (← getOptions) then
-    return (fs, #[])
+    -- We still update the hyp types since these are also used by stateless
+    -- forward reasoning.
+    return ({ fs with hypTypes := ← updateHypTypes fs.hypTypes } , #[])
   let fs ← diff.oldGoal.withContext do
     diff.removedFVars.foldM (init := fs) λ fs h => do eraseHyp h fs
   diff.newGoal.withContext do
@@ -44,5 +45,15 @@ where
     let patInsts ←
       rs.forwardRulePatternInstantiationsInExpr (← diff.newGoal.getType)
     fs.updateTargetPatInstsCore ruleMatches diff.newGoal patInsts
+
+  updateHypTypes (hypTypes : PHashSet RPINF) : BaseM (PHashSet RPINF) := do
+    let mut hypTypes := hypTypes
+    for fvarId in diff.removedFVars do
+      let type ← diff.oldGoal.withContext do rpinf (← fvarId.getType)
+      hypTypes := hypTypes.erase type
+    for fvarId in diff.addedFVars do
+      let type ← diff.newGoal.withContext do rpinf (← fvarId.getType)
+      hypTypes := hypTypes.insert type
+    return hypTypes
 
 end Aesop

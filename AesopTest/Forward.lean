@@ -439,8 +439,8 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
 
 -- `destruct` rules only clear propositional hypotheses. So this succeeds:
 
-example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
-    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ)
+    (r₂ : (a : α) → δ) : γ ∧ δ := by
   aesop (add safe [destruct r₁, destruct (immediate := [a]) r₂])
     (config := { enableSimp := false, terminal := true })
 
@@ -448,8 +448,8 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
 
 /-- error: tactic 'aesop' failed, failed to prove the goal after exhaustive search. -/
 #guard_msgs in
-example {α : Prop} (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
-    (r₂ : (a : α) → δ₁ ∧ δ₂) : γ₁ ∧ γ₂ ∧ δ₁ ∧ δ₂ := by
+example {α : Prop} (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ)
+    (r₂ : (a : α) → δ) : γ ∧ δ := by
   aesop (add safe [destruct r₁, destruct (immediate := [a]) r₂])
     (config := { enableSimp := false, terminal := true })
 
