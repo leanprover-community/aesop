@@ -344,6 +344,7 @@ def matchPremise? (premises : Array MVarId) (numPremiseIndexes : Nat)
   withAesopTraceNodeBefore .forward (return m!"match against premise {premiseIdx}: {hypType} ≟ {premiseType}") do
     let isDefEq ←
       withConstAesopTraceNode .forwardDebug (return m!"defeq check") do
+      withReducible do
         isDefEq premiseType hypType
     if isDefEq then
       let mut subst := .empty numPremiseIndexes
