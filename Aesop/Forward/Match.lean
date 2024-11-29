@@ -141,6 +141,15 @@ def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
     aesop_trace[forward] "args: {args.map λ | none => m!"_" | some e => m!"{e}"}"
     for arg? in args, mvar in argMVars do
       if let some arg := arg? then
+        -- TODO This `isDefEq` is expensive if `arg` and `mvar` have complex
+        -- types. Ideally, we would just assign `mvar` since our forward
+        -- reasoning method already ensures that the args are type-correct.
+        -- However, doing so doesn't assign universe mvars in the type of `e`,
+        -- so we get type-incorrect terms. Similarly, `mkAppOptM` does not
+        -- reliably handle universes.
+        --
+        -- We also tried to `rpinf` the type of `mvar` before `isDefEq`, but
+        -- this seems to make no appreciable difference.
         if ! (← isDefEq arg.toExpr mvar) then
           throwError "type mismatch during reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\n: expected{indentExpr (← inferType mvar)}\nbut got{indentExpr arg.toExpr} : {← inferType arg.toExpr}"
     try
