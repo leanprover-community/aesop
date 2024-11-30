@@ -16,16 +16,14 @@ open Lean.Meta
 
 namespace Aesop.RuleTac
 
-partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
-    (patInst : RulePatternInstantiation)
+partial def makeForwardHyps (e : Expr) (patSubst? : Option Substitution)
     (immediate : UnorderedArraySet PremiseIndex) (maxDepth? : Option Nat)
     (forwardHypData : ForwardHypData) (existingHypTypes : PHashSet RPINF) :
     BaseM (Array (Expr × Nat) × Array FVarId) :=
   withNewMCtxDepth (allowLevelAssignments := true) do
     let type ← inferType e
-    let patAndInst? := pat?.map (·, patInst)
     let (argMVars, binderInfos, _, patInstantiatedMVars) ←
-      openRuleType patAndInst? type
+      openRuleType patSubst? type
     let app := mkAppN e argMVars
     let mut instMVars := Array.mkEmpty argMVars.size
     let mut immediateMVars := Array.mkEmpty argMVars.size
@@ -120,8 +118,8 @@ def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (depth : Nat) :
 where
   tacticBuilder _ := Script.TacticBuilder.assertHypothesis goal hyp .reducible
 
-def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
-    (patInsts : Std.HashSet RulePatternInstantiation)
+def applyForwardRule (goal : MVarId) (e : Expr)
+    (patSubsts? : Option (Std.HashSet Substitution))
     (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
     (maxDepth? : Option Nat) (existingHypTypes : PHashSet RPINF) :
     ScriptM Subgoal :=
@@ -130,16 +128,16 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
     let forwardHypData ← getForwardHypData
     let mut newHypProofs := #[]
     let mut usedHyps := ∅
-    if pat?.isSome then
-      for patInst in patInsts do
+    if let some patSubsts := patSubsts? then
+      for patSubst in patSubsts do
         let (newHypProofs', usedHyps') ←
-          makeForwardHyps e pat? patInst immediate maxDepth? forwardHypData
+          makeForwardHyps e patSubst immediate maxDepth? forwardHypData
             existingHypTypes
         newHypProofs := newHypProofs ++ newHypProofs'
         usedHyps := usedHyps ++ usedHyps'
     else
       let (newHypProofs', usedHyps') ←
-        makeForwardHyps e pat? .empty immediate maxDepth? forwardHypData
+        makeForwardHyps e none immediate maxDepth? forwardHypData
           existingHypTypes
       newHypProofs := newHypProofs'
       usedHyps := usedHyps'
@@ -179,33 +177,31 @@ def applyForwardRule (goal : MVarId) (e : Expr) (pat? : Option RulePattern)
       "found no instances of {e} (other than possibly those which had been previously added by forward rules)"
 
 @[inline]
-def forwardExpr (e : Expr) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool) : RuleTac :=
+def forwardExpr (e : Expr) (immediate : UnorderedArraySet PremiseIndex)
+    (clear : Bool) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => input.goal.withContext do
     let (goal, steps) ←
-      applyForwardRule input.goal e pat? input.patternInstantiations immediate
+      applyForwardRule input.goal e input.patternSubsts? immediate
         (clear := clear) input.options.forwardMaxDepth? input.hypTypes
       |>.run
     return (#[goal], steps, none)
 
-def forwardConst (decl : Name) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool) :
-    RuleTac := λ input => do
+def forwardConst (decl : Name) (immediate : UnorderedArraySet PremiseIndex)
+    (clear : Bool) : RuleTac := λ input => do
   let e ← mkConstWithFreshMVarLevels decl
-  forwardExpr e pat? immediate (clear := clear) input
+  forwardExpr e immediate (clear := clear) input
 
-def forwardTerm (stx : Term) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool) :
-    RuleTac := λ input =>
+def forwardTerm (stx : Term) (immediate : UnorderedArraySet PremiseIndex)
+    (clear : Bool) : RuleTac := λ input =>
   input.goal.withContext do
     let e ← elabRuleTermForApplyLikeMetaM input.goal stx
-    forwardExpr e pat? immediate (clear := clear) input
+    forwardExpr e immediate (clear := clear) input
 
-def forward (t : RuleTerm) (pat? : Option RulePattern)
-    (immediate : UnorderedArraySet PremiseIndex) (clear : Bool) : RuleTac :=
+def forward (t : RuleTerm) (immediate : UnorderedArraySet PremiseIndex)
+    (clear : Bool) : RuleTac :=
   match t with
-  | .const decl => forwardConst decl pat? immediate clear
-  | .term tm => forwardTerm tm pat? immediate clear
+  | .const decl => forwardConst decl immediate clear
+  | .term tm => forwardTerm tm immediate clear
 
 def forwardMatch (m : ForwardRuleMatch) :
     RuleTac := SingleRuleTac.toRuleTac λ input => do

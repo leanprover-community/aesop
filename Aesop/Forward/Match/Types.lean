@@ -12,14 +12,13 @@ open Lean
 /-- A match associates hypotheses to (a prefix of) the slots of a slot
 cluster. -/
 structure Match where
-  /-- The substitution induced by the hyps or pattern instantiations added to
+  /-- The substitution induced by the hyps or pattern substitutions added to
   the slots. -/
   subst : Substitution
-  /-- The substitutions corresponding to pattern instantiations that have been
-  added to the match. -/
+  /-- The pattern substitutions that have been added to the match. -/
   patInstSubsts : Array Substitution
   /-- The match's level is the index of the maximal slot for which a hyp or
-  pattern instantiation has been added to the match. -/
+  pattern substitution has been added to the match. -/
   level : SlotIndex
   /-- Premises that appear in slots which are as yet unassigned in this match
   (i.e., in slots with index greater than `level`). This is a property of the

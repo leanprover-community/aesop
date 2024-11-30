@@ -37,14 +37,14 @@ where
       (ruleMatches : Array ForwardRuleMatch) :
       BaseM (ForwardState × Array ForwardRuleMatch) := do
     let rules ← rs.applicableForwardRules (← h.getType)
-    let patInsts ← rs.forwardRulePatternInstantiationsInLocalDecl (← h.getDecl)
-    fs.addHypWithPatInstsCore ruleMatches diff.newGoal h rules patInsts
+    let patInsts ← rs.forwardRulePatternSubstsInLocalDecl (← h.getDecl)
+    fs.addHypWithPatSubstsCore ruleMatches diff.newGoal h rules patInsts
 
   updateTarget (fs : ForwardState) (ruleMatches : Array ForwardRuleMatch) :
       BaseM (ForwardState × Array ForwardRuleMatch) := do
     let patInsts ←
-      rs.forwardRulePatternInstantiationsInExpr (← diff.newGoal.getType)
-    fs.updateTargetPatInstsCore ruleMatches diff.newGoal patInsts
+      rs.forwardRulePatternSubstsInExpr (← diff.newGoal.getType)
+    fs.updateTargetPatSubstsCore ruleMatches diff.newGoal patInsts
 
   updateHypTypes (hypTypes : PHashSet RPINF) : BaseM (PHashSet RPINF) := do
     let mut hypTypes := hypTypes

@@ -32,14 +32,15 @@ structure RuleTacInput where
   /-- If the rule is indexed, the locations (i.e. hyps or the target) matched by
   the rule's index entries. Otherwise an empty set. -/
   indexMatchLocations : Std.HashSet IndexMatchLocation
-  /-- If the rule has a pattern, the pattern instantiations that were found in
-  the goal. Each instantiation is a list of expressions which were found by
+  /-- If the rule has a pattern, the pattern substitutions that were found in
+  the goal. Each substitution is a list of expressions which were found by
   matching the pattern against expressions in the goal. For example, if `h : max
   a b = max a c` appears in the goal and the rule has pattern `max x y`, there
-  will be two pattern instantiations `[a, b]` (representing the substitution
-  `{x ↦ a, y ↦ b}`) and `[a, c]`. If the rule does not have a pattern,
-  `patternInstantiations` is empty; otherwise it's guaranteed to be non-empty. -/
-  patternInstantiations : Std.HashSet RulePatternInstantiation
+  will be two substitutions `{x ↦ a, y ↦ b}`) and `{x ↦ a, y ↦ c}`.
+
+  If the rule does not have a pattern, this is `none`. Otherwise it is
+  guaranteed to be `some xs` with `xs` non-empty. -/
+  patternSubsts? : Option (Std.HashSet Substitution)
   /-- The options given to Aesop. -/
   options : Options'
   /-- Normalised types of all non-implementation detail hypotheses in the local

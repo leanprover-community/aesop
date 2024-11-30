@@ -27,7 +27,7 @@ def forwardTac (goal : MVarId) (id : Ident) (immediate : Option (Array Syntax))
   let immediate ← RuleBuilder.getImmediatePremises ldecl.type none
     (immediate.map (·.map (·.getId)))
   let (goal, _) ←
-    RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) none ∅ immediate clear
+    RuleTac.applyForwardRule goal (mkFVar ldecl.fvarId) none immediate clear
       (maxDepth? := none) ∅ |>.run.run
   return [goal.mvarId]
 

@@ -42,7 +42,7 @@ def applyCore (t : ElabRuleTerm) (pat? : Option RulePattern)
   let e ← t.expr
   let type ← inferType e
   let imode ← imode?.getDM $ getApplyIndexingMode indexMd type
-  let tac := .apply t.toRuleTerm md pat?
+  let tac := .apply t.toRuleTerm md
   return .global $ .base $ phase.toRule (← t.name) .apply t.scope tac imode pat?
 
 def apply : RuleBuilder := λ input => do

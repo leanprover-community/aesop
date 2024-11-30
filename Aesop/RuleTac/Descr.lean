@@ -6,10 +6,10 @@ open Lean Lean.Meta
 namespace Aesop
 
 inductive RuleTacDescr
-  | apply (term : RuleTerm) (md : TransparencyMode) (pat? : Option RulePattern)
+  | apply (term : RuleTerm) (md : TransparencyMode)
   | constructors (constructorNames : Array Name) (md : TransparencyMode)
-  | forward (term : RuleTerm) (pat? : Option RulePattern)
-      (immediate : UnorderedArraySet PremiseIndex) (isDestruct : Bool)
+  | forward (term : RuleTerm) (immediate : UnorderedArraySet PremiseIndex)
+      (isDestruct : Bool)
   | cases (target : CasesTarget) (md : TransparencyMode)
       (isRecursiveType : Bool) (ctorNames : Array CtorNames)
   | tacticM (decl : Name)

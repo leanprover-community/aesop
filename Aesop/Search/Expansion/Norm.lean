@@ -133,7 +133,7 @@ def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
   profilingRule (.ruleName rule.rule.name) (λ result => result.isSome) do
     let ruleInput := {
       indexMatchLocations := rule.locations
-      patternInstantiations := rule.patternInstantiations
+      patternSubsts? := rule.patternSubsts?
       options := (← read).options
       hypTypes := (← get).forwardState.hypTypes
       goal, mvars

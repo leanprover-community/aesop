@@ -31,12 +31,12 @@ def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
       if ldecl.isImplementationDetail then
         continue
       let rules ← rs.applicableForwardRules ldecl.type
-      let patInsts ← rs.forwardRulePatternInstantiationsInLocalDecl ldecl
+      let patInsts ← rs.forwardRulePatternSubstsInLocalDecl ldecl
       let (fs', ruleMatches') ←
-        fs.addHypWithPatInstsCore ruleMatches goal ldecl.fvarId rules patInsts
+        fs.addHypWithPatSubstsCore ruleMatches goal ldecl.fvarId rules patInsts
       fs := fs'
       ruleMatches := ruleMatches'
-    let patInsts ← rs.forwardRulePatternInstantiationsInExpr (← goal.getType)
-    fs.addPatInstsCore ruleMatches goal patInsts
+    let patInsts ← rs.forwardRulePatternSubstsInExpr (← goal.getType)
+    fs.addPatSubstsCore ruleMatches goal patInsts
 
 end Aesop.LocalRuleSet

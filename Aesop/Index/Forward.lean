@@ -50,7 +50,7 @@ def merge (idx₁ idx₂ : ForwardIndex) : ForwardIndex where
 
 /-- Insert a forward rule into the `ForwardIndex`. -/
 def insert (r : ForwardRule) (idx : ForwardIndex) : ForwardIndex := Id.run do
-  if r.numPremiseIndexes == 0 then
+  if r.isConstant then
     return {
       idx with
       constRules := idx.constRules.insert r

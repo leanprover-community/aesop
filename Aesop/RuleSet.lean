@@ -523,28 +523,26 @@ def constForwardRuleMatches (rs : LocalRuleSet) : Array ForwardRuleMatch :=
 
 section ForwardRulePattern
 
-private def postprocessPatInstMap (rs : LocalRuleSet) (m : RulePatternInstMap) :
-    BaseM (Array (ForwardRule × RPINFRulePatternInstantiation)) :=
-  m.toFlatArray.filterMapM λ (n, patInst) =>
-    rs.forwardRules.getRuleWithName? n |>.mapM λ r =>
-      return (r, ← patInst.rpinf)
+private def postprocessPatSubstMap (rs : LocalRuleSet)
+    (m : RulePatternSubstMap) : Array (ForwardRule × Substitution) :=
+  m.toFlatArray.filterMap λ (n, patSubst) =>
+    rs.forwardRules.getRuleWithName? n |>.map (·, patSubst)
 
-def forwardRulePatternInstantiationsInExpr (rs : LocalRuleSet) (e : Expr) :
-    BaseM (Array (ForwardRule × RPINFRulePatternInstantiation)) := do
+def forwardRulePatternSubstsInExpr (rs : LocalRuleSet) (e : Expr) :
+    BaseM (Array (ForwardRule × Substitution)) := do
   withConstAesopTraceNode .forward (return m!"rule patterns in expr {e}:") do
     let ms ← rs.rulePatterns.get e
-    let ms ← postprocessPatInstMap rs ms
+    let ms := postprocessPatSubstMap rs ms
     aesop_trace[forward] do
       for (r, inst) in ms do
         aesop_trace![forward] m!"{r}, {inst}"
     return ms
 
-def forwardRulePatternInstantiationsInLocalDecl (rs : LocalRuleSet)
-    (ldecl : LocalDecl) :
-    BaseM (Array (ForwardRule × RPINFRulePatternInstantiation)) := do
+def forwardRulePatternSubstsInLocalDecl (rs : LocalRuleSet) (ldecl : LocalDecl) :
+    BaseM (Array (ForwardRule × Substitution)) := do
   withConstAesopTraceNode .forward (return m!"rule patterns in hyp {ldecl.userName}:") do
     let ms ← rs.rulePatterns.getInLocalDecl ldecl
-    let ms ← postprocessPatInstMap rs ms
+    let ms := postprocessPatSubstMap rs ms
     aesop_trace[forward] do
       for (r, inst) in ms do
         aesop_trace![forward] m!"{r}, {inst}"

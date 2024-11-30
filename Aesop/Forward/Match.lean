@@ -31,28 +31,28 @@ def elabForwardRuleTerm (goal : MVarId) : RuleTerm → MetaM Expr
 namespace Match
 
 /-- Create a one-element match. `subst` is the substitution that results from
-matching a hypothesis against slot 0, or from a pattern instantiation.
-`isPatInst` is `true` if the substitution resulted from a pattern instantiation.
+matching a hypothesis against slot 0, or from a pattern substitution.
+`isPatSubst` is `true` if the substitution resulted from a rule pattern.
 `forwardDeps` are the forward dependencies of slot 0. `conclusionDeps` are the
 conclusion dependencies of the rule to which this match belongs. -/
-def initial (subst : Substitution) (isPatInst : Bool)
+def initial (subst : Substitution) (isPatSubst : Bool)
     (forwardDeps conclusionDeps : Array PremiseIndex) : Match where
   subst := subst
-  patInstSubsts := if isPatInst then #[subst] else #[]
+  patInstSubsts := if isPatSubst then #[subst] else #[]
   level := ⟨0⟩
   forwardDeps := forwardDeps
   conclusionDeps := conclusionDeps
 
-/-- Add a hyp or pattern instantiation to the match. `subst` is the substitution
+/-- Add a hyp or pattern substitution to the match. `subst` is the substitution
 that results from matching a hypothesis against slot `m.level + 1`, or from the
-pattern instantiation. `isPatInst` is `true` if the substitution resulted from
-a pattern instantiation. `forwardDeps` are the forward dependencies of slot
+pattern. `isPatSubst` is `true` if the substitution resulted from a pattern
+substitution. `forwardDeps` are the forward dependencies of slot
 `m.level + 1`. -/
-def addHypOrPatternInst (subst : Substitution) (isPatInst : Bool)
+def addHypOrPatSubst (subst : Substitution) (isPatSubst : Bool)
     (forwardDeps : Array PremiseIndex) (m : Match) : Match where
   subst := m.subst.mergeCompatible subst
   patInstSubsts :=
-    if isPatInst then m.patInstSubsts.push subst else m.patInstSubsts
+    if isPatSubst then m.patInstSubsts.push subst else m.patInstSubsts
   level := m.level + 1
   forwardDeps := forwardDeps
   conclusionDeps := m.conclusionDeps
@@ -62,8 +62,8 @@ def containsHyp (hyp : FVarId) (m : Match) : Bool :=
   let fvar := .fvar hyp
   m.subst.toArray.any (·.any (·.toExpr == fvar))
 
-/-- Returns `true` if the match contains the given pattern instantiation. -/
-def containsPatInst (subst : Substitution) (m : Match) : Bool :=
+/-- Returns `true` if the match contains the given pattern substitution. -/
+def containsPatSubst (subst : Substitution) (m : Match) : Bool :=
   m.patInstSubsts.any (· == subst)
 
 end Match
@@ -75,9 +75,9 @@ match's slots and substitution. For non-immediate arguments, we return `none`. -
 def reconstructArgs (r : ForwardRule) (m : CompleteMatch) :
     Array (Option RPINF) := Id.run do
   assert! m.clusterMatches.size == r.slotClusters.size
-  let mut subst : Substitution := .empty r.numPremiseIndexes
+  let mut subst : Substitution := .empty r.numPremises
   for m in m.clusterMatches do
-    subst := subst.mergeCompatible m.subst
+    subst := m.subst.mergeCompatible subst
   let mut args := Array.mkEmpty r.numPremises
   for i in [:r.numPremises] do
     args := args.push $ subst.find? ⟨i⟩
