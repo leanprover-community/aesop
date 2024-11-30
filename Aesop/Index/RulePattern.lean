@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Index.Basic
-import Aesop.RulePattern.Basic
 import Aesop.RuleTac.GoalDiff
 import Batteries.Lean.Meta.DiscrTree
 
@@ -15,40 +14,32 @@ open Lean Lean.Meta
 
 namespace Aesop
 
-/-- A map from rule names to rule pattern instantiations. When run on a goal,
+/-- A map from rule names to rule pattern substitutions. When run on a goal,
 the rule pattern index returns such a map. -/
-abbrev RulePatternInstMap :=
-  Std.HashMap RuleName (Std.HashSet RulePatternInstantiation)
+abbrev RulePatternSubstMap := Std.HashMap RuleName (Std.HashSet Substitution)
 
-namespace RulePatternInstMap
+namespace RulePatternSubstMap
 
-instance : EmptyCollection RulePatternInstMap :=
-  ⟨{}⟩
-
-/-- Insert an array of rule pattern instantiations into a rule pattern
-instantiation map. -/
-def insertArray (xs : Array (RuleName × RulePatternInstantiation))
-    (m : RulePatternInstMap) : RulePatternInstMap :=
+/-- Insert an array of rule pattern substitutions into a rule pattern
+substitution map. -/
+def insertArray (xs : Array (RuleName × Substitution))
+    (m : RulePatternSubstMap) : RulePatternSubstMap :=
   xs.foldl (init := m) λ m (r, inst) =>
     match m[r]? with
     | none => m.insert r $ (∅ : Std.HashSet _).insert inst
     | some insts => m.insert r $ insts.insert inst
 
-/-- Build a rule instantiation map from an array of instantiations. -/
-def ofArray (xs : Array (RuleName × RulePatternInstantiation)) :
-    RulePatternInstMap :=
-  (∅ : RulePatternInstMap).insertArray xs
+/-- Build a rule pattern substitution map from an array of substitutions. -/
+def ofArray (xs : Array (RuleName × Substitution)) : RulePatternSubstMap :=
+  (∅ : RulePatternSubstMap).insertArray xs
 
-/-- Convert a rule instantiation map to a flat array of instantiations. -/
-def toFlatArray (m : RulePatternInstMap) :
-    Array (RuleName × RulePatternInstantiation) := Id.run do
-  let mut result := #[]
-  for (r, patInsts) in m do
-    for patInst in patInsts do
-      result := result.push (r, patInst)
-  return result
+/-- Convert a rule pattern substitution map to a flat array of substitutions. -/
+def toFlatArray (m : RulePatternSubstMap) : Array (RuleName × Substitution) :=
+  m.fold (init := #[]) λ acc r patInsts =>
+    patInsts.fold (init := acc) λ acc patInst =>
+      acc.push (r, patInst)
 
-end RulePatternInstMap
+end RulePatternSubstMap
 
 
 /-- An entry of the rule pattern index. -/
@@ -87,38 +78,29 @@ def merge (idx₁ idx₂ : RulePatternIndex) : RulePatternIndex :=
 
 section Get
 
-/-- Get rule pattern instantiations for the patterns that match `e`. -/
-def getSingle  (e : Expr) (idx : RulePatternIndex) :
-    MetaM (Array (RuleName × RulePatternInstantiation)) := do
+/-- Get rule pattern substitutions for the patterns that match `e`. -/
+def getSingle (e : Expr) (idx : RulePatternIndex) :
+    BaseM (Array (RuleName × Substitution)) := do
   let ms ← idx.tree.getUnify e discrTreeConfig
-  ms.foldlM (init := #[]) λ acc { name := r, pattern } =>
-    withNewMCtxDepth do
-      let (mvarIds, p) ← pattern.open
-      if ← isDefEq e p then
-        let inst ← mvarIds.mapM λ mvarId => do
-          let mvar := .mvar mvarId
-          let result ← instantiateMVars mvar
-          if result == mvar then
-            throwError "matchRulePatterns: while matching pattern '{p}' against expression '{e}': expected metavariable ?{(← mvarId.getDecl).userName} ({mvarId.name}) to be assigned"
-          pure result
-        return acc.push (r, inst)
-      else
-        return acc
+  ms.filterMapM λ { name := r, pattern } => do
+    let some subst ← pattern.match e
+      | return none
+    return (r, subst)
 
-/-- Get all instantiations of the rule patterns that match a subexpression of
+/-- Get all substitutions of the rule patterns that match a subexpression of
 `e`. Subexpressions containing bound variables are not considered. The returned
 array may contain duplicates. -/
 def getCore (e : Expr) (idx : RulePatternIndex) :
-    BaseM (Array (RuleName × RulePatternInstantiation)) := do
+    BaseM (Array (RuleName × Substitution)) := do
   let e ← instantiateMVars e
   checkCache (β := RulePatternCache.Entry) e λ _ => do
     let (_, ms) ← e.forEach getSubexpr |>.run #[]
     return ms
 where
   getSubexpr (e : Expr) :
-      StateRefT (Array (RuleName × RulePatternInstantiation)) BaseM Unit := do
+      StateRefT (Array (RuleName × Substitution)) BaseM Unit := do
     if e.hasLooseBVars then
-      -- We don't visit subexpressions with loose bvars. Instantiations
+      -- We don't visit subexpressions with loose bvars. Substitutions
       -- derived from such subexpressions would not be valid in the goal's
       -- context. E.g. if a rule `(x : T) → P x` has pattern `x` and we
       -- have the expression `λ (y : T), y` in the goal, then it makes no
@@ -128,14 +110,14 @@ where
     modifyThe (Array _) (· ++ ms)
 
 @[inherit_doc getCore]
-def get (e : Expr) (idx : RulePatternIndex) : BaseM RulePatternInstMap :=
+def get (e : Expr) (idx : RulePatternIndex) : BaseM RulePatternSubstMap :=
   .ofArray <$> idx.getCore e
 
-/-- Get all instantiations of the rule patterns that match a subexpression of
+/-- Get all substitutions of the rule patterns that match a subexpression of
 the given local declaration. Subexpressions containing bound variables are not
 considered. -/
-def getInLocalDeclCore (acc : RulePatternInstMap) (ldecl : LocalDecl)
-    (idx : RulePatternIndex) : BaseM RulePatternInstMap := do
+def getInLocalDeclCore (acc : RulePatternSubstMap) (ldecl : LocalDecl)
+    (idx : RulePatternIndex) : BaseM RulePatternSubstMap := do
   let mut result := acc
   result := result.insertArray $ ← idx.getCore ldecl.toExpr
   result := result.insertArray $ ← idx.getCore ldecl.type
@@ -145,14 +127,14 @@ def getInLocalDeclCore (acc : RulePatternInstMap) (ldecl : LocalDecl)
 
 @[inherit_doc getInLocalDeclCore]
 def getInLocalDecl (ldecl : LocalDecl) (idx : RulePatternIndex) :
-    BaseM RulePatternInstMap :=
+    BaseM RulePatternSubstMap :=
   idx.getInLocalDeclCore ∅ ldecl
 
-/-- Get all instantiations of the rule patterns that match a subexpression of
+/-- Get all substitutions of the rule patterns that match a subexpression of
 a hypothesis or the target. Subexpressions containing bound variables are not
 considered. -/
 def getInGoal (goal : MVarId) (idx : RulePatternIndex) :
-    BaseM RulePatternInstMap :=
+    BaseM RulePatternSubstMap :=
   goal.withContext do
     let mut result := ∅
     for ldecl in (← goal.getDecl).lctx do

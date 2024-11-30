@@ -135,7 +135,7 @@ private def applicableUnindexedRules (ri : Index α) (include? : Rule α → Boo
 -- Returns the rules in the order given by the `Ord α` instance.
 @[specialize]
 def applicableRules (ri : Index α) (goal : MVarId)
-    (patInstMap : RulePatternInstMap) (additionalRules : Array (Rule α))
+    (patSubstMap : RulePatternSubstMap) (additionalRules : Array (Rule α))
     (include? : Rule α → Bool) :
     MetaM (Array (IndexMatchResult (Rule α))) := do
   withConstAesopTraceNode .debug (return "rule selection") do
@@ -158,10 +158,11 @@ def applicableRules (ri : Index α) (goal : MVarId)
   for (rule, locs) in ruleMap do
     let locations := (∅ : Std.HashSet _).insertMany locs
     if rule.pattern?.isSome then
-      if let some patternInstantiations := patInstMap[rule.name]? then
-        result := result.push { rule, locations, patternInstantiations }
+      let patternSubsts? := patSubstMap[rule.name]?
+      if patternSubsts?.isSome  then
+        result := result.push { rule, locations, patternSubsts? }
     else
-      result := result.push { rule, locations, patternInstantiations := ∅ }
+      result := result.push { rule, locations, patternSubsts? := none }
   return result
 where
   @[inline]

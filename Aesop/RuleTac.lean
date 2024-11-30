@@ -16,10 +16,9 @@ open Lean
 namespace Aesop.RuleTacDescr
 
 protected def run : RuleTacDescr → RuleTac
-  | apply t md pat? => RuleTac.apply t pat? md
+  | apply t md => RuleTac.apply t md
   | constructors cs md => RuleTac.applyConsts cs md
-  | forward t pat? immediate clear =>
-    RuleTac.forward t pat? immediate clear
+  | forward t immediate clear => RuleTac.forward t immediate clear
   | cases target md isRecursiveType ctorNames =>
     RuleTac.cases target md isRecursiveType ctorNames
   | tacticM decl => RuleTac.tacticM decl

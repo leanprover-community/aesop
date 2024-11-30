@@ -5,11 +5,11 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.Forward.PremiseIndex
-import Aesop.RulePattern
+import Aesop.RPINF.Basic
 
 namespace Aesop
 
-open Lean
+open Lean Lean.Meta
 
 set_option linter.missingDocs true
 
@@ -65,21 +65,59 @@ def containsHyp (hyp : FVarId) (s : Substitution) : Bool :=
     | none => false
     | some e => e.toExpr.containsFVar hyp
 
+/-- Given `type = ∀ (x₁ : T₁) ... (xₙ : Tₙ), U` and a substitution `σ` for the
+arguments `xᵢ`, replace occurrences of `xᵢ` in the body `U` with fresh
+metavariables (like `forallMetaTelescope`). Then, for each mapping `xᵢ ↦ tᵢ` in
+`σ`, assign `tᵢ` to tthe metavariable corresponding to `xᵢ`. Returns the new
+metavariables, their binder infos, the new body and a set containing those
+new metavariables that were assigned. -/
+def openRuleType (type : Expr) (subst : Substitution) :
+    MetaM (Array Expr × Array BinderInfo × Expr × Std.HashSet MVarId) := do
+  let (mvars, binfos, body) ← forallMetaTelescopeReducing type
+  let mut assigned := ∅
+  for h : i in [:mvars.size] do
+    if let some inst := subst.find? ⟨i⟩ then
+      let mvarId := mvars[i]'h.2 |>.mvarId!
+      -- We use `isDefEq` to make sure that universe metavariables occurring in
+      -- the type of `mvarId` are assigned.
+      if ← isDefEq (.mvar mvarId) inst.toExpr then
+        assigned := assigned.insert mvarId
+      else
+        throwError "openRuleType: type-incorrect substitution: argument has type '{← mvarId.getType}' but instantiation '{inst}' has type '{← inferType inst.toExpr}'"
+  return (mvars, binfos, body, assigned)
+
+/-- Given `rule` of type `∀ (x₁ : T₁) ... (xₙ : Tₙ), U` and a substitution `σ` for
+the arguments `xᵢ`, specialise `rule` with the arguments given by `σ`. That is,
+construct `U t₁ ... tₙ` where `tⱼ` is `σ(xⱼ)` if `xⱼ ∈ dom(σ)` and is otherwise
+a fresh fvar, then λ-abstract the fresh fvars.
+-/
+def specializeRule (rule : Expr) (subst : Substitution) : MetaM Expr :=
+  withNewMCtxDepth do
+    forallTelescopeReducing (← inferType rule) λ fvarIds _ => do
+      let mut args := Array.mkEmpty fvarIds.size
+      let mut remainingFVarIds := Array.mkEmpty fvarIds.size
+      for h : i in [:fvarIds.size] do
+        if let some inst := subst.find? ⟨i⟩ then
+          args := args.push $ some inst.toExpr
+        else
+          let fvarId := fvarIds[i]'h.2
+          args := args.push $ some fvarId
+          remainingFVarIds := remainingFVarIds.push fvarId
+      let result ← mkLambdaFVars remainingFVarIds (← mkAppOptM' rule args)
+      return result
+
 end Substitution
 
-namespace RPINFRulePatternInstantiation
+/-- Open the type of a rule. If a substitution `σ` is given, this function acts
+like `Substitution.openRuleType σ`. Otherwise it acts like
+`forallMetaTelescope`. -/
+def openRuleType (subst? : Option Substitution) (type : Expr) :
+    MetaM (Array Expr × Array BinderInfo × Expr × Std.HashSet MVarId) := do
+  match subst? with
+  | some subst => do
+    subst.openRuleType type
+  | none =>
+    let (premises, binfos, conclusion) ← forallMetaTelescopeReducing type
+    return (premises, binfos, conclusion, ∅)
 
-/-- Convert a rule pattern instantiation to a substitution. `pat` is the rule
-pattern that was instantiated and `numPremiseIndexes` is the rule to which this
-pattern belongs. -/
-def toSubstitution (pat : RulePattern) (numPremiseIndexes : Nat)
-    (patInst : RPINFRulePatternInstantiation) :
-    Except String Substitution := do
-  let mut subst := .empty numPremiseIndexes
-  for i in pat.boundPremises do
-    let some inst ← pat.getRPINFInstantiation patInst i
-      | throw s!"pattern instantiation {patInst.toArray} does not contain an instantiation for premise {i}"
-    subst := subst.insert ⟨i⟩ inst
-  return subst
-
-end Aesop.RPINFRulePatternInstantiation
+end Aesop

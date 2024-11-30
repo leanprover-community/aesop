@@ -22,7 +22,7 @@ no forward dependencies. The goal of forward reasoning is to assign a
 hypothesis to each slot in such a way that the assignments agree on all
 variables shared between them.
 
-Exceptionally, a slot can also represent the rule pattern instantiation. Rules
+Exceptionally, a slot can also represent the rule pattern substitution. Rules
 with a rule pattern have exactly one such slot, which is assigned an arbitrary
 premise index. -/
 structure Slot where
@@ -68,13 +68,10 @@ structure ForwardRuleInfo where
 
 namespace ForwardRuleInfo
 
-/-- The number of premise indexes used by the rule. Data structures related to
-the rule use only premise indexes in the interval `[0, numPremiseIndexes)`. -/
-def numPremiseIndexes (r : ForwardRuleInfo) : Nat :=
-  if r.rulePatternInfo?.isSome then
-    r.numPremises + 1
-  else
-    r.numPremises
+/-- Is this rule a constant rule (i.e., does it have neither premises nor a rule
+pattern)? -/
+def isConstant (r : ForwardRuleInfo) : Bool :=
+  r.numPremises == 0 && r.rulePatternInfo?.isNone
 
 /-- Construct a `ForwardRuleInfo` for the theorem `thm`. -/
 def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
@@ -114,7 +111,7 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
     ! allDeps.contains idx && ! patBoundPremises.contains idx &&
     immediate.contains idx
   -- If the rule has a pattern, an additional slot is created for the rule
-  -- pattern instantiation. Again, we update the `default` fields with correct
+  -- pattern substitution. Again, we update the `default` fields with correct
   -- info later.
   if rulePattern?.isSome then
     slots := slots.push {

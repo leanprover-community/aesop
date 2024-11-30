@@ -35,7 +35,7 @@ def selectSafeRules (g : Goal) :
       return #[{
         rule := preprocessRule
         locations := ∅
-        patternInstantiations := ∅
+        patternSubsts? := none
       }]
     let ruleSet := (← read).ruleSet
     g.runMetaMInPostNormState' λ postNormGoal =>

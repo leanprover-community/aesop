@@ -123,7 +123,7 @@ def forwardCore (t : ElabRuleTerm) (immediate? : Option (Array Name))
   aesop_trace[debug] "immediate premises: {immediate}"
   let imode ← getForwardIndexingMode type immediate
   aesop_trace[debug] "imode: {imode}"
-  let tac := .forward t.toRuleTerm pat? immediate isDestruct
+  let tac := .forward t.toRuleTerm immediate isDestruct
   let member := phase.toRule (← t.name) builderName t.scope tac imode pat?
   -- HACK we currently add two rule set members for each forward rule; one
   -- normal, tactic-based rule and one `ForwardRule`. Eventually, only the

@@ -4,23 +4,15 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Forward.Substitution
 import Aesop.RPINF
 import Aesop.Rule.Name
-import Aesop.RulePattern.Basic
 import Aesop.Tracing
 import Aesop.Index.DiscrTreeConfig
 
 open Lean Lean.Meta
 
 namespace Aesop
-
-namespace RulePatternInstantiation
-
-def rpinf (inst : RulePatternInstantiation) :
-    BaseM RPINFRulePatternInstantiation :=
-  inst.mapM Aesop.rpinf
-
-end RulePatternInstantiation
 
 /--
 A rule pattern. For a rule of type `∀ (x₀ : T₀) ... (xₙ : Tₙ), U`, a valid rule
@@ -68,64 +60,23 @@ def «open» (pat : RulePattern) : MetaM (Array MVarId × Expr) := do
   let (mvarIds, _, p) ← openAbstractMVarsResult pat.pattern
   return (mvarIds.map (·.mvarId!), p)
 
-end RulePattern
-
-
-namespace RulePattern
-
-def getInstantiation (pat : RulePattern) (inst : RulePatternInstantiation)
-    (argIndex : Nat) : Except String (Option Expr) := do
-  -- It's possible that `argMap[argIndex]? = none` if the rule type is
-  -- syntactically `∀ (x₁ : T₁) ... (xₙ : Tₙ) = U` and `U` is a `forall` up to
-  -- the rule's transparency.
-  let some (some instIndex) := pat.argMap[argIndex]?
-    | return none
-  let some inst := inst.toArray[instIndex]?
-    | throw s!"getInstantiation: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
-  return some inst
-
-def getRPINFInstantiation (pat : RulePattern) (inst : RPINFRulePatternInstantiation)
-    (argIndex : Nat) : Except String (Option RPINF) := do
-  let some (some instIndex) := pat.argMap[argIndex]?
-    | return none
-  let some inst := inst.toArray[instIndex]?
-    | throw s!"getInstantiation: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
-  return some inst
-
-def openRuleType (pat : RulePattern) (inst : RulePatternInstantiation)
-    (type : Expr) :
-    MetaM (Array Expr × Array BinderInfo × Expr × Std.HashSet MVarId) := do
-  let (mvars, binfos, body) ← forallMetaTelescopeReducing type
-  let mut assigned := ∅
-  for h : i in [:mvars.size] do
-    if let some inst ← ofExcept $ pat.getInstantiation inst i then
-      let mvarId := mvars[i]'h.2 |>.mvarId!
-      -- We use `isDefEq` to make sure that universe metavariables occurring in
-      -- the type of `mvarId` are assigned.
-      if ← isDefEq (.mvar mvarId) inst then
-        assigned := assigned.insert mvarId
-      else
-        throwError "openRuleType: type-incorrect pattern instantiation: argument has type '{← mvarId.getType}' but pattern instantiation '{inst}' has type '{← inferType inst}'"
-  return (mvars, binfos, body, assigned)
-
-def specializeRule (pat : RulePattern) (inst : RulePatternInstantiation)
-    (rule : Expr) : MetaM Expr :=
+def «match» (e : Expr) (pat : RulePattern) : BaseM (Option Substitution) :=
   withNewMCtxDepth do
-    forallTelescopeReducing (← inferType rule) λ fvarIds _ => do
-      let mut args := Array.mkEmpty fvarIds.size
-      let mut remainingFVarIds := Array.mkEmpty fvarIds.size
-      for h : i in [:fvarIds.size] do
-        if let some inst ← ofExcept $ pat.getInstantiation inst i then
-          args := args.push $ some inst
-        else
-          let fvarId := fvarIds[i]'h.2
-          args := args.push $ some fvarId
-          remainingFVarIds := remainingFVarIds.push fvarId
-      let result ← mkLambdaFVars remainingFVarIds (← mkAppOptM' rule args)
-      return result
+    let (mvarIds, p) ← pat.open
+    if ! (← isDefEq e p) then
+      return none
+    let mut subst := .empty pat.argMap.size
+    for h : i in [:pat.argMap.size] do
+      if let some j := pat.argMap[i] then
+        let mvarId := mvarIds[j]!
+        let mvar := .mvar mvarId
+        let inst ← instantiateMVars mvar
+        if inst == mvar then
+          throwError "RulePattern.match: while matching pattern '{p}' against expression '{e}': expected metavariable ?{(← mvarId.getDecl).userName} ({mvarId.name}) to be assigned"
+        subst := subst.insert ⟨i⟩ (← rpinf inst)
+    return some subst
 
-open Lean.Elab Lean.Elab.Term
-
+open Lean.Elab Lean.Elab.Term in
 def «elab» (stx : Term) (ruleType : Expr) : TermElabM RulePattern :=
   withLCtx {} {} $ withoutModifyingState do
     forallTelescope ruleType λ fvars _ => do
@@ -169,16 +120,4 @@ where
       { paramNames := s.paramNames, numMVars := s.fvars.size, expr := e }
     return (result, mvarIdToPos)
 
-end RulePattern
-
-def openRuleType (patAndInst? : Option (RulePattern × RulePatternInstantiation))
-    (type : Expr) :
-    MetaM (Array Expr × Array BinderInfo × Expr × Std.HashSet MVarId) := do
-  match patAndInst? with
-  | some (pat, inst) => do
-    pat.openRuleType inst type
-  | none =>
-    let (premises, binfos, conclusion) ← forallMetaTelescopeReducing type
-    return (premises, binfos, conclusion, ∅)
-
-end Aesop
+end Aesop.RulePattern

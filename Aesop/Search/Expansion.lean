@@ -50,7 +50,7 @@ end SafeRuleResult
 
 def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
     (indexMatchLocations : Std.HashSet IndexMatchLocation)
-    (patternInstantiations : Std.HashSet RulePatternInstantiation)
+    (patternSubsts? : Option (Std.HashSet Substitution))
     (options : Options') (hypTypes : PHashSet RPINF) :
     BaseM (Sum Exception RuleTacOutput) := do
   let some (postNormGoal, postNormState) := goal.postNormGoalAndMetaState? | throwError
@@ -58,7 +58,7 @@ def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
   let input := {
     goal := postNormGoal
     mvars := goal.mvars
-    hypTypes, indexMatchLocations, patternInstantiations, options
+    hypTypes, indexMatchLocations, patternSubsts?, options
   }
   runRuleTac tac ruleName postNormState input
 
@@ -110,12 +110,12 @@ def withRuleTraceNode (ruleName : RuleName)
 
 def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
     (indexMatchLocations : Std.HashSet IndexMatchLocation)
-    (patternInstantiations : Std.HashSet RulePatternInstantiation) :
+    (patternSubsts? : Option (Std.HashSet Substitution)) :
     SearchM Q (Option RuleTacOutput) := do
   let parent ← parentRef.get
   let ruleOutput? ←
     runRegularRuleTac parent rule.tac.run rule.name indexMatchLocations
-      patternInstantiations (← read).options parent.forwardState.hypTypes
+      patternSubsts? (← read).options parent.forwardState.hypTypes
   match ruleOutput? with
   | Sum.inl exc =>
     aesop_trace[steps] exc.toMessageData
@@ -133,7 +133,7 @@ def runSafeRule (parentRef : GoalRef) (matchResult : IndexMatchResult SafeRule) 
     withRuleTraceNode rule.name (·.toEmoji) "" do
       let some output ←
           runRegularRuleCore parentRef (.safe matchResult.rule)
-            matchResult.locations matchResult.patternInstantiations
+            matchResult.locations matchResult.patternSubsts?
         | do addRuleFailure (.safe rule) parentRef; return .regular .failed
       let parentMVars := (← parentRef.get).mvars
       let rapps := output.applications
@@ -157,7 +157,7 @@ def runUnsafeRule (parentRef : GoalRef)
     withRuleTraceNode rule.name (·.toEmoji) "" do
       let some output ←
           runRegularRuleCore parentRef (.unsafe rule) matchResult.locations
-            matchResult.patternInstantiations
+            matchResult.patternSubsts?
         | do addRuleFailure (.unsafe rule) parentRef; return .failed
       addRapps parentRef (.unsafe rule) output.applications
 

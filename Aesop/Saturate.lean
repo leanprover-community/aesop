@@ -99,7 +99,7 @@ where
     withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} running rule {matchResult.rule.name}") do
     let input := {
       indexMatchLocations := matchResult.locations
-      patternInstantiations := matchResult.patternInstantiations
+      patternSubsts? := matchResult.patternSubsts?
       options := (← read).options
       hypTypes, goal, mvars
     }
@@ -173,9 +173,9 @@ where
           else
             let rules ← rs.applicableForwardRules type
             let patInsts ←
-              rs.forwardRulePatternInstantiationsInLocalDecl (← hyp.getDecl)
+              rs.forwardRulePatternSubstsInLocalDecl (← hyp.getDecl)
             let (fs, ruleMatches) ←
-              fs.addHypWithPatInsts goal hyp rules patInsts
+              fs.addHypWithPatSubsts goal hyp rules patInsts
             let queue :=
               ruleMatches.foldl (init := queue) λ queue m => queue.insert m
             go hypDepths fs queue erasedHyps goal
