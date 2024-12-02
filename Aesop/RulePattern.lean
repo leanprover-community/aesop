@@ -42,6 +42,11 @@ structure RulePattern where
   -/
   argMap : Array (Option Nat)
   /--
+  A partial map from the level metavariables occurring in the rule to the
+  pattern's level params.
+  -/
+  levelArgMap : Array (Option Nat)
+  /--
   Discrimination tree keys for `p`.
   -/
   discrTreeKeys : Array DiscrTree.Key
@@ -56,16 +61,21 @@ def boundPremises (pat : RulePattern) : Array Nat := Id.run do
       result := result.push i
   return result
 
-def «open» (pat : RulePattern) : MetaM (Array MVarId × Expr) := do
-  let (mvarIds, _, p) ← openAbstractMVarsResult pat.pattern
-  return (mvarIds.map (·.mvarId!), p)
+-- Largely copy-paste from openAbstractMVarsResult
+def «open» (pat : RulePattern) :
+    MetaM (Array MVarId × Array LMVarId × Expr) := do
+  let a := pat.pattern
+  let us ← a.paramNames.mapM fun _ => mkFreshLevelMVar
+  let e := a.expr.instantiateLevelParamsArray a.paramNames us
+  let (mvars, _, e) ← lambdaMetaTelescope e (some a.numMVars)
+  return (mvars.map (·.mvarId!), us.map (·.mvarId!) , e)
 
 def «match» (e : Expr) (pat : RulePattern) : BaseM (Option Substitution) :=
   withNewMCtxDepth do
-    let (mvarIds, p) ← pat.open
+    let (mvarIds, lmvarIds, p) ← pat.open
     if ! (← isDefEq e p) then
       return none
-    let mut subst := .empty pat.argMap.size
+    let mut subst := .empty pat.argMap.size pat.levelArgMap.size
     for h : i in [:pat.argMap.size] do
       if let some j := pat.argMap[i] then
         let mvarId := mvarIds[j]!
@@ -74,20 +84,32 @@ def «match» (e : Expr) (pat : RulePattern) : BaseM (Option Substitution) :=
         if inst == mvar then
           throwError "RulePattern.match: while matching pattern '{p}' against expression '{e}': expected metavariable ?{(← mvarId.getDecl).userName} ({mvarId.name}) to be assigned"
         subst := subst.insert ⟨i⟩ (← rpinf inst)
+    for h : i in [:pat.levelArgMap.size] do
+      if let some j := pat.levelArgMap[i] then
+        let mvar := .mvar lmvarIds[j]!
+        let inst ← instantiateLevelMVars mvar
+        if inst != mvar then
+          subst := subst.insertLevel ⟨i⟩ inst
     return some subst
 
 open Lean.Elab Lean.Elab.Term in
-def «elab» (stx : Term) (ruleType : Expr) : TermElabM RulePattern :=
+def «elab» (stx : Term) (rule : Expr) : TermElabM RulePattern :=
+  withConstAesopTraceNode .debug (return m!"elaborating rule pattern") do
    -- TODO withNewMCtxDepth produces an error, but I don't understand why
   withLCtx {} {} $ withoutModifyingState do
-    forallTelescope ruleType λ fvars _ => do
+    aesop_trace[debug] "rule: {rule}"
+    aesop_trace[debug] "pattern: {stx}"
+    let lmvarIds := collectLevelMVars {} (← instantiateMVars rule) |>.result
+    aesop_trace[debug] "level metavariables in rule: {lmvarIds.map Level.mvar}"
+    forallTelescope (← inferType rule) λ fvars _ => do
       let pat := (← elabPattern stx).consumeMData
       let (pat, mvarIds) ← fvarsToMVars fvars pat
       let discrTreeKeys ← mkDiscrTreePath pat
-      let (pat, mvarIdToPatternPos) ← abstractMVars' pat
+      let (pat, mvarIdToPatternPos, lmvarIdToPatternPos) ← abstractMVars' pat
       let argMap := mvarIds.map (mvarIdToPatternPos[·]?)
-      aesop_trace[debug] "pattern '{stx}' elaborated into '{pat.expr}'"
-      return { pattern := pat, argMap, discrTreeKeys }
+      let levelArgMap := lmvarIds.map (lmvarIdToPatternPos[·]?)
+      aesop_trace[debug] "result: '{pat.expr}' with arg map{indentD $ toMessageData argMap}\nand level arg map{indentD $ toMessageData levelArgMap}"
+      return { pattern := pat, argMap, levelArgMap, discrTreeKeys }
 where
   fvarsToMVars (fvars : Array Expr) (e : Expr) :
       MetaM (Expr × Array MVarId) := do
@@ -97,7 +119,7 @@ where
 
   -- Largely copy-pasta of `abstractMVars`.
   abstractMVars' (e : Expr) :
-      MetaM (AbstractMVarsResult × Std.HashMap MVarId Nat) := do
+      MetaM (AbstractMVarsResult × Std.HashMap MVarId Nat × Std.HashMap LMVarId Nat) := do
     let e ← instantiateMVars e
     let (e, s) := AbstractMVars.abstractExprMVars e
       { mctx := (← getMCtx)
@@ -114,8 +136,15 @@ where
     let mut mvarIdToPos := ∅
     for h : i in [:s.fvars.size] do
       mvarIdToPos := mvarIdToPos.insert fvarIdToMVarId[s.fvars[i].fvarId!]! i
+    let mut paramToLMVarId : Std.HashMap Name LMVarId := ∅
+    for (lmvarId, l) in s.lmap do
+      if let .param n := l then
+        paramToLMVarId := paramToLMVarId.insert n lmvarId
+    let mut lmvarIdToPos := ∅
+    for h : i in [:s.paramNames.size] do
+      lmvarIdToPos := lmvarIdToPos.insert paramToLMVarId[s.paramNames[i]]! i
     let result :=
       { paramNames := s.paramNames, numMVars := s.fvars.size, expr := e }
-    return (result, mvarIdToPos)
+    return (result, mvarIdToPos, lmvarIdToPos)
 
 end Aesop.RulePattern

@@ -660,7 +660,7 @@ end Instance
 namespace ConstForwardRule
 
 axiom α : Type
-@[aesop safe forward]
+@[local aesop safe forward]
 axiom a : α
 
 noncomputable example : α := by
@@ -676,3 +676,22 @@ noncomputable example : α := by
   saturate
 
 end ConstForwardRule
+
+section MultipleUniverses
+
+-- Here we test the handling of rules with multiple universe parameters.
+
+axiom α.{u} : Type u
+axiom β.{v} : Type v
+axiom γ.{w} : Type w
+axiom P.{u, v, w} : α.{u} → β.{v} → γ.{w} → Prop
+axiom Q.{u, v, w} : β.{v} → α.{u} → γ.{w} → Prop
+
+@[local aesop safe forward]
+axiom foo {a b c} : P a b c → Q b a c
+
+example (h : P a b c) : Q b a c := by
+  saturate
+  assumption
+
+end MultipleUniverses
