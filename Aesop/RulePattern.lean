@@ -94,16 +94,10 @@ where
     let (mvars, _, e) ← lambdaMetaTelescope e (maxMVars? := some fvars.size)
     return (e, mvars.map (·.mvarId!))
 
-  setMVarUserNamesToUniqueNames (e : Expr) : MetaM Unit := do
-    let mvarIds ← getMVarDependencies e
-    for mvarId in mvarIds do
-      mvarId.setUserName mvarId.name
-
   -- Largely copy-pasta of `abstractMVars`.
   abstractMVars' (e : Expr) :
       MetaM (AbstractMVarsResult × Std.HashMap MVarId Nat) := do
     let e ← instantiateMVars e
-    setMVarUserNamesToUniqueNames e
     let (e, s) := AbstractMVars.abstractExprMVars e
       { mctx := (← getMCtx)
         lctx := (← getLCtx)
@@ -112,10 +106,13 @@ where
     setNGen s.ngen
     setMCtx s.mctx
     let e := s.lctx.mkLambda s.fvars e
+    let mut fvarIdToMVarId : Std.HashMap FVarId MVarId := ∅
+    for (mvarId, e) in s.emap do
+      if let .fvar fvarId := e then
+        fvarIdToMVarId := fvarIdToMVarId.insert fvarId mvarId
     let mut mvarIdToPos := ∅
     for h : i in [:s.fvars.size] do
-      let name := s.lctx.get! (s.fvars[i]).fvarId! |>.userName
-      mvarIdToPos := mvarIdToPos.insert ⟨name⟩ i
+      mvarIdToPos := mvarIdToPos.insert fvarIdToMVarId[s.fvars[i].fvarId!]! i
     let result :=
       { paramNames := s.paramNames, numMVars := s.fvars.size, expr := e }
     return (result, mvarIdToPos)
