@@ -22,7 +22,7 @@ def check (decl : Name) (p : CasesPattern) : MetaM Unit :=
 
 def toIndexingMode (p : CasesPattern) : MetaM IndexingMode :=
   withoutModifyingState do
-    .hyps <$> DiscrTree.mkPath (← p.toExpr) discrTreeConfig
+    .hyps <$> (withConfigWithKey discrTreeConfig <| DiscrTree.mkPath (← p.toExpr))
 
 end CasesPattern
 

@@ -15,7 +15,8 @@ open Lean.Meta
 
 namespace Aesop
 
-structure NormSimpContext extends Simp.Context where
+structure NormSimpContext where
+  toContext : Simp.Context
   enabled : Bool
   useHyps : Bool
   configStx? : Option Term
@@ -83,10 +84,8 @@ protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     MetaM (α × State Q × Tree × Stats) := do
   let t ← mkInitialTree goal
   let normSimpContext := {
-    config := simpConfig
-    maxDischargeDepth := UInt32.ofNatTruncate simpConfig.maxDischargeDepth
-    simpTheorems := ruleSet.simpTheoremsArray.map (·.snd)
-    congrTheorems := ← getSimpCongrTheorems
+    toContext := ← Simp.mkContext simpConfig (simpTheorems := ruleSet.simpTheoremsArray.map (·.snd))
+      (congrTheorems := ← getSimpCongrTheorems)
     simprocs := ruleSet.simprocsArray.map (·.snd)
     configStx? := simpConfigStx?
     enabled := options.enableSimp
