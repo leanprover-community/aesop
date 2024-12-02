@@ -34,7 +34,7 @@ private def forwardIndexingModeCore (type : Expr)
       match args.get? i with
       | some arg =>
         let argT := (← arg.mvarId!.getDecl).type
-        let keys ← DiscrTree.mkPath argT discrTreeConfig
+        let keys ← withConfigWithKey discrTreeConfig <| DiscrTree.mkPath argT
         return .hyps keys
       | none => throwError
         "aesop: internal error: immediate arg for forward rule is out of range"

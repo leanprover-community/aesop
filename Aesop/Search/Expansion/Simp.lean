@@ -44,7 +44,7 @@ def addLetDeclsToSimpTheorems (ctx : Simp.Context) : MetaM Simp.Context := do
     if ldecl.hasValue && ! ldecl.isImplementationDetail then
       simpTheoremsArray := simpTheoremsArray.modify 0 λ simpTheorems =>
         simpTheorems.addLetDeclToUnfold ldecl.fvarId
-  return { ctx with simpTheorems := simpTheoremsArray }
+  return ctx.setSimpTheorems simpTheoremsArray
 
 def addLetDeclsToSimpTheoremsUnlessZetaDelta (ctx : Simp.Context) :
     MetaM Simp.Context := do
@@ -58,7 +58,7 @@ def simpGoal (mvarId : MVarId) (ctx : Simp.Context)
     (simplifyTarget : Bool := true) (fvarIdsToSimp : Array FVarId := #[])
     (stats : Simp.Stats := {}) : MetaM SimpResult := do
   let mvarIdOld := mvarId
-  let ctx := { ctx with config.failIfUnchanged := false }
+  let ctx := ctx.setFailIfUnchanged false
   let (result, { usedTheorems := usedSimps, .. }) ←
     Meta.simpGoal mvarId ctx simprocs discharge? simplifyTarget fvarIdsToSimp
       stats
@@ -89,7 +89,7 @@ def simpAll (mvarId : MVarId) (ctx : Simp.Context)
     (simprocs : Simp.SimprocsArray) (stats : Simp.Stats := {}) :
     MetaM SimpResult :=
   mvarId.withContext do
-    let ctx := { ctx with config.failIfUnchanged := false }
+    let ctx := ctx.setFailIfUnchanged false
     let ctx ← addLetDeclsToSimpTheoremsUnlessZetaDelta ctx
     match ← Lean.Meta.simpAll mvarId ctx simprocs stats with
     | (none, stats) => return .solved stats.usedTheorems

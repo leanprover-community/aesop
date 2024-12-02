@@ -50,7 +50,7 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
         (proofTypesAcc : Std.HashSet Expr) :
         MetaM (Array (Expr × Nat) × Array FVarId × Std.HashSet Expr) := do
       if h : i < immediateMVars.size then
-        let mvarId := immediateMVars.get ⟨i, h⟩
+        let mvarId := immediateMVars[i]
         let type ← mvarId.getType
         (← getLCtx).foldlM (init := (proofsAcc, usedHypsAcc, proofTypesAcc)) λ s@(proofsAcc, usedHypsAcc, proofTypesAcc) ldecl => do
           if ldecl.isImplementationDetail then
