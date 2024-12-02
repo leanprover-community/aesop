@@ -560,4 +560,25 @@ def lBoolOr : (x y : LBool) → LBool
   | .undef, .true => .true
   | .undef, _ => .undef
 
+-- Core's `arrayOrd` goes through lists. -.-
+def compareArrayLex (cmp : α → α → Ordering) (xs ys : Array α) :
+    Ordering := Id.run do
+  let s := max xs.size ys.size
+  for i in [:s] do
+    if let some x := xs[i]? then
+      if let some y := ys[i]? then
+        let c := cmp x y
+        if c.isNe then
+          return c
+      else
+        return .gt
+    else
+      return .lt
+  return .eq
+
+def compareArraySizeThenLex (cmp : α → α → Ordering) (xs ys : Array α) :
+    Ordering :=
+  compare xs.size ys.size |>.then $
+  compareArrayLex cmp xs ys
+
 end Aesop

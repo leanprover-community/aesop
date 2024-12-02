@@ -126,6 +126,10 @@ instance : BEq (PINF md) where
 instance : Hashable (PINF md) where
   hash x := x.hash
 
+instance : Ord (PINF md) where
+  compare x y :=
+    if x == y then .eq else if x.toExpr.lt y.toExpr then .lt else .gt
+
 instance : ToString (PINF md) where
   toString x := toString x.toExpr
 

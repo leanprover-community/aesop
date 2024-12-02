@@ -36,14 +36,17 @@ def successProbability? : ForwardRulePriority → Option Percent
   | .unsafe p => some p
   | .normSafe .. => none
 
-/-- Compare two rule priorities. Norm/safe rules have higher priority than
-unsafe rules. Among norm/safe rules, lower penalty is better (lower). Among
-unsafe rules, higher percentage is better. -/
-protected def le : (p₁ p₂ : ForwardRulePriority) → Bool
-  | .normSafe _, .unsafe _ => true
-  | .unsafe _, .normSafe _ => true
-  | .normSafe n₁, .normSafe n₂ => n₁ ≤ n₂
-  | .unsafe p₁, .unsafe p₂ => p₁ ≥ p₂
+/-- Compare two rule priorities. Less means higher priority ('better').
+Norm/safe rules have higher priority than unsafe rules. Among norm/safe rules,
+lower penalty is better. Among unsafe rules, higher percentage is better. -/
+protected def compare : (p₁ p₂ : ForwardRulePriority) → Ordering
+  | .normSafe .., .unsafe .. => .lt
+  | .unsafe .., .normSafe .. => .gt
+  | .normSafe n₁, .normSafe n₂ => compare n₁ n₂
+  | .unsafe p₁, .unsafe p₂ => compare p₁ p₂ |>.swap
+
+instance : Ord ForwardRulePriority :=
+  ⟨ForwardRulePriority.compare⟩
 
 instance : ToString ForwardRulePriority where
   toString
@@ -71,7 +74,7 @@ instance : Hashable ForwardRule :=
   ⟨λ r => hash r.name⟩
 
 instance : Ord ForwardRule :=
-  ⟨λ r₁ r₂ => compare r₁.name r₂.name⟩
+  ⟨λ r₁ r₂ => compare r₁.prio r₂.prio |>.then (compare r₁.name r₂.name)⟩
 
 instance : ToString ForwardRule where
   toString r := s!"[{r.prio}] {r.name}"
