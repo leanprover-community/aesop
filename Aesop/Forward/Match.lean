@@ -99,12 +99,6 @@ namespace ForwardRuleMatch
 instance : ToMessageData ForwardRuleMatch where
   toMessageData m := m!"{m.rule.name} {m.match.toMessageData m.rule}"
 
-/-- Compare two queue entries by rule priority and rule name. Higher-priority
-rules are considered less (since the queues are min-queues). -/
-protected def compare (m₁ m₂ : ForwardRuleMatch) : Ordering :=
-  compare m₁.rule m₂.rule |>.then $
-  compare m₁.match m₂.match
-
 /-- Fold over the hypotheses contained in a match. -/
 def foldHypsM [Monad M] (f : σ → FVarId → M σ) (init : σ)
     (m : ForwardRuleMatch) : M σ :=
