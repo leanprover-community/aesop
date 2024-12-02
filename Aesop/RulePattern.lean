@@ -78,6 +78,7 @@ def «match» (e : Expr) (pat : RulePattern) : BaseM (Option Substitution) :=
 
 open Lean.Elab Lean.Elab.Term in
 def «elab» (stx : Term) (ruleType : Expr) : TermElabM RulePattern :=
+   -- TODO withNewMCtxDepth produces an error, but I don't understand why
   withLCtx {} {} $ withoutModifyingState do
     forallTelescope ruleType λ fvars _ => do
       let pat := (← elabPattern stx).consumeMData
