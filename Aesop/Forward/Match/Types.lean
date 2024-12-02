@@ -63,6 +63,12 @@ instance : Hashable Match where
       m.forwardDeps.foldl  (init := h) λ h p => mixHash h $ hash (m.subst.find? p)
     m.conclusionDeps.foldl (init := h) λ h p => mixHash h $ hash (m.subst.find? p)
 
+instance : Ord Match where
+  compare m₁ m₂ :=
+    compare m₁.level m₂.level |>.then $
+    if m₁ == m₂ then .eq else
+    compare m₁.subst m₂.subst
+
 instance : ToMessageData Match where
   toMessageData m := m!"{m.subst}"
 
@@ -81,6 +87,10 @@ structure CompleteMatch where
 instance : EmptyCollection CompleteMatch :=
   ⟨{ clusterMatches := ∅ }⟩
 
+instance : Ord CompleteMatch where
+  compare m₁ m₂ :=
+    compareArraySizeThenLex compare m₁.clusterMatches m₂.clusterMatches
+
 /-- An entry in the forward state queues. Represents a complete match. -/
 structure ForwardRuleMatch where
   /-- The rule to which this match belongs. -/
@@ -89,4 +99,18 @@ structure ForwardRuleMatch where
   «match» : CompleteMatch
   deriving Inhabited, BEq, Hashable
 
-end Aesop
+namespace ForwardRuleMatch
+
+/-- Compare two queue entries by rule priority, rule name and the expressions
+contained in the match. Higher-priority rules are considered less (since the
+queues are min-queues). The ordering on expressions is arbitrary. -/
+protected instance ord : Ord ForwardRuleMatch where
+  compare m₁ m₂ :=
+    compare m₁.rule m₂.rule |>.then $
+    compare m₁.match m₂.match
+
+@[inherit_doc ForwardRuleMatch.ord]
+protected def le (m₁ m₂ : ForwardRuleMatch) : Bool :=
+  compare m₁ m₂ |>.isLE
+
+end Aesop.ForwardRuleMatch

@@ -103,8 +103,8 @@ example {α β γ δ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : γ �
 
 /--
 info: Try this:
-  have fwd : γ := h₂ h₄
-  have fwd_1 : β := h₁ h₄
+  have fwd : β := h₁ h₄
+  have fwd_1 : γ := h₂ h₄
 ---
 error: unsolved goals
 α β γ δ : Prop
@@ -112,8 +112,8 @@ h₁ : α → β
 h₂ : α → γ
 h₃ : β → γ → δ
 h₄ : α
-fwd : γ
-fwd_1 : β
+fwd : β
+fwd_1 : γ
 ⊢ δ
 -/
 #guard_msgs in
@@ -243,9 +243,9 @@ example {P Q R : α → α → Prop} (h₁ : ∀ a b, P a b → Q b a → R a b)
 /--
 info: Try this:
   have fwd : R c c := h₁ c d d c h₂ h₅
-  have fwd_1 : R b c := h₁ b a d c h₄ h₅
-  have fwd_2 : R b b := h₁ b a a b h₄ h₃
-  have fwd_3 : R c b := h₁ c d a b h₂ h₃
+  have fwd_1 : R c b := h₁ c d a b h₂ h₃
+  have fwd_2 : R b c := h₁ b a d c h₄ h₅
+  have fwd_3 : R b b := h₁ b a a b h₄ h₃
 ---
 error: unsolved goals
 α : Sort u_1
@@ -257,9 +257,9 @@ h₃ : Q a b
 h₄ : P b a
 h₅ : Q d c
 fwd : R c c
-fwd_1 : R b c
-fwd_2 : R b b
-fwd_3 : R c b
+fwd_1 : R c b
+fwd_2 : R b c
+fwd_3 : R b b
 ⊢ R c b
 -/
 #guard_msgs in
@@ -269,8 +269,8 @@ example {P Q R : α → α → Prop} (h₁ : ∀ a b c d, P a b → Q c d → R 
 
 /--
 info: Try this:
-  have fwd : S a c := h₁ a b d c h₂ h₃ h₅
-  have fwd_1 : S a d := h₁ a b c d h₂ h₃ h₄
+  have fwd : S a d := h₁ a b c d h₂ h₃ h₄
+  have fwd_1 : S a c := h₁ a b d c h₂ h₃ h₅
 ---
 error: unsolved goals
 α : Sort u_1
@@ -281,8 +281,8 @@ h₂ : P a b
 h₃ : Q b a
 h₄ : R c d
 h₅ : R d c
-fwd : S a c
-fwd_1 : S a d
+fwd : S a d
+fwd_1 : S a c
 ⊢ S a d
 -/
 #guard_msgs in
@@ -396,8 +396,8 @@ P Q : α → Prop
 r : ∀ (a : α), P a → Q a
 p₁ : P a₁
 p₂ p₂' : P a₂
-fwd : Q a₂
-fwd_1 : Q a₁
+fwd : Q a₁
+fwd_1 : Q a₂
 ⊢ True
 -/
 #guard_msgs in

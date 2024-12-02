@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Forward.LevelIndex
 import Aesop.Forward.PremiseIndex
 import Aesop.RPINF.Basic
+import Aesop.Util.Basic
 
 namespace Aesop
 
@@ -35,6 +36,11 @@ instance : BEq Substitution where
 
 instance : Hashable Substitution where
   hash s := hash s.premises
+
+instance : Ord Substitution where
+  compare s₁ s₂ :=
+    compare s₁.premises.size s₂.premises.size |>.then $
+    compareArrayLex compare s₁.premises s₂.premises
 
 /-- The empty substitution for a rule with the given number of premise
 indexes. -/
