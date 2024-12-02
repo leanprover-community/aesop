@@ -22,14 +22,13 @@ partial def makeForwardHyps (e : Expr) (patSubst? : Option Substitution)
     BaseM (Array (Expr × Nat) × Array FVarId) :=
   withNewMCtxDepth (allowLevelAssignments := true) do
     let type ← inferType e
-    let (argMVars, binderInfos, _, patInstantiatedMVars) ←
-      openRuleType patSubst? type
-    let app := mkAppN e argMVars
+    let (argMVars, binderInfos, _) ← openRuleType patSubst? e
+    let app := mkAppN e (argMVars.map .mvar)
     let mut instMVars := Array.mkEmpty argMVars.size
     let mut immediateMVars := Array.mkEmpty argMVars.size
     for h : i in [:argMVars.size] do
-      let mvarId := argMVars[i]'h.2 |>.mvarId!
-      if patInstantiatedMVars.contains mvarId then
+      let mvarId := argMVars[i]
+      if ← mvarId.isAssignedOrDelayedAssigned then
         continue
       if immediate.contains ⟨i⟩ then
         immediateMVars := immediateMVars.push mvarId

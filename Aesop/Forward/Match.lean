@@ -60,7 +60,7 @@ def addHypOrPatSubst (subst : Substitution) (isPatSubst : Bool)
 /-- Returns `true` if the match contains the given hyp. -/
 def containsHyp (hyp : FVarId) (m : Match) : Bool :=
   let fvar := .fvar hyp
-  m.subst.toArray.any (·.any (·.toExpr == fvar))
+  m.subst.premises.any (·.any (·.toExpr == fvar))
 
 /-- Returns `true` if the match contains the given pattern substitution. -/
 def containsPatSubst (subst : Substitution) (m : Match) : Bool :=
@@ -71,22 +71,26 @@ end Match
 namespace CompleteMatch
 
 /-- Given a complete match `m` for `r`, get arguments to `r` contained in the
-match's slots and substitution. For non-immediate arguments, we return `none`. -/
+match's slots and substitution. For non-immediate arguments, we return `none`.
+The returned levels are suitable assignments for the level mvars of `r`. -/
 def reconstructArgs (r : ForwardRule) (m : CompleteMatch) :
-    Array (Option RPINF) := Id.run do
+    Array (Option RPINF) × Array (Option Level) := Id.run do
   assert! m.clusterMatches.size == r.slotClusters.size
-  let mut subst : Substitution := .empty r.numPremises
+  let mut subst : Substitution := .empty r.numPremises r.numLevelParams
   for m in m.clusterMatches do
     subst := m.subst.mergeCompatible subst
   let mut args := Array.mkEmpty r.numPremises
   for i in [:r.numPremises] do
     args := args.push $ subst.find? ⟨i⟩
-  return args
+  let mut levels := Array.mkEmpty r.numLevelParams
+  for i in [:r.numLevelParams] do
+    levels := levels.push $ subst.findLevel? ⟨i⟩
+  return (args, levels)
 
 set_option linter.missingDocs false in
 protected def toMessageData (r : ForwardRule) (m : CompleteMatch) :
     MessageData :=
-  m!"{m.reconstructArgs r |>.map λ | none => m!"_" | some e => m!"{e}"}"
+  m!"{m.reconstructArgs r |>.1.map λ | none => m!"_" | some e => m!"{e}"}"
 
 end CompleteMatch
 
@@ -105,7 +109,7 @@ protected def le (m₁ m₂ : ForwardRuleMatch) : Bool :=
 def foldHypsM [Monad M] (f : σ → FVarId → M σ) (init : σ)
     (m : ForwardRuleMatch) : M σ :=
   m.match.clusterMatches.foldlM (init := init) λ s cm =>
-    cm.subst.toArray.foldlM (init := s) λ
+    cm.subst.premises.foldlM (init := s) λ
       | s, some { toExpr := e, .. } =>
         if let .fvar hyp := e.consumeMData then f s hyp else pure s
       | s, _ => pure s
@@ -117,7 +121,7 @@ def foldHyps (f : σ → FVarId → σ) (init : σ) (m : ForwardRuleMatch) : σ 
 /-- Returns `true` if any hypothesis contained in `m` satisfies `f`. -/
 def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
   m.match.clusterMatches.any λ m =>
-    m.subst.toArray.any λ
+    m.subst.premises.any λ
       | some { toExpr := e, .. } =>
         if let .fvar hyp := e.consumeMData then f hyp else false
       | _ => false
@@ -129,29 +133,30 @@ def getPropHyps (m : ForwardRuleMatch) : MetaM (Array FVarId) :=
 
 /-- Construct the proof of the new hypothesis represented by `m`. -/
 def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
+  withExceptionPrefix s!"while constructing a new hyp for forward rule {m.rule.name}:\n" do
   withConstAesopTraceNode .forward (return m!"proof construction for forward rule match") do
   goal.withContext do
   withNewMCtxDepth do
     aesop_trace[forward] "rule: {m.rule.name}"
     let e ← elabForwardRuleTerm goal m.rule.term
-    aesop_trace[forward] "term: {e} : {← inferType e}"
-    let (argMVars, binderInfos, _) ←
-      withReducible $ forallMetaTelescope (← inferType e)
-    let args := m.match.reconstructArgs m.rule
-    aesop_trace[forward] "args: {args.map λ | none => m!"_" | some e => m!"{e}"}"
+    let lmvars := collectLevelMVars {} e |>.result
+    let eType ← instantiateMVars (← inferType e)
+    aesop_trace[forward] "term: {e} : {eType}"
+    let (argMVars, binderInfos, _) ← withReducible do
+      forallMetaTelescope (← inferType e)
+    if argMVars.size != m.rule.numPremises then
+      throwError "rule term{indentExpr e}\nwith type{indentExpr eType}\n was expected to have {m.rule.numPremises} arguments, but has {argMVars.size}"
+    if lmvars.size != m.rule.numLevelParams then
+      throwError "rule term{indentExpr e}\nwith type{indentExpr eType}\n was expected to have {m.rule.numLevelParams} level metavariables, but has {lmvars.size}"
+    let (args, levels) := m.match.reconstructArgs m.rule
+    aesop_trace[forward] "args:   {args.map λ | none => m!"_" | some e => m!"{e}"}"
+    aesop_trace[forward] "levels: {levels.map λ | none => m!"_" | some l => m!"{l}"}"
+    for level? in levels, lmvarId in lmvars do
+      if let some level := level? then
+        assignLevelMVar lmvarId level
     for arg? in args, mvar in argMVars do
       if let some arg := arg? then
-        -- TODO This `isDefEq` is expensive if `arg` and `mvar` have complex
-        -- types. Ideally, we would just assign `mvar` since our forward
-        -- reasoning method already ensures that the args are type-correct.
-        -- However, doing so doesn't assign universe mvars in the type of `e`,
-        -- so we get type-incorrect terms. Similarly, `mkAppOptM` does not
-        -- reliably handle universes.
-        --
-        -- We also tried to `rpinf` the type of `mvar` before `isDefEq`, but
-        -- this seems to make no appreciable difference.
-        if ! (← isDefEq arg.toExpr mvar) then
-          throwError "type mismatch during reconstruction of match for forward rule{indentD m!"{m.rule.name}"}\n: expected{indentExpr (← inferType mvar)}\nbut got{indentExpr arg.toExpr} : {← inferType arg.toExpr}"
+        mvar.mvarId!.assign arg.toExpr
     try
       synthAppInstances `aesop goal argMVars binderInfos
         (synthAssignedInstances := false) (allowSynthFailures := false)

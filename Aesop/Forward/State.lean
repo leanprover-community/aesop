@@ -331,8 +331,9 @@ def findSlot? (cs : ClusterState) (i : PremiseIndex) : Option Slot :=
 
 /-- Match hypothesis `hyp` against the slot with index `slot` in `cs` (which
 must be a valid index). -/
-def matchPremise? (premises : Array MVarId) (cs : ClusterState)
-    (slot : SlotIndex) (hyp : FVarId) : BaseM (Option Substitution) := do
+def matchPremise? (premises : Array MVarId) (lmvarIds : Array LMVarId)
+    (cs : ClusterState) (slot : SlotIndex) (hyp : FVarId) :
+    BaseM (Option Substitution) := do
   let some slot := cs.slots[slot.toNat]?
     | throwError "aesop: internal error: matchPremise?: no slot with index {slot}"
   let premiseIdx := slot.premiseIndex.toNat
@@ -346,10 +347,13 @@ def matchPremise? (premises : Array MVarId) (cs : ClusterState)
       withReducible do
         isDefEq premiseType hypType
     if isDefEq then
-      let mut subst := .empty premises.size
+      let mut subst := .empty premises.size lmvarIds.size
       for var in slot.deps do
         subst ← updateSubst premises var subst
       subst := subst.insert slot.premiseIndex $ ← rpinf (.fvar hyp)
+      for h : i in [:lmvarIds.size] do
+        if let some l ← getLevelMVarAssignment? lmvarIds[i] then
+          subst := subst.insertLevel ⟨i⟩ l
       aesop_trace[forward] "substitution: {subst}"
       return subst
     else
@@ -429,11 +433,12 @@ def addHypCore (newCompleteMatches : Array Match) (cs : ClusterState)
 
 /-- Add a hypothesis to the cluster state. If the hypothesis's type does not
 match the premise corresponding to `slot`, then the hypothesis is not added. -/
-def addHyp (premises : Array MVarId) (cs : ClusterState) (i : PremiseIndex)
-    (h : FVarId) : BaseM (ClusterState × Array Match) := do
+def addHyp (premises : Array MVarId) (lmvars : Array LMVarId)
+    (cs : ClusterState) (i : PremiseIndex) (h : FVarId) :
+    BaseM (ClusterState × Array Match) := do
   let some slot := cs.findSlot? i
     | return (cs, #[])
-  let some subst ← cs.matchPremise? premises slot.index h
+  let some subst ← cs.matchPremise? premises lmvars slot.index h
     | return (cs, #[])
   addHypCore #[] cs slot { fvarId? := h, subst }
 
@@ -509,12 +514,17 @@ def addHypOrPatSubst (goal : MVarId) (h : Sum FVarId Substitution)
       withConstAesopTraceNode .forwardDebug (return m!"elab rule term") do
         show MetaM _ from observing? $ elabForwardRuleTerm goal rs.rule.term
       | return (rs, #[])
+    let lmvars := collectLevelMVars {} ruleExpr |>.result
+    if lmvars.size != rs.rule.numLevelParams then
+      aesop_trace[forward] "failed to add hyp or pat inst: rule term{indentD $ toMessageData rs.rule.term}\ndoes not have expected number of level mvars {rs.rule.numLevelParams}"
+      return (rs, #[])
+    let ruleType ← instantiateMVars (← inferType ruleExpr)
     let (premises, _, _) ←
       withConstAesopTraceNode .forwardDebug (return m!"open rule term") do
       withReducible do
-        forallMetaTelescope (← inferType ruleExpr)
+        forallMetaTelescope ruleType
     if premises.size != rs.rule.numPremises then
-      aesop_trace[forward] "failed to add hyp or pat inst:\n  rule term '{rs.rule.term}' does not have expected number of premises {rs.rule.numPremises}"
+      aesop_trace[forward] "failed to add hyp or pat inst: rule term{indentD $ toMessageData rs.rule.term}\ndoes not have expected number of premises {rs.rule.numPremises}"
       return (rs, #[])
     let premises := premises.map (·.mvarId!)
     let mut rs := rs
@@ -526,7 +536,7 @@ def addHypOrPatSubst (goal : MVarId) (h : Sum FVarId Substitution)
         match h with
         | .inl h =>
           withConstAesopTraceNode .forwardDebug (return m!"add hyp to cluster state {i}") do
-            cs.addHyp premises pi h
+            cs.addHyp premises lmvars pi h
         | .inr subst => cs.addPatSubst pi subst
       clusterStates := clusterStates.set! i cs
       completeMatches ←
@@ -569,7 +579,7 @@ where
 def erasePatSubst (subst : Substitution) (source : PatSubstSource)
     (rs : RuleState) : RuleState := Id.run do
   let some sources := rs.patSubstSources[subst]
-    | panic! s!"unknown pattern substitution {subst.toArray} for rule {rs.rule.name}"
+    | panic! s!"unknown pattern substitution {subst.premises} for rule {rs.rule.name}"
   let sources := sources.erase source
   if sources.isEmpty then
     let some (pat, patPremiseIdx) := rs.rule.rulePatternInfo?

@@ -142,8 +142,7 @@ def forward (isDestruct : Bool) : RuleBuilder := λ input => do
     let opts := input.options
     let e ← elabRuleTermForApplyLike input.term
     let t := ElabRuleTerm.ofElaboratedTerm input.term e
-    let type ← inferType e
-    let pat? ← opts.pattern?.mapM (RulePattern.elab · type)
+    let pat? ← opts.pattern?.mapM (RulePattern.elab · e)
     forwardCore t opts.immediatePremises? pat? input.phase
       (isDestruct := isDestruct)
 

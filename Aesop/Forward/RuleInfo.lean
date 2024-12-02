@@ -57,6 +57,10 @@ local instance : Hashable Slot :=
 structure ForwardRuleInfo where
   /-- The rule's number of premises. -/
   numPremises : Nat
+  /-- The number of distinct level parameters and level metavariables occurring
+  in the rule's type. We expect that these turn into level metavariables when
+  the rule is elaborated. -/
+  numLevelParams : Nat
   /-- Slots representing the maximal premises of the forward rule, partitioned
   into metavariable clusters. -/
   slotClusters : Array (Array Slot)
@@ -77,7 +81,10 @@ def isConstant (r : ForwardRuleInfo) : Bool :=
 def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
     (immediate : UnorderedArraySet PremiseIndex) : MetaM ForwardRuleInfo :=
   withNewMCtxDepth do
-  let e ← inferType thm
+  let e ← instantiateMVars (← inferType thm)
+  let numLevelParams :=
+    (collectLevelParams {} e).params.size +
+    (collectLevelMVars {} e).result.size
   let (premises, _, conclusion) ← withReducible $ forallMetaTelescope e
   let premises := premises.map (·.mvarId!)
   let mut premiseToIdx : Std.HashMap MVarId PremiseIndex := ∅
@@ -133,7 +140,7 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
   let rulePatternInfo? := rulePattern?.map (·, ⟨premises.size⟩)
   return {
     numPremises := premises.size
-    slotClusters, rulePatternInfo?, conclusionDeps
+    slotClusters, rulePatternInfo?, conclusionDeps, numLevelParams
   }
 where
   /-- Sort slots such that each slot has at least one variable in common with

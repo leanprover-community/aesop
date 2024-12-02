@@ -51,7 +51,7 @@ def apply : RuleBuilder := λ input => do
   let t := ElabRuleTerm.ofElaboratedTerm input.term e
   let type ← inferType e
   checkNoIff type
-  let pat? ← opts.pattern?.mapM (RulePattern.elab · type)
+  let pat? ← opts.pattern?.mapM (RulePattern.elab · e)
   applyCore t pat? opts.indexingMode? opts.applyTransparency
     opts.applyIndexTransparency input.phase
 
