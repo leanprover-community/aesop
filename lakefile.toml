@@ -5,7 +5,7 @@ precompileModules = false # We would like to turn this on, but it breaks the Mat
 
 [[require]]
 name = "batteries"
-git = "https://github.com/leanprover-community/batteries"
+scope = "leanprover-community"
 rev = "v4.15.0-rc1"
 
 [[lean_lib]]
