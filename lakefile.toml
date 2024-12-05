@@ -1,6 +1,9 @@
 name = "aesop"
 defaultTargets = ["Aesop"]
-testDriver = "aesop_test_executable"
+# We would like to be able to specify multiple test drivers,
+# but this would require https://github.com/leanprover/lean4/issues/6314
+# Instead we add a CI step for `aesop_test_executable`.
+testDriver = "AesopTest"
 precompileModules = false # We would like to turn this on, but it breaks the Mathlib cache.
 
 [[require]]
