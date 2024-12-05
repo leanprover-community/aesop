@@ -17,3 +17,7 @@ jobs:
         with:
           check-reservoir-eligibility: true
           build-args: "--wfail"
+      
+      - # This should be handled by `testDriver` in `lakefile.toml`,
+        # but this is waiting on https://github.com/leanprover/lean4/issues/6314
+        run: lake exe aesop_test_executable
