@@ -21,4 +21,4 @@ leanOptions = {linter.unusedVariables = false}
 
 [[lean_exe]]
 name = "aesop_test_executable"
-root = "AesopTest.Main"
+root = "AesopTest.AesopTestExecutable"
