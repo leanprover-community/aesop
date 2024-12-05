@@ -35,7 +35,7 @@ instance : ToFormat IndexingMode :=
   ⟨IndexingMode.format⟩
 
 def targetMatchingConclusion (type : Expr) : MetaM IndexingMode := do
-  let path ← getConclusionDiscrTreeKeys type discrTreeConfig
+  let path ← getConclusionDiscrTreeKeys type
   return target path
 
 def hypsMatchingConst (decl : Name) : MetaM IndexingMode := do
