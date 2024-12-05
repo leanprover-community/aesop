@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
+import Aesop.Index.DiscrTreeConfig
 import Aesop.Nanos
 import Aesop.Util.UnorderedArraySet
 import Batteries.Lean.Expr
@@ -78,11 +79,10 @@ open DiscrTree
 
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
 -- `n` stars).
-def getConclusionDiscrTreeKeys (type : Expr) (config : ConfigWithKey) :
-    MetaM (Array Key) :=
+def getConclusionDiscrTreeKeys (type : Expr) : MetaM (Array Key) :=
   withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
-    withConfigWithKey config <| mkPath conclusion
+    mkDiscrTreePath conclusion
     -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
     -- turn into `Key.star`) but not fvars.
 

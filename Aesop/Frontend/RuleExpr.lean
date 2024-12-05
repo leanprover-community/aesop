@@ -172,8 +172,7 @@ def elabSingleIndexingMode (stx : Syntax) : ElabM IndexingMode :=
   where
     elabKeys (stx : Syntax) : ElabM (Array DiscrTree.Key) :=
       show TermElabM _ from withoutModifyingState do
-        let e ← elabPattern stx
-        withConfigWithKey discrTreeConfig <| DiscrTree.mkPath (← instantiateMVars e)
+        mkDiscrTreePath (← elabPattern stx)
 
 def IndexingMode.elab (stxs : Array Syntax) : ElabM IndexingMode :=
   .or <$> stxs.mapM elabSingleIndexingMode
