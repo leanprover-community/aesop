@@ -315,6 +315,8 @@ inductive Feature
 
 namespace Feature
 
+-- Workaround for codegen bug, see #182
+set_option compiler.extract_closed false in
 partial def «elab» (stx : Syntax) : ElabM Feature :=
   withRef stx do
     match stx with
@@ -330,7 +332,7 @@ partial def «elab» (stx : Syntax) : ElabM Feature :=
         let nonIdentAlts :=
           stx.getArgs.filter λ stx => ! stx.isOfKind ``Parser.featIdent
         if h : nonIdentAlts.size = 1 then
-          return ← «elab» $ nonIdentAlts[0]'(by simp [h])
+          return ← «elab» $ nonIdentAlts[0]
       throwUnsupportedSyntax
 
 end Feature
