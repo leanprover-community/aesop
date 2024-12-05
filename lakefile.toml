@@ -15,3 +15,8 @@ name = "Aesop"
 name = "AesopTest"
 globs = ["AesopTest.+"]
 leanOptions = {linter.unusedVariables = false}
+
+[[lean_exe]]
+name = "aesop-test-executable"
+root = "AesopTest.Main"
+deps = ["Aesop"]
