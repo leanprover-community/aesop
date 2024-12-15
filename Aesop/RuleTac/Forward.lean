@@ -33,7 +33,7 @@ partial def makeForwardHyps (e : Expr) (pat? : Option RulePattern)
     let mut instMVars := Array.mkEmpty argMVars.size
     let mut immediateMVars := Array.mkEmpty argMVars.size
     for h : i in [:argMVars.size] do
-      let mvarId := argMVars[i]'h.2 |>.mvarId!
+      let mvarId := argMVars[i].mvarId!
       if patInstantiatedMVars.contains mvarId then
         continue
       if immediate.contains i then

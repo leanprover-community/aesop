@@ -60,7 +60,7 @@ def getImmediatePremises  (type : Expr) (pat? : Option RulePattern)
       for h : i in [:args.size] do
         if isPatternInstantiated i then
           continue
-        let fvarId := (args[i]'h.2).fvarId!
+        let fvarId := args[i].fvarId!
         let ldecl ← fvarId.getDecl
         let isNondep : MetaM Bool :=
           args.allM (start := i + 1) λ arg => do
