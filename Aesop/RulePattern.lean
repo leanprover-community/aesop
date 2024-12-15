@@ -144,7 +144,7 @@ def openRuleType (pat : RulePattern) (inst : RulePatternInstantiation)
   let mut assigned := ∅
   for h : i in [:mvars.size] do
     if let some inst ← pat.getInstantiation inst i then
-      let mvarId := mvars[i]'h.2 |>.mvarId!
+      let mvarId := mvars[i] |>.mvarId!
       -- We use `isDefEq` to make sure that universe metavariables occurring in
       -- the type of `mvarId` are assigned.
       if ← isDefEq (.mvar mvarId) inst then
@@ -163,7 +163,7 @@ def specializeRule (pat : RulePattern) (inst : RulePatternInstantiation)
         if let some inst ← pat.getInstantiation inst i then
           args := args.push $ some inst
         else
-          let fvarId := fvarIds[i]'h.2
+          let fvarId := fvarIds[i]
           args := args.push $ some fvarId
           remainingFVarIds := remainingFVarIds.push fvarId
       let result ← mkLambdaFVars remainingFVarIds (← mkAppOptM' rule args)
@@ -207,7 +207,7 @@ where
     let e := s.lctx.mkLambda s.fvars e
     let mut mvarIdToPos := ∅
     for h : i in [:s.fvars.size] do
-      let name := s.lctx.get! (s.fvars[i]'h.2).fvarId! |>.userName
+      let name := s.lctx.get! (s.fvars[i]).fvarId! |>.userName
       mvarIdToPos := mvarIdToPos.insert ⟨name⟩ i
     let result :=
       { paramNames := s.paramNames, numMVars := s.fvars.size, expr := e }
