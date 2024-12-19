@@ -18,7 +18,7 @@ def findFirstStep? {α β : Type} (goals : Array α) (step? : α → Option β)
      (stepOrder : β → Nat) : Option (Nat × α × β) := Id.run do
   let mut firstStep? := none
   for h : pos in [:goals.size] do
-    let g := goals[pos]'h.2
+    let g := goals[pos]
     if let some step := step? g then
       if let some (_, _, currentFirstStep) := firstStep? then
         if stepOrder step < stepOrder currentFirstStep then

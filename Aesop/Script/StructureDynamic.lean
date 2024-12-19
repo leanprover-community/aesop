@@ -60,7 +60,7 @@ def DynStructureM.run (x : DynStructureM α) (script : UScript) :
     MetaM (α × Bool) := do
   let mut steps : PHashMap MVarId (Nat × Step) := {}
   for h : i in [:script.size] do
-    let step := script[i]'h.2
+    let step := script[i]
     steps := steps.insert step.preGoal (i, step)
   let (a, s) ← ReaderT.run x { steps } |>.run {}
   return (a, s.perfect)
