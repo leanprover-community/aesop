@@ -21,8 +21,7 @@ def check (decl : Name) (p : CasesPattern) : MetaM Unit :=
       throwError "expected pattern '{p}' ({toString p}) to be an application of '{decl}'"
 
 def toIndexingMode (p : CasesPattern) : MetaM IndexingMode :=
-  withoutModifyingState do
-    .hyps <$> (withConfigWithKey discrTreeConfig <| DiscrTree.mkPath (← p.toExpr))
+  withoutModifyingState do .hyps <$> mkDiscrTreePath (← p.toExpr)
 
 end CasesPattern
 
