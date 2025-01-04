@@ -23,8 +23,8 @@ example (m n : Nat) : (↑m : Int) < 0 ∧ (↑n : Int) > 0 := by
   set_option aesop.check.script false in
   aesop!
   all_goals
-    guard_hyp fwd_1 : 0 ≤ (m : Int)
     guard_hyp fwd_2 : 0 ≤ (n : Int)
+    guard_hyp fwd_1 : 0 ≤ (m : Int)
     falso
 
 @[aesop safe forward (pattern := min x y)]

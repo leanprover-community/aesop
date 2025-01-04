@@ -79,6 +79,7 @@ open DiscrTree
 
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
 -- `n` stars).
+
 def getConclusionDiscrTreeKeys (type : Expr) : MetaM (Array Key) :=
   withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
