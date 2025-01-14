@@ -108,7 +108,7 @@ def getRootGoal : TreeM GoalRef := do
   let cref ← getRootMVarCluster
   let grefs := (← cref.get).goals
   if h : grefs.size = 1 then
-    return grefs.get ⟨0, by simp [h]⟩
+    return grefs[0]
   else
     throwError "aesop: internal error: unexpected number of goals in root mvar cluster: {grefs.size}"
 

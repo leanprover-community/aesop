@@ -1,14 +1,14 @@
 /-
-Copyright (c) 2021-2024 Jannis Limperg. All rights reserved.
+Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
 import Lean
 
-namespace Aesop
-
 open Lean Lean.Meta
+
+namespace Aesop
 
 /-- The configuration used by all Aesop indices. -/
 -- I don't really know what I'm doing here. I'm just copying the config used

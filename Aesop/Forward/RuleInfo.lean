@@ -94,7 +94,7 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
   let mut allDeps : Std.HashSet PremiseIndex := ∅
   for h : i in [:premises.size] do
     let mvarId := premises[i]
-    let typeDiscrTreeKeys ← DiscrTree.mkPath (← mvarId.getType) discrTreeConfig
+    let typeDiscrTreeKeys ← mkDiscrTreePath (← mvarId.getType)
     let mut deps : Std.HashSet PremiseIndex := ∅
     for dep in ← mvarId.getMVarDependencies do
       if let some idx := premiseToIdx[dep]? then

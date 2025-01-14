@@ -69,7 +69,7 @@ def addRapps (parentRef : GoalRef) (rule : RegularRule)
   let mut rrefs := Array.mkEmpty rapps.size
   let mut subgoals := Array.mkEmpty $ rapps.size * 3
   for h : i in [:rapps.size] do
-    let rapp := rapps[i]'h.2
+    let rapp := rapps[i]
     let successProbability :=
       parent.successProbability *
       (rapp.successProbability?.getD rule.successProbability)

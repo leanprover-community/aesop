@@ -415,23 +415,23 @@ def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleFilter) :
       Σ' a : Array (Name × SimpTheorems), a.size = rs.simpTheoremsArray.size :=
     ⟨rs.simpTheoremsArray, rfl⟩
   if let some id := f.matchesLocalNormSimpRule? then
-    if let some idx := localNormSimpRules.findIdx? (·.id == id) then
+    if let some idx := localNormSimpRules.findFinIdx? (·.id == id) then
       localNormSimpRules := localNormSimpRules.eraseIdx idx
   if let some decl := f.matchesSimpTheorem? then
     for h : i in [:rs.simpTheoremsArray.size] do
       have i_valid : i < simpTheoremsArray'.fst.size := by
-        simp_all [Membership.mem, simpTheoremsArray'.snd]
+        simp_all +zetaDelta [Membership.mem, simpTheoremsArray'.snd]
       let (name, simpTheorems) := simpTheoremsArray'.fst[i]
       if SimpTheorems.containsDecl simpTheorems decl then
         let origin := .decl decl (inv := false)
         simpTheoremsArray' :=
-          ⟨simpTheoremsArray'.fst.set ⟨i, i_valid⟩
+          ⟨simpTheoremsArray'.fst.set i
             (name, simpTheorems.eraseCore origin),
            by simp [simpTheoremsArray'.snd, Array.size_set]⟩
         anyErased := true
   let simpTheoremsArray := simpTheoremsArray'.fst
   let simpTheoremsArrayNonempty : 0 < simpTheoremsArray.size := by
-    simp [simpTheoremsArray'.snd, rs.simpTheoremsArrayNonempty]
+    simp [simpTheoremsArray, simpTheoremsArray'.snd, rs.simpTheoremsArrayNonempty]
   let rs := { rs with
     localNormSimpRules, simpTheoremsArray, simpTheoremsArrayNonempty
   }

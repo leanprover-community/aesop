@@ -104,7 +104,7 @@ def «elab» (stx : Term) (rule : Expr) : TermElabM RulePattern :=
     forallTelescope (← inferType rule) λ fvars _ => do
       let pat := (← elabPattern stx).consumeMData
       let (pat, mvarIds) ← fvarsToMVars fvars pat
-      let discrTreeKeys ← DiscrTree.mkPath pat discrTreeConfig
+      let discrTreeKeys ← mkDiscrTreePath pat
       let (pat, mvarIdToPatternPos, lmvarIdToPatternPos) ← abstractMVars' pat
       let argMap := mvarIds.map (mvarIdToPatternPos[·]?)
       let levelArgMap := lmvarIds.map (lmvarIdToPatternPos[·]?)

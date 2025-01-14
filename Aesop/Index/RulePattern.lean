@@ -81,7 +81,7 @@ section Get
 /-- Get rule pattern substitutions for the patterns that match `e`. -/
 def getSingle (e : Expr) (idx : RulePatternIndex) :
     BaseM (Array (RuleName × Substitution)) := do
-  let ms ← idx.tree.getUnify e discrTreeConfig
+  let ms ← getUnify idx.tree e
   ms.filterMapM λ { name := r, pattern } => do
     let some subst ← pattern.match e
       | return none

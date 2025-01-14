@@ -141,7 +141,7 @@ def specializeRule (rule : Expr) (subst : Substitution) : MetaM Expr :=
         if let some inst := subst.find? ⟨i⟩ then
           args := args.push $ some inst.toExpr
         else
-          let fvarId := fvarIds[i]'h.2
+          let fvarId := fvarIds[i]
           args := args.push $ some fvarId
           remainingFVarIds := remainingFVarIds.push fvarId
       let result ← mkLambdaFVars remainingFVarIds (← mkAppOptM' rule args)

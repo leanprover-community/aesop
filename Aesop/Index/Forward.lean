@@ -72,7 +72,7 @@ Each returned pair `(r, i)` contains a rule `r` and the index `i` of the premise
 of `r` that likely unifies with `e`. -/
 def get (idx : ForwardIndex) (e : Expr) :
     MetaM (Array (ForwardRule × PremiseIndex)) :=
-  idx.tree.getUnify e discrTreeConfig
+  getUnify idx.tree e
 
 /-- Get the forward rule with the given rule name. -/
 def getRuleWithName? (n : RuleName) (idx : ForwardIndex) : Option ForwardRule :=

@@ -898,7 +898,7 @@ theorem last_append (l₁ l₂ : List α) (h : l₂ ≠ []) :
   last (l₁ ++ l₂) (append_ne_nil_of_right_ne_nil l₁ h) = last l₂ h := by
   induction l₁ <;> aesop
 
-theorem last_concat {a : α} (l : List α) : last (concat l a) (concat_ne_nil a l) = a := by
+theorem last_concat {a : α} (l : List α) : last (concat l a) (X.concat_ne_nil a l) = a := by
   aesop
 
 @[simp] theorem last_singleton (a : α) : last [a] (cons_ne_nil a []) = a := rfl

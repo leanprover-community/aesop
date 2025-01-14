@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
 
+import Aesop.Index.DiscrTreeConfig
 import Aesop.Nanos
 import Aesop.Util.UnorderedArraySet
 import Batteries.Lean.Expr
@@ -77,18 +78,18 @@ open DiscrTree
 
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
 -- `n` stars).
-def getConclusionDiscrTreeKeys (type : Expr) (config : WhnfCoreConfig) :
-    MetaM (Array Key) :=
+
+def getConclusionDiscrTreeKeys (type : Expr) : MetaM (Array Key) :=
   withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
-    mkPath conclusion config
+    mkDiscrTreePath conclusion
     -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
     -- turn into `Key.star`) but not fvars.
 
 -- For a constant `d` with type `∀ (x₁, ..., xₙ), T`, returns keys that
 -- match `d * ... *` (with `n` stars).
 def getConstDiscrTreeKeys (decl : Name) : MetaM (Array Key) := do
-  let arity := (← getConstInfo decl).type.forallArity
+  let arity := (← getConstInfo decl).type.getNumHeadForalls
   let mut keys := Array.mkEmpty (arity + 1)
   keys := keys.push $ .const decl arity
   for _ in [0:arity] do
@@ -116,7 +117,7 @@ private partial def filterTrieM [Monad m] [Inhabited σ] (f : σ → α → m σ
       if h : i < children.size then
         let (key, t) := children[i]'h
         let (t, acc) ← filterTrieM f p acc t
-        go acc (i + 1) (children.set ⟨i, h⟩ (key, t))
+        go acc (i + 1) (children.set i (key, t))
       else
         return (children, acc)
 

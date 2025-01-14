@@ -98,7 +98,7 @@ private def applicableByTargetRules (ri : Index α) (goal : MVarId)
     (include? : Rule α → Bool) :
     MetaM (Array (Rule α × Array IndexMatchLocation)) :=
   goal.withContext do
-    let rules ← ri.byTarget.getUnify (← goal.getType) discrTreeConfig
+    let rules ← getUnify ri.byTarget (← goal.getType)
     let mut rs := Array.mkEmpty rules.size
       -- Assumption: include? is true for most rules.
     for r in rules do
@@ -116,7 +116,7 @@ private def applicableByHypRules (ri : Index α) (goal : MVarId)
     for localDecl in ← getLCtx do
       if localDecl.isImplementationDetail then
         continue
-      let rules ← ri.byHyp.getUnify localDecl.type discrTreeConfig
+      let rules ← getUnify ri.byHyp localDecl.type
       for r in rules do
         if include? r then
           rs := rs.push (r, #[.hyp localDecl])

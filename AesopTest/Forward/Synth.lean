@@ -45,7 +45,7 @@ elab "test " nPremises:num nQs:num nLemmas:num erase:num " by " ts:tacticSeq : c
 
   let mut mNames := pNames
   let bindersM : TSyntaxArray ``Term.bracketedBinder ←
-    (mNames.eraseIdx erase).mapIdxM λ i pName => do
+    (mNames.eraseIdx! erase).mapIdxM λ i pName => do
       `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident $(mkIdent `n)))
   let sigM : Term ← `(∀ $(mkIdent `n) $bindersM:bracketedBinder*, True)
   elabCommand $ ← `(command|
@@ -71,7 +71,7 @@ elab "test " nPremises:num nQs:num nLemmas:num erase:num " by " ts:tacticSeq : c
   /- Active hyps -/
   let binders : TSyntaxArray ``Term.bracketedBinder ←
     --pNames.mapIdxM λ i pName => do
-    (mNames.eraseIdx erase).mapIdxM λ i pName => do
+    (mNames.eraseIdx! erase).mapIdxM λ i pName => do
       `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident (snat% 0)))
   -- Create `theorem t1 (p1 : P1 (snat% 0)) ... (pm : Pm (snat% 0)) : True := by ts`
 
