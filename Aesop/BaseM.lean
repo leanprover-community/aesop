@@ -33,8 +33,9 @@ abbrev BaseM := StateRefT BaseM.State MetaM
 namespace BaseM
 
 /-- Run a `BaseM` action. -/
-protected def run (x : BaseM α) : MetaM α :=
-  StateRefT'.run' x ∅
+protected def run (x : BaseM α) (stats : Stats := ∅) : MetaM (α × Stats) := do
+  let (a, s) ← StateRefT'.run x { stats, rulePatternCache := ∅, rpinfCache := ∅ }
+  return (a, s.stats)
 
 instance : MonadHashMapCacheAdapter Expr RulePatternCache.Entry BaseM where
   getCache := return (← get).rulePatternCache.map
