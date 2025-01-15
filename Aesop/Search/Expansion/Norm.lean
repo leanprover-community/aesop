@@ -25,7 +25,6 @@ structure Context where
   options : Options'
   ruleSet : LocalRuleSet
   normSimpContext : NormSimpContext
-  statsRef : StatsRef
 
 structure State where
   forwardState : ForwardState
