@@ -36,7 +36,7 @@ namespace SaturateM
 
 def run (options : Aesop.Options') (x : SaturateM α) :
     MetaM (α × Array Script.LazyStep) :=
-  ReaderT.run x { options } |>.run' {} |>.run.run
+  (·.fst) <$> (ReaderT.run x { options } |>.run' {} |>.run.run)
 
 end SaturateM
 
