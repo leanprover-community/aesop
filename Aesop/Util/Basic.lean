@@ -471,6 +471,19 @@ def withMaxHeartbeats [Monad m] [MonadLiftT BaseIO m]
   }
   withReader f x
 
+/--
+Runs a computation for at most the given number of heartbeats times 1000 or the
+global heartbeat limit, whichever is lower. Note that heartbeats spent on the
+computation still count towards the global heartbeat count. If 0 is given, the
+global heartbeat limit is used.
+-/
+def withAtMostMaxHeartbeats [Monad m] [MonadLiftT BaseIO m] [MonadLiftT CoreM m]
+    [MonadWithReaderOf Core.Context m] (n : Nat) (x : m α) : m α := do
+  let globalMaxHeartbeats ← getMaxHeartbeats
+  let maxHeartbeats :=
+    if n == 0 then globalMaxHeartbeats else min n globalMaxHeartbeats
+  withMaxHeartbeats maxHeartbeats x
+
 open Lean.Elab Lean.Elab.Term in
 def elabPattern (stx : Syntax) : TermElabM Expr :=
   withRef stx $ withReader adjustCtx $ withSynthesize $ elabTerm stx none

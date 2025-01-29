@@ -72,8 +72,9 @@ structure Options where
   /--
   Heartbeat limit for individual Aesop rules. If a rule goes over this limit, it
   fails, but Aesop itself continues until it reaches the limit set by the
-  `maxHeartbeats` option. If `maxRuleHeartbeats = 0`, there is no per-rule
-  limit.
+  `maxHeartbeats` option. If `maxRuleHeartbeats = 0` or `maxRuleHeartbeats` is
+  greater than `maxHeartbeats`, the `maxHeartbeats` limit is used for the
+  individual rules as well.
   -/
   maxRuleHeartbeats := 0
   /--
