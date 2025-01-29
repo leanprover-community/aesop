@@ -17,7 +17,7 @@ def runRuleTac (tac : RuleTac) (ruleName : RuleName)
   let result ←
     tryCatchRuntimeEx
       (Sum.inr <$> preState.runMetaM' do
-        withMaxHeartbeats input.options.maxRuleHeartbeats do
+        withAtMostMaxHeartbeats input.options.maxRuleHeartbeats do
           tac input)
       (λ e => return Sum.inl e)
   if ← Check.rules.isEnabled then
