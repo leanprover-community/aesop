@@ -540,7 +540,6 @@ theorem X.append_ne_nil_of_ne_nil_left (s t : List α) : s ≠ [] → s ++ t ≠
 theorem X.append_ne_nil_of_ne_nil_right (s t : List α) : t ≠ [] → s ++ t ≠ [] := by
   induction s <;> aesop
 
-attribute [-simp] append_eq_nil
 @[simp] theorem X.append_eq_nil {p q : List α} : (p ++ q) = [] ↔ p = [] ∧ q = [] := by
   aesop (add 1% cases List)
 
@@ -718,7 +717,7 @@ theorem replicate_right_injective (a : α) : Injective (λ n => replicate n a) :
 /-! ### flatMap -/
 
 instance : Bind List where
-  bind l f := List.flatMap l f
+  bind l f := List.flatMap f l
 
 @[simp] theorem bind_eq_flatMap {α β} (f : α → List β) (l : List α) :
     l >>= f = l.flatMap f := rfl
