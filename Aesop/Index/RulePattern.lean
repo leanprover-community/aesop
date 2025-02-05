@@ -58,31 +58,49 @@ set_option linter.missingDocs false in
 /-- A rule pattern index. Maps expressions `e` to rule patterns that likely
 unify with `e`. -/
 structure RulePatternIndex where
+  /-- The discrimination tree which maps expressions to rule patterns. -/
   tree : DiscrTree RulePatternIndex.Entry
+  /-- The discrimination tree which maps types to rule patterns.
+
+      See the documentation of `RulePattern`.
+  -/
+  tyTree : DiscrTree RulePatternIndex.Entry
   deriving Inhabited
 
 namespace RulePatternIndex
 
 instance : EmptyCollection RulePatternIndex :=
-  ⟨⟨{}⟩⟩
+  ⟨⟨{},{}⟩⟩
 
 /-- Add a rule pattern to the index. -/
 def add (name : RuleName) (pattern : RulePattern) (idx : RulePatternIndex) :
     RulePatternIndex :=
-  ⟨idx.tree.insertCore pattern.discrTreeKeys { name, pattern }⟩
+  /- Insert the pattern in `tree` or `tyTree` depending on whether the pattern
+     is degenerate or not -/
+  let insert (tree : DiscrTree RulePatternIndex.Entry) :=
+    tree.insertCore pattern.discrTreeKeys { name, pattern }
+  if pattern.isTyTreeKey then
+    ⟨idx.tree, insert idx.tyTree⟩
+  else
+    ⟨insert idx.tree, idx.tyTree⟩
 
 /-- Merge two rule pattern indices. Patterns that appear in both indices appear
 twice in the result. -/
 def merge (idx₁ idx₂ : RulePatternIndex) : RulePatternIndex :=
-  ⟨idx₁.tree.mergePreservingDuplicates idx₂.tree⟩
+  ⟨idx₁.tree.mergePreservingDuplicates idx₂.tree, idx₂.tyTree.mergePreservingDuplicates idx₂.tyTree⟩
 
 section Get
 
 /-- Get rule pattern substitutions for the patterns that match `e`. -/
 def getSingle (e : Expr) (idx : RulePatternIndex) :
     BaseM (Array (RuleName × Substitution)) := do
+  aesop_trace[debug] "Expression {e}"
+  -- Lookup the rules for the expression
   let ms ← getUnify idx.tree e
-  ms.filterMapM λ { name := r, pattern } => do
+  -- Lookup the rules for the type of the expression
+  let ms' ← getUnify idx.tyTree (← inferType e)
+  -- Filter
+  (ms ++ ms').filterMapM λ { name := r, pattern } => do
     let some subst ← pattern.match e
       | return none
     return (r, subst)

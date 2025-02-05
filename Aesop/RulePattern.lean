@@ -50,6 +50,24 @@ structure RulePattern where
   Discrimination tree keys for `p`.
   -/
   discrTreeKeys : Array DiscrTree.Key
+  /--
+  Should we store the rule pattern in the discrimination tree for expression,
+  or in the discrimination tree for types.
+
+  We use two discrimination trees to efficiently handle what we dub
+  "degenerate" patterns which are made of a single variable.
+
+  For instance, given the pattern `cons ?hd ?tl`, we store the
+  corresponding rule in the discrimination tree for expressions.
+  However, given the pattern `?x` where `?x : List ?a`, we actually
+  store the key `List ?a` in the discrimination tree for types.
+
+  When looking up rules for a given sub-expression, we then use
+  the sub-expression itself to lookup rules from the discrimination tree
+  for expressions, then use the type of the sub-expression to lookup
+  rules from the discrimination tree for types.
+  -/
+  isTyTreeKey : Bool
   deriving Inhabited
 
 namespace RulePattern
@@ -73,6 +91,10 @@ def «open» (pat : RulePattern) :
 def «match» (e : Expr) (pat : RulePattern) : BaseM (Option Substitution) :=
   withNewMCtxDepth do
     let (mvarIds, lmvarIds, p) ← pat.open
+    -- We first check the type
+    if ! (← isDefEq (← inferType e) (← inferType p)) then
+      return none
+    -- We then check the expression itself
     if ! (← isDefEq e p) then
       return none
     let mut subst := .empty pat.argMap.size pat.levelArgMap.size
@@ -102,14 +124,22 @@ def «elab» (stx : Term) (rule : Expr) : TermElabM RulePattern :=
     let lmvarIds := collectLevelMVars {} (← instantiateMVars rule) |>.result
     aesop_trace[debug] "level metavariables in rule: {lmvarIds.map Level.mvar}"
     forallTelescope (← inferType rule) λ fvars _ => do
-      let pat := (← elabPattern stx).consumeMData
-      let (pat, mvarIds) ← fvarsToMVars fvars pat
-      let discrTreeKeys ← mkDiscrTreePath pat
+      let pat0 := (← elabPattern stx).consumeMData
+      let (pat, mvarIds) ← fvarsToMVars fvars pat0
+      /- Check if the pattern is degenerate, to decide whether we should put the
+         rule in the discrimination tree for expressions or for types. -/
+      let (discrTreeKeys, isTyTreeKey) ← do
+        if pat.isMVar then
+          let pat ← inferType pat0
+          let (pat, _) ← fvarsToMVars fvars pat
+          pure (← mkDiscrTreePath pat, true)
+        else
+          pure (← mkDiscrTreePath pat, false)
       let (pat, mvarIdToPatternPos, lmvarIdToPatternPos) ← abstractMVars' pat
       let argMap := mvarIds.map (mvarIdToPatternPos[·]?)
       let levelArgMap := lmvarIds.map (lmvarIdToPatternPos[·]?)
       aesop_trace[debug] "result: '{pat.expr}' with arg map{indentD $ toMessageData argMap}\nand level arg map{indentD $ toMessageData levelArgMap}"
-      return { pattern := pat, argMap, levelArgMap, discrTreeKeys }
+      return { pattern := pat, argMap, levelArgMap, discrTreeKeys, isTyTreeKey }
 where
   fvarsToMVars (fvars : Array Expr) (e : Expr) :
       MetaM (Expr × Array MVarId) := do
