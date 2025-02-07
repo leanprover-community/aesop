@@ -8,6 +8,7 @@ import AesopTest.Forward.Synth
 import AesopTest.Forward.SynthCascade
 import AesopTest.Forward.SynthIndep
 import AesopTest.Forward.SynthClusters
+import AesopTest.Forward.SynthTrans
 
 open Aesop
 open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
@@ -30,7 +31,7 @@ elab "bchmk " nIter:num " with " t:term " using " r:term : command => do
   let func ← liftTermElabM do
     let r ← withSynthesize $ elabTerm r (some $ .const `FuncType [])
     unsafe Lean.Meta.evalExpr (Nat → CommandElabM Nanos) (.const `FuncType []) r
-  for b in [true, false] do
+  for b in [false, true] do
     let mut ltimes : Array Nat := #[]
     for i in steps do
       let mut avr : Nat := 0
@@ -42,7 +43,8 @@ elab "bchmk " nIter:num " with " t:term " using " r:term : command => do
 
 def pows (n : Nat) : List Nat := (List.range n).map (2 ^ ·)
 /- The old impl.'s premise order. -/
-def steps (n : Nat) : List Nat := (n - 1) :: (List.range (n - 1)) ++ [n]
+def steps (n : Nat) : List Nat := (List.iota (n - 1)) ++ [0] ++ [n]
+def isteps (n : Nat) : List Nat := (List.iota (n - 1)) ++ [0]
 
 /-
 **Uncomment to reveal parameters**
@@ -53,11 +55,11 @@ def steps (n : Nat) : List Nat := (n - 1) :: (List.range (n - 1)) ++ [n]
 -/
 
 /-
-**Uncomment to run tests**
+**Uncomment to run tests**-/
 local notation "k" => 10
 
-bchmk 30 with steps k using fun n ↦ runTestErase k 0 k n
-bchmk 30 with (pows 5) using fun n ↦ runTestIndep 6 n
-bchmk 30 with (pows 5) using fun n ↦ runTestCascade n
-bchmk 30 with (pows 6) using fun n ↦ runTestCluster n 3 (2 ^ 5 / n)
--/
+bchmk 3 with [2,3,4,5] using fun n ↦ runTestTrans n 300
+bchmk 3 with isteps k using fun n ↦ runTestErase k 0 k n
+bchmk 3 with (pows 5) using fun n ↦ runTestIndep 6 n
+bchmk 3 with (pows 6) using fun n ↦ runTestCascade n
+bchmk 3 with (pows 6) using fun n ↦ runTestCluster n 3 (2 ^ 5 / n)

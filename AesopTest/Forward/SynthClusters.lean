@@ -76,31 +76,6 @@ def runTestCluster (nPs : Nat) (nRs : Nat) (nCs : Nat) : CommandElabM Nanos := d
   let mut nCs := Syntax.mkNatLit nCs
   let cmd := elabCommand <| ← `(testCluster $nPs $nRs $nCs by
     set_option maxHeartbeats 5000000 in
-    set_option aesop.dev.statefulForward false in
     saturate
     trivial)
   Aesop.time' <| liftCoreM <| withoutModifyingState $ liftCommandElabM cmd
-
-
---X : Old benchmark; These don't seems to exactly match the new? TODO: Investigate.
-/-
-open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser in
-elab "bmClusters " nTPs:num nRules:num : command => do
-  let some nTPs := nTPs.raw.isNatLit?
-    | throwUnsupportedSyntax
-  for i in [:(nTPs + 1)] do
-    let mut inum := (Lean.Syntax.mkNatLit (2 ^ i))
-    let mut inuminv := (Lean.Syntax.mkNatLit ((2 ^ nTPs) / (2 ^ i)))
-    elabCommand $ ← `(testCluster $inum $nRules $inuminv by
-      set_option maxHeartbeats 5000000 in
-      set_option aesop.dev.statefulForward false in
-      set_option trace.profiler true in
-      --set_option trace.aesop.forward true in
-      --set_option trace.saturate true in
-      --set_option profiler true in
-      saturate
-      trivial)
-
-/- log of the total number of hyps - number of rules -/
-bmClusters 7 3
--/

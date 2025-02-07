@@ -5,29 +5,14 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
+import AesopTest.Forward.Definitions
 
-set_option aesop.dev.statefulForward true
+open Aesop Lean Lean.Meta Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
 
-open Lean Lean.Meta Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
-
-inductive SNat where
-  | zero
-  | succ (n : SNat)
-
-abbrev Nat.toSNat : Nat → SNat
-  | zero => .zero
-  | succ n => .succ n.toSNat
-
-elab "snat% " n:num : term => do
-  let n ← elabTerm n (some $ .const ``Nat [])
-  reduceAll (.app (.const ``Nat.toSNat []) n)
-
-elab "setup" : command => do
+elab "testTrans " nHyps:num firstNum:num " by " ts:tacticSeq : command => do
   let P := mkIdent `P
   elabCommand $ ← `(command| axiom $P : SNat → SNat → Prop)
   elabCommand $ ← `(command| @[aesop safe forward] axiom $(mkIdent `rule) : ∀ x y z, $P x y → $P y z → $P x z)
-
-elab "test " nHyps:num firstNum:num " by " ts:tacticSeq : command => do
   let some nHyps := nHyps.raw.isNatLit?
     | throwUnsupportedSyntax
   let some firstNum := firstNum.raw.isNatLit?
@@ -45,13 +30,22 @@ elab "test " nHyps:num firstNum:num " by " ts:tacticSeq : command => do
     binders := binders.push $ ← `(bracketedBinder| (_ : $P $x₁ $x₂))
   elabCommand $ ← `(theorem foo $binders:bracketedBinder* : True := by $ts)
 
-setup
+-- set_option trace.profiler true in
+-- testTrans 5 300 by
+--   set_option maxHeartbeats 5000000 in
+--   set_option maxRecDepth   1000000 in
+--   --set_option maxHeartbeats 1000000 in
+--   set_option aesop.dev.statefulForward false in
+--   saturate
+--   trivial
 
-set_option maxRecDepth   1000000 in
-set_option maxHeartbeats 1000000 in
--- set_option profiler true in
-test 10 300 by
-  -- set_option trace.aesop.forward true in
-  -- set_option trace.aesop.forward.debug true in
-  saturate
-  trivial
+
+def runTestTrans (nHs : Nat) (fH : Nat) : CommandElabM Nanos := do
+  let mut nHs := Syntax.mkNatLit nHs
+  let mut fH := Syntax.mkNatLit fH
+  let cmd := elabCommand <| ← `(testTrans $nHs $fH by
+    set_option maxRecDepth   1000000 in
+    set_option maxHeartbeats 5000000 in
+    saturate [*]
+    trivial)
+  Aesop.time' <| liftCoreM <| withoutModifyingState $ liftCommandElabM cmd

@@ -1,17 +1,16 @@
 import Aesop
 
 open Aesop
-open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
+open Lean Lean.Meta Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
 
 inductive SNat where
   | zero
   | succ (n : SNat)
 
-def Nat.toSNat : Nat → SNat
+abbrev Nat.toSNat : Nat → SNat
   | zero => .zero
   | succ n => .succ n.toSNat
 
-open Lean.Meta in
 elab "snat% " n:num : term => do
   let n ← elabTerm n (some $ .const ``Nat [])
   reduceAll (.app (.const ``Nat.toSNat []) n)

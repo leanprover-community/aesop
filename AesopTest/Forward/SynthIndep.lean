@@ -57,46 +57,24 @@ elab "testIndep " nPremises:num nRules:num " by " ts:tacticSeq : command => do
       : True := by $ts
   )
 
-/- **Uncomment for single test** :
-testIndep 6 256 by
+/-
+/- **Uncomment for single test** :-/
+testIndep 6 50 by
   set_option maxHeartbeats 5000000 in
-  set_option aesop.dev.statefulForward true in
+  set_option aesop.dev.statefulForward false in
   set_option trace.profiler true in
   --set_option trace.aesop.forward true in
   --set_option trace.saturate true in
   --set_option profiler true in
   saturate
-  trivial-/
+  trivial
+-/
 
 def runTestIndep (nPs : Nat) (nRs : Nat) : CommandElabM Nanos := do
   let mut nPs := Syntax.mkNatLit nPs
   let mut nRs := Syntax.mkNatLit nRs
   let cmd := elabCommand <| ← `(testIndep $nPs $nRs by
     set_option maxHeartbeats 5000000 in
-    set_option aesop.dev.statefulForward false in
     saturate
     trivial)
   Aesop.time' <| liftCoreM <| withoutModifyingState $ liftCommandElabM cmd
-
-
-/-
-X : Old benchmark
-open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser in
-elab "bmIndep " nPs:num nRules:num : command => do
-  let some nRules:= nRules.raw.isNatLit?
-    | throwUnsupportedSyntax
-  for i in [:(nRules + 1)] do
-    let mut inum := (Lean.Syntax.mkNatLit (2 ^ i))
-    elabCommand $ ← `(command| testIndep $nPs $inum by
-      set_option maxHeartbeats 5000000 in
-      set_option aesop.dev.statefulForward true in
-       set_option trace.profiler true in
-      --set_option trace.aesop.forward true in
-      --set_option trace.saturate true in
-      --set_option profiler true in
-      saturate
-      trivial)
--/
-
-/- n : number of premises --- m : means we test [1,2,..., 2 ^ m] rules -/
---bmIndep 6 8
