@@ -7,7 +7,7 @@ platformIndependent = true
 [[require]]
 name = "batteries"
 git = "https://github.com/leanprover-community/batteries"
-rev = "v4.17.0-rc1"
+rev = "nightly-testing"
 
 [[lean_lib]]
 name = "Aesop"
