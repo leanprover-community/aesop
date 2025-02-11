@@ -70,6 +70,21 @@ testIndep 6 50 by
   trivial
 -/
 
+/--
+#### Independent rules.
+
+This test compares the efficiency of the procedures on independent rules
+and hypotheses.
+
+Consider a set of propositions `P := {Pᵢⱼ | 1 ≤ i ≤ nRs and 1 ≤ j ≤ nPs}` and
+`Q := {Qᵢ | 1 ≤ i ≤ nRs}`.
+We run the procedures we with the `nRs` following rules `rᵢ : Pᵢ₁ → ... → Pᵢₙₚₛ → Qᵢ`
+and a context containing precisely `P`.
+
+- `nPs` : Number of premises in the rules.
+- `nRs` : Number of unique rules; they are independent but have the same number
+of premises.
+-/
 def runTestIndep (nPs : Nat) (nRs : Nat) : CommandElabM Nanos := do
   let mut nPs := Syntax.mkNatLit nPs
   let mut nRs := Syntax.mkNatLit nRs
