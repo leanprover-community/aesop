@@ -32,20 +32,24 @@ elab "bchmk " nIter:num " with " t:term " using " r:term : command => do
     let r ← withSynthesize $ elabTerm r (some $ .const `FuncType [])
     unsafe Lean.Meta.evalExpr (Nat → CommandElabM Nanos) (.const `FuncType []) r
   for b in [false, true] do
-    let mut ltimes : Array Nat := #[]
+    let mut ltimes : Array (Nat × Nat) := #[]
     for i in steps do
       let mut avr : Nat := 0
       for j in [:nIter] do
         avr := avr + (← withStatefulForward b $ func i).nanos
-      ltimes := ltimes.push (avr / nIter)
+      ltimes := ltimes.push ((i, avr / nIter))
     IO.println ("StatefulForward: " ++ toString b)
-    IO.println <| (ltimes.map (·.toFloat / 1000000)).toList
+    for point in (ltimes.map (fun (i,n) ↦ (i, n.toFloat / 1000000))).toList do
+      IO.print point
+      IO.print " "
+    IO.println ("")
 
 def pows (n : Nat) : List Nat := (List.range n).map (2 ^ ·)
 /- The old impl.'s premise order. -/
-def steps (n : Nat) : List Nat := (List.iota (n - 1)) ++ [0] ++ [n]
-def isteps (n : Nat) : List Nat := (List.iota (n - 1)) ++ [0]
+def steps (n : Nat) : List Nat := (List.range n).reverse ++ [n]
+def isteps (n : Nat) : List Nat := (List.range' 1 (n - 1)).reverse ++ [0]
 
+/-
 /-
 **Uncomment to reveal parameters**
 #check runTestErase
@@ -54,14 +58,14 @@ def isteps (n : Nat) : List Nat := (List.iota (n - 1)) ++ [0]
 #check runTestCluster
 -/
 
-/-
+
 /-
 **Uncomment to run tests**-/
-local notation "k" => 10
+local notation "k" => 6
 
-bchmk 3 with [2,3,4,5] using fun n ↦ runTestTrans n 300
+bchmk 3 with [2,3,4,5,6] using fun n ↦ runTestTrans n 20
 bchmk 3 with isteps k using fun n ↦ runTestErase k 0 k n
-bchmk 3 with (pows 5) using fun n ↦ runTestIndep 6 n
+bchmk 3 with (pows 6) using fun n ↦ runTestIndep 6 n
 bchmk 3 with (pows 6) using fun n ↦ runTestCascade n
 bchmk 3 with (pows 6) using fun n ↦ runTestCluster n 3 (2 ^ 5 / n)
 -/
