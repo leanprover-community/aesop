@@ -39,10 +39,25 @@ elab "testTrans " nHyps:num firstNum:num " by " ts:tacticSeq : command => do
 --   saturate
 --   trivial
 
+/--
+#### Transitivity.
 
-def runTestTrans (nHs : Nat) (fH : Nat) : CommandElabM Nanos := do
-  let mut nHs := Syntax.mkNatLit nHs
-  let mut fH := Syntax.mkNatLit fH
+This test compares the efficiency of the procedures on scaled up version of
+a transitivity problem.
+
+Given some predicate `P ?x₁ ?x₂`, we register the rule `r : P x y → P y z → P x z`.
+The procedures are then compared on a context containing `nHs` hypotheses
+of the form `(h₁ : P a (n + 1)), ..., (hₙ : P (a + n - 1) (a + n))`.
+Saturating this goal adds a total of `n(n-1)/2` hypotheses to the context.
+
+- `nHs` : Number of hypotheses in the context.
+- `a` : Starting integer for the transitivity chain.
+Note that this affects the run time as big number are designed to be much
+harder to unify.
+-/
+def runTestTrans (n : Nat) (a : Nat) : CommandElabM Nanos := do
+  let mut nHs := Syntax.mkNatLit n
+  let mut fH := Syntax.mkNatLit a
   let cmd := elabCommand <| ← `(testTrans $nHs $fH by
     set_option maxRecDepth   1000000 in
     set_option maxHeartbeats 5000000 in
