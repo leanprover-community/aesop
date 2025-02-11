@@ -89,11 +89,6 @@ elab "test " nPremises:num nQs:num nLemmas:num erase:num " by " ts:tacticSeq : c
   )
 
 /-
-Notes :
-- The order of the old saturate is `n - 1, 0, 1, ..., n - 2`.
--/
-
-/-
  **Uncomment for single test** :
 test 6 0 100 1 by
   set_option maxHeartbeats 5000000 in
@@ -103,7 +98,35 @@ test 6 0 100 1 by
   trivial
 -/
 
-def runTestErase (nPs : Nat) (nQs : Nat) (nRs : Nat) (e : Nat) : CommandElabM Nanos := do
+/--
+#### Depth of considered rules.
+
+This test compares the efficiency of the procedures in term of the depth
+of the considered hypotheses.
+
+In the stateless implementation, a rule `r` with `n` premises is selected
+when a hypothesis matching its (last) slot `n` is present in the context.
+The context's other hypotheses are then tried iteratively to fill the slots
+`n-1`, `n-2`, etc.
+
+The **depth** refers to the number of hypotheses sucessfully matched with the
+premises of a rule until the rule is thrown out because it could not be completed.
+For example, if a rule is not select, its depth is 0.
+If we find hypotheses matching the slot `n` and `n-1` but not `n-2`, the depth is 2.
+
+In the stateful implementation, this notion is mostly irrelevant as hypotheses
+are saved regardless of their slot's position.
+
+- `nPs` : Number of premises in the rules.
+- `nQs` : Number of hypotheses in the context which do not unify with any premise
+of any rule.
+- `nRs` : Number of rules; here they are all the same.
+- `e` : The number associated to the slot for which there is no hypothesis in
+the context that match this slot.
+If it is greater or equal to the number of premises, the context will contain
+hypotheses matching all the slots and the rules will be applied.
+-/
+def runTestErase (nPs nQs nRs e : Nat) : CommandElabM Nanos := do
   let mut nPs := Syntax.mkNatLit nPs
   let mut nQs := Syntax.mkNatLit nQs
   let mut nRs := Syntax.mkNatLit nRs
