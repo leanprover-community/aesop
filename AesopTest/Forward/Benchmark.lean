@@ -64,8 +64,8 @@ def isteps (n : Nat) : List Nat := (List.range' 1 (n - 1)).reverse ++ [0]
 local notation "k" => 6
 
 bchmk 3 with [2,3,4,5,6] using fun n ↦ runTestTrans n 20
-bchmk 3 with isteps k using fun n ↦ runTestErase k 0 k n
-bchmk 3 with (pows 6) using fun n ↦ runTestIndep 6 n
+bchmk 3 with isteps k using fun n ↦ runTestErase k 0 k n 0
+bchmk 3 with (pows 5) using fun n ↦ runTestIndep 6 n 0
 bchmk 3 with (pows 6) using fun n ↦ runTestCascade n
 bchmk 3 with (pows 6) using fun n ↦ runTestCluster n 3 (2 ^ 5 / n)
 -/

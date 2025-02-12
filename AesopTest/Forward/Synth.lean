@@ -12,7 +12,7 @@ open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
 
 --set_option aesop.dev.statefulForward true
 
-elab "test " nPremises:num nQs:num nLemmas:num erase:num " by " ts:tacticSeq : command => do
+elab "test " nPremises:num nQs:num nLemmas:num erase:num a:num " by " ts:tacticSeq : command => do
   let some nPs := nPremises.raw.isNatLit?
     | throwUnsupportedSyntax
   let some nQs := nQs.raw.isNatLit?
@@ -20,6 +20,8 @@ elab "test " nPremises:num nQs:num nLemmas:num erase:num " by " ts:tacticSeq : c
   let some nLemmas := nLemmas.raw.isNatLit?
     | throwUnsupportedSyntax
   let some erase := erase.raw.isNatLit?
+    | throwUnsupportedSyntax
+  let some a := a.raw.isNatLit?
     | throwUnsupportedSyntax
   let mut pNames := Array.mkEmpty nPs
   let mut qNames := Array.mkEmpty nQs
@@ -45,8 +47,9 @@ elab "test " nPremises:num nQs:num nLemmas:num erase:num " by " ts:tacticSeq : c
 
   let mut mNames := pNames
   let bindersM : TSyntaxArray ``Term.bracketedBinder ←
-    (mNames.eraseIdx! erase).mapIdxM λ i pName => do
-      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident $(mkIdent `n)))
+    (mNames.eraseIdxIfInBounds erase).mapIdxM λ i pName => do
+      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) :
+        $(mkIdent pName):ident $(mkIdent `n)))
   let sigM : Term ← `(∀ $(mkIdent `n) $bindersM:bracketedBinder*, True)
   elabCommand $ ← `(command|
       @[aesop safe]
@@ -71,15 +74,17 @@ elab "test " nPremises:num nQs:num nLemmas:num erase:num " by " ts:tacticSeq : c
   /- Active hyps -/
   let binders : TSyntaxArray ``Term.bracketedBinder ←
     --pNames.mapIdxM λ i pName => do
-    (mNames.eraseIdx! erase).mapIdxM λ i pName => do
-      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident (snat% 0)))
+    (mNames.eraseIdxIfInBounds erase).mapIdxM λ i pName => do
+      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) :
+        $(mkIdent pName):ident (snat% $(Syntax.mkNatLit a))))
   -- Create `theorem t1 (p1 : P1 (snat% 0)) ... (pm : Pm (snat% 0)) : True := by ts`
 
   /- Inert hyps -/
   let bindersQ : TSyntaxArray ``Term.bracketedBinder ←
     --pNames.mapIdxM λ i pName => do
     (qNames).mapIdxM λ i qName => do
-      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "q" ++ toString i) : $(mkIdent qName):ident (snat% 0)))
+      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "q" ++ toString i) :
+        $(mkIdent qName):ident (snat% $(Syntax.mkNatLit a))))
   -- Create `theorem t1 (p1 : P1 (snat% 0)) ... (pm : Pm (snat% 0)) : True := by ts`
   -- where m = nPs.
   elabCommand $ ← `(command|
@@ -125,13 +130,17 @@ of any rule.
 the context that match this slot.
 If it is greater or equal to the number of premises, the context will contain
 hypotheses matching all the slots and the rules will be applied.
+- `a` : Instantiation of the predicates in the rule.
+Note that this affects the run time as big number are designed to be much
+harder to unify.
 -/
-def runTestErase (nPs nQs nRs e : Nat) : CommandElabM Nanos := do
+def runTestErase (nPs nQs nRs e a : Nat) : CommandElabM Nanos := do
   let mut nPs := Syntax.mkNatLit nPs
   let mut nQs := Syntax.mkNatLit nQs
   let mut nRs := Syntax.mkNatLit nRs
   let mut e := Syntax.mkNatLit e
-  let cmd := elabCommand <| ← `(test $nPs $nQs $nRs $e by
+  let mut a := Syntax.mkNatLit a
+  let cmd := elabCommand <| ← `(test $nPs $nQs $nRs $e $a by
     set_option maxHeartbeats 5000000 in
     saturate
     trivial)
