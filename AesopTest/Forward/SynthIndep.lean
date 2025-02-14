@@ -99,8 +99,10 @@ def runTestIndep (nPs nRs a : Nat) : CommandElabM Nanos := do
   let mut nPs := Syntax.mkNatLit nPs
   let mut nRs := Syntax.mkNatLit nRs
   let mut a := Syntax.mkNatLit a
-  let cmd := elabCommand <| ← `(testIndep $nPs $nRs $a by
+  liftCoreM $ withoutModifyingState $ liftCommandElabM do
+  elabCommand <| ← `(testIndep $nPs $nRs $a by
+    set_option maxRecDepth   1000000 in
     set_option maxHeartbeats 5000000 in
-    saturate
+    time saturate
     trivial)
-  Aesop.time' <| liftCoreM <| withoutModifyingState $ liftCommandElabM cmd
+  timeRef.get

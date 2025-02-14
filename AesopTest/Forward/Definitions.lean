@@ -18,3 +18,9 @@ elab "snat% " n:num : term => do
 instance : MonadBacktrack Core.SavedState CoreM where
   saveState := Core.saveState
   restoreState := Core.SavedState.restore
+
+initialize timeRef : IO.Ref Nanos ← IO.mkRef 0
+
+elab "time " t:tactic : tactic => do
+  let nanos ← Aesop.time' (Lean.Elab.Tactic.evalTactic t)
+  timeRef.set nanos

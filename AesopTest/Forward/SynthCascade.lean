@@ -40,8 +40,10 @@ testCascade 35 by
 
 def runTestCascade (nRs : Nat) : CommandElabM Nanos := do
   let mut nRs := Syntax.mkNatLit nRs
-  let cmd := elabCommand <| ← `(testCascade $nRs by
-    set_option maxHeartbeats 5000000 in
-    saturate
-    trivial)
-  Aesop.time' <| liftCoreM <| withoutModifyingState $ liftCommandElabM cmd
+  liftCoreM $ withoutModifyingState $ liftCommandElabM do
+    elabCommand <| ← `(testCascade $nRs by
+      set_option maxRecDepth   1000000 in
+      set_option maxHeartbeats 5000000 in
+      time saturate
+      trivial)
+    timeRef.get

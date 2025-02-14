@@ -59,8 +59,8 @@ def isteps (n : Nat) : List Nat := (List.range' 1 (n - 1)).reverse ++ [0]
 -/
 
 
-/-
-**Uncomment to run tests**-/
+
+**Uncomment to run tests**
 local notation "k" => 6
 
 bchmk 3 with [2,3,4,5,6] using fun n ↦ runTestTrans n 20

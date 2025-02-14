@@ -140,8 +140,10 @@ def runTestErase (nPs nQs nRs e a : Nat) : CommandElabM Nanos := do
   let mut nRs := Syntax.mkNatLit nRs
   let mut e := Syntax.mkNatLit e
   let mut a := Syntax.mkNatLit a
-  let cmd := elabCommand <| ← `(test $nPs $nQs $nRs $e $a by
-    set_option maxHeartbeats 5000000 in
-    saturate
-    trivial)
-  Aesop.time' <| liftCoreM <| withoutModifyingState $ liftCommandElabM cmd
+  liftCoreM $ withoutModifyingState $ liftCommandElabM do
+    elabCommand <| ← `(test $nPs $nQs $nRs $e $a by
+      set_option maxRecDepth   1000000 in
+      set_option maxHeartbeats 5000000 in
+      time saturate
+      trivial)
+    timeRef.get

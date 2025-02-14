@@ -74,8 +74,10 @@ def runTestCluster (nPs : Nat) (nRs : Nat) (nCs : Nat) : CommandElabM Nanos := d
   let mut nPs := Syntax.mkNatLit nPs
   let mut nRs := Syntax.mkNatLit nRs
   let mut nCs := Syntax.mkNatLit nCs
-  let cmd := elabCommand <| ← `(testCluster $nPs $nRs $nCs by
-    set_option maxHeartbeats 5000000 in
-    saturate
-    trivial)
-  Aesop.time' <| liftCoreM <| withoutModifyingState $ liftCommandElabM cmd
+  liftCoreM $ withoutModifyingState $ liftCommandElabM do
+    elabCommand <| ← `(testCluster $nPs $nRs $nCs by
+      set_option maxRecDepth   1000000 in
+      set_option maxHeartbeats 5000000 in
+      time saturate
+      trivial)
+    timeRef.get

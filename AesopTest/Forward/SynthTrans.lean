@@ -20,11 +20,7 @@ elab "testTrans " nHyps:num firstNum:num " by " ts:tacticSeq : command => do
   let P := mkIdent `P
   let mut binders : TSyntaxArray ``Term.bracketedBinder := #[]
   for i in [:nHyps] do
-    let mkNum n :=
-      if i % 2 == 0 then
-        `(Nat.toSNat $(Syntax.mkNatLit (firstNum + n)))
-      else
-        `(snat% $(Syntax.mkNatLit (firstNum + n)))
+    let mkNum n :=`(snat% $(Syntax.mkNatLit (firstNum + n)))
     let x₁ ← mkNum i
     let x₂ ← mkNum (i + 1)
     binders := binders.push $ ← `(bracketedBinder| (_ : $P $x₁ $x₂))
@@ -38,7 +34,6 @@ elab "testTrans " nHyps:num firstNum:num " by " ts:tacticSeq : command => do
 --   set_option aesop.dev.statefulForward false in
 --   saturate
 --   trivial
-
 /--
 #### Transitivity.
 
@@ -58,9 +53,10 @@ harder to unify.
 def runTestTrans (n : Nat) (a : Nat) : CommandElabM Nanos := do
   let mut nHs := Syntax.mkNatLit n
   let mut fH := Syntax.mkNatLit a
-  let cmd := elabCommand <| ← `(testTrans $nHs $fH by
-    set_option maxRecDepth   1000000 in
-    set_option maxHeartbeats 5000000 in
-    saturate [*]
-    trivial)
-  Aesop.time' <| liftCoreM <| withoutModifyingState $ liftCommandElabM cmd
+  liftCoreM $ withoutModifyingState $ liftCommandElabM do
+    elabCommand <| ← `(testTrans $nHs $fH by
+      set_option maxRecDepth   1000000 in
+      set_option maxHeartbeats 5000000 in
+      time saturate
+      trivial)
+    timeRef.get
