@@ -28,6 +28,15 @@ private def ppPHashSet [BEq α] [Hashable α] [ToMessageData α] (s : PHashSet �
     MessageData :=
   toMessageData $ s.fold (init := #[]) λ as a => as.push a
 
+/-- A hypothesis that has not yet been matched against a premise, or a rule
+pattern substitution. -/
+inductive RawHyp where
+  /-- The hypothesis. -/
+  | fvarId (fvarId : FVarId)
+  /-- The rule pattern substitution. -/
+  | patSubst (subst : Substitution)
+  deriving Inhabited, BEq, Hashable
+
 /-- A hypothesis that was matched against a premise, or a rule pattern
 substitution. -/
 structure Hyp where
@@ -311,9 +320,35 @@ structure ClusterState where
   variableMap : VariableMap
   /-- Complete matches for this cluster. -/
   completeMatches : PHashSet Match
-  deriving Inhabited
+  /-- When this flag is `true`, hyps are added to the `slotQueues` rather than
+  the `variableMap`. This is an optimisation that avoids performing unifications
+  until a rule can potentially generate a complete match. More precisely:
+
+  - `addHypsLazily` is initially set to `true`.
+  - While `addHypsLazily` is `true`, hyps are added to (and deleted from) the
+    `slotQueues` and are not added to the `variableMap`.
+    Once an addition causes all slot queues to have at least one element,
+    `addHypsLazily` is permanently set to `false` and the hyps from the
+    slot queues are added to the `variableMap`.
+  - While `addHypsLazily` is `false`, hyps are directly added to (and deleted
+    from) the variable map. The slot queues are no longer used.
+  -/
+  addHypsLazily : Bool
+  /-- Hypotheses or pattern substitutions that have been added to the cluster
+  state, but have not yet been added to the `variableMap`.  -/
+  slotQueues : Array (Array RawHyp)
+  /-- There is exactly one queue for each slot. -/
+  slotQueues_size : slotQueues.size = slots.size
 
 namespace ClusterState
+
+instance : Inhabited ClusterState where
+  default := by refine' {
+    slots := #[]
+    slotQueues := #[]
+    slotQueues_size := by simp
+    ..
+  } <;> exact default
 
 instance : ToMessageData ClusterState where
   toMessageData cs :=
@@ -342,6 +377,7 @@ def matchPremise? (premises : Array MVarId) (lmvarIds : Array LMVarId)
   let premiseType ← slotPremise.getType
   let hypType ← hyp.getType
   withAesopTraceNodeBefore .forward (return m!"match against premise {premiseIdx}: {hypType} ≟ {premiseType}") do
+  withoutModifyingState do
     let isDefEq ←
       withConstAesopTraceNode .forwardDebug (return m!"defeq check") do
       withReducible do
@@ -353,7 +389,7 @@ def matchPremise? (premises : Array MVarId) (lmvarIds : Array LMVarId)
       subst := subst.insert slot.premiseIndex $ ← rpinf (.fvar hyp)
       for h : i in [:lmvarIds.size] do
         if let some l ← getLevelMVarAssignment? lmvarIds[i] then
-          subst := subst.insertLevel ⟨i⟩ l
+          subst := subst.insertLevel ⟨i⟩ (← instantiateLevelMVars l)
       aesop_trace[forward] "substitution: {subst}"
       return subst
     else
@@ -431,37 +467,106 @@ def addHypCore (newCompleteMatches : Array Match) (cs : ClusterState)
       newCompleteMatches := newCompleteMatches'
     return (cs, newCompleteMatches)
 
-/-- Add a hypothesis to the cluster state. If the hypothesis's type does not
-match the premise corresponding to `slot`, then the hypothesis is not added. -/
-def addHyp (premises : Array MVarId) (lmvars : Array LMVarId)
-    (cs : ClusterState) (i : PremiseIndex) (h : FVarId) :
-    BaseM (ClusterState × Array Match) := do
-  let some slot := cs.findSlot? i
-    | return (cs, #[])
-  let some subst ← cs.matchPremise? premises lmvars slot.index h
-    | return (cs, #[])
-  addHypCore #[] cs slot { fvarId? := h, subst }
+/-- Add a hypothesis or pattern substitution to the queue for its slot. If
+afterwards each slot queue contains at least one element, then the returned
+cluster state `cs` has `cs.addHypsLazily = false`. -/
+def enqueueRawHyp (slot : Slot) (h : RawHyp) (cs : ClusterState) :
+    ClusterState := Id.run do
+  let mut cs := {
+    cs with
+    slotQueues := cs.slotQueues.modify slot.index.toNat (·.push h)
+    slotQueues_size := by simp [cs.slotQueues_size]
+  }
+  if cs.slotQueues.all (·.size > 0) then
+    cs := { cs with addHypsLazily := false }
+  return cs
 
-/-- Add a pattern substitution to the cluster state. -/
-def addPatSubst (cs : ClusterState) (i : PremiseIndex) (subst : Substitution) :
+/-- Add a hypothesis or pattern substitution to the cluster state. -/
+def addRawHypCore (newCompleteMatches : Array Match) (premises : Array MVarId)
+    (lmvars : Array LMVarId) (h : RawHyp) (slot : Slot) (cs : ClusterState) :
+    BaseM (ClusterState × Array Match) :=
+  match h with
+  | .fvarId fvarId =>
+    withConstAesopTraceNode .forwardDebug (return m!"add hyp {Expr.fvar fvarId} to slot {slot.index}") do
+      let some subst ← cs.matchPremise? premises lmvars slot.index fvarId
+        | return (cs, newCompleteMatches)
+      addHypCore newCompleteMatches cs slot { fvarId? := fvarId, subst }
+  | .patSubst subst =>
+    withConstAesopTraceNode .forwardDebug (return m!"add pattern subst {subst} to slot {slot.index}") do
+      addHypCore newCompleteMatches cs slot { fvarId? := none, subst }
+
+/-- Add the hypotheses and pattern substitutions from the slot queues of cluster
+state `cs` to `cs`'s variable map. -/
+def addQueuedRawHyps (premises : Array MVarId) (lmvars : Array LMVarId)
+    (cs : ClusterState) : BaseM (ClusterState × Array Match) :=
+  withConstAesopTraceNode .forwardDebug (return m!"adding queued hypotheses and pattern substs") do
+    let csOld := cs
+    let mut cs := cs
+    let mut newCompleteMatches := #[]
+    for hi : i in [:csOld.slotQueues.size] do
+      have : i < csOld.slots.size := by
+        simp [← csOld.slotQueues_size]
+        exact hi.2.1
+      let slot := csOld.slots[i]
+      for h in csOld.slotQueues[i] do
+        let (cs', newCompleteMatches') ←
+          cs.addRawHypCore newCompleteMatches premises lmvars h slot
+        cs := cs'
+        newCompleteMatches := newCompleteMatches'
+    cs := {
+      cs with
+      slotQueues := mkArray cs.slots.size #[]
+      slotQueues_size := by simp
+    }
+    return (cs, newCompleteMatches)
+
+/-- Add a hypothesis or pattern substitution to the cluster state. If a
+hypothesis is given and its type does not match the premise corresponding to
+`slot`, it is not added. -/
+def addRawHyp (premises : Array MVarId) (lmvars : Array LMVarId)
+    (cs : ClusterState) (i : PremiseIndex) (h : RawHyp) :
     BaseM (ClusterState × Array Match) := do
   let some slot := cs.findSlot? i
     | return (cs, #[])
-  addHypCore #[] cs slot { fvarId? := none, subst }
+  if cs.addHypsLazily then
+    let cs := cs.enqueueRawHyp slot h
+    if ! cs.addHypsLazily then
+      cs.addQueuedRawHyps premises lmvars
+    else
+      return (cs, #[])
+  else
+    cs.addRawHypCore #[] premises lmvars h slot
+
+/-- Erase a `RawHyp` from the slot queue of the given slot. -/
+def eraseEnqueuedRawHyp (h : RawHyp) (slot : Slot) (cs : ClusterState) :
+    ClusterState := {
+  cs with
+  slotQueues := cs.slotQueues.modify slot.index.toNat λ q => q.erase h
+  slotQueues_size := by simp [cs.slotQueues_size]
+}
 
 /-- Erase a hypothesis from the cluster state. -/
 def eraseHyp (h : FVarId) (pi : PremiseIndex) (cs : ClusterState) :
     ClusterState := Id.run do
   let some slot := cs.findSlot? pi
     | return cs
-  { cs with variableMap := cs.variableMap.eraseHyp h slot.index }
+  if cs.addHypsLazily then
+    return cs.eraseEnqueuedRawHyp (.fvarId h) slot
+  else
+    return { cs with variableMap := cs.variableMap.eraseHyp h slot.index }
 
 /-- Erase a pattern substitution from the cluster state. -/
 def erasePatSubst (subst : Substitution) (pi : PremiseIndex) (cs : ClusterState) :
     ClusterState := Id.run do
   let some slot := cs.findSlot? pi
     | return cs
-  { cs with variableMap := cs.variableMap.erasePatSubst subst slot.index }
+  if cs.addHypsLazily then
+    return cs.eraseEnqueuedRawHyp (.patSubst subst) slot
+  else
+    return {
+      cs with
+      variableMap := cs.variableMap.erasePatSubst subst slot.index
+    }
 
 end ClusterState
 
@@ -498,18 +603,23 @@ def ForwardRule.initialRuleState (r : ForwardRule) : RuleState :=
     variableMap := ∅
     completeMatches := {}
     conclusionDeps := r.conclusionDeps
+    slotQueues := mkArray slots.size #[]
+    slotQueues_size := by simp
+    addHypsLazily := true
     slots
   }
   { rule := r, clusterStates, patSubstSources := {} }
 
 namespace RuleState
 
-/-- Add a hypothesis to the rule state. Returns the new rule state and any newly
-completed matches. If `h` does not match premise `pi`, nothing happens. -/
-def addHypOrPatSubst (goal : MVarId) (h : Sum FVarId Substitution)
-    (pi : PremiseIndex) (rs : RuleState) :
+/-- Add a hypothesis or pattern substitution to the rule state. Returns the new
+rule state and any newly completed matches. If a hypothesis is given and it does
+not match premise `pi`, nothing happens. -/
+def addRawHyp (goal : MVarId) (h : RawHyp) (pi : PremiseIndex) (rs : RuleState) :
     BaseM (RuleState × Array CompleteMatch) :=
   withNewMCtxDepth do
+    -- TODO We currently open the rule expression also if `h` is a pattern
+    -- substitution, which is unnecessary.
     let some ruleExpr ←
       withConstAesopTraceNode .forwardDebug (return m!"elab rule term") do
         show MetaM _ from observing? $ elabForwardRuleTerm goal rs.rule.term
@@ -532,12 +642,7 @@ def addHypOrPatSubst (goal : MVarId) (h : Sum FVarId Substitution)
     let mut completeMatches := #[]
     for i in [:clusterStates.size] do
       let cs := clusterStates[i]!
-      let (cs, newCompleteMatches) ←
-        match h with
-        | .inl h =>
-          withConstAesopTraceNode .forwardDebug (return m!"add hyp to cluster state {i}") do
-            cs.addHyp premises lmvars pi h
-        | .inr subst => cs.addPatSubst pi subst
+      let (cs, newCompleteMatches) ← cs.addRawHyp premises lmvars pi h
       clusterStates := clusterStates.set! i cs
       completeMatches ←
         withConstAesopTraceNode .forwardDebug (return m!"construct new complete matches") do
@@ -661,7 +766,7 @@ def addHypCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
     ms.foldlM (init := (fs, ruleMatches)) λ (fs, ruleMatches) (r, i) => do
       withConstAesopTraceNode .forward (return m!"rule {r.name}, premise {i}") do
         let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState
-        let (rs, newRuleMatches) ← rs.addHypOrPatSubst goal (.inl h) i
+        let (rs, newRuleMatches) ← rs.addRawHyp goal (.fvarId h) i
         let ruleStates := fs.ruleStates.insert r.name rs
         let hyps := fs.hyps.insert h $
           ms.map (λ (r, i) => (r.name, i)) |>.toPArray'
@@ -685,7 +790,7 @@ def addPatSubstCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
     let some (_, patSlotPremiseIdx) := r.rulePatternInfo?
       | throwError "aesop: internal error: addPatSubstCore: rule {r.name} does not have a rule pattern"
     let (rs, newRuleMatches) ←
-      rs.addHypOrPatSubst goal (.inr patSubst) patSlotPremiseIdx
+      rs.addRawHyp goal (.patSubst patSubst) patSlotPremiseIdx
     let fs := { fs with ruleStates := fs.ruleStates.insert r.name rs }
     let ms ← addForwardRuleMatches ruleMatches r newRuleMatches
     return (fs, ms)
@@ -739,7 +844,8 @@ def erasePatSubsts (source : PatSubstSource) (fs : ForwardState) :
 context `lctx`, then `fs.eraseHyp h ms` represents `lctx` with `h` removed.
 `type` must be the normalised type of `h`. `ms` must contain all rules for which
 `h` may unify with a maximal premise. -/
-def eraseHyp (h : FVarId) (type : RPINF) (fs : ForwardState) : ForwardState := Id.run do
+def eraseHyp (h : FVarId) (type : RPINF) (fs : ForwardState) :
+    ForwardState := Id.run do
   let mut ruleStates := fs.ruleStates
   for (r, i) in fs.hyps[h].getD {} do
     let some rs := ruleStates.find? r
