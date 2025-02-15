@@ -80,8 +80,7 @@ open DiscrTree
 -- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
 -- `n` stars).
 
-def getConclusionDiscrTreeKeys (type : Expr) :
-    MetaM (Array Key) :=
+def getConclusionDiscrTreeKeys (type : Expr) : MetaM (Array Key) :=
   withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
     mkDiscrTreePath conclusion
@@ -415,6 +414,19 @@ def withMaxHeartbeats [Monad m] [MonadLiftT BaseIO m]
     maxHeartbeats := n * 1000
   }
   withReader f x
+
+/--
+Runs a computation for at most the given number of heartbeats times 1000 or the
+global heartbeat limit, whichever is lower. Note that heartbeats spent on the
+computation still count towards the global heartbeat count. If 0 is given, the
+global heartbeat limit is used.
+-/
+def withAtMostMaxHeartbeats [Monad m] [MonadLiftT BaseIO m] [MonadLiftT CoreM m]
+    [MonadWithReaderOf Core.Context m] (n : Nat) (x : m α) : m α := do
+  let globalMaxHeartbeats ← getMaxHeartbeats
+  let maxHeartbeats :=
+    if n == 0 then globalMaxHeartbeats else min n globalMaxHeartbeats
+  withMaxHeartbeats maxHeartbeats x
 
 open Lean.Elab Lean.Elab.Term in
 def elabPattern (stx : Syntax) : TermElabM Expr :=
