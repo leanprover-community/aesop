@@ -31,7 +31,7 @@ private def forwardIndexingModeCore (type : Expr)
   | some i =>
     withoutModifyingState do
       let (args, _, _) ← withTransparency md $ forallMetaTelescopeReducing type
-      match args.get? i with
+      match args[i]? with
       | some arg =>
         let argT := (← arg.mvarId!.getDecl).type
         let keys ← mkDiscrTreePath argT
