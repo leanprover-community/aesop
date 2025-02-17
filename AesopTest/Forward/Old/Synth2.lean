@@ -56,7 +56,7 @@ elab "test₁ " nPremises:num nQs:num nLemmas:num remStart:num remStop:num " by 
   let sig : Term ← `(∀ $(mkIdent `n) $binders:bracketedBinder*, True)
 
   /- Rule that we are able to complete. -/
-  let mut mNames' := pNames.zipWithIndex
+  let mut mNames' := pNames.zipIdx
   mNames' := mNames'.filter (fun ⟨name, i⟩ => i < remStart ∨ remStop < i)
   let mNames := mNames'.unzip.1
   let bindersM : TSyntaxArray ``Term.bracketedBinder ←
