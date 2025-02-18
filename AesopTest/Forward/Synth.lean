@@ -10,16 +10,14 @@ import AesopTest.Forward.Definitions
 open Aesop
 open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
 
---set_option aesop.dev.statefulForward true
-
-elab "test " nPremises:num nQs:num nLemmas:num erase:num a:num " by " ts:tacticSeq : command => do
+elab "test " nPremises:num nQs:num nLemmas:num depth:num a:num " by " ts:tacticSeq : command => do
   let some nPs := nPremises.raw.isNatLit?
     | throwUnsupportedSyntax
   let some nQs := nQs.raw.isNatLit?
     | throwUnsupportedSyntax
   let some nLemmas := nLemmas.raw.isNatLit?
     | throwUnsupportedSyntax
-  let some erase := erase.raw.isNatLit?
+  let some depth := depth.raw.isNatLit?
     | throwUnsupportedSyntax
   let some a := a.raw.isNatLit?
     | throwUnsupportedSyntax
@@ -43,25 +41,6 @@ elab "test " nPremises:num nQs:num nLemmas:num erase:num a:num " by " ts:tacticS
         $(mkIdent pName):ident $(mkIdent `n)))
   let sig : Term ← `(∀ $(mkIdent `n) $binders:bracketedBinder*, True)
 
-  /- Rule that we are able to complete. -/
-
-  let mut mNames := pNames
-  let bindersM : TSyntaxArray ``Term.bracketedBinder ←
-    (mNames.eraseIdxIfInBounds erase).mapIdxM λ i pName => do
-      `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) :
-        $(mkIdent pName):ident $(mkIdent `n)))
-  let sigM : Term ← `(∀ $(mkIdent `n) $bindersM:bracketedBinder*, True)
-  elabCommand $ ← `(command|
-      @[aesop safe]
-      axiom $(mkIdent $ .mkSimple $ "lM"):ident : $sigM:term
-    )
-
-
-  --  ($(mkIdent $ .mkSimple $ "a") : $(mkIdent `A):ident $(mkIdent `n) $(mkIdent `n))
-  -- Create `axiom li : ∀ n (p1 : P1 n) ... (pm : Pm n), Q → True` for
-  -- i ∈ [0..nLemmas - 1] and m = nPs
-  -- ($(mkIdent $ .mkSimple $ "q") :  $(mkIdent `Q):ident $(mkIdent `n))
-  -- ($(mkIdent $ .mkSimple $ "p" ++ toString i) : $(mkIdent pName):ident $(mkIdent `n))
   for i in [:nLemmas] do
     elabCommand $ ← `(command|
       @[aesop safe forward]
@@ -73,11 +52,12 @@ elab "test " nPremises:num nQs:num nLemmas:num erase:num a:num " by " ts:tacticS
   -/
   /- Active hyps -/
   let binders : TSyntaxArray ``Term.bracketedBinder ←
-    --pNames.mapIdxM λ i pName => do
-    (mNames.eraseIdxIfInBounds erase).mapIdxM λ i pName => do
+    pNames.mapIdxM λ i pName => do
+      let mut n := a
+      if i + 1= nPs - depth then n := a + 1
       `(bracketedBinder| ($(mkIdent $ .mkSimple $ "p" ++ toString i) :
-        $(mkIdent pName):ident (snat% $(Syntax.mkNatLit a))))
-  -- Create `theorem t1 (p1 : P1 (snat% 0)) ... (pm : Pm (snat% 0)) : True := by ts`
+        $(mkIdent pName):ident (snat% $(Syntax.mkNatLit n))))
+  -- Create `theorem t1 (p1 : P1 (snat% a)) ... (pm : Pm (snat% a)) : True := by ts`
 
   /- Inert hyps -/
   let bindersQ : TSyntaxArray ``Term.bracketedBinder ←
@@ -85,22 +65,24 @@ elab "test " nPremises:num nQs:num nLemmas:num erase:num a:num " by " ts:tacticS
     (qNames).mapIdxM λ i qName => do
       `(bracketedBinder| ($(mkIdent $ .mkSimple $ "q" ++ toString i) :
         $(mkIdent qName):ident (snat% $(Syntax.mkNatLit a))))
-  -- Create `theorem t1 (p1 : P1 (snat% 0)) ... (pm : Pm (snat% 0)) : True := by ts`
+  -- Create `theorem t1 (p1 : P1 (snat% a)) ... (pm : Pm (snat% a)) : True := by ts`
   -- where m = nPs.
   elabCommand $ ← `(command|
     theorem $(mkIdent $ .mkSimple $ "t") $binders:bracketedBinder* $bindersQ:bracketedBinder*
-      --($(mkIdent $ .mkSimple $ "a") : $(mkIdent `A):ident (snat% 0) (snat% 0))
       : True := by $ts
   )
 
 /-
  **Uncomment for single test** :
-test 6 0 100 1 by
+test 6 0 100 1 0 by
   set_option maxHeartbeats 5000000 in
-  set_option aesop.dev.statefulForward false in
+  set_option aesop.dev.statefulForward true in
   set_option trace.profiler true in
   saturate
   trivial
+
+#check l1
+
 -/
 
 /--
@@ -126,22 +108,20 @@ are saved regardless of their slot's position.
 - `nQs` : Number of hypotheses in the context which do not unify with any premise
 of any rule.
 - `nRs` : Number of rules; here they are all the same.
-- `e` : The number associated to the slot for which there is no hypothesis in
-the context that match this slot.
-If it is greater or equal to the number of premises, the context will contain
-hypotheses matching all the slots and the rules will be applied.
+- `d` : The depth: This is the number of slots considered before the procedure stops
+as the hypotheses are incompatible. This is well defined for `d ∈ [1,nPs]`.
 - `a` : Instantiation of the predicates in the rule.
 Note that this affects the run time as big number are designed to be much
 harder to unify.
 -/
-def runTestErase (nPs nQs nRs e a : Nat) : CommandElabM Nanos := do
+def runTestDepth (nPs nQs nRs d a : Nat) : CommandElabM Nanos := do
   let mut nPs := Syntax.mkNatLit nPs
   let mut nQs := Syntax.mkNatLit nQs
   let mut nRs := Syntax.mkNatLit nRs
-  let mut e := Syntax.mkNatLit e
+  let mut d := Syntax.mkNatLit d
   let mut a := Syntax.mkNatLit a
   liftCoreM $ withoutModifyingState $ liftCommandElabM do
-    elabCommand <| ← `(test $nPs $nQs $nRs $e $a by
+    elabCommand <| ← `(test $nPs $nQs $nRs $d $a by
       set_option maxRecDepth   1000000 in
       set_option maxHeartbeats 5000000 in
       time saturate

@@ -46,8 +46,7 @@ elab "bchmk " nIter:num " with " t:term " using " r:term : command => do
 
 def pows (n : Nat) : List Nat := (List.range n).map (2 ^ ·)
 /- The old impl.'s premise order. -/
-def steps (n : Nat) : List Nat := (List.range n).reverse ++ [n]
-def isteps (n : Nat) : List Nat := (List.range' 1 (n - 1)).reverse ++ [0]
+def steps (n : Nat) : List Nat := (List.range' 1 (n - 1))
 
 /-
 /-
@@ -60,12 +59,13 @@ def isteps (n : Nat) : List Nat := (List.range' 1 (n - 1)).reverse ++ [0]
 
 
 
-**Uncomment to run tests**
+/-**Uncomment to run tests**-/
 local notation "k" => 6
 
-bchmk 3 with [2,3,4,5,6] using fun n ↦ runTestTrans n 20
-bchmk 3 with isteps k using fun n ↦ runTestErase k 0 k n 0
-bchmk 3 with (pows 5) using fun n ↦ runTestIndep 6 n 0
-bchmk 3 with (pows 6) using fun n ↦ runTestCascade n
-bchmk 3 with (pows 6) using fun n ↦ runTestCluster n 3 (2 ^ 5 / n)
--/
+set_option maxHeartbeats 100000000 in
+--bchmk 1 with [32] using fun n ↦ runTestTrans n 0
+bchmk 30 with steps k using fun n ↦ runTestDepth k 0 100 n 0
+--bchmk 1 with (pows 6) using fun n ↦ runTestIndep 6 n 100
+--bchmk 3 with (pows 6) using fun n ↦ runTestCascade n
+--bchmk 3 with (pows 6) using fun n ↦ runTestCluster n 3 (2 ^ 5 / n)
+--/
