@@ -58,29 +58,39 @@ set_option linter.missingDocs false in
 /-- A rule pattern index. Maps expressions `e` to rule patterns that likely
 unify with `e`. -/
 structure RulePatternIndex where
+  /-- The index. -/
   tree : DiscrTree RulePatternIndex.Entry
+  /-- `true` iff the index contains no patterns. -/
+  isEmpty : Bool
   deriving Inhabited
 
 namespace RulePatternIndex
 
 instance : EmptyCollection RulePatternIndex :=
-  ⟨⟨{}⟩⟩
+  ⟨⟨{}, true⟩⟩
 
 /-- Add a rule pattern to the index. -/
 def add (name : RuleName) (pattern : RulePattern) (idx : RulePatternIndex) :
     RulePatternIndex :=
-  ⟨idx.tree.insertCore pattern.discrTreeKeys { name, pattern }⟩
+  ⟨idx.tree.insertCore pattern.discrTreeKeys { name, pattern }, false⟩
 
 /-- Merge two rule pattern indices. Patterns that appear in both indices appear
 twice in the result. -/
 def merge (idx₁ idx₂ : RulePatternIndex) : RulePatternIndex :=
-  ⟨idx₁.tree.mergePreservingDuplicates idx₂.tree⟩
+  if idx₁.isEmpty then
+    idx₂
+  else if idx₂.isEmpty then
+    idx₁
+  else
+    ⟨idx₁.tree.mergePreservingDuplicates idx₂.tree, false⟩
 
 section Get
 
 /-- Get rule pattern substitutions for the patterns that match `e`. -/
 def getSingle (e : Expr) (idx : RulePatternIndex) :
     BaseM (Array (RuleName × Substitution)) := do
+  if idx.isEmpty then
+    return #[]
   let ms ← getUnify idx.tree e
   ms.filterMapM λ { name := r, pattern } => do
     let some subst ← pattern.match e
@@ -92,6 +102,8 @@ def getSingle (e : Expr) (idx : RulePatternIndex) :
 array may contain duplicates. -/
 def getCore (e : Expr) (idx : RulePatternIndex) :
     BaseM (Array (RuleName × Substitution)) := do
+  if idx.isEmpty then
+    return #[]
   let e ← instantiateMVars e
   checkCache (β := RulePatternCache.Entry) e λ _ => do
     let (_, ms) ← e.forEach getSubexpr |>.run #[]
@@ -118,6 +130,8 @@ the given local declaration. Subexpressions containing bound variables are not
 considered. -/
 def getInLocalDeclCore (acc : RulePatternSubstMap) (ldecl : LocalDecl)
     (idx : RulePatternIndex) : BaseM RulePatternSubstMap := do
+  if idx.isEmpty then
+    return acc
   let mut result := acc
   result := result.insertArray $ ← idx.getCore ldecl.toExpr
   result := result.insertArray $ ← idx.getCore ldecl.type
@@ -136,6 +150,8 @@ considered. -/
 def getInGoal (goal : MVarId) (idx : RulePatternIndex) :
     BaseM RulePatternSubstMap :=
   goal.withContext do
+    if idx.isEmpty then
+      return ∅
     let mut result := ∅
     for ldecl in (← goal.getDecl).lctx do
       unless ldecl.isImplementationDetail do
