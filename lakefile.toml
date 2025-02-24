@@ -16,3 +16,6 @@ name = "Aesop"
 name = "AesopTest"
 globs = ["AesopTest.+"]
 leanOptions = {linter.unusedVariables = false}
+
+[[lean_lib]]
+name = "Benchmark"

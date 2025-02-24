@@ -23,6 +23,20 @@ local instance : MonadWithOptions CommandElabM where
     let options := f (← getOptions)
     withScope (fun s ↦ {s with opts := options}) x
 
+/-
+## The `bchmk` command.
+
+For a given test, that runs the `saturate` tactic in some given context,
+this command runs the test, both for the naive and incremental algorithm
+`nIter` times and outputs the average.
+
+The term `t` should be a list of type `ℕ`.
+
+The term `r` expects a function `ℕ → Aesop.Nanos`.
+Most tests used in this projects take multiple `ℕ` argument with
+the intended use to fix all of them but one.
+The function `ℕ → Aesop.Nanos` is then instantiated for each value of `t`.
+-/
 elab "bchmk " nIter:num " with " t:term " using " r:term : command => do
   let mut steps ← liftTermElabM do
     let t ← elabTerm t (some $ toTypeExpr (List Nat))
@@ -31,6 +45,8 @@ elab "bchmk " nIter:num " with " t:term " using " r:term : command => do
   let func ← liftTermElabM do
     let r ← withSynthesize $ elabTerm r (some $ .const `FuncType [])
     unsafe Lean.Meta.evalExpr (Nat → CommandElabM Nanos) (.const `FuncType []) r
+  IO.println ((r.raw[1][3][0].getId).toString ++ " with unification challenge "
+     ++ (r.raw[1][3][1][r.raw[1][3][1].getNumArgs - 1].toNat.repr))
   for b in [false, true] do
     let mut ltimes : Array (Nat × Nat) := #[]
     for i in steps do
@@ -45,27 +61,4 @@ elab "bchmk " nIter:num " with " t:term " using " r:term : command => do
     IO.println ("")
 
 def pows (n : Nat) : List Nat := (List.range n).map (2 ^ ·)
-/- The old impl.'s premise order. -/
 def steps (n : Nat) : List Nat := (List.range' 1 (n - 1))
-
-/-
-/-
-**Uncomment to reveal parameters**
-#check runTestErase
-#check runTestIndep
-#check runTestCascade
-#check runTestCluster
--/
-
-
-
-/-**Uncomment to run tests**-/
-local notation "k" => 6
-
-set_option maxHeartbeats 100000000 in
---bchmk 1 with [32] using fun n ↦ runTestTrans n 0
-bchmk 30 with steps k using fun n ↦ runTestDepth k 0 100 n 0
---bchmk 1 with (pows 6) using fun n ↦ runTestIndep 6 n 100
---bchmk 3 with (pows 6) using fun n ↦ runTestCascade n
---bchmk 3 with (pows 6) using fun n ↦ runTestCluster n 3 (2 ^ 5 / n)
---/
