@@ -19,18 +19,22 @@ To run the benchmarks, simply load this file normally or build it with
 
 ## The `bchmk` command.
 
-This is a custom command with the following syntax :
-`#bchmk (nIter : Nat) with (l : List Nat) using (b : Benchmark)`
+This is a custom command with syntax
+```
+#bchmk (nIter : Nat) with (l : List Nat) using (b : Benchmark)
+```
 
-In this command, `nIter` determines the number of times the benchmark will be run.
+`nIter` determines the number of times the benchmark is be run.
 
-Then, given `l : List Nat` we execute a benchmark `b` for each element of `l`.
+Then, given `l : List Nat`, we execute a benchmark `b` for each element of `l`.
 We output the average over `nIter` runs for each element of `l`.
-See below for a description of the different benchmarks studied. (Uncomment the #check benchX)
+See below for a description of the different benchmarks studied. (Uncomment the
+`#check benchX` lines.)
 
-See also `Benchmark/Basic` for the definition of the `Benchmark` type.
+See `Benchmark/Basic.lean` for the definition of the `Benchmark` type.
 
 ## Lists with relevant values
+
 We run the benchmarks on the following lists:
 
 - `pows (n : Nat)` :
@@ -40,13 +44,12 @@ The list of the first `n` powers of two : `(List.range n).map (2 ^ ·)`
 The range between `1` and `n - 1`: `(List.range' 1 (n - 1))`
 This contains the relevant values for the depth test.
 
-## Technical Detail
-The benchmarks are set up with the same configuration as in the paper.
-However by default they do only one run (As opposed of taking the average of 20 runs).
-This take about 8 minutes on our machine.
-(MacBook Pro with an Apple M2 Pro processor and 32GB of RAM.)
+## Benchmark Configuration
 
-To run the exact same test as shown in the paper, set `nIter` to 20.
+The benchmarks are set up with the same configuration as in the paper, only with
+`nIter = 1` instead of `nIter = 20`.
+This take about 8 minutes on our machine (a MacBook Pro with an Apple M2 Pro
+processor and 32GB of RAM).
 -/
 
 /- We effectively disable Lean's deterministic timeout mechanism
