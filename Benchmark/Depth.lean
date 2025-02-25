@@ -107,10 +107,10 @@ with the chosen slot ordering, leads to similar behaviour.
 - `nQs` : Number of hypotheses in the context that do not unify with any premise
   of any rule.
 - `nRs` : Number of rules; here they are all the same.
-- `d` : The depth: This is the number of slots considered before the procedure stops
-   as the hypotheses are incompatible. This is well defined for `d ∈ [1,nPs]`.
 - `a` : Instantiation of the predicates in the rule.
   For larger values of `a`, premises and hypotheses take longer to unify.
+- `d` : The depth: This is the number of slots considered before the procedure stops
+   as the hypotheses are incompatible. This is well defined for `d ∈ [1,nPs]`.
 -/
 def benchDepth (nPs nQs nRs a : Nat) : Benchmark where
   title := s!"Depth (variable depth, {nPs} premises per rule, {nQs} additional hypotheses, {nRs} rules, term size {a})"

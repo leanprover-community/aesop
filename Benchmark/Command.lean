@@ -27,6 +27,8 @@ The term `t` should be a list of type `ℕ`.
 
 The term `r` should be a `Benchmark`, which is executed `nIter` times for each
 value in `t`.
+
+See `Benchmark/Basic` for the definition of the `Benchmark` type.
 -/
 elab "bchmk " nIter:num " with " t:term " using " r:term : command => do
   let mut steps ← liftTermElabM do

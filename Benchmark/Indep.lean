@@ -90,10 +90,10 @@ We run the procedures with the `nRs` following rules
 and a context containing precisely `P`.
 
 - `nPs` : Number of premises in the rules.
-- `nRs` : Number of unique rules; they are independent but have the same number
-  of premises.
 - `a` : Instantiation of the predicates `Pᵢⱼ`.
   Note that `a` affects the run time as big numbers are harder to unify.
+- `nRs` : Number of unique rules; they are independent but have the same number
+  of premises.
 -/
 def benchIndep (nPs a : Nat) : Benchmark where
   title := s!"Independence (variable number of rules, {nPs} premises per rule, term size {a})"
