@@ -4,8 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Xavier Généreux
 -/
 
-import Aesop
-import AesopTest.Forward.Definitions
+import Benchmark.Basic
 
 open Aesop
 open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
@@ -101,29 +100,30 @@ premises of a rule until the rule is thrown out because it could not be complete
 For example, if a rule is not select, its depth is 0.
 If we find hypotheses matching the slot `n` and `n-1` but not `n-2`, the depth is 2.
 
-In the stateful implementation, this notion is mostly irrelevant as hypotheses
-are saved regardless of their slot's position.
+In the stateful implementation, the lazy insertion optimisation, in combination
+with the chosen slot ordering, leads to similar behaviour.
 
 - `nPs` : Number of premises in the rules.
-- `nQs` : Number of hypotheses in the context which do not unify with any premise
-of any rule.
+- `nQs` : Number of hypotheses in the context that do not unify with any premise
+  of any rule.
 - `nRs` : Number of rules; here they are all the same.
 - `d` : The depth: This is the number of slots considered before the procedure stops
-as the hypotheses are incompatible. This is well defined for `d ∈ [1,nPs]`.
+   as the hypotheses are incompatible. This is well defined for `d ∈ [1,nPs]`.
 - `a` : Instantiation of the predicates in the rule.
-Note that this affects the run time as big number are designed to be much
-harder to unify.
+  For larger values of `a`, premises and hypotheses take longer to unify.
 -/
-def runTestDepth (nPs nQs nRs d a : Nat) : CommandElabM Nanos := do
-  let mut nPs := Syntax.mkNatLit nPs
-  let mut nQs := Syntax.mkNatLit nQs
-  let mut nRs := Syntax.mkNatLit nRs
-  let mut d := Syntax.mkNatLit d
-  let mut a := Syntax.mkNatLit a
-  liftCoreM $ withoutModifyingState $ liftCommandElabM do
-    elabCommand <| ← `(test $nPs $nQs $nRs $d $a by
-      set_option maxRecDepth   1000000 in
-      set_option maxHeartbeats 5000000 in
-      time saturate
-      trivial)
-    timeRef.get
+def benchDepth (nPs nQs nRs a : Nat) : Benchmark where
+  title := s!"Depth (variable depth, {nPs} premises per rule, {nQs} additional hypotheses, {nRs} rules, term size {a})"
+  fn := fun d => do
+    let mut nPs := Syntax.mkNatLit nPs
+    let mut nQs := Syntax.mkNatLit nQs
+    let mut nRs := Syntax.mkNatLit nRs
+    let mut d := Syntax.mkNatLit d
+    let mut a := Syntax.mkNatLit a
+    liftCoreM $ withoutModifyingState $ liftCommandElabM do
+      elabCommand <| ← `(test $nPs $nQs $nRs $d $a by
+        set_option maxRecDepth   1000000 in
+        set_option maxHeartbeats 5000000 in
+        time saturate
+        trivial)
+      timeRef.get

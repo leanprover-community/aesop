@@ -1,5 +1,10 @@
-import Aesop
-import AesopTest.Forward.Definitions
+/-
+Copyright (c) 2024 Xavier Généreux. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Xavier Généreux, Jannis Limperg
+-/
+
+import Benchmark.Basic
 
 open Aesop
 open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
@@ -38,12 +43,14 @@ testCascade 35 by
   trivial
 -/
 
-def runTestCascade (nRs : Nat) : CommandElabM Nanos := do
-  let mut nRs := Syntax.mkNatLit nRs
-  liftCoreM $ withoutModifyingState $ liftCommandElabM do
-    elabCommand <| ← `(testCascade $nRs by
-      set_option maxRecDepth   1000000 in
-      set_option maxHeartbeats 5000000 in
-      time saturate
-      trivial)
-    timeRef.get
+def benchCascade : Benchmark where
+  title := s!"Cascade (variable number of rules)"
+  fn := fun nRs => do
+    let mut nRs := Syntax.mkNatLit nRs
+    liftCoreM $ withoutModifyingState $ liftCommandElabM do
+      elabCommand <| ← `(testCascade $nRs by
+        set_option maxRecDepth   1000000 in
+        set_option maxHeartbeats 5000000 in
+        time saturate
+        trivial)
+      timeRef.get

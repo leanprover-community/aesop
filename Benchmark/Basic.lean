@@ -22,5 +22,12 @@ instance : MonadBacktrack Core.SavedState CoreM where
 initialize timeRef : IO.Ref Nanos ← IO.mkRef 0
 
 elab "time " t:tactic : tactic => do
-  let nanos ← Aesop.time' (Lean.Elab.Tactic.evalTactic t)
+  let nanos ← Aesop.time' $ Lean.Elab.Tactic.evalTactic t
   timeRef.set nanos
+
+/-- A benchmark that can be run by the `bchmk` command. -/
+structure Benchmark where
+  /-- A title for the benchmark's output. -/
+  title : String
+  /-- A function that executes the benchmark once. -/
+  fn : Nat → CommandElabM Nanos

@@ -4,8 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Xavier Généreux
 -/
 
-import Aesop
-import AesopTest.Forward.Definitions
+import Benchmark.Basic
 
 /-
 Note :
@@ -70,14 +69,16 @@ elab "testCluster " nPremises:num nRules:num nClusters:num " by " ts:tacticSeq :
       : True := by $ts
   )
 
-def runTestCluster (nPs : Nat) (nRs : Nat) (nCs : Nat) : CommandElabM Nanos := do
-  let mut nPs := Syntax.mkNatLit nPs
-  let mut nRs := Syntax.mkNatLit nRs
-  let mut nCs := Syntax.mkNatLit nCs
-  liftCoreM $ withoutModifyingState $ liftCommandElabM do
-    elabCommand <| ← `(testCluster $nPs $nRs $nCs by
-      set_option maxRecDepth   1000000 in
-      set_option maxHeartbeats 5000000 in
-      time saturate
-      trivial)
-    timeRef.get
+def runTestCluster (nPs nCs : Nat) : Benchmark where
+  title := s!"Cluster (variable number of rules, {nPs} premises per rule, cluster size {nCs})"
+  fn := fun nRs => do
+    let mut nPs := Syntax.mkNatLit nPs
+    let mut nRs := Syntax.mkNatLit nRs
+    let mut nCs := Syntax.mkNatLit nCs
+    liftCoreM $ withoutModifyingState $ liftCommandElabM do
+      elabCommand <| ← `(testCluster $nPs $nRs $nCs by
+        set_option maxRecDepth   1000000 in
+        set_option maxHeartbeats 5000000 in
+        time saturate
+        trivial)
+      timeRef.get
