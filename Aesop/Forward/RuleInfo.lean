@@ -148,11 +148,16 @@ where
   sortSlots (slots : Array Slot) : Array Slot := Id.run do
     if slots.isEmpty then
       panic! "empty slot cluster"
-    have : Ord Slot := ⟨compareOn (·.deps.size)⟩
+    -- Slots with more dependencies are preferred. In case of a tie, later slots
+    -- are preferred since they tend to be more specific.
+    have : Ord Slot := ⟨λ x y =>
+      compareOn (·.deps.size) x y
+      |>.then (compareOn (·.premiseIndex) x y)
+    ⟩
     let firstSlot := slots.maxI
-    let mut unseen := Std.HashSet.ofArray slots |>.erase firstSlot
+    let mut unseen := slots |>.erase firstSlot
     let firstSlotForwardDeps : Std.HashSet PremiseIndex :=
-      unseen.fold (init := ∅) λ deps s => deps.insertMany s.deps
+      unseen.foldl (init := ∅) λ deps s => deps.insertMany s.deps
     let firstSlot := {
       firstSlot with
       index := ⟨0⟩
@@ -163,17 +168,13 @@ where
     let mut previousDeps := firstSlot.deps
     let mut i := 1
     while newSlots.size != slots.size do
-      let mut slot? := none
-      for slot in unseen do
-        if slot.deps.any (previousDeps.contains ·) then
-          slot? := some slot
-          break
-      let some slot := slot?
-        | panic! "not enough suitable slots"
+      let candidates := unseen.filter (·.deps.any (previousDeps.contains ·))
+      let some slot := candidates.max?
+        | panic! "no suitable slot found"
       unseen := unseen.erase slot
       let common := previousDeps.filter (slot.deps.contains ·)
       let forwardDeps : Std.HashSet PremiseIndex :=
-        unseen.fold (init := ∅) λ deps s => deps.insertMany s.deps
+        unseen.foldl (init := ∅) λ deps s => deps.insertMany s.deps
       let forwardDeps := forwardDeps.toArray
       newSlots := newSlots.push { slot with index := ⟨i⟩, common, forwardDeps }
       previousDeps := previousDeps.insertMany slot.deps
