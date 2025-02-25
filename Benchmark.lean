@@ -16,6 +16,37 @@ import Benchmark.Trans
 
 To run the benchmarks, simply load this file normally or build it with
 `lake build +Benchmark`.
+
+## The `bchmk` command.
+
+This is a custom command with the following syntax :
+`#bchmk (nIter : Nat) with (l : List Nat) using (b : Benchmark)`
+
+In this command, `nIter` determines the number of times the benchmark will be run.
+
+Then, given `l : List Nat` we execute a benchmark `b` for each element of `l`.
+We output the average over `nIter` runs for each element of `l`.
+See below for a description of the different benchmarks studied. (Uncomment the #check benchX)
+
+See also `Benchmark/Basic` for the definition of the `Benchmark` type.
+
+## Lists with relevant values
+We run the benchmarks on the following lists:
+
+- `pows (n : Nat)` :
+The list of the first `n` powers of two : `(List.range n).map (2 ^ ·)`
+
+- `steps (n : Nat)` :
+The range between `1` and `n - 1`: `(List.range' 1 (n - 1))`
+This contains the relevant values for the depth test.
+
+## Technical Detail
+The benchmarks are set up with the same configuration as in the paper.
+However by default they do only one run (As opposed of taking the average of 20 runs).
+This take about 8 minutes on our machine.
+(MacBook Pro with an Apple M2 Pro processor and 32GB of RAM.)
+
+To run the exact same test as shown in the paper, set `nIter` to 20.
 -/
 
 /- We effectively disable Lean's deterministic timeout mechanism
@@ -29,13 +60,13 @@ set_option maxRecDepth   100000000
 -- #check benchDepth
 
 /- Transitivity benchmark -/
-bchmk 20 with pows 6  using benchTrans 0
-bchmk 20 with pows 6  using benchTrans 100
+bchmk 1 with pows 6  using benchTrans 0
+bchmk 1 with pows 6  using benchTrans 100
 
 /- Independence benchmark -/
-bchmk 20 with pows 6  using benchIndep 6 0
-bchmk 20 with pows 6  using benchIndep 6 100
+bchmk 1 with pows 6  using benchIndep 6 0
+bchmk 1 with pows 6  using benchIndep 6 100
 
 /- Depth benchmark -/
-bchmk 20 with steps 6 using benchDepth 6 0 100 0
-bchmk 20 with steps 6 using benchDepth 6 0 100 100
+bchmk 1 with steps 6 using benchDepth 6 0 100 0
+bchmk 1 with steps 6 using benchDepth 6 0 100 100

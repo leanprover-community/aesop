@@ -23,21 +23,21 @@ local instance : MonadWithOptions CommandElabM where
 This command runs a benchmark, both for the naive and incremental algorithm,
 `nIter` times and outputs the average.
 
-The term `t` should be a list of type `ℕ`.
+The term `l` should be a list of type `ℕ`.
 
-The term `r` should be a `Benchmark`, which is executed `nIter` times for each
-value in `t`.
+The term `b` should be a `Benchmark`, which is executed `nIter` times for each
+value in `l`.
 
 See `Benchmark/Basic` for the definition of the `Benchmark` type.
 -/
-elab "bchmk " nIter:num " with " t:term " using " r:term : command => do
+elab "bchmk " nIter:num " with " l:term " using " b:term : command => do
   let mut steps ← liftTermElabM do
-    let t ← elabTerm t (some $ toTypeExpr (List Nat))
-    unsafe Lean.Meta.evalExpr (List Nat) (toTypeExpr (List Nat)) t
+    let l ← elabTerm l (some $ toTypeExpr (List Nat))
+    unsafe Lean.Meta.evalExpr (List Nat) (toTypeExpr (List Nat)) l
   let nIter := nIter.getNat
   let benchmark ← liftTermElabM do
-    let r ← withSynthesize $ elabTerm r (some $ .const ``Benchmark [])
-    unsafe Lean.Meta.evalExpr Benchmark (.const ``Benchmark []) r
+    let b ← withSynthesize $ elabTerm b (some $ .const ``Benchmark [])
+    unsafe Lean.Meta.evalExpr Benchmark (.const ``Benchmark []) b
   IO.println benchmark.title
   for b in [false, true] do
     let mut ltimes : Array (Nat × Nat) := #[]
