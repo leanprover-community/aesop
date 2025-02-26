@@ -4,8 +4,11 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Forward.Substitution
+import Aesop.RPINF
 import Aesop.Rule.Name
 import Aesop.Tracing
+import Aesop.Index.DiscrTreeConfig
 
 open Lean Lean.Meta
 
@@ -38,148 +41,75 @@ structure RulePattern where
   instantiation `tⱼ` of `yⱼ` should be substituted for `xᵢ`.
   -/
   argMap : Array (Option Nat)
+  /--
+  A partial map from the level metavariables occurring in the rule to the
+  pattern's level params.
+  -/
+  levelArgMap : Array (Option Nat)
+  /--
+  Discrimination tree keys for `p`.
+  -/
+  discrTreeKeys : Array DiscrTree.Key
   deriving Inhabited
 
 namespace RulePattern
 
-def «open» (pat : RulePattern) : MetaM (Array MVarId × Expr) := do
-  let (mvarIds, _, p) ← openAbstractMVarsResult pat.pattern
-  return (mvarIds.map (·.mvarId!), p)
+def boundPremises (pat : RulePattern) : Array Nat := Id.run do
+  let mut result := Array.mkEmpty pat.argMap.size
+  for h : i in [:pat.argMap.size] do
+    if pat.argMap[i].isSome then
+      result := result.push i
+  return result
 
-end RulePattern
+-- Largely copy-paste from openAbstractMVarsResult
+def «open» (pat : RulePattern) :
+    MetaM (Array MVarId × Array LMVarId × Expr) := do
+  let a := pat.pattern
+  let us ← a.paramNames.mapM fun _ => mkFreshLevelMVar
+  let e := a.expr.instantiateLevelParamsArray a.paramNames us
+  let (mvars, _, e) ← lambdaMetaTelescope e (some a.numMVars)
+  return (mvars.map (·.mvarId!), us.map (·.mvarId!) , e)
 
-def RulePatternInstantiation := Array Expr
-  deriving Inhabited, BEq, Hashable
-
-def RulePatternInstantiation.toArray : RulePatternInstantiation → Array Expr :=
-  id
-
-instance : EmptyCollection RulePatternInstantiation :=
-  ⟨.empty⟩
-
-section
-
-variable {ω : Type} {m : Type → Type} [STWorld ω m] [MonadLiftT (ST ω) m]
-    [Monad m] [MonadControlT MetaM m] [MonadLiftT MetaM m]
-
-def forEachExprInGoalCore (mvarId : MVarId) (g : Expr → m Bool) :
-    MonadCacheT Expr Unit m Unit :=
-  mvarId.withContext do
-    for ldecl in ← show MetaM _ from getLCtx do
-      if ldecl.isImplementationDetail then
-        continue
-      ForEachExpr.visit g ldecl.toExpr
-      ForEachExpr.visit g ldecl.type
-      if let some value := ldecl.value? then
-        ForEachExpr.visit g value
-    ForEachExpr.visit g (← mvarId.getType)
-
-@[inline, always_inline]
-def forEachExprInGoal' (mvarId : MVarId) (g : Expr → m Bool) : m Unit :=
-  forEachExprInGoalCore mvarId g |>.run
-
-@[inline, always_inline]
-def forEachExprInGoal (mvarId : MVarId) (g : Expr → m Unit) : m Unit :=
-  forEachExprInGoal' mvarId λ e => do g e; return true
-
-end
-
-def matchRulePatternsCore (pats : Array (RuleName × RulePattern))
-    (mvarId : MVarId) :
-    StateRefT (Std.HashMap RuleName (Std.HashSet RulePatternInstantiation)) MetaM Unit :=
-  withNewMCtxDepth do -- TODO use (allowLevelAssignments := true)?
-    let openPats ← pats.mapM λ (name, pat) => return (name, ← pat.open)
-    let initialState ← show MetaM _ from saveState
-    forEachExprInGoal mvarId λ e => do
-      if e.hasLooseBVars then
-        -- We don't visit subexpressions with loose bvars. Instantiations
-        -- derived from such subexpressions would not be valid in the goal's
-        -- context. E.g. if a rule `(x : T) → P x` has pattern `x` and we
-        -- have the expression `λ (y : T), y` in the goal, then it makes no
-        -- sense to match `y` and generate `P y`.
-        return
-      for (name, mvarIds, p) in openPats do
-        initialState.restore
-        -- The many `isDefEq` checks here are quite expensive. Perhaps a better
-        -- strategy would be to reducibly normalise the goal once and for all.
-        -- Then we could use a variant of `isDefEq` that only checks for
-        -- syntactic equality up to mvars.
-        if ← isDefEq e p then
-          let instances ← mvarIds.mapM λ mvarId => do
-            let mvar := .mvar mvarId
-            let result ← instantiateMVars mvar
-            if result == mvar then
-              initialState.restore
-              throwError "matchRulePatterns: while matching pattern '{p}' against expression '{e}': expected metavariable ?{(← mvarId.getDecl).userName} ({mvarId.name}) to be assigned"
-            pure result
-          modify λ m =>
-            -- TODO loss of linearity?
-            if let some instanceSet := m[name]? then
-              m.insert name (instanceSet.insert instances)
-            else
-              m.insert name (.empty |>.insert instances)
-
-def matchRulePatterns (pats : Array (RuleName × RulePattern))
-    (mvarId : MVarId) :
-    MetaM (Std.HashMap RuleName (Std.HashSet RulePatternInstantiation)) :=
-  (·.snd) <$> (matchRulePatternsCore pats mvarId |>.run ∅)
-
-namespace RulePattern
-
-def getInstantiation [Monad m] [MonadError m] (pat : RulePattern)
-    (inst : RulePatternInstantiation) (argIndex : Nat) : m (Option Expr) := do
-  -- It's possible that `argMap[argIndex]? = none` if the rule type is
-  -- syntactically `∀ (x₁ : T₁) ... (xₙ : Tₙ) = U` and `U` is a `forall` up to
-  -- the rule's transparency.
-  let some (some instIndex) := pat.argMap[argIndex]?
-    | return none
-  let some inst := inst.toArray[instIndex]?
-    | throwError "getInstantiation: expected {instIndex} to be a valid instantiation index, but RulePatternInstantiation has size {inst.toArray.size}"
-  return some inst
-
-def openRuleType (pat : RulePattern) (inst : RulePatternInstantiation)
-    (type : Expr) :
-    MetaM (Array Expr × Array BinderInfo × Expr × Std.HashSet MVarId) := do
-  let (mvars, binfos, body) ← forallMetaTelescopeReducing type
-  let mut assigned := ∅
-  for h : i in [:mvars.size] do
-    if let some inst ← pat.getInstantiation inst i then
-      let mvarId := mvars[i] |>.mvarId!
-      -- We use `isDefEq` to make sure that universe metavariables occurring in
-      -- the type of `mvarId` are assigned.
-      if ← isDefEq (.mvar mvarId) inst then
-        assigned := assigned.insert mvarId
-      else
-        throwError "openRuleType: type-incorrect pattern instantiation: argument has type '{← mvarId.getType}' but pattern instantiation '{inst}' has type '{← inferType inst}'"
-  return (mvars, binfos, body, assigned)
-
-def specializeRule (pat : RulePattern) (inst : RulePatternInstantiation)
-    (rule : Expr) : MetaM Expr :=
+def «match» (e : Expr) (pat : RulePattern) : BaseM (Option Substitution) :=
   withNewMCtxDepth do
-    forallTelescopeReducing (← inferType rule) λ fvarIds _ => do
-      let mut args := Array.mkEmpty fvarIds.size
-      let mut remainingFVarIds := Array.mkEmpty fvarIds.size
-      for h : i in [:fvarIds.size] do
-        if let some inst ← pat.getInstantiation inst i then
-          args := args.push $ some inst
-        else
-          let fvarId := fvarIds[i]
-          args := args.push $ some fvarId
-          remainingFVarIds := remainingFVarIds.push fvarId
-      let result ← mkLambdaFVars remainingFVarIds (← mkAppOptM' rule args)
-      return result
+    let (mvarIds, lmvarIds, p) ← pat.open
+    if ! (← isDefEq e p) then
+      return none
+    let mut subst := .empty pat.argMap.size pat.levelArgMap.size
+    for h : i in [:pat.argMap.size] do
+      if let some j := pat.argMap[i] then
+        let mvarId := mvarIds[j]!
+        let mvar := .mvar mvarId
+        let inst ← instantiateMVars mvar
+        if inst == mvar then
+          throwError "RulePattern.match: while matching pattern '{p}' against expression '{e}': expected metavariable ?{(← mvarId.getDecl).userName} ({mvarId.name}) to be assigned"
+        subst := subst.insert ⟨i⟩ (← rpinf inst)
+    for h : i in [:pat.levelArgMap.size] do
+      if let some j := pat.levelArgMap[i] then
+        let mvar := .mvar lmvarIds[j]!
+        let inst ← instantiateLevelMVars mvar
+        if inst != mvar then
+          subst := subst.insertLevel ⟨i⟩ inst
+    return some subst
 
-open Lean.Elab Lean.Elab.Term
-
-def «elab» (stx : Term) (ruleType : Expr) : TermElabM RulePattern :=
+open Lean.Elab Lean.Elab.Term in
+def «elab» (stx : Term) (rule : Expr) : TermElabM RulePattern :=
+  withConstAesopTraceNode .debug (return m!"elaborating rule pattern") do
+   -- TODO withNewMCtxDepth produces an error, but I don't understand why
   withLCtx {} {} $ withoutModifyingState do
-    forallTelescope ruleType λ fvars _ => do
+    aesop_trace[debug] "rule: {rule}"
+    aesop_trace[debug] "pattern: {stx}"
+    let lmvarIds := collectLevelMVars {} (← instantiateMVars rule) |>.result
+    aesop_trace[debug] "level metavariables in rule: {lmvarIds.map Level.mvar}"
+    forallTelescope (← inferType rule) λ fvars _ => do
       let pat := (← elabPattern stx).consumeMData
       let (pat, mvarIds) ← fvarsToMVars fvars pat
-      let (pat, mvarIdToPatternPos) ← abstractMVars' pat
+      let discrTreeKeys ← mkDiscrTreePath pat
+      let (pat, mvarIdToPatternPos, lmvarIdToPatternPos) ← abstractMVars' pat
       let argMap := mvarIds.map (mvarIdToPatternPos[·]?)
-      aesop_trace[debug] "pattern '{stx}' elaborated into '{pat.expr}'"
-      return { pattern := pat, argMap }
+      let levelArgMap := lmvarIds.map (lmvarIdToPatternPos[·]?)
+      aesop_trace[debug] "result: '{pat.expr}' with arg map{indentD $ toMessageData argMap}\nand level arg map{indentD $ toMessageData levelArgMap}"
+      return { pattern := pat, argMap, levelArgMap, discrTreeKeys }
 where
   fvarsToMVars (fvars : Array Expr) (e : Expr) :
       MetaM (Expr × Array MVarId) := do
@@ -187,16 +117,10 @@ where
     let (mvars, _, e) ← lambdaMetaTelescope e (maxMVars? := some fvars.size)
     return (e, mvars.map (·.mvarId!))
 
-  setMVarUserNamesToUniqueNames (e : Expr) : MetaM Unit := do
-    let mvarIds ← getMVarDependencies e
-    for mvarId in mvarIds do
-      mvarId.setUserName mvarId.name
-
   -- Largely copy-pasta of `abstractMVars`.
   abstractMVars' (e : Expr) :
-      MetaM (AbstractMVarsResult × Std.HashMap MVarId Nat) := do
+      MetaM (AbstractMVarsResult × Std.HashMap MVarId Nat × Std.HashMap LMVarId Nat) := do
     let e ← instantiateMVars e
-    setMVarUserNamesToUniqueNames e
     let (e, s) := AbstractMVars.abstractExprMVars e
       { mctx := (← getMCtx)
         lctx := (← getLCtx)
@@ -205,12 +129,22 @@ where
     setNGen s.ngen
     setMCtx s.mctx
     let e := s.lctx.mkLambda s.fvars e
+    let mut fvarIdToMVarId : Std.HashMap FVarId MVarId := ∅
+    for (mvarId, e) in s.emap do
+      if let .fvar fvarId := e then
+        fvarIdToMVarId := fvarIdToMVarId.insert fvarId mvarId
     let mut mvarIdToPos := ∅
     for h : i in [:s.fvars.size] do
-      let name := s.lctx.get! (s.fvars[i]).fvarId! |>.userName
-      mvarIdToPos := mvarIdToPos.insert ⟨name⟩ i
+      mvarIdToPos := mvarIdToPos.insert fvarIdToMVarId[s.fvars[i].fvarId!]! i
+    let mut paramToLMVarId : Std.HashMap Name LMVarId := ∅
+    for (lmvarId, l) in s.lmap do
+      if let .param n := l then
+        paramToLMVarId := paramToLMVarId.insert n lmvarId
+    let mut lmvarIdToPos := ∅
+    for h : i in [:s.paramNames.size] do
+      lmvarIdToPos := lmvarIdToPos.insert paramToLMVarId[s.paramNames[i]]! i
     let result :=
       { paramNames := s.paramNames, numMVars := s.fvars.size, expr := e }
-    return (result, mvarIdToPos)
+    return (result, mvarIdToPos, lmvarIdToPos)
 
 end Aesop.RulePattern

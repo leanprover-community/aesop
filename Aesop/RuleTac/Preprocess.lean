@@ -17,6 +17,6 @@ tried.
 -/
 def preprocess : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let ((mvarId, _), steps) ← renameInaccessibleFVarsS input.goal |>.run
-  return (#[{ mvarId, diff := ∅ }], steps, none)
+  return (#[{ diff := .empty input.goal mvarId }], steps, none)
 
 end Aesop.RuleTac

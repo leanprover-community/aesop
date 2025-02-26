@@ -38,13 +38,22 @@ def Goal.traceMetadata (g : Goal) (traceOpt : TraceOption) : MetaM Unit := do
   trc m!"Metavariables: {g.mvars.toArray.map (·.name)}"
   trc m!"Parent rapp:  {← (← g.parentRapp?).mapM λ rref => (·.id) <$> rref.get}"
   trc m!"Child rapps:  {← g.children.mapM λ rref => (·.id) <$> rref.get}"
-  trc m!"Origin: {g.origin.toString}" -- TODO
+  trc m!"Origin: {g.origin.toString}"
   trc m!"Depth: {g.depth}"
   trc m!"State: {g.state.toEmoji} {g.state}"
+  trc m!"Forward rule matches: {g.forwardRuleMatches.size}"
   trc m!"Irrelevant: {toYesNo g.isIrrelevant}"
   trc m!"Forced unprovable: {toYesNo g.isForcedUnprovable}"
   trc m!"Added in iteration: {g.addedInIteration}"
   trc m!"Last expanded in iteration: {if g.lastExpandedInIteration == .none then "never" else toString $ g.lastExpandedInIteration}"
+  trcNode m!"Forward state" do
+    match g.postNormGoalAndMetaState? with
+    | some (mvarId, metaState) =>
+      metaState.runMetaM' do mvarId.withContext do
+        trc $ toMessageData g.forwardState
+    | none =>
+      g.runMetaMInParentState' do g.preNormGoal.withContext do
+        trc $ toMessageData g.forwardState
   if g.unsafeRulesSelected then
     if g.unsafeQueue.isEmpty then
       trc m!"Unsafe rule queue: <empty>"

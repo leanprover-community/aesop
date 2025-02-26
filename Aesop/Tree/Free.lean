@@ -34,31 +34,8 @@ mutual
 end
 
 private def mkDummyRefs : BaseIO (GoalRef × MVarClusterRef) := do
-  let cref ← IO.mkRef $ MVarCluster.mk {
-    parent? := default
-    goals := #[]
-    isIrrelevant := default
-    state := default
-  }
-  let gref ← IO.mkRef $ Goal.mk {
-    id := default
-    parent := cref
-    children := default
-    origin := default
-    depth := default
-    state := default
-    isIrrelevant := default
-    isForcedUnprovable := default
-    preNormGoal := default
-    normalizationState := default
-    mvars := default
-    successProbability := default
-    addedInIteration := default
-    lastExpandedInIteration := default
-    unsafeRulesSelected := default
-    unsafeQueue := default
-    failedRapps := default
-  }
+  let cref ← IO.mkRef $ by refine' MVarCluster.mk {..} <;> exact default
+  let gref ← IO.mkRef $ by refine' Goal.mk { parent := cref, .. } <;> exact default
   return (gref, cref)
 
 def GoalRef.free (gref : GoalRef) : BaseIO Unit := do
@@ -74,6 +51,6 @@ def MVarClusterRef.free (cref : MVarClusterRef) : BaseIO Unit := do
   freeMVarClusterRef dgref dcref cref
 
 def freeTree : TreeM Unit := do
-  (← get).root.free
+  (← getThe Tree).root.free
 
 end Aesop

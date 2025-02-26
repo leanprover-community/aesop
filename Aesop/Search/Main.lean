@@ -110,9 +110,6 @@ def checkRootUnprovable : SearchM Q (Option MessageData) := do
 def getProof? : SearchM Q (Option Expr) := do
   getExprMVarAssignment? (← getRootMVarId)
 
-private def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
-  withOptions (·.setBool `pp.analyze true) x
-
 def finalizeProof : SearchM Q Unit := do
   (← getRootMVarId).withContext do
     extractProof
@@ -151,6 +148,7 @@ def finishIfProven : SearchM Q Bool := do
   traceTree
   return true
 
+-- TODO move to Tree directory
 /--
 This function detects whether the search has made progress, meaning that the
 remaining goals after safe prefix expansion are different from the initial goal.
@@ -183,7 +181,7 @@ def treeHasProgress : TreeM Bool := do
         resultRef.set true
         return false)
     (λ _ => return true)
-    (.mvarCluster (← get).root)
+    (.mvarCluster (← getThe Tree).root)
   resultRef.get
 
 def throwAesopEx (mvarId : MVarId) (remainingSafeGoals : Array MVarId)
@@ -276,11 +274,12 @@ def search (goal : MVarId) (ruleSet? : Option LocalRuleSet := none)
         mkLocalRuleSet rss options
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
+  let go : SearchM _ _ := do
+    show SearchM Q _ from
+    try searchLoop
+    finally freeTree
   let (goals, _, _, stats) ←
-    SearchM.run ruleSet options simpConfig simpConfigSyntax? goal stats do
-      show SearchM Q _ from
-      try searchLoop
-      finally freeTree
+    go.run ruleSet options simpConfig simpConfigSyntax? goal stats |>.run
   return (goals, stats)
 
 end Aesop

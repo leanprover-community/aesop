@@ -44,7 +44,7 @@ where
   getProperGoals (state : Meta.SavedState) (goals : Array MVarId) :
       MetaM (Array MVarId) :=
     state.runMetaM' do
-      let (properGoals, _) ← partitionGoalsAndMVars goals
+      let (properGoals, _) ← partitionGoalsAndMVars id goals
       return properGoals.map (·.fst)
 
 end Aesop.Script
