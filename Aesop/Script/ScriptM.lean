@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.BaseM
 import Aesop.Script.Step
 import Aesop.Script.Tactic
 
@@ -21,7 +22,7 @@ protected def run [Monad m] [MonadLiftT (ST IO.RealWorld) m] (x : ScriptT m α) 
 
 end ScriptT
 
-abbrev ScriptM := ScriptT MetaM
+abbrev ScriptM := ScriptT BaseM
 
 variable [MonadStateOf (Array LazyStep) m]
 

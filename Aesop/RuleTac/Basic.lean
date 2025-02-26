@@ -4,8 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Forward.Match.Types
 import Aesop.Index.Basic
 import Aesop.Percent
+import Aesop.Rule.Forward
 import Aesop.RuleTac.GoalDiff
 import Aesop.RuleTac.FVarIdSubst
 import Aesop.Script.CtorNames
@@ -19,40 +21,35 @@ open Lean.Meta
 
 namespace Aesop
 
-
 /-! # Rule Tactic Types -/
 
--- TODO put docs on the structure fields instead of the structures
-
-/--
-Input for a rule tactic. Contains:
-
-- `goal`: the goal on which the rule is run.
-- `mvars`: the set of mvars which occur in `goal`.
-- `indexMatchLocations`: if the rule is indexed, the locations (e.g. hyps or the
-  target) matched by the rule's index entries. Otherwise an empty set.
-- `patternInstantiations`: if the rule has a pattern, the pattern instantiations
-  that were found in the goal. Each instantiation is a list of expressions which
-  were found by matching the pattern against expressions in the goal. For
-  example, if `h : max a b = max a c` appears in the goal and the rule has
-  pattern `max x y`, there will be two pattern instantiations `[a, b]`
-  (representing the substitution `{x ↦ a, y ↦ b}`) and `[a, c]`. If the rule
-  does not have a pattern, `patternInstantiations` is empty; otherwise it's
-  guaranteed to be non-empty.
-- `options`: the options given to Aesop.
--/
+/-- Input for a rule tactic. -/
 structure RuleTacInput where
+  /-- The goal on which the rule is run. -/
   goal : MVarId
+  /-- The set of mvars that `goal` depends on. -/
   mvars : UnorderedArraySet MVarId
+  /-- If the rule is indexed, the locations (i.e. hyps or the target) matched by
+  the rule's index entries. Otherwise an empty set. -/
   indexMatchLocations : Std.HashSet IndexMatchLocation
-  patternInstantiations : Std.HashSet RulePatternInstantiation
+  /-- If the rule has a pattern, the pattern substitutions that were found in
+  the goal. Each substitution is a list of expressions which were found by
+  matching the pattern against expressions in the goal. For example, if `h : max
+  a b = max a c` appears in the goal and the rule has pattern `max x y`, there
+  will be two substitutions `{x ↦ a, y ↦ b}`) and `{x ↦ a, y ↦ c}`.
+
+  If the rule does not have a pattern, this is `none`. Otherwise it is
+  guaranteed to be `some xs` with `xs` non-empty. -/
+  patternSubsts? : Option (Std.HashSet Substitution)
+  /-- The options given to Aesop. -/
   options : Options'
+  /-- Normalised types of all non-implementation detail hypotheses in the local
+  context of `goal`. -/
+  hypTypes : PHashSet RPINF
   deriving Inhabited
 
 /-- A subgoal produced by a rule. -/
 structure Subgoal where
-  /-- The goal mvar. -/
-  mvarId : MVarId
   /--
   A diff between the goal the rule was run on and this goal. Many `MetaM`
   tactics report information that allows you to easily construct a `GoalDiff`.
@@ -62,9 +59,15 @@ structure Subgoal where
   diff : GoalDiff
   deriving Inhabited
 
-def mvarIdToSubgoal (parentMVarId mvarId : MVarId) (fvarSubst : FVarIdSubst) :
-    MetaM Subgoal :=
-  return { mvarId, diff := ← diffGoals parentMVarId mvarId fvarSubst }
+namespace Subgoal
+
+def mvarId (g : Subgoal) : MVarId :=
+  g.diff.newGoal
+
+end Subgoal
+
+def mvarIdToSubgoal (parentMVarId mvarId : MVarId) : BaseM Subgoal :=
+  return { diff := ← diffGoals parentMVarId mvarId }
 
 /--
 A single rule application, representing the application of a tactic to the input
@@ -88,8 +91,8 @@ structure RuleApplication where
 namespace RuleApplication
 
 def check (r : RuleApplication) (input : RuleTacInput) :
-    MetaM (Option MessageData) :=
-  r.postState.runMetaM' do
+    BaseM (Option MessageData) :=
+  runInMetaState r.postState do
     for goal in r.goals do
       if ← goal.mvarId.isAssignedOrDelayedAssigned then
         return some m!"subgoal metavariable ?{goal.mvarId.name} is already assigned."
@@ -109,7 +112,7 @@ structure RuleTacOutput where
 /--
 A `RuleTac` is the tactic that is run when a rule is applied to a goal.
 -/
-def RuleTac := RuleTacInput → MetaM RuleTacOutput
+def RuleTac := RuleTacInput → BaseM RuleTacOutput
 
 instance : Inhabited RuleTac := by
   unfold RuleTac; exact inferInstance
@@ -119,7 +122,7 @@ A `RuleTac` which generates only a single `RuleApplication`.
 -/
 def SingleRuleTac :=
   RuleTacInput →
-  MetaM (Array Subgoal × Option (Array Script.LazyStep) × Option Percent)
+  BaseM (Array Subgoal × Option (Array Script.LazyStep) × Option Percent)
 
 @[inline]
 def SingleRuleTac.toRuleTac (t : SingleRuleTac) : RuleTac := λ input => do
@@ -142,7 +145,7 @@ def RuleTac.ofTacticSyntax (t : RuleTacInput → MetaM Syntax.Tactic) : RuleTac 
       tacticBuilders := #[return .unstructured stx]
       preState, postState, postGoals
     }
-    let postGoals ← postGoals.mapM (mvarIdToSubgoal input.goal · ∅)
+    let postGoals ← postGoals.mapM (mvarIdToSubgoal input.goal ·)
     return (postGoals, some #[step], none)
 
 /--
@@ -165,26 +168,6 @@ def CasesPattern := AbstractMVarsResult
 inductive CasesTarget
   | decl (decl : Name)
   | patterns (patterns : Array CasesPattern)
-  deriving Inhabited
-
-inductive RuleTerm
-  | const (decl : Name)
-  | term (term : Term)
-
-inductive RuleTacDescr
-  | apply (term : RuleTerm) (md : TransparencyMode) (pat? : Option RulePattern)
-  | constructors (constructorNames : Array Name) (md : TransparencyMode)
-  | forward (term : RuleTerm) (pat? : Option RulePattern)
-      (immediate : UnorderedArraySet Nat) (isDestruct : Bool)
-      (md : TransparencyMode)
-  | cases (target : CasesTarget) (md : TransparencyMode)
-      (isRecursiveType : Bool) (ctorNames : Array CtorNames)
-  | tacticM (decl : Name)
-  | ruleTac (decl : Name)
-  | tacGen (decl : Name)
-  | singleRuleTac (decl : Name)
-  | tacticStx (stx : Syntax)
-  | preprocess
   deriving Inhabited
 
 end Aesop

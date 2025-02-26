@@ -4,7 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Forward.Match
 import Aesop.Index.Basic
+import Aesop.Index.RulePattern
 import Aesop.RulePattern
 import Aesop.Rule.Basic
 import Aesop.Tracing
@@ -124,7 +126,6 @@ private def applicableByHypRules (ri : Index α) (goal : MVarId)
 @[inline]
 private def applicableUnindexedRules (ri : Index α) (include? : Rule α → Bool) :
     Array (Rule α × Array IndexMatchLocation) :=
-  -- Assumption: include? is true for most rules.
   ri.unindexed.fold (init := #[]) λ acc r =>
     if include? r then
       acc.push (r, #[.none])
@@ -134,46 +135,44 @@ private def applicableUnindexedRules (ri : Index α) (include? : Rule α → Boo
 -- Returns the rules in the order given by the `Ord α` instance.
 @[specialize]
 def applicableRules (ri : Index α) (goal : MVarId)
+    (patSubstMap : RulePatternSubstMap) (additionalRules : Array (Rule α))
     (include? : Rule α → Bool) :
     MetaM (Array (IndexMatchResult (Rule α))) := do
   withConstAesopTraceNode .debug (return "rule selection") do
   goal.instantiateMVars
-  let mut result :=
+  let mut ruleMap :=
     mkRBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName
-  result := insertIndexMatchResults result
+  ruleMap := insertIndexMatchResults ruleMap
     (← applicableByTargetRules ri goal include?)
-  result := insertIndexMatchResults result
+  ruleMap := insertIndexMatchResults ruleMap
     (← applicableByHypRules ri goal include?)
-  result := insertIndexMatchResults result
+  ruleMap := insertIndexMatchResults ruleMap
     (applicableUnindexedRules ri include?)
-  aesop_trace[debug] "selected rules before pattern check:{indentD $ flip MessageData.joinSep "\n" $ result.toList.map (toMessageData ·.fst.name)}"
-  let patterns :=
-    result.fold (init := Array.mkEmpty result.size) λ pats rule _ =>
-      if let some pattern := rule.pattern? then
-        pats.push (rule.name, pattern)
-      else
-        pats
-  aesop_trace[debug] "patterns:{indentD $ flip MessageData.joinSep "\n" $ patterns.map (λ (name, pat) => m!"{name}: {pat.pattern.expr}") |>.toList}"
-  let patternInstsMap ← matchRulePatterns patterns goal
-  aesop_trace[debug] "found pattern instantiations:{indentD $ flip MessageData.joinSep "\n" $ patternInstsMap.toList.map λ (name, insts) => m!"{name}: {insts.toArray.map (·.toArray)}"}"
-  return result.fold (init := Array.mkEmpty result.size) λ rs rule locs =>
-    let_fun locations := (∅ : Std.HashSet _).insertMany locs
+  ruleMap := additionalRules.foldl (init := ruleMap) λ ruleMap r =>
+    ruleMap.insert r #[] -- NOTE: additional rules are not checked with include?
+  let mut patterns := Array.mkEmpty ruleMap.size
+  for (rule, _) in ruleMap do
+    if let some pattern := rule.pattern? then
+      patterns := patterns.push (rule.name, pattern)
+  let mut result := Array.mkEmpty ruleMap.size
+  for (rule, locs) in ruleMap do
+    let locations := (∅ : Std.HashSet _).insertMany locs
     if rule.pattern?.isSome then
-      if let some patternInstantiations := patternInstsMap[rule.name]? then
-        rs.push { rule, locations, patternInstantiations }
-      else
-        rs
+      let patternSubsts? := patSubstMap[rule.name]?
+      if patternSubsts?.isSome  then
+        result := result.push { rule, locations, patternSubsts? }
     else
-      rs.push { rule, locations, patternInstantiations := ∅ }
-  where
-    @[inline]
-    insertIndexMatchResults
-        (m : RBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName)
-        (rs : Array (Rule α × Array IndexMatchLocation)) :
-        RBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName :=
-      rs.foldl (init := m) λ m (rule, locs) =>
-        match m.find? rule with
-        | none => m.insert rule locs
-        | some locs' => m.insert rule (locs' ++ locs)
+      result := result.push { rule, locations, patternSubsts? := none }
+  return result
+where
+  @[inline]
+  insertIndexMatchResults
+      (m : RBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName)
+      (rs : Array (Rule α × Array IndexMatchLocation)) :
+      RBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName :=
+    rs.foldl (init := m) λ m (rule, locs) =>
+      match m.find? rule with
+      | none => m.insert rule locs
+      | some locs' => m.insert rule (locs' ++ locs)
 
 end Aesop.Index

@@ -27,11 +27,9 @@ info: Try this:
   cases h with
   | inl val =>
     have fwd : False := Aesop.BuiltinRules.empty_false val
-    clear val
     simp_all only
   | inr val_1 =>
     have fwd : False := Aesop.BuiltinRules.empty_false val_1
-    clear val_1
     simp_all only
 -/
 #guard_msgs in

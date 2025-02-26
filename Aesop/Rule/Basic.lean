@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Index.Basic
 import Aesop.Rule.Name
 import Aesop.RuleTac.Basic
+import Aesop.RuleTac.Descr
 
 open Lean
 

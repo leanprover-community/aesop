@@ -23,8 +23,8 @@ example (m n : Nat) : (↑m : Int) < 0 ∧ (↑n : Int) > 0 := by
   set_option aesop.check.script false in
   aesop!
   all_goals
-    guard_hyp fwd : 0 ≤ (n : Int)
-    guard_hyp fwd_2 : 0 ≤ (m : Int)
+    guard_hyp fwd   : 0 ≤ (n : Int)
+    guard_hyp fwd_1 : 0 ≤ (m : Int)
     falso
 
 @[aesop safe forward (pattern := min x y)]
@@ -44,8 +44,8 @@ axiom triangle (a b : Int) : |a + b| ≤ |a| + |b|
 
 example : |a + b| ≤ |c + d| := by
   aesop!
-  guard_hyp fwd_1 : |c + d| ≤ |c| + |d|
-  guard_hyp fwd   : |a + b| ≤ |a| + |b|
+  guard_hyp fwd   : |c + d| ≤ |c| + |d|
+  guard_hyp fwd_1 : |a + b| ≤ |a| + |b|
   falso
 
 @[aesop safe apply (pattern := (0 : Nat))]
@@ -99,7 +99,7 @@ axiom falso₁ : T
 
 -- We support dependencies in patterns. E.g. in the following pattern, only the
 -- premise `x` occurs syntactically, but the type of `x` depends on `a` and `p`,
--- so these premises are also determined by the pattern instantiation.
+-- so these premises are also determined by the pattern substitution.
 -- (Thanks to Son Ho for this test case.)
 
 @[aesop safe forward (pattern := x)]

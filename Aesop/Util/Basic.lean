@@ -10,6 +10,7 @@ import Aesop.Util.UnorderedArraySet
 import Batteries.Lean.Expr
 import Batteries.Data.String.Basic
 import Lean
+import Std.Data.HashSet.Basic
 
 open Lean
 open Lean.Meta Lean.Elab.Tactic
@@ -37,28 +38,26 @@ def time' [Monad m] [MonadLiftT BaseIO m] (x : m Unit) : m Aesop.Nanos := do
   let stop ← IO.monoNanosNow
   return ⟨stop - start⟩
 
-namespace HashSet
-
--- TODO reuse old hash set instead of building a new one.
-def filter [BEq α] [Hashable α] (hs : Std.HashSet α) (p : α → Bool) : Std.HashSet α :=
-  hs.fold (init := ∅) λ hs a => if p a then hs.insert a else hs
-
-end HashSet
-
 namespace PersistentHashSet
+
+variable [BEq α] [Hashable α]
 
 -- Elements are returned in unspecified order.
 @[inline]
-def toList [BEq α] [Hashable α] (s : PersistentHashSet α) :
-    List α :=
+def toList (s : PersistentHashSet α) : List α :=
   s.fold (init := []) λ as a => a :: as
 
 -- Elements are returned in unspecified order. (In fact, they are currently
 -- returned in reverse order of `toList`.)
 @[inline]
-def toArray [BEq α] [Hashable α] (s : PersistentHashSet α) :
-    Array α :=
+def toArray (s : PersistentHashSet α) : Array α :=
   s.fold (init := #[]) λ as a => as.push a
+
+def toHashSet (s : PHashSet α) : Std.HashSet α :=
+  s.fold (init := ∅) fun result a ↦ result.insert a
+
+def filter (p : α → Bool) (s : PHashSet α) : PHashSet α :=
+  s.fold (init := s) λ s a => if p a then s else s.erase a
 
 end PersistentHashSet
 
@@ -189,6 +188,62 @@ def containsDecl (thms : SimpTheorems) (decl : Name) : Bool :=
 end SimpTheorems
 
 
+section ForEachExpr
+
+variable {ω : Type} {m : Type → Type} [STWorld ω m] [MonadLiftT (ST ω) m]
+    [Monad m] [MonadControlT MetaM m] [MonadLiftT MetaM m]
+
+def forEachExprInLDeclCore (ldecl : LocalDecl) (g : Expr → m Bool) :
+    MonadCacheT Expr Unit m Unit := do
+  if ! ldecl.isImplementationDetail then
+    ForEachExpr.visit g ldecl.toExpr
+    ForEachExpr.visit g ldecl.type
+    if let some value := ldecl.value? then
+      ForEachExpr.visit g value
+
+@[inline, always_inline]
+def forEachExprInLDecl' (ldecl : LocalDecl) (g : Expr → m Bool) :
+    m Unit :=
+  forEachExprInLDeclCore ldecl g |>.run
+
+@[inline, always_inline]
+def forEachExprInLDecl (ldecl : LocalDecl) (g : Expr → m Unit) :
+    m Unit :=
+  forEachExprInLDeclCore ldecl (λ e => do g e; return true) |>.run
+
+@[inline, always_inline]
+def forEachExprInLCtxCore (lctx : LocalContext) (g : Expr → m Bool) :
+    MonadCacheT Expr Unit m Unit :=
+  for ldecl in lctx do
+    forEachExprInLDeclCore ldecl g
+
+@[inline, always_inline]
+def forEachExprInLCtx' (mvarId : MVarId) (g : Expr → m Bool) : m Unit :=
+  mvarId.withContext do
+    forEachExprInLCtxCore (← mvarId.getDecl).lctx g |>.run
+
+@[inline, always_inline]
+def forEachExprInLCtx (mvarId : MVarId) (g : Expr → m Unit) : m Unit :=
+  forEachExprInLCtx' mvarId (λ e => do g e; return true)
+
+@[inline, always_inline]
+def forEachExprInGoalCore (mvarId : MVarId) (g : Expr → m Bool) :
+    MonadCacheT Expr Unit m Unit :=
+  mvarId.withContext do
+    forEachExprInLCtxCore (← mvarId.getDecl).lctx g
+    ForEachExpr.visit g (← mvarId.getType)
+
+@[inline, always_inline]
+def forEachExprInGoal' (mvarId : MVarId) (g : Expr → m Bool) : m Unit :=
+  forEachExprInGoalCore mvarId g |>.run
+
+@[inline, always_inline]
+def forEachExprInGoal (mvarId : MVarId) (g : Expr → m Unit) : m Unit :=
+  forEachExprInGoal' mvarId λ e => do g e; return true
+
+end ForEachExpr
+
+
 @[inline]
 def setThe (σ) {m} [MonadStateOf σ m] (s : σ) : m PUnit :=
   MonadStateOf.set s
@@ -263,24 +318,25 @@ where
     | _ => return (e, args.reverse)
 
 /--
-Partition an array of `MVarId`s into 'goals' and 'proper mvars'. An `MVarId`
-from the input array `ms` is classified as a proper mvar if any of the `ms`
-depend on it, and as a goal otherwise. Additionally, for each goal, we report
-the set of mvars that the goal depends on.
+Partition an array of structures containing `MVarId`s into 'goals' and
+'proper mvars'. An `MVarId` from the input array `goals` is classified as a
+proper mvar if any of the `MVarId`s depend on it, and as a goal otherwise.
+Additionally, for each goal, we report the set of mvars that the goal depends
+on.
 -/
-def partitionGoalsAndMVars (goals : Array MVarId) :
-    MetaM (Array (MVarId × UnorderedArraySet MVarId) × UnorderedArraySet MVarId) := do
+def partitionGoalsAndMVars (mvarId : α → MVarId) (goals : Array α) :
+    MetaM (Array (α × UnorderedArraySet MVarId) × UnorderedArraySet MVarId) := do
   let mut goalsAndMVars := #[]
   let mut mvars : UnorderedArraySet MVarId := {}
   for g in goals do
-    let gMVars ← .ofHashSet <$> g.getMVarDependencies
+    let gMVars ← .ofHashSet <$> (mvarId g).getMVarDependencies
     mvars := mvars.merge gMVars
     goalsAndMVars := goalsAndMVars.push (g, gMVars)
   let goals :=
     if mvars.isEmpty then
       goalsAndMVars
     else
-      goalsAndMVars.filter λ (g, _) => ! mvars.contains g
+      goalsAndMVars.filter λ (g, _) => ! mvars.contains (mvarId g)
   return (goals, mvars)
 
 section RunTactic
@@ -492,5 +548,51 @@ def withExceptionTransform [Monad m] [MonadError m]
 def withExceptionPrefix [Monad m] [MonadError m] (pre : MessageData) :
     m α → m α :=
   withExceptionTransform (λ msg => pre ++ msg)
+
+def withPPAnalyze [Monad m] [MonadWithOptions m] (x : m α) : m α :=
+  withOptions (·.setBool `pp.analyze true |>.setBool `pp.proofs true) x
+  -- `pp.proofs` works around lean4#6216
+
+-- TODO upstream
+scoped instance [MonadCache α β m] : MonadCache α β (StateRefT' ω σ m) where
+  findCached? a := MonadCache.findCached? (m := m) a
+  cache a b := MonadCache.cache (m := m) a b
+
+/-- A generalized variant of `Meta.SavedState.runMetaM` -/
+def runInMetaState [Monad m] [MonadLiftT MetaM m] [MonadFinally m]
+    (s : Meta.SavedState) (x : m α) : m α := do
+  let initialState ← show MetaM _ from saveState
+  try
+    s.restore
+    x
+  finally
+    initialState.restore
+
+def lBoolOr : (x y : LBool) → LBool
+  | .true, _ => .true
+  | .false, y => y
+  | .undef, .true => .true
+  | .undef, _ => .undef
+
+-- Core's `arrayOrd` goes through lists. -.-
+def compareArrayLex (cmp : α → α → Ordering) (xs ys : Array α) :
+    Ordering := Id.run do
+  let s := max xs.size ys.size
+  for i in [:s] do
+    if let some x := xs[i]? then
+      if let some y := ys[i]? then
+        let c := cmp x y
+        if c.isNe then
+          return c
+      else
+        return .gt
+    else
+      return .lt
+  return .eq
+
+def compareArraySizeThenLex (cmp : α → α → Ordering) (xs ys : Array α) :
+    Ordering :=
+  compare xs.size ys.size |>.then $
+  compareArrayLex cmp xs ys
 
 end Aesop
