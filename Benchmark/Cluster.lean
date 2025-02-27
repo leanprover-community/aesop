@@ -69,7 +69,7 @@ elab "testCluster " nPremises:num nRules:num nClusters:num " by " ts:tacticSeq :
       : True := by $ts
   )
 
-def runTestCluster (nPs nCs : Nat) : Benchmark where
+def benchCluster (nPs nCs : Nat) : Benchmark where
   title := s!"Cluster (variable number of rules, {nPs} premises per rule, cluster size {nCs})"
   fn := fun nRs => do
     let mut nPs := Syntax.mkNatLit nPs
