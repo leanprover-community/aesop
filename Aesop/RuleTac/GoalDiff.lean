@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Aesop.RPINF
+import Aesop.BaseM
 import Aesop.RuleTac.FVarIdSubst
 import Aesop.Util.Basic
 

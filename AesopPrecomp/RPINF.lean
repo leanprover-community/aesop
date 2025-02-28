@@ -4,13 +4,19 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
-import Lean
+import Lean.Expr
+import Lean.Message
+import Lean.Meta.InferType
+import Lean.Util.MonadCache
+import Std.Data.HashMap.Basic
 
-set_option linter.missingDocs true
+namespace Aesop
 
 open Lean Lean.Meta
 
-namespace Aesop
+set_option linter.missingDocs true
+
+initialize registerTraceClass `aesop.rpinf
 
 /-- `MData` tag for expressions that are proofs. -/
 def mdataPINFIsProofName : Name :=
@@ -26,28 +32,34 @@ def mdataIsProof (d : MData) : Bool :=
 
 mutual
   /-- Check whether two expressions in PINF are equal. We assume that the two
-  expressions are type-correct, in PINF and have defeq types. -/
-  def pinfEqCore : (x y : Expr) → Bool
+  expressions are type-correct, are in PINF and have defeq types. -/
+  unsafe def pinfEqCoreUnsafe : (x y : Expr) → Bool
     | .bvar i₁, .bvar i₂ => i₁ == i₂
     | .fvar id₁, .fvar id₂ => id₁ == id₂
     | .mvar id₁, .mvar id₂ => id₁ == id₂
     | .sort u, .sort v => u == v
     | .const n₁ us, .const n₂ vs => n₁ == n₂ && us == vs
-    | .app f₁ e₁, .app f₂ e₂ => pinfEq f₁ f₂ && pinfEq e₁ e₂
+    | .app f₁ e₁, .app f₂ e₂ => pinfEqUnsafe f₁ f₂ && pinfEqUnsafe e₁ e₂
     | .lam _ t₁ e₁ bi₁, .lam _ t₂ e₂ bi₂ =>
-      bi₁ == bi₂ && pinfEq t₁ t₂ && pinfEq e₁ e₂
+      bi₁ == bi₂ && pinfEqUnsafe t₁ t₂ && pinfEqUnsafe e₁ e₂
     | .forallE _ t₁ e₁ bi₁, .forallE _ t₂ e₂ bi₂ =>
-      bi₁ == bi₂ && pinfEq t₁ t₂ && pinfEq e₁ e₂
+      bi₁ == bi₂ && pinfEqUnsafe t₁ t₂ && pinfEqUnsafe e₁ e₂
     | .letE _ t₁ v₁ e₁ _, .letE _ t₂ v₂ e₂ _ =>
-      pinfEq v₁ v₂ && pinfEq t₁ t₂ && pinfEq e₁ e₂
+      pinfEqUnsafe v₁ v₂ && pinfEqUnsafe t₁ t₂ && pinfEqUnsafe e₁ e₂
     | .lit l₁, .lit l₂ => l₁ == l₂
-    | .mdata d e₁, e₂ | e₁, .mdata d e₂ => mdataIsProof d || pinfEq e₁ e₂
+    | .mdata d e₁, e₂ | e₁, .mdata d e₂ => mdataIsProof d || pinfEqUnsafe e₁ e₂
     | _, _ => false
 
-  @[inherit_doc pinfEqCore]
-  def pinfEq (x y : Expr) : Bool :=
-    (unsafe ptrEq x y) || pinfEqCore x y
+  @[inherit_doc pinfEqCoreUnsafe]
+  unsafe def pinfEqUnsafe (x y : Expr) : Bool :=
+    ptrEq x y || pinfEqCoreUnsafe x y
 end
+
+@[implemented_by pinfEqCoreUnsafe, inherit_doc pinfEqCoreUnsafe]
+opaque pinfEqCore (x y : Expr) : Bool
+
+@[implemented_by pinfEqCore, inherit_doc pinfEqCore]
+opaque pinfEq (x y : Expr) : Bool
 
 /-- Compute the PINF hash of an expression in PINF. The hash ignores binder
 names, binder info and proofs marked by `mdataPINFIsProofName`. -/
@@ -141,5 +153,74 @@ instance : ToMessageData (PINF md) where
 
 /-- An expression in RPINF together with its RPINF hash. -/
 abbrev RPINF := PINF .reducible
+
+variable [Monad m] [MonadCache Expr RPINFRaw m] [MonadControlT MetaM m]
+  [MonadLiftT MetaM m] [MonadError m] [MonadRecDepth m] [MonadOptions m]
+  [MonadLiftT IO m] [MonadTrace m] [AddMessageContext m]
+  [MonadAlwaysExcept Exception m] [MonadLiftT BaseIO m]
+
+local instance : MonadCache Expr Expr m where
+  findCached? e :=
+    return (← MonadCache.findCached? e : Option RPINFRaw).map (·.toExpr)
+  cache k v := MonadCache.cache k (⟨v⟩ : RPINFRaw)
+
+/-- TODO -/
+@[specialize]
+partial def rpinfRaw (e : Expr) : m RPINFRaw :=
+  withReducible do return ⟨← go e⟩
+where
+  @[specialize]
+  go (e : Expr) : m Expr :=
+    withIncRecDepth do
+    checkCache e λ _ => do
+      if ← isProof e then
+        return .mdata (mdataSetIsProof {}) e
+      let e ← whnf e
+      match e with
+      | .app .. =>
+          let f ← go e.getAppFn'
+          let mut args := e.getAppArgs -- TODO getAppArgs'
+          for i in [:args.size] do
+            let arg := args[i]!
+            args := args.set! i default -- prevent nonlinear access to args[i]
+            let arg ← go arg
+            args := args.set! i arg
+          if f.isConstOf ``Nat.succ && args.size == 1 && args[0]!.isRawNatLit then
+            return mkRawNatLit (args[0]!.rawNatLit?.get! + 1)
+          else
+            return mkAppN f args
+      | .lam .. =>
+        -- TODO disable cache?
+        lambdaTelescope e λ xs e => withNewFVars xs do
+          mkLambdaFVars xs (← go e)
+      | .forallE .. =>
+        -- TODO disable cache?
+        forallTelescope e λ xs e => withNewFVars xs do
+          mkForallFVars xs (← go e)
+      | .proj t i e =>
+        return .proj t i (← go e)
+      | .sort .. | .mvar .. | .lit .. | .const .. | .fvar .. =>
+        return e
+      | .letE .. | .mdata .. | .bvar .. => unreachable!
+
+  @[specialize]
+  withNewFVars {α} (fvars : Array Expr) (k : m α) : m α := do
+    let mut lctx ← (getLCtx : MetaM _)
+    for fvar in fvars do
+      let fvarId := fvar.fvarId!
+      let ldecl ← fvarId.getDecl
+      let ldecl := ldecl.setType $ ← go ldecl.type
+      lctx := lctx.modifyLocalDecl fvarId λ _ => ldecl
+    withLCtx lctx (← getLocalInstances) k
+
+/-- TODO -/
+@[specialize]
+def rpinf (e : Expr) : m RPINF :=
+  withTraceNode `aesop.rpinf (λ _ => return m!"rpinf: {e}") do
+    let e ← rpinfRaw e
+    let hash := pinfHash e.toExpr
+    trace[aesop.rpinf] "hash:   {hash}"
+    trace[aesop.rpinf] "result: {e.toExpr}"
+    return { e with hash }
 
 end Aesop

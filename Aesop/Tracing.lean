@@ -75,10 +75,6 @@ initialize forwardDebug : TraceOption ←
   registerTraceOption `forward.debug
     "(aesop) Trace more information about forward reasoning. Mostly intended for performance analysis."
 
-initialize rpinf : TraceOption ←
-  registerTraceOption `rpinf
-    "(aesop) Trace RPINF calculations."
-
 end TraceOption
 
 section
