@@ -9,7 +9,7 @@ import Aesop.RulePattern.Cache
 
 set_option linter.missingDocs true
 
-open Lean
+open Lean Lean.Meta
 
 namespace Aesop
 

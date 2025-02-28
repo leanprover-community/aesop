@@ -1,8 +1,6 @@
 name = "aesop"
 defaultTargets = ["Aesop"]
 testDriver = "AesopTest"
-precompileModules = false # We would like to turn this on, but it breaks the Mathlib cache.
-platformIndependent = true
 
 [[require]]
 name = "batteries"
@@ -11,6 +9,13 @@ rev = "v4.17.0-rc1"
 
 [[lean_lib]]
 name = "Aesop"
+precompileModules = false # We would like to turn this on, but it breaks the Mathlib cache.
+platformIndependent = true
+
+[[lean_lib]]
+name = "AesopPrecomp"
+precompileModules = true
+platformIndependent = true
 
 [[lean_lib]]
 name = "AesopTest"
