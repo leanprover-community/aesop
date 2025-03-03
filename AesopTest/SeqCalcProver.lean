@@ -268,7 +268,7 @@ instance Cal.instDecidable [DecidableEq Φ] (l r : List Φ) (Γ Δ : List (Form 
     have ih : Decidable (Cal l r (φ :: Γ) (ψ :: Δ)) := instDecidable l r (φ :: Γ) (ψ :: Δ)
     aesop
 termination_by sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
-decreasing_by all_goals simp_wf <;> simp_arith
+decreasing_by all_goals simp_wf <;> simp +arith
 
 abbrev Prove (φ : Form Φ) : Prop := Cal [] [] [] [φ]
 
@@ -393,7 +393,7 @@ theorem Cal_sound_complete [DecidableEq Φ]
         have AnyφψΔ : Any (Val i) (φ ⇒ ψ :: Δ ++ r.map (♩·)) := h i dec AllΓ
         simp_all
 termination_by sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
-decreasing_by all_goals simp_wf <;> simp_arith
+decreasing_by all_goals simp_wf <;> simp +arith
 
 theorem Prove_sound_complete [DecidableEq Φ] (φ : Form Φ)
   : Prove φ ↔ Valid φ := by
@@ -488,7 +488,7 @@ theorem Cal_Proof [DecidableEq Φ]
     have ih : Proof' l r (φ :: Γ) (ψ :: Δ) := Cal_Proof l r (φ :: Γ) (ψ :: Δ) h
     aesop
 termination_by sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
-decreasing_by all_goals simp_wf <;> simp_arith
+decreasing_by all_goals simp_wf <;> simp +arith
 
 theorem Proof_sound_complete [DecidableEq Φ] (φ : Form Φ)
   : Proof [] [φ] ↔ Valid φ := by

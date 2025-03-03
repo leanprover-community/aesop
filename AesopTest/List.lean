@@ -145,7 +145,7 @@ def ihead [Inhabited α] : List α → α
 def nth_le : ∀ (l : List α) (n), n < l.length → α
   | [],       n,     h => absurd h n.not_lt_zero
   | (a :: _), 0,     _ => a
-  | (_ :: l), (n+1), h => nth_le l n (by simp_all_arith)
+  | (_ :: l), (n+1), h => nth_le l n (by simp_all +arith)
 
 @[simp]
 def modify_head (f : α → α) : List α → List α

@@ -30,7 +30,7 @@ def getForwardIndexingMode (type : Expr)
   | some i =>
     withoutModifyingState do
       let (args, _, _) ← withReducible $ forallMetaTelescopeReducing type
-      match args.get? i with
+      match args[i]? with
       | some arg =>
         let argT := (← arg.mvarId!.getDecl).type
         let keys ← mkDiscrTreePath argT
