@@ -51,36 +51,11 @@ local macro "throwPRError " s:interpolatedStr(term) : term =>
 
 -- ## Copying Declarations
 
-private def getNewConsts (oldEnv newEnv : Environment) :
-    Std.HashMap Name ConstantInfo := Id.run do
-  let oldMap₂ := oldEnv.constants.map₂
-  let newMap₂ := newEnv.constants.map₂
-  newMap₂.foldl (init := Std.HashMap.empty) λ cs n c =>
-    if oldMap₂.contains n then cs else cs.insert n c
-
--- For each declaration `d` that appears in `newState` but not in
--- `oldState`, add `d` to the environment. We assume that the environment in
--- `newState` is a local extension of the environment in `oldState`, meaning
---
--- 1. The declarations in `newState` are a superset of the declarations in
---    `oldState`.
--- 2. The `map₁`s of the environments in `newState` and `oldState` are
---    identical. (These contain imported decls.)
-private def copyNewDeclarations (oldEnv newEnv : Environment) : CoreM Unit := do
-  let newConsts := getNewConsts oldEnv newEnv
-  setEnv (← (← getEnv).replay newConsts)
-
-open Match in
-private def copyMatchEqnsExtState (oldEnv newEnv : Environment) : CoreM Unit := do
-  let oldState := matchEqnsExt.getState oldEnv
-  let newState := matchEqnsExt.getState newEnv
-  for (n, eqns) in newState.map do
-    if !oldState.map.contains n then
-      registerMatchEqns n eqns
 
 private def copyEnvModifications (oldEnv newEnv : Environment) : CoreM Unit := do
-  copyNewDeclarations oldEnv newEnv
-  copyMatchEqnsExtState oldEnv newEnv
+  let env ← getEnv
+  let env ← env.replayConsts oldEnv newEnv
+  setEnv env
 
 -- ## Copying Metavariables
 
