@@ -256,7 +256,7 @@ def addBuilderOption (bos : RuleBuilderOptions) :
 
 namespace Parser
 
-syntax ruleSetsFeature := "(" &"rule_sets" " := " "[" ident,+,? "]" ")"
+syntax ruleSetsFeature := " (" &"rule_sets" " := " "[" ident,+,? "]" ")"
 
 end Parser
 
