@@ -90,7 +90,7 @@ def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
       | throwError "no suitable hypothesis found"
     -- TODO we can construct a better diff here, and doing so would be important
     -- since `subst` often renames fvars.
-    let goal ← mvarIdToSubgoal input.goal goal ∅
+    let goal ← mvarIdToSubgoal input.goal goal
     return (#[goal], steps, none)
 
 end Aesop.BuiltinRules

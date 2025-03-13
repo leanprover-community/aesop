@@ -4,8 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 import Aesop.Index
+import Aesop.Index.Forward
 import Aesop.RuleSet.Filter
 import Aesop.RuleSet.Member
+import Aesop.Tree.Data.ForwardRuleMatches
 
 open Lean Lean.Meta
 
@@ -38,10 +40,26 @@ structure BaseRuleSet where
   represents a declaration `decl` which should be unfolded. `unfoldThm?` should
   be the output of `getUnfoldEqnFor? decl` and is cached here for efficiency.
   -/
+  -- TODO Don't cache equation name; this may lead to bugs and the performance
+  -- cost is negligible.
   unfoldRules : PHashMap Name (Option Name)
   /--
-  The set of rules that were erased from `normRules`, `unsafeRules` and
-  `safeRules`. When we erase a rule which is present in any of these three
+  Forward rules. There's a special procedure for applying forward rules, so we
+  don't store them in the regular indices.
+  -/
+  forwardRules : ForwardIndex
+  /-- The names of all rules in `forwardRules`. -/
+  -- HACK to be removed once we switch fully to stateful forward reasoning.
+  forwardRuleNames : PHashSet RuleName
+  /--
+  An index for the rule patterns associated with rules contained in this rule
+  set. When rules are removed from the rule set, their patterns are not removed
+  from this index.
+  -/
+  rulePatterns : RulePatternIndex
+  /--
+  The set of rules that were erased from `normRules`, `unsafeRules`, `safeRules`
+  and `forwardRules`. When we erase a rule which is present in any of these four
   indices, the rule is not removed from the indices but just added to this set.
   By contrast, when we erase a rule from `unfoldRules`, we actually delete it.
   -/
@@ -49,10 +67,10 @@ structure BaseRuleSet where
   /--
   A cache of the names of all rules registered in this rule set. Invariant:
   `ruleNames` contains exactly the names of the rules present in `normRules`,
-  `unsafeRules`, `safeRules` and `unfoldRules` and not present in `erased`. We
-  use this cache (a) to quickly determine whether a rule is present in the rule
-  set and (b) to find the full rule names associated with the fvar or const
-  identified by a name.
+  `unsafeRules`, `safeRules`, `forwardRules` and `unfoldRules` and not present
+  in `erased`. We use this cache (a) to quickly determine whether a rule is
+  present in the rule set and (b) to find the full rule names associated with
+  the fvar or const identified by a name.
   -/
   ruleNames : PHashMap Name (UnorderedArraySet RuleName)
   deriving Inhabited
@@ -172,6 +190,8 @@ def BaseRuleSet.trace (rs : BaseRuleSet) (traceOpt : TraceOption) :
     rs.unsafeRules.trace traceOpt
   withConstAesopTraceNode traceOpt (return "Safe rules") do
     rs.safeRules.trace traceOpt
+  withConstAesopTraceNode traceOpt (return "Forward rules") do
+    rs.forwardRules.trace traceOpt
   withConstAesopTraceNode traceOpt (return "Normalisation rules") do
     rs.normRules.trace traceOpt
   withConstAesopTraceNode traceOpt (return "Constants to unfold") do
@@ -204,21 +224,14 @@ where
     | n => toString n
 
 
-def BaseRuleSet.empty : BaseRuleSet where
-  normRules := ∅
-  unsafeRules := ∅
-  safeRules := ∅
-  unfoldRules := {}
-  ruleNames := {}
-  erased := ∅
+def BaseRuleSet.empty : BaseRuleSet := by
+  refine' {..} <;> exact {}
 
 instance : EmptyCollection BaseRuleSet :=
   ⟨.empty⟩
 
-def GlobalRuleSet.empty : GlobalRuleSet where
-  toBaseRuleSet := ∅
-  simpTheorems := {}
-  simprocs := {}
+def GlobalRuleSet.empty : GlobalRuleSet := by
+  refine' {..} <;> exact {}
 
 instance : EmptyCollection GlobalRuleSet :=
   ⟨.empty⟩
@@ -270,6 +283,9 @@ def BaseRuleSet.merge (rs₁ rs₂ : BaseRuleSet) : BaseRuleSet where
   normRules := rs₁.normRules.merge rs₂.normRules
   unsafeRules := rs₁.unsafeRules.merge rs₂.unsafeRules
   safeRules := rs₁.safeRules.merge rs₂.safeRules
+  forwardRules := rs₁.forwardRules.merge rs₂.forwardRules
+  forwardRuleNames := rs₁.forwardRuleNames.merge rs₂.forwardRuleNames
+  rulePatterns := rs₁.rulePatterns.merge rs₂.rulePatterns
   unfoldRules := rs₁.unfoldRules.mergeWith rs₂.unfoldRules
     λ _ unfoldThm?₁ _ => unfoldThm?₁
   ruleNames :=
@@ -287,7 +303,6 @@ def BaseRuleSet.merge (rs₁ rs₂ : BaseRuleSet) : BaseRuleSet where
           if ns.contains n then x else x.insert n
     go rs₂ rs₁ $ go rs₁ rs₂ {}
 
-
 def BaseRuleSet.add (rs : BaseRuleSet) (r : BaseRuleSetMember) :
     BaseRuleSet :=
   let erased := rs.erased.erase r.name
@@ -299,13 +314,46 @@ def BaseRuleSet.add (rs : BaseRuleSet) (r : BaseRuleSetMember) :
   let rs := { rs with erased, ruleNames }
   match r with
   | .normRule r =>
-    { rs with normRules := rs.normRules.add r r.indexingMode }
+    let rs := { rs with normRules := rs.normRules.add r r.indexingMode }
+    addRulePattern r.name r.pattern? rs
   | .unsafeRule r =>
-    { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
+    let rs := { rs with unsafeRules := rs.unsafeRules.add r r.indexingMode }
+    addRulePattern r.name r.pattern? rs
   | .safeRule r =>
-    { rs with safeRules := rs.safeRules.add r r.indexingMode }
+    let rs := { rs with safeRules := rs.safeRules.add r r.indexingMode }
+    addRulePattern r.name r.pattern? rs
   | .unfoldRule r =>
     { rs with unfoldRules := rs.unfoldRules.insert r.decl r.unfoldThm? }
+  | .normForwardRule r₁ r₂ =>
+    let rs := {
+      rs with
+      forwardRules := rs.forwardRules.insert r₁
+      forwardRuleNames := rs.forwardRuleNames.insert r₁.name
+      normRules := rs.normRules.add r₂ r₂.indexingMode
+    }
+    addRulePattern r₂.name r₂.pattern? rs
+  | .unsafeForwardRule r₁ r₂ =>
+    let rs := {
+      rs with
+      forwardRules := rs.forwardRules.insert r₁
+      forwardRuleNames := rs.forwardRuleNames.insert r₁.name
+      unsafeRules := rs.unsafeRules.add r₂ r₂.indexingMode
+    }
+    addRulePattern r₂.name r₂.pattern? rs
+  | .safeForwardRule r₁ r₂ =>
+    let rs := {
+      rs with
+      forwardRules := rs.forwardRules.insert r₁
+      forwardRuleNames := rs.forwardRuleNames.insert r₁.name
+      safeRules := rs.safeRules.add r₂ r₂.indexingMode
+    }
+    addRulePattern r₂.name r₂.pattern? rs
+where
+  addRulePattern (n : RuleName) (pat? : Option RulePattern)
+      (rs : BaseRuleSet) : BaseRuleSet :=
+    match pat? with
+    | none => rs
+    | some pat => { rs with rulePatterns := rs.rulePatterns.add n pat }
 
 def LocalRuleSet.add (rs : LocalRuleSet) :
     LocalRuleSetMember → LocalRuleSet
@@ -392,37 +440,117 @@ def LocalRuleSet.erase (rs : LocalRuleSet) (f : RuleFilter) :
 
 namespace LocalRuleSet
 
-def applicableNormalizationRulesWith (rs : LocalRuleSet) (goal : MVarId)
-    (include? : NormRule → Bool) : MetaM (Array (IndexMatchResult NormRule)) :=
-  rs.normRules.applicableRules goal
-    (λ rule => include? rule && !rs.isErased rule.name)
+@[inline, always_inline]
+private def fwdRulePredicate (opts : Lean.Options) (rs : LocalRuleSet)
+    (include? : Rule α → Bool) (r : Rule α) : Bool :=
+  aesop.dev.statefulForward.get opts && include? r && ! rs.isErased r.name
 
 @[inline, always_inline]
-def applicableNormalizationRules (rs : LocalRuleSet) (goal : MVarId) :
-    MetaM (Array (IndexMatchResult NormRule)) :=
-  rs.applicableNormalizationRulesWith goal (λ _ => true)
+private def rulePredicate (opts : Lean.Options) (rs : LocalRuleSet)
+    (include? : Rule α → Bool) : Rule α → Bool :=
+  -- HACK When stateful forward reasoning is active, we exclude rules which are
+  -- already covered by equivalent `ForwardRule`s.
+  if aesop.dev.statefulForward.get opts then
+    λ r => include? r && ! rs.isErased r.name &&
+           ! rs.forwardRuleNames.contains r.name
+  else
+    λ r => include? r && ! rs.isErased r.name
 
-def applicableUnsafeRulesWith (rs : LocalRuleSet) (goal : MVarId)
-    (include? : UnsafeRule → Bool) :
-    MetaM (Array (IndexMatchResult UnsafeRule)) := do
-  rs.unsafeRules.applicableRules goal
-    (λ rule => include? rule && !rs.isErased rule.name)
+def applicableNormalizationRulesWith (rs : LocalRuleSet)
+    (fms : ForwardRuleMatches) (goal : MVarId)
+    (include? : NormRule → Bool) : BaseM (Array (IndexMatchResult NormRule)) := do
+  let opts ← getOptions
+  let normFwdRules := fms.normRules.filter (fwdRulePredicate opts rs include?)
+  let patInstMap ← rs.rulePatterns.getInGoal goal
+  rs.normRules.applicableRules goal patInstMap normFwdRules
+    (rulePredicate opts rs include?)
 
 @[inline, always_inline]
-def applicableUnsafeRules (rs : LocalRuleSet) (goal : MVarId) :
-    MetaM (Array (IndexMatchResult UnsafeRule)) := do
-  rs.applicableUnsafeRulesWith goal (λ _ => true)
+def applicableNormalizationRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
+    (goal : MVarId) : BaseM (Array (IndexMatchResult NormRule)) :=
+  rs.applicableNormalizationRulesWith fms goal (include? := λ _ => true)
 
-def applicableSafeRulesWith (rs : LocalRuleSet) (goal : MVarId)
-    (include? : SafeRule → Bool) :=
-  rs.safeRules.applicableRules goal
-    (λ rule => include? rule && !rs.isErased rule.name)
+def applicableUnsafeRulesWith (rs : LocalRuleSet) (fms : ForwardRuleMatches)
+    (goal : MVarId) (include? : UnsafeRule → Bool) :
+    BaseM (Array (IndexMatchResult UnsafeRule)) := do
+  let opts ← getOptions
+  let unsafeFwdRules :=
+    fms.unsafeRules.filter (fwdRulePredicate opts rs include?)
+  let patInstMap ← rs.rulePatterns.getInGoal goal
+  rs.unsafeRules.applicableRules goal patInstMap unsafeFwdRules
+    (rulePredicate opts rs include?)
 
 @[inline, always_inline]
-def applicableSafeRules (rs : LocalRuleSet) (goal : MVarId) :
-    MetaM (Array (IndexMatchResult SafeRule)) :=
-  rs.applicableSafeRulesWith goal (include? := λ _ => true)
+def applicableUnsafeRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
+    (goal : MVarId) : BaseM (Array (IndexMatchResult UnsafeRule)) :=
+  rs.applicableUnsafeRulesWith fms goal (include? := λ _ => true)
 
+def applicableSafeRulesWith (rs : LocalRuleSet) (fms : ForwardRuleMatches)
+    (goal : MVarId) (include? : SafeRule → Bool) :
+    BaseM (Array (IndexMatchResult SafeRule)) := do
+  let opts ← getOptions
+  let safeFwdRules := fms.safeRules.filter (fwdRulePredicate opts rs include?)
+  let patInstMap ← rs.rulePatterns.getInGoal goal
+  rs.safeRules.applicableRules goal patInstMap safeFwdRules
+    (rulePredicate opts rs include?)
+
+@[inline, always_inline]
+def applicableSafeRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
+    (goal : MVarId) : BaseM (Array (IndexMatchResult SafeRule)) :=
+  rs.applicableSafeRulesWith fms goal (include? := λ _ => true)
+
+def applicableForwardRulesWith (rs : LocalRuleSet) (e : Expr)
+    (include? : ForwardRule → Bool) :
+    MetaM (Array (ForwardRule × PremiseIndex)) :=
+  withConstAesopTraceNode .forward (return m!"selected forward rules:") do
+    let rules ← rs.forwardRules.get e
+    let rules := rules.filter λ (rule, _) =>
+      include? rule && !rs.isErased rule.name
+    aesop_trace[forward] do
+      for (r, i) in rules do
+        aesop_trace![forward] mkMsg r i
+    return rules
+  where
+    mkMsg r i := m!"{r}, premise {i}" -- Inlining this triggers a Lean bug.
+
+@[inline, always_inline]
+def applicableForwardRules (rs : LocalRuleSet) (e : Expr) :
+    MetaM (Array (ForwardRule × PremiseIndex)) :=
+  rs.applicableForwardRulesWith e (include? := λ _ => true)
+
+def constForwardRuleMatches (rs : LocalRuleSet) : Array ForwardRuleMatch :=
+  rs.forwardRules.getConstRuleMatches
+
+section ForwardRulePattern
+
+private def postprocessPatSubstMap (rs : LocalRuleSet)
+    (m : RulePatternSubstMap) : Array (ForwardRule × Substitution) :=
+  m.toFlatArray.filterMap λ (n, patSubst) =>
+    rs.forwardRules.getRuleWithName? n |>.map (·, patSubst)
+
+def forwardRulePatternSubstsInExpr (rs : LocalRuleSet) (e : Expr) :
+    BaseM (Array (ForwardRule × Substitution)) := do
+  withConstAesopTraceNode .forward (return m!"rule patterns in expr {e}:") do
+    let ms ← rs.rulePatterns.get e
+    let ms := postprocessPatSubstMap rs ms
+    aesop_trace[forward] do
+      for (r, inst) in ms do
+        aesop_trace![forward] m!"{r}, {inst}"
+    return ms
+
+def forwardRulePatternSubstsInLocalDecl (rs : LocalRuleSet) (ldecl : LocalDecl) :
+    BaseM (Array (ForwardRule × Substitution)) := do
+  withConstAesopTraceNode .forward (return m!"rule patterns in hyp {ldecl.userName}:") do
+    let ms ← rs.rulePatterns.getInLocalDecl ldecl
+    let ms := postprocessPatSubstMap rs ms
+    aesop_trace[forward] do
+      for (r, inst) in ms do
+        aesop_trace![forward] m!"{r}, {inst}"
+    return ms
+
+end ForwardRulePattern
+
+-- NOTE: only non-forward norm/safe/unsafe rules can be unindexed.
 def unindex (rs : LocalRuleSet) (p : RuleName → Bool) : LocalRuleSet := {
   rs with
   normRules := rs.normRules.unindex (p ·.name)

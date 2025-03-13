@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.Forward.State.Initial
+import Aesop.RuleSet
 import Aesop.Tree.Data
 
 open Lean
@@ -23,13 +25,15 @@ structure Tree where
   -/
   allIntroducedMVars : Std.HashSet MVarId
 
-def mkInitialTree (goal : MVarId) : MetaM Tree := do
+def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : BaseM Tree := do
   let rootClusterRef ← IO.mkRef $ MVarCluster.mk {
     parent? := none
     goals := #[] -- patched up below
     isIrrelevant := false
     state := NodeState.unknown
   }
+  let (forwardState, ms) ← withConstAesopTraceNode .forward (return m!"building initial forward state") do
+    rs.mkInitialForwardState goal
   let rootGoalRef ← IO.mkRef $ Goal.mk {
     id := GoalId.zero
     parent := rootClusterRef
@@ -42,6 +46,8 @@ def mkInitialTree (goal : MVarId) : MetaM Tree := do
     preNormGoal := goal
     normalizationState := NormalizationState.notNormal
     mvars := .ofHashSet (← goal.getMVarDependencies)
+    forwardState
+    forwardRuleMatches := .ofArray ms
     successProbability := Percent.hundred
     addedInIteration := Iteration.one
     lastExpandedInIteration := Iteration.none
@@ -62,8 +68,12 @@ def mkInitialTree (goal : MVarId) : MetaM Tree := do
 
 structure TreeM.Context where
   currentIteration : Iteration
+  ruleSet : LocalRuleSet
 
-abbrev TreeM := ReaderT TreeM.Context $ StateRefT Tree MetaM
+structure TreeM.State where
+  tree : Tree
+
+abbrev TreeM := ReaderT TreeM.Context $ StateRefT TreeM.State BaseM
 
 namespace TreeM
 
@@ -72,21 +82,27 @@ namespace TreeM
 instance : Monad TreeM :=
   { inferInstanceAs (Monad TreeM) with }
 
+instance (priority := low) : MonadStateOf Tree TreeM where
+  get := return (← getThe State).tree
+  set tree := modifyThe State ({ · with tree })
+  modifyGet f := modifyGetThe State λ s =>
+    let (a, tree) := f s.tree
+    (a, { s with tree })
+
 instance : Inhabited (TreeM α) where
   default := failure
 
-def run' (ctx : TreeM.Context) (t : Tree) (x : TreeM α) :
-    MetaM (α × Tree) :=
-  ReaderT.run x ctx |>.run t
+def run' (ctx : TreeM.Context) (tree : Tree) (x : TreeM α) :
+    BaseM (α × TreeM.State) :=
+  ReaderT.run x ctx |>.run { tree }
 
 end TreeM
 
-
 def getRootMVarCluster : TreeM MVarClusterRef :=
-  return (← get).root
+  return (← getThe Tree).root
 
 def getRootMetaState : TreeM Meta.SavedState :=
-  return (← get).rootMetaState
+  return (← getThe Tree).rootMetaState
 
 def getRootGoal : TreeM GoalRef := do
   let cref ← getRootMVarCluster
@@ -101,21 +117,21 @@ def getRootMVarId : TreeM MVarId := do
   return (← gref.get).preNormGoal
 
 def incrementNumGoals (increment := 1) : TreeM Unit := do
-  modify λ s => { s with numGoals := s.numGoals + increment }
+  modifyThe Tree λ s => { s with numGoals := s.numGoals + increment }
 
 def incrementNumRapps (increment := 1) : TreeM Unit := do
-  modify λ s => { s with numRapps := s.numRapps + increment }
+  modifyThe Tree λ s => { s with numRapps := s.numRapps + increment }
 
 def getAllIntroducedMVars : TreeM (Std.HashSet MVarId) :=
-  return (← get).allIntroducedMVars
+  return (← getThe Tree).allIntroducedMVars
 
 def getAndIncrementNextGoalId : TreeM GoalId := do
-  modifyGet λ t =>
+  modifyGetThe Tree λ t =>
     let curr := t.nextGoalId
     (curr, { t with nextGoalId := curr.succ })
 
 def getAndIncrementNextRappId : TreeM RappId := do
-  modifyGet λ t =>
+  modifyGetThe Tree λ t =>
     let curr := t.nextRappId
     (curr, { t with nextRappId := curr.succ })
 

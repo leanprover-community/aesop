@@ -12,10 +12,6 @@ open Lean Lean.Meta
 
 namespace Aesop
 
--- This value controls whether we use 'powerful' reductions, e.g. iota, when
--- indexing Aesop rules. See the `DiscrTree` docs for details.
-def discrTreeConfig : ConfigWithKey := { iota := false : Config}.toConfigWithKey
-
 inductive IndexingMode : Type
   | unindexed
   | target (keys : Array DiscrTree.Key)
@@ -90,7 +86,7 @@ end IndexMatchLocation
 structure IndexMatchResult (α : Type) where
   rule : α
   locations : Std.HashSet IndexMatchLocation
-  patternInstantiations : Std.HashSet RulePatternInstantiation
+  patternSubsts? : Option (Std.HashSet Substitution)
   deriving Inhabited
 
 namespace IndexMatchResult

@@ -67,6 +67,18 @@ initialize script : TraceOption ←
   registerTraceOption `script
     "(aesop) Print a trace of script generation."
 
+initialize forward : TraceOption ←
+  registerTraceOption `forward
+    "(aesop) Trace forward reasoning."
+
+initialize forwardDebug : TraceOption ←
+  registerTraceOption `forward.debug
+    "(aesop) Trace more information about forward reasoning. Mostly intended for performance analysis."
+
+initialize rpinf : TraceOption ←
+  registerTraceOption `rpinf
+    "(aesop) Trace RPINF calculations."
+
 end TraceOption
 
 section
@@ -135,6 +147,11 @@ variable [Monad m] [MonadTrace m] [MonadLiftT BaseIO m] [MonadLiftT IO m]
 def withAesopTraceNode (opt : TraceOption)
     (msg : Except ε α → m MessageData) (k : m α) (collapsed := true) : m α :=
   withTraceNode opt.traceClass msg k collapsed
+
+@[inline, always_inline]
+def withAesopTraceNodeBefore [ExceptToEmoji ε α] (opt : TraceOption)
+    (msg : m MessageData) (k : m α) (collapsed := true) : m α :=
+  withTraceNodeBefore opt.traceClass msg k collapsed
 
 @[inline, always_inline]
 def withConstAesopTraceNode (opt : TraceOption) (msg : m MessageData) (k : m α)

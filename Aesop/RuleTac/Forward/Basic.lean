@@ -80,32 +80,18 @@ def _root_.Aesop.clearForwardImplDetailHyps (goal : MVarId) : MetaM MVarId :=
 
 structure ForwardHypData where
   /--
-  Types of the hypotheses that have already been added by forward reasoning.
-  -/
-  types : Array Expr
-  /--
   Depths of the hypotheses that have already been added by forward reasoning.
   -/
   depths : Std.HashMap FVarId Nat
 
 def getForwardHypData : MetaM ForwardHypData := do
   let ldecls ← getForwardImplDetailHyps
-  let mut types := ∅
   let mut depths := ∅
   for ldecl in ldecls do
-    types := types.push (← instantiateMVars ldecl.type)
     if let some (depth, name) := matchForwardImplDetailHypName ldecl.userName then
       if let some ldecl := (← getLCtx).findFromUserName? name then
         depths := depths.insert ldecl.fvarId depth
-  return { types, depths }
-
-namespace ForwardHypData
-
-def containsTypeUpToIds (data : ForwardHypData) (type : Expr) : MetaM Bool :=
-  data.types.anyM λ knownType =>
-    exprsEqualUpToIds' type knownType (allowAssignmentDiff := true)
-
-end ForwardHypData
+  return { depths }
 
 /--
 Mark hypotheses that, according to their name, are forward implementation detail
