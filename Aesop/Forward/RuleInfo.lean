@@ -9,7 +9,6 @@ import Aesop.Forward.SlotIndex
 import Aesop.Index.Basic
 import Aesop.Util.Basic
 import Aesop.Util.UnionFind
-import Batteries.Lean.HashSet
 
 set_option linter.missingDocs true
 
