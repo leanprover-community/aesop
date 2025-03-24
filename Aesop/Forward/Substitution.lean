@@ -45,8 +45,8 @@ instance : Ord Substitution where
 /-- The empty substitution for a rule with the given number of premise
 indexes. -/
 def empty (numPremises numLevels : Nat) : Substitution where
-  premises := mkArray numPremises none
-  levels   := mkArray numLevels   none
+  premises := .replicate numPremises none
+  levels   := .replicate numLevels   none
 
 /-- Insert the mapping `pi ↦ inst` into the substitution `s`. Precondition: `pi`
 is in the domain of `s`. -/
