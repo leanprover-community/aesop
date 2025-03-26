@@ -50,7 +50,7 @@ where
         Simp.tryTheorem? e
           { origin := .decl unfoldThm
             proof := mkConst unfoldThm
-            rfl := ← isRflTheorem unfoldThm }
+            rflTask := ← isRflTheorem unfoldThm }
       match result? with
       | none   => return .continue
       | some r =>
