@@ -17,7 +17,10 @@ class Foo (α : Type u) where
 class Bar (α : Type u) extends Foo α where
   eq : ∀ x : α, f x = f x
 
-def bar : Bar Unit where
-  f := fun _ => ()
-  eq := by aesop
-  p := ?x
+-- This fails on v4.19.0-rc1, due to changes to structure elaboration from
+-- https://github.com/leanprover/lean4/pull/7717
+
+-- def bar : Bar Unit where
+--   f := fun _ => ()
+--   eq := by aesop
+--   p := ?x

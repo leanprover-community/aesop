@@ -619,9 +619,9 @@ def ForwardRule.initialRuleState (r : ForwardRule) : RuleState :=
     variableMap := ∅
     completeMatches := {}
     conclusionDeps := r.conclusionDeps
-    slotQueues := mkArray slots.size #[]
+    slotQueues := .replicate slots.size #[]
     slotQueues_size := by simp
-    slotMaybeHasMatches := mkArray slots.size false
+    slotMaybeHasMatches := .replicate slots.size false
     slotMaybeHasMatches_size := by simp
     addHypsLazily := true
     slots

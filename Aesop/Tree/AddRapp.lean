@@ -65,7 +65,7 @@ def getGoalsToCopy (assignedMVars : UnorderedArraySet MVarId)
     (start : GoalRef) : TreeM (Array GoalRef) := do
   let (pathRapps, pathGoals) ← findPathForAssignedMVars assignedMVars start
   let mut toCopy := #[]
-  let mut toCopyIds := Std.HashSet.empty
+  let mut toCopyIds := (∅ : Std.HashSet GoalId)
   for rref in pathRapps do
     for cref in (← rref.get).children do
       for gref in (← cref.get).goals do
