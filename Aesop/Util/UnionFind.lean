@@ -83,7 +83,7 @@ private unsafe def mergeUnsafe (x y : α) (u : UnionFind α) :
 opaque merge (x y : α) : UnionFind α → UnionFind α
 
 def sets {α : Type v} [BEq α] [Hashable α] (u : UnionFind α) : Array (Array α) × UnionFind α :=
-  let (sets, u) := u.toRep.fold (init := (Std.HashMap.empty, u)) λ ((sets : Std.HashMap USize _), u) x rep =>
+  let (sets, u) := u.toRep.fold (init := (∅, u)) λ ((sets : Std.HashMap USize _), u) x rep =>
     let (rep, u) := u.findRep rep
     let sets :=
       match sets[rep]? with
