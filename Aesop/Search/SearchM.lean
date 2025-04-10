@@ -29,7 +29,6 @@ structure Context where
   ruleSet : LocalRuleSet
   normSimpContext : NormSimpContext
   options : Aesop.Options'
-  statsRef : StatsRef
   deriving Nonempty
 
 structure State (Q) [Aesop.Queue Q] where
@@ -74,15 +73,14 @@ instance : MonadLift TreeM (SearchM Q) where
     liftM $ ReaderT.run x ctx
 
 protected def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (tree : Tree)
-    (x : SearchM Q α) : BaseM (α × SearchM.State Q × Tree × Stats) := do
+    (x : SearchM Q α) : BaseM (α × SearchM.State Q × Tree) := do
   let ((a, σ), t) ←
     x.run ctx |>.run σ |>.run { tree }
-  return (a, σ, t.tree, ← ctx.statsRef.get)
+  return (a, σ, t.tree)
 
 protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     (simpConfig : Simp.Config) (simpConfigStx? : Option Term)
-    (goal : MVarId) (stats : Stats) (x : SearchM Q α) :
-    BaseM (α × State Q × Tree × Stats) := do
+    (goal : MVarId) (x : SearchM Q α) : BaseM (α × State Q × Tree) := do
   let t ← mkInitialTree goal ruleSet
   let normSimpContext := {
     toContext := ← Simp.mkContext simpConfig (simpTheorems := ruleSet.simpTheoremsArray.map (·.snd))
@@ -92,8 +90,7 @@ protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     enabled := options.enableSimp
     useHyps := options.useSimpAll
   }
-  let statsRef ← IO.mkRef stats
-  let ctx := { ruleSet, options, normSimpContext, statsRef }
+  let ctx := { ruleSet, options, normSimpContext }
   let #[rootGoal] := (← t.root.get).goals
     | throwError "aesop: internal error: root mvar cluster does not contain exactly one goal."
   let state := {

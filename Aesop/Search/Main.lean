@@ -278,8 +278,8 @@ def search (goal : MVarId) (ruleSet? : Option LocalRuleSet := none)
     show SearchM Q _ from
     try searchLoop
     finally freeTree
-  let (goals, _, _, stats) ←
-    go.run ruleSet options simpConfig simpConfigSyntax? goal stats |>.run
+  let ((goals, _, _), stats) ←
+    go.run ruleSet options simpConfig simpConfigSyntax? goal |>.run stats
   return (goals, stats)
 
 end Aesop
