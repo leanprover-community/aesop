@@ -106,10 +106,10 @@ where
     let tacResult ←
       runRuleTac matchResult.rule.tac.run matchResult.rule.name preState input
     match tacResult with
-    | .inl exc =>
+    | .error exc =>
       trace[saturate] exc.toMessageData
       return none
-    | .inr output =>
+    | .ok output =>
       let (diff, postState, scriptSteps?) ← getSingleGoal output
       postState.restore
       return (diff, scriptSteps?)
