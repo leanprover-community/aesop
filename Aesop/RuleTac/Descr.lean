@@ -18,13 +18,13 @@ inductive RuleTacDescr
   | singleRuleTac (decl : Name)
   | tacticStx (stx : Syntax)
   | preprocess
-  | forwardMatch (m : ForwardRuleMatch)
+  | forwardMatches (ms : Array ForwardRuleMatch)
   deriving Inhabited
 
 namespace RuleTacDescr
 
-def forwardRuleMatch? : RuleTacDescr → Option ForwardRuleMatch
-  | forwardMatch m => m
+def forwardRuleMatches? : RuleTacDescr → Option (Array ForwardRuleMatch)
+  | forwardMatches ms => ms
   | _ => none
 
 end RuleTacDescr

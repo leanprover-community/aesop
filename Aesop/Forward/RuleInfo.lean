@@ -6,7 +6,7 @@ Authors: Xavier Généreux, Jannis Limperg
 
 import Aesop.Forward.PremiseIndex
 import Aesop.Forward.SlotIndex
-import Aesop.Index.Basic
+import Aesop.RulePattern
 import Aesop.Util.Basic
 import Aesop.Util.UnionFind
 

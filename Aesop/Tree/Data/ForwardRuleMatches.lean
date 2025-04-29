@@ -84,52 +84,32 @@ def eraseHyp (h : FVarId) (ms : ForwardRuleMatches) : ForwardRuleMatches :=
 child goal. `newMatches` are new forward rule matches obtained by updating the
 old goal's `ForwardState` with new hypotheses from the new goal. `erasedHyps`
 are the hypotheses from the old goal that no longer appear in the new goal.
-`consumedForwardRuleMatch?` is a forward rule match that was applied as a rule
-to transform the old goal into the new goal. -/
+`consumedForwardRuleMatches` contains forward rule matches that were applied as
+rules to transform the old goal into the new goal. -/
 def update (newMatches : Array ForwardRuleMatch)
     (erasedHyps : Std.HashSet FVarId)
-    (consumedForwardRuleMatch? : Option ForwardRuleMatch)
+    (consumedForwardRuleMatches : Array ForwardRuleMatch)
     (forwardRuleMatches : ForwardRuleMatches) : ForwardRuleMatches := Id.run do
   let mut ms :=
    forwardRuleMatches.insertMany newMatches |>.eraseHyps erasedHyps
-  if let some m := consumedForwardRuleMatch? then
+  for m in consumedForwardRuleMatches do
     ms := ms.erase m
   return ms
 
-private def foldRules! (ms : PHashSet ForwardRuleMatch)
-    (f : ForwardRuleMatch → Option α) (g : σ → α → σ) (init : σ) : σ :=
-  have : Inhabited σ := ⟨init⟩
-  ms.fold (init := init) λ s m =>
-    match f m with
-    | none => panic! s!"conversion failed for match of rule {m.rule.name}"
-    | some a => g s a
-
-/-- Fold over the norm rules corresponding to the norm rule matches. -/
-def foldNormRules (ms : ForwardRuleMatches) (f : σ → NormRule → σ) (init : σ) :
-    σ :=
-  foldRules! ms.normMatches (·.toNormRule?) f init
+private def pHashSetToArray [BEq α] [Hashable α] (s : PHashSet α) : Array α :=
+  s.fold (init := #[]) λ acc x => acc.push x
 
 /-- Get the norm rules corresponding to the norm rule matches. -/
 def normRules (ms : ForwardRuleMatches) : Array NormRule :=
-  ms.foldNormRules (init := #[]) (·.push ·)
-
-/-- Fold over the safe rules corresponding to the safe rule matches. -/
-def foldSafeRules (ms : ForwardRuleMatches) (f : σ → SafeRule → σ) (init : σ) :
-    σ :=
-  foldRules! ms.safeMatches (·.toSafeRule?) f init
+  forwardRuleMatchesToNormRules? (pHashSetToArray ms.normMatches) |>.get!
 
 /-- Get the safe rules corresponding to the safe rule matches. -/
 def safeRules (ms : ForwardRuleMatches) : Array SafeRule :=
-  ms.foldSafeRules (init := #[]) (·.push ·)
-
-/-- Fold over the unsafe rules corresponding to the unsafe rule matches. -/
-def foldUnsafeRules (ms : ForwardRuleMatches) (f : σ → UnsafeRule → σ)
-    (init : σ) : σ :=
-  foldRules! ms.unsafeMatches (·.toUnsafeRule?) f init
+  forwardRuleMatchesToSafeRules? (pHashSetToArray ms.safeMatches) |>.get!
 
 /-- Get the unsafe rules corresponding to the unsafe rule matches. -/
 def unsafeRules (ms : ForwardRuleMatches) : Array UnsafeRule :=
-  ms.foldUnsafeRules (init := #[]) (·.push ·)
+  forwardRuleMatchesToUnsafeRules? (pHashSetToArray ms.unsafeMatches) |>.get!
 
 /-- `O(n)` Number of matches in `ms`. -/
 def size (ms : ForwardRuleMatches) : Nat :=
