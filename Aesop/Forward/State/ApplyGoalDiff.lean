@@ -31,7 +31,8 @@ def ForwardState.applyGoalDiff (rs : LocalRuleSet) (diff : GoalDiff)
       return (fs, ruleMatches)
 where
   eraseHyp (h : FVarId) (fs : ForwardState) : BaseM ForwardState :=
-    return fs.eraseHyp h (← rpinf (← h.getType))
+    withConstAesopTraceNode .forward (return m!"erase hyp {Expr.fvar h} ({h.name})") do
+      return fs.eraseHyp h (← rpinf (← h.getType))
 
   addHyp (h : FVarId) (fs : ForwardState)
       (ruleMatches : Array ForwardRuleMatch) :

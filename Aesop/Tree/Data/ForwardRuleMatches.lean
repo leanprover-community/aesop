@@ -90,11 +90,10 @@ def update (newMatches : Array ForwardRuleMatch)
     (erasedHyps : Std.HashSet FVarId)
     (consumedForwardRuleMatches : Array ForwardRuleMatch)
     (forwardRuleMatches : ForwardRuleMatches) : ForwardRuleMatches := Id.run do
-  let mut ms :=
-   forwardRuleMatches.insertMany newMatches |>.eraseHyps erasedHyps
+  let mut ms := forwardRuleMatches
   for m in consumedForwardRuleMatches do
     ms := ms.erase m
-  return ms
+  return forwardRuleMatches.eraseHyps erasedHyps |>.insertMany newMatches
 
 private def pHashSetToArray [BEq α] [Hashable α] (s : PHashSet α) : Array α :=
   s.fold (init := #[]) λ acc x => acc.push x
