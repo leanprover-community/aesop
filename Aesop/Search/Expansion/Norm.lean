@@ -390,47 +390,60 @@ def _root_.Aesop.reduceAllInGoal (goal : MVarId)
   goal.withContext do
     withReducible do
       let type ← goal.getType
-      let newType ←
+      let reducedType ←
         if rpinf then
           let r <- rpinfRaw type
           pure r.toExpr
         else
           reduce type skipImplicitArguments skipTypes skipProofs
 
-      let mut changed :=  if rpinf then !pinfEq type newType else newType != type
+      let mut changed := false
+      let mut newType := type
+      let changedType := if rpinf then !pinfEq type reducedType else reducedType != type
+      if changedType then
+        newType := reducedType
+        changed := true
+
         --add option if rpinf is enabled then run pinfEq else use the old method
       let mut newLCtx : LocalContext := {}
 
-      for ldecl in ← getLCtx do
-        if ldecl.isImplementationDetail then
-          -- Directly add implementation details without modification
+      let lctx ← getLCtx
+      for ldecl in lctx do
+        match ldecl.kind with
+        | .implDetail =>
           newLCtx := newLCtx.addDecl ldecl
-        else
+        | .auxDecl =>
+          let fullName := lctx.auxDeclToFullName.find! ldecl.fvarId
+          newLCtx := newLCtx.mkAuxDecl ldecl.fvarId ldecl.userName ldecl.type fullName
+        | .default =>
           -- Skip reducing types if the option is enabled
           let type := ldecl.type
-          let newType ←
+          let reducedType ←
             if rpinf then
               let r <- rpinfRaw type
               pure r.toExpr
             else
               reduce type skipImplicitArguments skipTypes skipProofs
-          let mut newLDecl := ldecl.setType newType
 
-          -- Check if the type has changed
-          changed := changed || if rpinf then !pinfEq type newType else newType != type
+          let changedType := if rpinf then !pinfEq type reducedType else reducedType != type
+          let mut newLDecl := ldecl
+          if changedType then
+            newLDecl := newLDecl.setType reducedType
+            changed := true
 
           -- Reduce the value if it exists and skip proofs if needed
           if let some val := ldecl.value? then
-            let newVal ←
+            let reducedVal ←
               if rpinf then
                 let r <- rpinfRaw val
                 pure r.toExpr
               else
                 reduce val skipImplicitArguments skipTypes skipProofs
-            changed := changed || if rpinf then !pinfEq val newVal else newVal != val
 
-
-            newLDecl := newLDecl.setValue newVal
+            let changedVal := if rpinf then !pinfEq val reducedVal else reducedVal != val
+            if changedVal then
+              newLDecl := newLDecl.setValue reducedVal
+              changed := true
 
           -- Add the (potentially updated) declaration to the new local context
           newLCtx := newLCtx.addDecl newLDecl
@@ -443,8 +456,6 @@ def _root_.Aesop.reduceAllInGoal (goal : MVarId)
       let newGoal ← mkFreshExprMVarAt newLCtx (← getLocalInstances) newType
       goal.assign newGoal
       return newGoal.mvarId!--write a function
-
-
 
 def reduceAllInGoal : NormStep
   | goal, _, _ => do
