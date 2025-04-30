@@ -44,8 +44,8 @@ axiom triangle (a b : Int) : |a + b| ≤ |a| + |b|
 
 example : |a + b| ≤ |c + d| := by
   aesop!
-  guard_hyp fwd   : |c + d| ≤ |c| + |d|
-  guard_hyp fwd_1 : |a + b| ≤ |a| + |b|
+  guard_hyp fwd   : |a + b| ≤ |a| + |b|
+  guard_hyp fwd_1 : |c + d| ≤ |c| + |d|
   falso
 
 @[aesop safe apply (pattern := (0 : Nat))]

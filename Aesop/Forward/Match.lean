@@ -59,8 +59,7 @@ def addHypOrPatSubst (subst : Substitution) (isPatSubst : Bool)
 
 /-- Returns `true` if the match contains the given hyp. -/
 def containsHyp (hyp : FVarId) (m : Match) : Bool :=
-  let fvar := .fvar hyp
-  m.subst.premises.any (·.any (·.toExpr == fvar))
+  m.subst.premises.any (·.any (·.toExpr.containsFVar hyp))
 
 /-- Returns `true` if the match contains the given pattern substitution. -/
 def containsPatSubst (subst : Substitution) (m : Match) : Bool :=
