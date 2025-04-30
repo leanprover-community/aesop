@@ -378,17 +378,121 @@ def simp (mvars : Std.HashSet MVarId) : NormStep
       return .unchanged
     let r := (← normSimp goal mvars).map (.normSimp, ·)
     return optNormRuleResultToNormSeqResult r
+--NVU
+--squash commit upto a20ac15dd63b5b85fdac712f3a8402580e06b4f9
+--make new branch should end up with dd78c1426...
+--use this command git switch -c your new-branch upstream/rpinf-precomp
+--cherry pick squashed commit
+
+
+def _root_.Aesop.reduceAllInGoal (goal : MVarId)
+  (skipProofs skipTypes skipImplicitArguments rpinf: Bool) : BaseM MVarId := do
+  goal.withContext do
+    withReducible do
+      let type ← goal.getType
+      let newType ←
+        if rpinf then
+          let r <- rpinfRaw type
+          pure r.toExpr
+        else
+          reduce type skipImplicitArguments skipTypes skipProofs
+
+      let mut changed :=  if rpinf then !pinfEq type newType else newType != type
+        --add option if rpinf is enabled then run pinfEq else use the old method
+      let mut newLCtx : LocalContext := {}
+
+      for ldecl in ← getLCtx do
+        if ldecl.isImplementationDetail then
+          -- Directly add implementation details without modification
+          newLCtx := newLCtx.addDecl ldecl
+        else
+          -- Skip reducing types if the option is enabled
+          let type := ldecl.type
+          let newType ←
+            if rpinf then
+              let r <- rpinfRaw type
+              pure r.toExpr
+            else
+              reduce type skipImplicitArguments skipTypes skipProofs
+          let mut newLDecl := ldecl.setType newType
+
+          -- Check if the type has changed
+          changed := changed || if rpinf then !pinfEq type newType else newType != type
+
+          -- Reduce the value if it exists and skip proofs if needed
+          if let some val := ldecl.value? then
+            let newVal ←
+              if rpinf then
+                let r <- rpinfRaw val
+                pure r.toExpr
+              else
+                reduce val skipImplicitArguments skipTypes skipProofs
+            changed := changed || if rpinf then !pinfEq val newVal else newVal != val
+
+
+            newLDecl := newLDecl.setValue newVal
+
+          -- Add the (potentially updated) declaration to the new local context
+          newLCtx := newLCtx.addDecl newLDecl
+
+      -- If nothing has changed, return the original goal without creating a new one
+      if not changed then
+        return goal
+
+      -- Otherwise, create a new goal with the updated context and type
+      let newGoal ← mkFreshExprMVarAt newLCtx (← getLocalInstances) newType
+      goal.assign newGoal
+      return newGoal.mvarId!--write a function
+
+
+
+def reduceAllInGoal : NormStep
+  | goal, _, _ => do
+      let rpinf := true
+      let skipProofs := false
+      let skipTypes := true
+      let skipImplicitArguments := false
+      let (newGoal, time) ← time (Aesop.reduceAllInGoal goal skipProofs skipTypes skipImplicitArguments rpinf)
+      trace[debug] "Execution time for `reduceAllInGoal`: {time.printAsMillis}"
+      modifyCurrentStats λ stats => {stats with reduceAllInGoal := stats.reduceAllInGoal + time}
+      if newGoal == goal then
+        return .unchanged
+      else
+        return .changed newGoal #[]
 
 end NormStep
+-- Aesop branch: rpinf-precomp
+-- squash commit (rebase -i)
+-- make new branch
+-- git cherry-pick <your commit>
+-- discard changes with git restore before rebranching
 
+
+  /-def NormStep.reduceAllInGoal : NormStep
+  | goal, _, _ => do
+      let (newGoal, time) ← time (Aesop.reduceAllInGoal goal false false false)
+      trace[debug] "Execution time for reduceAllInGoal: {time.printAsMillis}"
+      modifyCurrentStats λ stats => {stats with reduceAllInGoal := stats.reduceAllInGoal + time}
+      if newGoal == goal then
+        return .unchanged
+      else
+        return .changed newGoal #[]
+
+upstream/rpinf-precomp in case
+import precomp rpinf
+--
+-/
+
+--NVU
 partial def normalizeGoalMVar (goal : MVarId)
     (mvars : UnorderedArraySet MVarId) : NormM NormSeqResult := do
   let mvarsHashSet := .ofArray mvars.toArray
   let mut normSteps := #[
+    NormStep.reduceAllInGoal,
     NormStep.runPreSimpRules mvars,
     NormStep.unfold,
     NormStep.simp mvarsHashSet,
-    NormStep.runPostSimpRules mvars
+    NormStep.runPostSimpRules mvars --NVU
   ]
   runNormSteps goal normSteps
     (by simp (config := { decide := true }) [normSteps])

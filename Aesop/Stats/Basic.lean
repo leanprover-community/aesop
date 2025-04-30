@@ -67,6 +67,7 @@ structure Stats where
   script : Nanos
   scriptGenerated : ScriptGenerated
   ruleStats : Array RuleStats
+  reduceAllInGoal : Nanos
   deriving Inhabited
 
 namespace Stats
@@ -79,6 +80,7 @@ protected def empty : Stats where
   ruleSelection := 0
   script := 0
   scriptGenerated := .none
+  reduceAllInGoal := 0 --NVU
   ruleStats := #[]
 
 instance : EmptyCollection Stats :=
@@ -161,6 +163,7 @@ def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
   aesop_trace![opt] "Rule set construction: {p.ruleSetConstruction.printAsMillis}"
   aesop_trace![opt] "Script generation: {p.script.printAsMillis}"
   aesop_trace![opt] "Script generated: {p.scriptGenerated.toString}"
+  aesop_trace![opt] "ReduceAllInGoal: {p.reduceAllInGoal.printAsMillis}"
   withConstAesopTraceNode opt (collapsed := false)
       (return m!"Search: {p.search.printAsMillis}") do
     aesop_trace![opt] "Rule selection: {p.ruleSelection.printAsMillis}"
@@ -237,8 +240,9 @@ def profilingRule (rule : DisplayRuleName) (wasSuccessful : α → Bool) :
     { stats with ruleStats := stats.ruleStats.push rp }
 
 def modifyCurrentStats (f : Stats → Stats) : m Unit := do
-  if ← isStatsCollectionEnabled then
+  if ← isStatsCollectionOrTracingEnabled then
     modifyStats f
+  --use in the norm file to modify the time calculation
 
 def recordScriptGenerated (x : ScriptGenerated) : m Unit := do
   modifyCurrentStats ({ · with scriptGenerated := x })

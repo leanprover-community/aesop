@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Percent
 import Aesop.Stats.Extension
+import Aesop.Stats.Basic -- Add this import to resolve StatsT
 
 open Lean
 
@@ -37,6 +38,7 @@ def default : StatsReport := λ statsArray => Id.run do
   let mut search := 0
   let mut ruleSelection := 0
   let mut script := 0
+  let mut timedReduceAllInGoal := 0
   let mut ruleStats : Std.HashMap DisplayRuleName RuleStatsTotals := ∅
   for stats in statsArray do
     let stats := stats.stats
@@ -46,6 +48,7 @@ def default : StatsReport := λ statsArray => Id.run do
     search := search + stats.search
     ruleSelection := ruleSelection + stats.ruleSelection
     script := script + stats.script
+    timedReduceAllInGoal := timedReduceAllInGoal + stats.reduceAllInGoal --NVU
     ruleStats := stats.ruleStatsTotals (init := ruleStats)
   let samples := statsArray.size
   f!"Statistics for {statsArray.size} Aesop calls in current and imported modules\n\
@@ -56,10 +59,13 @@ def default : StatsReport := λ statsArray => Id.run do
      Rule selection:        {fmtTime ruleSelection samples}\n\
      Script generation:     {fmtTime script samples}\n\
      Search:                {fmtTime search samples}\n\
+     ReduceAllInGoal:       {fmtTime timedReduceAllInGoal samples}\n\
      Rules:{Std.Format.indentD $ fmtRuleStats $ sortRuleStatsTotals $ ruleStats.toArray}"
 where
   fmtTime (n : Nanos) (samples : Nat) : Format :=
     f!"{n} [{if samples == 0 then 0 else n / samples}]"
+
+
 
   fmtRuleStats (stats : Array (DisplayRuleName × RuleStatsTotals)) :
       Format := Id.run do
@@ -141,8 +147,13 @@ where
     let pct95 := sortedPercentileD ⟨0.95⟩ 0 ns
     let pct99 := sortedPercentileD ⟨0.99⟩ 0 ns
     f!"{total} (min = {min}, avg = {average}, median = {median}, 80pct = {pct80}, 95pct = {pct95}, 99pct = {pct99}, max = {max})"
-
-def scripts := scriptsCore
-def scriptsNontrivial := scriptsCore (nontrivialOnly := true)
+/-
+def reportReduceAllInGoal : StatsT MetaM Unit := do
+  if ← isStatsCollectionOrTracingEnabled then
+    let stats ← readStatsRef
+    let timeTaken := stats.reduceAllInGoal
+    let report := f!"ReduceAllInGoal execution time: {timeTaken.printAsMillis}"
+    logInfo report-/
+--add report stats here for reduction
 
 end Aesop.StatsReport

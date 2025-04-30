@@ -7,8 +7,8 @@ Authors: Jannis Limperg
 -- commit a945b3769cb82bc238ee004b4327201a6864e7e0
 
 import Aesop
-
-set_option aesop.check.script true
+set_option trace.aesop.stats true
+set_option aesop.collectStats true
 
 -- We use this constant to 'prove' theorems which Aesop can't solve. We don't
 -- use `sorry` because it generates lots of warnings.
@@ -1003,10 +1003,12 @@ theorem getLast?_append_of_ne_nil (l₁ : List α) : ∀ {l₂ : List α} (_ : l
   | [], hl₂ => by aesop
   | b :: l₂, _ => by aesop
 
+set_option trace.aesop.stats true in
+set_option trace.debug true in
 theorem getLast?_append' {l₁ l₂ : List α} {x : α} (h : x ∈ l₂.getLast?) :
   x ∈ (l₁ ++ l₂).getLast? := by
   aesop (add 1% cases List)
-
+--without the skipTypes, proofs, implicit, it took 1,3ms to run reduce all in goal
 end getLast?
 
 /-! ### head(') and tail -/
@@ -1058,3 +1060,6 @@ theorem cons_head_tail [Inhabited α] {l : List α} (h : l ≠ []) : (ihead l)::
   aesop
 
 end List
+
+--create a test table to check time runnung reduction test
+#aesop_stats
