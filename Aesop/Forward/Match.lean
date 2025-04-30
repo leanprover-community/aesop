@@ -59,8 +59,7 @@ def addHypOrPatSubst (subst : Substitution) (isPatSubst : Bool)
 
 /-- Returns `true` if the match contains the given hyp. -/
 def containsHyp (hyp : FVarId) (m : Match) : Bool :=
-  let fvar := .fvar hyp
-  m.subst.premises.any (·.any (·.toExpr == fvar))
+  m.subst.premises.any (·.any (·.toExpr.containsFVar hyp))
 
 /-- Returns `true` if the match contains the given pattern substitution. -/
 def containsPatSubst (subst : Substitution) (m : Match) : Bool :=
@@ -191,35 +190,49 @@ def apply (goal : MVarId) (m : ForwardRuleMatch) (skip? : Option (RPINF → Bool
     let (goal, _) ← tryClearManyS goal usedPropHyps
     return some (goal, hyp, usedPropHyps)
 
-/-- Convert a forward rule match to a rule tactic description. -/
-def toRuleTacDescr (m : ForwardRuleMatch) : RuleTacDescr :=
-  .forwardMatch m
+end ForwardRuleMatch
 
-/-- Convert a forward rule match `m` to a rule. Fails if `mkExtra? m` fails. -/
-def toRule? (m : ForwardRuleMatch) (mkExtra? : ForwardRuleMatch → Option α) :
-    Option (Rule α) := do
-  let extra ← mkExtra? m
-  return {
-    name := m.rule.name
-    indexingMode := .unindexed
-    pattern? := none
-    tac := m.toRuleTacDescr
-    extra
-  }
+private def forwardRuleMatchesToRules? (ms : Array ForwardRuleMatch)
+    (mkExtra? : ForwardRuleMatch → Option α) :
+    Option (Array (Rule α)) := Id.run do
+  let mut ruleMap : Std.HashMap RuleName (Array ForwardRuleMatch) := ∅
+  for m in ms do
+    let name := m.rule.name
+    if let some ms := ruleMap[name]? then
+      ruleMap := ruleMap.insert name (ms.push m)
+    else
+      ruleMap := ruleMap.insert name #[m]
+  let mut result := Array.mkEmpty ruleMap.size
+  for (name, ms) in ruleMap do
+    let some extra := mkExtra? ms[0]!
+      | return none
+    result := result.push {
+      indexingMode := .unindexed
+      pattern? := none
+      tac := .forwardMatches ms
+      name, extra
+    }
+  return some result
 
-/-- Convert a norm forward rule match to a norm rule. Fails if the match is not
-a norm rule match. -/
-def toNormRule? (m : ForwardRuleMatch) : Option NormRule :=
-  m.toRule? (·.rule.prio.penalty?.map ({ penalty := · }))
+/-- Convert forward rule matches to norm rules. Fails if any of the matches is
+not a norm rule match.  -/
+def forwardRuleMatchesToNormRules? (ms : Array ForwardRuleMatch) :
+    Option (Array NormRule) :=
+  forwardRuleMatchesToRules? ms
+    (·.rule.prio.penalty?.map ({ penalty := · }))
 
-/-- Convert a safe forward rule match to a safe rule. Fails if the match is not
-a safe rule match. -/
-def toSafeRule? (m : ForwardRuleMatch) : Option SafeRule :=
-  m.toRule? (·.rule.prio.penalty?.map ({ penalty := ·, safety := .safe }))
+/-- Convert forward rule matches to safe rules. Fails if any of the matches is
+not a safe rule match. -/
+def forwardRuleMatchesToSafeRules? (ms : Array ForwardRuleMatch) :
+    Option (Array SafeRule) :=
+  forwardRuleMatchesToRules? ms
+    (·.rule.prio.penalty?.map ({ penalty := ·, safety := .safe }))
 
-/-- Convert an unsafe forward rule match to an unsafe rule. Fails if the match
+/-- Convert forward rule matches to unsafe rules. Fails if any of the matches
 is not an unsafe rule match. -/
-def toUnsafeRule? (m : ForwardRuleMatch) : Option UnsafeRule :=
-  m.toRule? (·.rule.prio.successProbability?.map ({ successProbability := · }))
+def forwardRuleMatchesToUnsafeRules? (ms : Array ForwardRuleMatch) :
+    Option (Array UnsafeRule) :=
+  forwardRuleMatchesToRules? ms
+    (·.rule.prio.successProbability?.map ({ successProbability := · }))
 
-end Aesop.ForwardRuleMatch
+end Aesop

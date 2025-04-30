@@ -456,11 +456,17 @@ private def rulePredicate (opts : Lean.Options) (rs : LocalRuleSet)
   else
     λ r => include? r && ! rs.isErased r.name
 
+private def postprocessForwardMatchRules (opts : Lean.Options) (rs : LocalRuleSet)
+    (include? : Rule α → Bool) (rules : Array (Rule α)) :
+    Array (IndexMatchResult (Rule α)) :=
+  rules.filter (fwdRulePredicate opts rs include?) |>.map λ rule =>
+    { rule, locations := ∅, patternSubsts? := none }
+
 def applicableNormalizationRulesWith (rs : LocalRuleSet)
     (fms : ForwardRuleMatches) (goal : MVarId)
     (include? : NormRule → Bool) : BaseM (Array (IndexMatchResult NormRule)) := do
   let opts ← getOptions
-  let normFwdRules := fms.normRules.filter (fwdRulePredicate opts rs include?)
+  let normFwdRules := postprocessForwardMatchRules opts rs include? fms.normRules
   let patInstMap ← rs.rulePatterns.getInGoal goal
   rs.normRules.applicableRules goal patInstMap normFwdRules
     (rulePredicate opts rs include?)
@@ -474,8 +480,7 @@ def applicableUnsafeRulesWith (rs : LocalRuleSet) (fms : ForwardRuleMatches)
     (goal : MVarId) (include? : UnsafeRule → Bool) :
     BaseM (Array (IndexMatchResult UnsafeRule)) := do
   let opts ← getOptions
-  let unsafeFwdRules :=
-    fms.unsafeRules.filter (fwdRulePredicate opts rs include?)
+  let unsafeFwdRules := postprocessForwardMatchRules opts rs include? fms.unsafeRules
   let patInstMap ← rs.rulePatterns.getInGoal goal
   rs.unsafeRules.applicableRules goal patInstMap unsafeFwdRules
     (rulePredicate opts rs include?)
@@ -489,7 +494,7 @@ def applicableSafeRulesWith (rs : LocalRuleSet) (fms : ForwardRuleMatches)
     (goal : MVarId) (include? : SafeRule → Bool) :
     BaseM (Array (IndexMatchResult SafeRule)) := do
   let opts ← getOptions
-  let safeFwdRules := fms.safeRules.filter (fwdRulePredicate opts rs include?)
+  let safeFwdRules := postprocessForwardMatchRules opts rs include? fms.safeRules
   let patInstMap ← rs.rulePatterns.getInGoal goal
   rs.safeRules.applicableRules goal patInstMap safeFwdRules
     (rulePredicate opts rs include?)

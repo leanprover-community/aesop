@@ -27,6 +27,6 @@ protected def run : RuleTacDescr → RuleTac
   | tacticStx stx => RuleTac.tacticStx stx
   | tacGen decl => RuleTac.tacGen decl
   | preprocess => RuleTac.preprocess
-  | forwardMatch m => RuleTac.forwardMatch m
+  | forwardMatches m => RuleTac.forwardMatches m
 
 end RuleTacDescr

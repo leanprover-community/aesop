@@ -20,7 +20,7 @@ abbrev StaticStructureM :=
 
 protected def StaticStructureM.run (script : UScript) (x : StaticStructureM α) :
     CoreM (α × Bool) := do
-  let mut steps : Std.HashMap MVarId (Nat × Step) := Std.HashMap.empty script.size
+  let mut steps : Std.HashMap MVarId (Nat × Step) := Std.HashMap.emptyWithCapacity script.size
   for h : i in [:script.size] do
     let step := script[i]
     if h : step.postGoals.size = 1 then

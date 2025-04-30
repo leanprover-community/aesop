@@ -3,10 +3,7 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-
-import Lean
-
-open Lean (HashMap)
+import Std.Data.HashMap
 
 namespace Aesop
 
@@ -86,7 +83,7 @@ private unsafe def mergeUnsafe (x y : α) (u : UnionFind α) :
 opaque merge (x y : α) : UnionFind α → UnionFind α
 
 def sets {α : Type v} [BEq α] [Hashable α] (u : UnionFind α) : Array (Array α) × UnionFind α :=
-  let (sets, u) := u.toRep.fold (init := (Std.HashMap.empty, u)) λ ((sets : Std.HashMap USize _), u) x rep =>
+  let (sets, u) := u.toRep.fold (init := (∅, u)) λ ((sets : Std.HashMap USize _), u) x rep =>
     let (rep, u) := u.findRep rep
     let sets :=
       match sets[rep]? with
