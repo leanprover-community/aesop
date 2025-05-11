@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Util.Basic
 import Aesop.Rule.Name
 import Aesop.RulePattern
+import Aesop.Forward.Match.Types
 
 open Lean Lean.Meta
 
@@ -83,9 +84,19 @@ instance : Hashable IndexMatchLocation where
 end IndexMatchLocation
 
 
+/-- A rule that, according to the index, should be applied to the current goal.
+In addition to the rule, this data structure contains information about how the
+rule should be applied. For example, if the rule has rule patterns, we report
+the substitutions obtained by matching the rule patterns against the current
+goal. -/
 structure IndexMatchResult (α : Type) where
+  /-- The rule that should be applied. -/
   rule : α
+  /-- Goal locations where the rule matched. The rule's `indexingMode`
+  determines which locations can be contained in this set. -/
   locations : Std.HashSet IndexMatchLocation
+  /-- Pattern substitutions for this rule that were found in the goal. `none`
+  iff the rule doesn't have a pattern. -/
   patternSubsts? : Option (Std.HashSet Substitution)
   deriving Inhabited
 

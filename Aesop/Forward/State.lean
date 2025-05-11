@@ -430,7 +430,7 @@ structure AddM.Context where
   premiseLMVars : Array LMVarId
 
 /-- A monad for operations that add hyps or matches to a cluster state. The
-monad's state is an array of complete matches discovered during while adding
+monad's state is an array of complete matches discovered while adding
 hyps/matches. -/
 abbrev AddM := ReaderT AddM.Context $ StateRefT (Array Match) $ BaseM
 
@@ -447,7 +447,7 @@ mutual
     let slotIdx := m.level
     if slotIdx.toNat == cs.slots.size - 1 then
       if cs.completeMatches.contains m then
-        aesop_trace[forward] "complete match {m} with subst {m.subst} already present"
+        aesop_trace[forward] "complete match {m} already present"
         return cs
       else
         cs := { cs with completeMatches := cs.completeMatches.insert m }
@@ -455,7 +455,7 @@ mutual
         return cs
     else
       let nextSlot := cs.slot! $ slotIdx + 1
-      aesop_trace[forward] "add match {m} for slot {slotIdx} with subst {m.subst}"
+      aesop_trace[forward] "add match {m} for slot {slotIdx}"
       let (vmap, changed) := cs.variableMap.addMatch nextSlot m  -- This is correct; VariableMap.addMatch needs the next slot.
       if ! changed then
         aesop_trace[forward] "match already present"
@@ -498,7 +498,7 @@ mutual
       AddM ClusterState :=
     match h with
     | .fvarId fvarId =>
-      withConstAesopTraceNode .forwardDebug (return m!"add hyp {Expr.fvar fvarId} to slot {slot.index}") do
+      withConstAesopTraceNode .forwardDebug (return m!"add hyp {Expr.fvar fvarId} ({fvarId.name}) to slot {slot.index}") do
         let some subst ←
           cs.matchPremise? (← read).premiseMVars (← read).premiseLMVars
             slot.index fvarId
@@ -561,7 +561,13 @@ def eraseEnqueuedRawHyp (h : RawHyp) (slot : Slot) (cs : ClusterState) :
   slotQueues_size := by simp [cs.slotQueues_size]
 }
 
-/-- Erase a hypothesis from the cluster state. -/
+private def filterPHashSet [BEq α] [Hashable α] (p : α → Bool)
+    (s : PHashSet α) : PHashSet α :=
+  let toDelete := s.fold (init := #[]) λ toDelete a =>
+    if p a then toDelete else toDelete.push a
+  toDelete.foldl (init := s) λ s a => s.erase a
+
+/-- Erase a hypothesis from the cluster state's variable map. -/
 def eraseHyp (h : FVarId) (pi : PremiseIndex) (cs : ClusterState) :
     ClusterState := Id.run do
   let some slot := cs.findSlot? pi
@@ -569,7 +575,12 @@ def eraseHyp (h : FVarId) (pi : PremiseIndex) (cs : ClusterState) :
   if cs.addHypsLazily then
     return cs.eraseEnqueuedRawHyp (.fvarId h) slot
   else
-    return { cs with variableMap := cs.variableMap.eraseHyp h slot.index }
+    return {
+      cs with
+      variableMap := cs.variableMap.eraseHyp h slot.index
+      completeMatches := filterPHashSet (! ·.containsHyp h) cs.completeMatches
+      -- TODO inefficient: complete matches should only be filtered once
+    }
 
 /-- Erase a pattern substitution from the cluster state. -/
 def erasePatSubst (subst : Substitution) (pi : PremiseIndex) (cs : ClusterState) :
@@ -582,6 +593,7 @@ def erasePatSubst (subst : Substitution) (pi : PremiseIndex) (cs : ClusterState)
     return {
       cs with
       variableMap := cs.variableMap.erasePatSubst subst slot.index
+      completeMatches := filterPHashSet (! ·.containsPatSubst subst) cs.completeMatches
     }
 
 end ClusterState
@@ -775,7 +787,7 @@ def addHypCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
     (h : FVarId) (ms : Array (ForwardRule × PremiseIndex))
     (fs : ForwardState) : BaseM (ForwardState × Array ForwardRuleMatch) := do
   goal.withContext do
-  withConstAesopTraceNode .forward (return m!"add hyp {Expr.fvar h}") do
+  withConstAesopTraceNode .forward (return m!"add hyp {Expr.fvar h} ({h.name})") do
     let hTypeRPINF ← rpinf (← h.getType)
     if (← isProp hTypeRPINF.toExpr) && fs.hypTypes.contains hTypeRPINF then
       aesop_trace[forward] "a hyp with the same (propositional) type was already added"

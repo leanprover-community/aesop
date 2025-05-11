@@ -22,10 +22,8 @@ structure AddRapp extends RuleApplication where
 
 namespace AddRapp
 
-def consumedForwardRuleMatch? (r : AddRapp) : Option ForwardRuleMatch :=
-  match r.appliedRule.tac with
-  | .forwardMatch m => some m
-  | _ => none
+def consumedForwardRuleMatches (r : AddRapp) : Array ForwardRuleMatch :=
+  r.appliedRule.tac.forwardRuleMatches? |>.getD #[]
 
 end AddRapp
 
@@ -98,7 +96,7 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
         let (forwardState, ms) ← start.forwardState.applyGoalDiff rs diff
         let forwardRuleMatches :=
           start.forwardRuleMatches.update ms diff.removedFVars
-            (consumedForwardRuleMatch? := none) -- TODO unsure whether this is correct
+            (consumedForwardRuleMatches := #[]) -- TODO unsure whether this is correct
         let mvars ← .ofHashSet <$> g.preNormGoal.getMVarDependencies
         pure (forwardState, forwardRuleMatches, mvars)
     return Goal.mk {
@@ -127,14 +125,14 @@ def makeInitialGoal (goal : Subgoal) (mvars : UnorderedArraySet MVarId)
     (parent : MVarClusterRef) (parentMetaState : Meta.SavedState)
     (parentForwardState : ForwardState)
     (parentForwardMatches : ForwardRuleMatches)
-    (consumedForwardRuleMatch? : Option ForwardRuleMatch) (depth : Nat)
+    (consumedForwardRuleMatches : Array ForwardRuleMatch) (depth : Nat)
     (successProbability : Percent) (origin : GoalOrigin) : TreeM Goal := do
   let rs := (← read).ruleSet
   let (forwardState, forwardRuleMatches) ← runInMetaState parentMetaState do
     let (fs, newMatches) ← parentForwardState.applyGoalDiff rs goal.diff
     let ms :=
       parentForwardMatches.update newMatches goal.diff.removedFVars
-        consumedForwardRuleMatch?
+        consumedForwardRuleMatches
     pure (fs, ms)
   return Goal.mk {
     id := ← getAndIncrementNextGoalId
@@ -247,7 +245,7 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
       try
         makeInitialGoal goal mvars (unsafeCast ()) r.postState
           parentGoal.forwardState parentGoal.forwardRuleMatches
-          r.consumedForwardRuleMatch? goalDepth r.successProbability origin
+          r.consumedForwardRuleMatches goalDepth r.successProbability origin
           -- The parent (`unsafeCast ()`) will be patched up later.
       catch e =>
         throwError "in rapp for rule {r.appliedRule.name}:{indentD e.toMessageData}"
