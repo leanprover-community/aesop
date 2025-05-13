@@ -135,44 +135,39 @@ private def applicableUnindexedRules (ri : Index α) (include? : Rule α → Boo
 -- Returns the rules in the order given by the `Ord α` instance.
 @[specialize]
 def applicableRules (ri : Index α) (goal : MVarId)
-    (patSubstMap : RulePatternSubstMap) (additionalRules : Array (Rule α))
+    (patSubstMap : RulePatternSubstMap)
+    (additionalRules : Array (IndexMatchResult (Rule α)))
     (include? : Rule α → Bool) :
     MetaM (Array (IndexMatchResult (Rule α))) := do
   withConstAesopTraceNode .debug (return "rule selection") do
   goal.instantiateMVars
-  let mut ruleMap :=
-    mkRBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName
-  ruleMap := insertIndexMatchResults ruleMap
-    (← applicableByTargetRules ri goal include?)
-  ruleMap := insertIndexMatchResults ruleMap
-    (← applicableByHypRules ri goal include?)
-  ruleMap := insertIndexMatchResults ruleMap
+  let result := addRules additionalRules #[
+    (← applicableByTargetRules ri goal include?),
+    (← applicableByHypRules ri goal include?),
     (applicableUnindexedRules ri include?)
-  ruleMap := additionalRules.foldl (init := ruleMap) λ ruleMap r =>
-    ruleMap.insert r #[] -- NOTE: additional rules are not checked with include?
-  let mut patterns := Array.mkEmpty ruleMap.size
-  for (rule, _) in ruleMap do
-    if let some pattern := rule.pattern? then
-      patterns := patterns.push (rule.name, pattern)
-  let mut result := Array.mkEmpty ruleMap.size
-  for (rule, locs) in ruleMap do
-    let locations := (∅ : Std.HashSet _).insertMany locs
-    if rule.pattern?.isSome then
-      let patternSubsts? := patSubstMap[rule.name]?
-      if patternSubsts?.isSome  then
-        result := result.push { rule, locations, patternSubsts? }
-    else
-      result := result.push { rule, locations, patternSubsts? := none }
+  ]
+  let result := result.qsort λ x y => x.rule.compareByPriorityThenName y.rule |>.isLT
+  aesop_trace[debug] "selected rules:{.joinSep (result.map (m!"{·.rule.name}") |>.toList) "\n"}"
   return result
 where
-  @[inline]
-  insertIndexMatchResults
-      (m : RBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName)
-      (rs : Array (Rule α × Array IndexMatchLocation)) :
-      RBMap (Rule α) (Array IndexMatchLocation) Rule.compareByPriorityThenName :=
-    rs.foldl (init := m) λ m (rule, locs) =>
-      match m.find? rule with
-      | none => m.insert rule locs
-      | some locs' => m.insert rule (locs' ++ locs)
+  addRules (acc : Array (IndexMatchResult (Rule α)))
+      (ruless : Array (Array (Rule α × Array IndexMatchLocation))) :
+      Array (IndexMatchResult (Rule α)) := Id.run do
+    let mut locMap : Std.HashMap (Rule α) (Std.HashSet IndexMatchLocation) := ∅
+    for rules in ruless do
+      for (rule, locs) in rules do
+        if let some locs' := locMap[rule]? then
+          locMap := locMap.insert rule (locs'.insertMany locs)
+        else
+          locMap := locMap.insert rule (.ofArray locs)
+    let mut result := acc
+    for (rule, locations) in locMap do
+      if rule.pattern?.isSome then
+        let patternSubsts? := patSubstMap[rule.name]?
+        if patternSubsts?.isSome then
+          result := result.push { rule, locations, patternSubsts? }
+      else
+        result := result.push { rule, locations, patternSubsts? := none }
+    return result
 
 end Aesop.Index

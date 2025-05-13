@@ -202,19 +202,33 @@ def forward (t : RuleTerm) (immediate : UnorderedArraySet PremiseIndex)
   | .const decl => forwardConst decl immediate clear
   | .term tm => forwardTerm tm immediate clear
 
-def forwardMatch (m : ForwardRuleMatch) :
-    RuleTac := SingleRuleTac.toRuleTac λ input => do
-  let skip type := input.hypTypes.contains type
-  let (some (goal, hyp, removedFVars), steps) ←
-    m.apply input.goal (some skip) |>.run
-    | throwError "hyp already exists or synthesis of instance arguments failed"
-  let diff := {
-    oldGoal := input.goal
-    newGoal := goal
-    addedFVars := {hyp}
-    targetChanged := .false
-    removedFVars := .ofArray removedFVars
-  }
-  return (#[{ diff }], some steps, none)
+def forwardMatches (ms : Array ForwardRuleMatch) : RuleTac :=
+  SingleRuleTac.toRuleTac λ input => do
+    let skip type := input.hypTypes.contains type
+    let mut goal := input.goal
+    let mut addedFVars := ∅
+    let mut removedFVars := ∅
+    let mut anySuccess := false
+    let mut steps := #[]
+    for m in ms do
+      let (some (goal', hyp, removedFVars'), steps') ← m.apply goal (some skip) |>.run
+        | continue
+      anySuccess := true
+      goal := goal'
+      addedFVars := addedFVars.insert hyp
+      removedFVars := removedFVars.insertMany removedFVars'
+      steps := steps ++ steps'
+    if ! anySuccess then
+      throwError "failed to add hyps for any of the following forward rule matches:{indentD $ MessageData.joinSep (ms.map toMessageData |>.toList) "\n"}"
+    let diff := {
+      oldGoal := input.goal
+      newGoal := goal
+      targetChanged := .false
+      addedFVars, removedFVars
+    }
+    return (#[{ diff }], some steps, none)
+
+def forwardMatch (m : ForwardRuleMatch) : RuleTac :=
+  .forwardMatches #[m]
 
 end Aesop.RuleTac
