@@ -49,6 +49,7 @@ initialize statsExtension : StatsExtension ←
   registerSimplePersistentEnvExtension {
     addEntryFn := λ _ _ => ()
     addImportedFn := λ _ => ()
+    asyncMode := .sync -- Maybe we could use a less restrictive mode, but (a) it's not clear to me and (b) this extension is unused by default.
   }
 
 def recordStatsIfEnabled [Monad m] [MonadEnv m] [MonadOptions m]
