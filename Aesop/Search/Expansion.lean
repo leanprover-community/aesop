@@ -52,7 +52,7 @@ def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
     (indexMatchLocations : Std.HashSet IndexMatchLocation)
     (patternSubsts? : Option (Std.HashSet Substitution))
     (options : Options') (hypTypes : PHashSet RPINF) :
-    BaseM (Sum Exception RuleTacOutput) := do
+    BaseM (Except Exception RuleTacOutput) := do
   let some (postNormGoal, postNormState) := goal.postNormGoalAndMetaState? | throwError
     "aesop: internal error during expansion: expected goal {goal.id} to be normalised (but not proven by normalisation)."
   let input := {
@@ -117,13 +117,13 @@ def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
     runRegularRuleTac parent rule.tac.run rule.name indexMatchLocations
       patternSubsts? (← read).options parent.forwardState.hypTypes
   match ruleOutput? with
-  | Sum.inl exc =>
+  | .error exc =>
     aesop_trace[steps] exc.toMessageData
     return none
-  | Sum.inr { applications := #[], .. } =>
+  | .ok { applications := #[], .. } =>
     aesop_trace[steps] "Rule returned no rule applications"
     return none
-  | Sum.inr output =>
+  | .ok output =>
     return some output
 
 def runSafeRule (parentRef : GoalRef) (matchResult : IndexMatchResult SafeRule) :
