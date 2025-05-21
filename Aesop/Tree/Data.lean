@@ -906,3 +906,17 @@ def provenGoal? (c : MVarCluster) : BaseIO (Option GoalRef) :=
   c.goals.findM? λ gref => return (← gref.get).state.isProven
 
 end MVarCluster
+
+
+namespace RappRef
+
+/-- Get a `DeclNameGenerator` for auxiliary declarations that can be used by
+children of this rapp. Successive calls to this function return
+`DeclNameGenerators` that are guaranteed to generate distinct names. -/
+def getChildAuxDeclNameGenerator (r : RappRef) : BaseIO DeclNameGenerator := do
+  r.modifyGet λ r =>
+    let (child, parent) := r.metaState.core.auxDeclNGen.mkChild
+    let r := r.setMetaState $ { r.metaState with core.auxDeclNGen := parent }
+    (child, r)
+
+end RappRef
