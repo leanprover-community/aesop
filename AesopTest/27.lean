@@ -19,7 +19,7 @@ inductive All (P : α → Prop) : List α → Prop
   | cons {x xs} : P x → All P xs → All P (x :: xs)
 
 /--
-info: [aesop.proof] Final proof:
+trace: [aesop.proof] Final proof:
       (fun (h_1 : All P (x :: xs)) =>
           ((fun (h_2 : All P (x :: xs)) =>
                 (casesOn (P := P) (motive := fun a x_1 => x :: xs = a → HEq h x_1 → P x ∧ All P xs) h_2
