@@ -15,14 +15,7 @@ import Std.Data.HashSet.Basic
 open Lean
 open Lean.Meta Lean.Elab.Tactic
 
-namespace Aesop.Array
-
-theorem size_modify (a : Array α) (i : Nat) (f : α → α) :
-    (a.modify i f).size = a.size := by
-  simp only [Array.modify, Id.run, Array.modifyM]
-  split <;> simp
-
-end Array
+namespace Aesop
 
 @[inline]
 def time [Monad m] [MonadLiftT BaseIO m] (x : m α) : m (α × Aesop.Nanos) := do
