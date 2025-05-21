@@ -14,7 +14,7 @@ The commands below should not panic and should show non-zero stats.
 set_option aesop.collectStats true
 set_option trace.aesop.stats true
 
-#guard_msgs (drop info) in
+#guard_msgs (drop trace) in
 theorem mem_spec {o : Option α} : a ∈ o ↔ o = some a := by
   aesop (add norm simp Membership.mem)
 
