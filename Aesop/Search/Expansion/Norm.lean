@@ -103,10 +103,10 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) (fs : ForwardState)
   let result? ← runRuleTac rule.tac.run rule.name preMetaState input
   let forwardRuleMatches := rule.tac.forwardRuleMatches? |>.getD #[]
   match result? with
-  | Sum.inl e =>
+  | .error e =>
     aesop_trace[steps] e.toMessageData
     return (none, forwardRuleMatches)
-  | Sum.inr result =>
+  | .ok result =>
     let #[rapp] := result.applications
       | err m!"rule did not produce exactly one rule application."
     show MetaM _ from restoreState rapp.postState
