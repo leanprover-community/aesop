@@ -176,7 +176,7 @@ any matches containing `hyp` are removed from `ms`. -/
 def eraseHyp (imap : InstMap) (hyp : FVarId) (slot : SlotIndex) :
     InstMap :=
   imap.modifyMapsForSlotsFrom slot λ ms hs =>
-    let ms := PersistentHashSet.filter (·.containsHyp hyp) ms
+    let ms := PersistentHashSet.filter (! ·.containsHyp hyp) ms
     let hs := hs.erase { fvarId? := hyp, subst := default }
     (ms, hs)
 
@@ -186,7 +186,7 @@ removed from `hs` and any matches containing `subst` are removed from `ms`. -/
 def erasePatSubst (imap : InstMap) (subst : Substitution) (slot : SlotIndex) :
     InstMap :=
   imap.modifyMapsForSlotsFrom slot λ ms hs =>
-    let ms := PersistentHashSet.filter (·.containsPatSubst subst) ms
+    let ms := PersistentHashSet.filter (! ·.containsPatSubst subst) ms
     let hs := hs.erase { fvarId? := none, subst }
     (ms, hs)
 
