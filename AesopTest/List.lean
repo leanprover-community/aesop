@@ -231,7 +231,6 @@ attribute [aesop safe cases (cases_patterns := [List.Mem _ [], List.Mem _ (_ :: 
 theorem X.mem_singleton_self (a : α) : a ∈ [a] := by
   aesop
 
-attribute [-simp] mem_singleton
 -- attribute [-simp] eq_of_mem_singleton
 theorem X.eq_of_mem_singleton {a b : α} : a ∈ [b] → a = b := by
   aesop
