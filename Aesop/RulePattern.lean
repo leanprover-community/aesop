@@ -144,7 +144,7 @@ where
     for h : i in [:s.paramNames.size] do
       lmvarIdToPos := lmvarIdToPos.insert paramToLMVarId[s.paramNames[i]]! i
     let result :=
-      { paramNames := s.paramNames, numMVars := s.fvars.size, expr := e }
+      { paramNames := s.paramNames, mvars := s.mvars, expr := e }
     return (result, mvarIdToPos, lmvarIdToPos)
 
 end Aesop.RulePattern
