@@ -34,8 +34,11 @@ When we assign a metavariable `m`, we must take some care:
   assignments, since they may additionally contain delayed-assigned
   metavariables which depend on the unassigned metavariables.
 
-We also replay env modifications in a similar fashion. We assume that rules only
-add declarations to the environment.
+We also replay environment modifications -- e.g., auxiliary declarations added
+by a tactic -- in a similar fashion. To do this, we use
+`Environment.replayConsts`, so newly added constants are sent to the kernel
+again and environment extensions get a chance to replay their changes with
+`replay?`.
 
 If the root goal is not proven, we extract the goals after safe rule
 applications. This means we proceed as above, but stop as soon as we reach the
@@ -51,11 +54,8 @@ local macro "throwPRError " s:interpolatedStr(term) : term =>
 
 -- ## Copying Declarations
 
-
 private def copyEnvModifications (oldEnv newEnv : Environment) : CoreM Unit := do
-  let env ← getEnv
-  let env ← env.replayConsts oldEnv newEnv
-  setEnv env
+  setEnv $ ← (← getEnv).replayConsts oldEnv newEnv (skipExisting := true)
 
 -- ## Copying Metavariables
 
@@ -104,7 +104,7 @@ private def visitGoal (parentEnv : Environment) (g : Goal) :
   | NormalizationState.normal postNormGoal postState _ =>
     copyEnvModifications parentEnv postState.core.env
     copyExprMVar postState g.preNormGoal
-    return (postNormGoal, g.children, ← getEnv)
+    return (postNormGoal, g.children, postState.core.env)
   | NormalizationState.provenByNormalization postState _ =>
     copyEnvModifications parentEnv postState.core.env
     copyExprMVar postState g.preNormGoal
