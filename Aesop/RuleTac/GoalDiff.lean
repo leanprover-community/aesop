@@ -65,13 +65,13 @@ protected def GoalDiff.empty (oldGoal newGoal : MVarId) : GoalDiff := {
 def isRPINFEqual (goal₁ goal₂ : MVarId) (e₁ e₂ : Expr) : BaseM Bool :=
   return (← goal₁.withContext $ rpinf e₁) == (← goal₂.withContext $ rpinf e₂)
 
-def isRPINFEqualLDecl (goal₁ goal₂ : MVarId) :
-    (ldecl₁ ldecl₂ : LocalDecl) → BaseM Bool
-  | .cdecl (type := type₁) .., .cdecl (type := type₂) .. =>
-    isRPINFEqual goal₁ goal₂ type₁ type₂
-  | .ldecl (type := type₁) (value := value₁) .., .ldecl (type := type₂) (value := value₂) .. =>
-    isRPINFEqual goal₁ goal₂ type₁ type₂ <&&>
-    isRPINFEqual goal₁ goal₂ value₁ value₂
+def isRPINFEqualLDecl (goal₁ goal₂ : MVarId) (ldecl₁ ldecl₂ : LocalDecl) : BaseM Bool :=
+  match ldecl₁.isLet, ldecl₂.isLet with
+  | false, false =>
+    isRPINFEqual goal₁ goal₂ ldecl₁.type ldecl₂.type
+  | true, true =>
+    isRPINFEqual goal₁ goal₂ ldecl₁.type ldecl₂.type <&&>
+    isRPINFEqual goal₁ goal₂ ldecl₁.value ldecl₂.value
   | _, _ => return false
 
 def getNewFVars (oldGoal newGoal : MVarId) (oldLCtx newLCtx : LocalContext) :
