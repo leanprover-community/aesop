@@ -281,19 +281,18 @@ mutual
       | _, _ => return false
 
   @[specialize]
-  unsafe def localDeclsEqualUpToIdsCore :
-      LocalDecl → LocalDecl → ReaderT GoalContext EqualUpToIdsM Bool
-    | .cdecl _ _ userName₁ type₁ bi₁ kind₁,
-      .cdecl _ _ userName₂ type₂ bi₂ kind₂ =>
-      pure (namesEqualUpToMacroScopes userName₁ userName₂ && bi₁ == bi₂ &&
-            kind₁ == kind₂) <&&>
-      exprsEqualUpToIdsCore₁ type₁ type₂
-    | .ldecl _ _ userName₁ type₁ v₁ _ kind₁,
-      .ldecl _ _ userName₂ type₂ v₂ _ kind₂ =>
-      pure (namesEqualUpToMacroScopes userName₁ userName₂ &&
-            kind₁ == kind₂) <&&>
-      exprsEqualUpToIdsCore₁ type₁ type₂ <&&>
-      exprsEqualUpToIdsCore₁ v₁ v₂
+  unsafe def localDeclsEqualUpToIdsCore (ldecl₁ ldecl₂ : LocalDecl) :
+      ReaderT GoalContext EqualUpToIdsM Bool :=
+    match ldecl₁.isLet, ldecl₂.isLet with
+    | false, false =>
+      pure (namesEqualUpToMacroScopes ldecl₁.userName ldecl₂.userName && ldecl₁.binderInfo == ldecl₂.binderInfo &&
+        ldecl₁.kind == ldecl₂.kind) <&&>
+      exprsEqualUpToIdsCore₁ ldecl₁.type ldecl₂.type
+    | true, true =>
+      pure (namesEqualUpToMacroScopes ldecl₁.userName ldecl₂.userName &&
+            ldecl₁.kind == ldecl₂.kind) <&&>
+      exprsEqualUpToIdsCore₁ ldecl₁.type ldecl₂.type <&&>
+      exprsEqualUpToIdsCore₁ ldecl₁.value ldecl₂.value
     | _, _ => return false
 
   @[specialize]
