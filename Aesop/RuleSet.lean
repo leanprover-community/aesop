@@ -599,10 +599,10 @@ def mkLocalRuleSet (rss : Array (GlobalRuleSet × Name × Name))
       toBaseRuleSet := result.toBaseRuleSet.merge rs.toBaseRuleSet
       simpTheoremsArray :=
         result.simpTheoremsArray.push (simpExtName, rs.simpTheorems)
-      simpTheoremsArrayNonempty := by simp [result.simpTheoremsArrayNonempty]
+      simpTheoremsArrayNonempty := by simp
       simprocsArray :=
         result.simprocsArray.push (simprocExtName, rs.simprocs)
-      simprocsArrayNonempty := by simp [result.simprocsArrayNonempty]
+      simprocsArrayNonempty := by simp
     }
   if let some p := unindexPredicate? options then
     return result.unindex p
