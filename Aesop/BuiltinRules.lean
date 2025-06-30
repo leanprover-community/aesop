@@ -55,7 +55,7 @@ attribute [aesop (rule_sets := [builtin]) norm constructors] ULift
 attribute [aesop (rule_sets := [builtin]) norm 0 destruct] ULift.down
 
 @[aesop (rule_sets := [builtin]) norm simp]
-theorem heq_iff_eq (x y : α) : HEq x y ↔ x = y :=
+theorem heq_iff_eq (x y : α) : x ≍ y ↔ x = y :=
   ⟨eq_of_heq, heq_of_eq⟩
 
 end Aesop.BuiltinRules
