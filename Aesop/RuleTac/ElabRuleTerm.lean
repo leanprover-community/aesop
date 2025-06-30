@@ -59,7 +59,7 @@ def elabSimpTheorems (stx : Syntax) (ctx : Simp.Context)
     let kind : SimpKind := if isSimpAll then .simpAll else .simp
     let result ←
       elabSimpArgs stx ctx simprocs (eraseLocal := true) (kind := kind)
-    if result.starArg then
+    if result.simpArgs.any fun | (_, .star) => true | _ => false then
       throwError "aesop: simp builder currently does not support wildcard '*'"
     return (result.ctx, result.simprocs)
 

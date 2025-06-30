@@ -146,7 +146,7 @@ namespace SimpTheorems
 
 def addSimpEntry (s : SimpTheorems) : SimpEntry → SimpTheorems
   | SimpEntry.thm l =>
-    { addSimpTheoremEntry s l with erased := s.erased.erase l.origin }
+    { s.addSimpTheorem l with erased := s.erased.erase l.origin }
   | SimpEntry.toUnfold d =>
     { s with toUnfold := s.toUnfold.insert d }
   | SimpEntry.toUnfoldThms n thms => s.registerDeclToUnfoldThms n thms
