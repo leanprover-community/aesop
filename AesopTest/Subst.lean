@@ -73,11 +73,11 @@ example (h₁ : P ↔ Q) (h₂ : Q ↔ R) (h₃ : P) : R  := by
 error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
-example {P : α → Prop} {x y z : α} (h₁ : HEq x y) (h₂ : HEq y z) (h₃ : P x) :
+example {P : α → Prop} {x y z : α} (h₁ : x ≍ y) (h₂ : y ≍ z) (h₃ : P x) :
     P z  := by
   aesop (erase Aesop.BuiltinRules.subst)
     (config := { useSimpAll := false, terminal := true })
 
-example {P : α → Prop} {x y z : α} (h₁ : HEq x y) (h₂ : HEq y z) (h₃ : P x) :
+example {P : α → Prop} {x y z : α} (h₁ : x ≍ y) (h₂ : y ≍ z) (h₃ : P x) :
     P z  := by
   aesop (config := { useSimpAll := false })
