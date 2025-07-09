@@ -16,7 +16,7 @@ namespace Aesop.Frontend.Parser
 
 syntax (name := declareRuleSets)
   "declare_aesop_rule_sets " "[" ident,+,? "]"
-  ("(" &"default" " := " Aesop.bool_lit ")")? : command
+  (" (" &"default" " := " Aesop.bool_lit ")")? : command
 
 elab_rules : command
   | `(declare_aesop_rule_sets [ $ids:ident,* ]
