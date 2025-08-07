@@ -155,6 +155,18 @@ def makeInitialGoal (goal : Subgoal) (mvars : UnorderedArraySet MVarId)
 unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
   let originalSubgoals := r.goals
 
+  -- We update the rapp's `auxDeclNGen` to ensure that tactics on different
+  -- branches of the search tree generate different names for auxiliary
+  -- declarations.
+  let auxDeclNGen ←
+    match ← (← r.parent.get).parentRapp? with
+    | none =>
+      let (child, parent) := (← getDeclNGen).mkChild
+      setDeclNGen parent
+      pure child
+    | some parentRapp => parentRapp.getChildAuxDeclNameGenerator
+  let metaState := { r.postState with core.auxDeclNGen := auxDeclNGen }
+
   let rref : RappRef ← IO.mkRef $ Rapp.mk {
     id := ← getAndIncrementNextRappId
     parent := r.parent
@@ -165,7 +177,7 @@ unsafe def addRappUnsafe (r : AddRapp) : TreeM RappRef := do
     scriptSteps? := r.scriptSteps?
     originalSubgoals := originalSubgoals.map (·.mvarId)
     successProbability := r.successProbability
-    metaState := r.postState
+    metaState
     introducedMVars := {} -- will be filled in later
     assignedMVars   := {} -- will be filled in later
   }
