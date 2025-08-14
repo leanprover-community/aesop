@@ -44,8 +44,8 @@ axiom triangle (a b : Int) : |a + b| ≤ |a| + |b|
 
 example : |a + b| ≤ |c + d| := by
   aesop!
-  guard_hyp fwd   : |a + b| ≤ |a| + |b|
-  guard_hyp fwd_1 : |c + d| ≤ |c| + |d|
+  guard_hyp fwd_1 : |a + b| ≤ |a| + |b|
+  guard_hyp fwd : |c + d| ≤ |c| + |d|
   falso
 
 @[aesop safe apply (pattern := (0 : Nat))]
@@ -65,9 +65,7 @@ example (h : n = 0) : False := by
 
 -- Patterns may only contain variables mentioned in the rule.
 
-/--
-error: unknown identifier 'z'
--/
+/-- error: Unknown identifier `z` -/
 #guard_msgs in
 @[aesop safe forward (pattern := z)]
 axiom quuz (x y : Nat) : True
@@ -90,9 +88,7 @@ axiom baz (x y : Nat) : True
 
 abbrev T := (tt : True) → False
 
-/--
-error: unknown identifier 'tt'
--/
+/-- error: Unknown identifier `tt` -/
 #guard_msgs in
 @[aesop safe forward (pattern := tt)]
 axiom falso₁ : T
