@@ -90,7 +90,7 @@ def foldM [Monad m] (f : σ → α → m σ) (init : σ) (s : UnorderedArraySet 
     m σ :=
   s.rep.foldlM f init
 
-instance : ForIn m (UnorderedArraySet α) α where
+instance [Monad m] : ForIn m (UnorderedArraySet α) α where
   forIn s := forIn s.rep
 
 /-- O(n) -/
