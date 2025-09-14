@@ -69,25 +69,16 @@ section DiscrTree
 
 open DiscrTree
 
--- For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
--- `n` stars).
-
+/-
+For `type = ∀ (x₁, ..., xₙ), T`, returns keys that match `T * ... *` (with
+`n` stars).
+-/
 def getConclusionDiscrTreeKeys (type : Expr) : MetaM (Array Key) :=
   withoutModifyingState do
     let (_, _, conclusion) ← forallMetaTelescope type
     mkDiscrTreePath conclusion
     -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
     -- turn into `Key.star`) but not fvars.
-
--- For a constant `d` with type `∀ (x₁, ..., xₙ), T`, returns keys that
--- match `d * ... *` (with `n` stars).
-def getConstDiscrTreeKeys (decl : Name) : MetaM (Array Key) := do
-  let arity := (← getConstInfo decl).type.getNumHeadForalls
-  let mut keys := Array.mkEmpty (arity + 1)
-  keys := keys.push $ .const decl arity
-  for _ in [0:arity] do
-    keys := keys.push $ .star
-  return keys
 
 def isEmptyTrie : Trie α → Bool
   | .node vs children => vs.isEmpty && children.isEmpty
@@ -258,17 +249,10 @@ def runTacticSyntaxAsMetaM (stx : Syntax) (goals : List MVarId) :
     MetaM (List MVarId) :=
   return (← runTacticMAsMetaM (evalTactic stx) goals).snd
 
-
 def updateSimpEntryPriority (priority : Nat) (e : SimpEntry) : SimpEntry :=
   match e with
   | .thm t => .thm { t with priority }
   | .toUnfoldThms .. | .toUnfold .. => e
-
-def getMVarDependencies (e : Expr) : MetaM (Std.HashSet MVarId) := do
-  let (_, deps) ←
-    Lean.MVarId.getMVarDependencies.addMVars (includeDelayed := true) e
-    |>.run {}
-  return deps
 
 partial def hasSorry [Monad m] [MonadMCtx m] (e : Expr) : m Bool :=
   return go (← getMCtx) e
