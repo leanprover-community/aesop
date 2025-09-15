@@ -22,7 +22,7 @@ inductive PhaseName
 namespace PhaseName
 
 instance : Ord PhaseName where
-  compare s₁ s₂ := compare s₁.toCtorIdx s₂.toCtorIdx
+  compare s₁ s₂ := compare s₁.ctorIdx s₂.ctorIdx
 
 instance : ToString PhaseName where
   toString
@@ -43,7 +43,7 @@ inductive ScopeName
 namespace ScopeName
 
 instance : Ord ScopeName where
-  compare s₁ s₂ := compare s₁.toCtorIdx s₂.toCtorIdx
+  compare s₁ s₂ := compare s₁.ctorIdx s₂.ctorIdx
 
 instance : ToString ScopeName where
   toString
@@ -69,7 +69,7 @@ inductive BuilderName
 namespace BuilderName
 
 instance : Ord BuilderName where
-  compare b₁ b₂ := compare b₁.toCtorIdx b₂.toCtorIdx
+  compare b₁ b₂ := compare b₁.ctorIdx b₂.ctorIdx
 
 instance : ToString BuilderName where
   toString
