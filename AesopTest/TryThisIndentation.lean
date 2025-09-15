@@ -8,8 +8,9 @@ import Aesop
 
 /--
 info: Try this:
-  intro a_1 a_2
-  simp_all only [ne_eq, List.mem_cons, or_self, not_false_eq_true]
+
+      intro a_1 a_2
+    simp_all only [ne_eq, List.mem_cons, or_self, not_false_eq_true]
 -/
 #guard_msgs in
 example {a y : α} {l : List α} : a ≠ y → a ∉ l → a ∉ y::l := by
@@ -17,7 +18,8 @@ example {a y : α} {l : List α} : a ≠ y → a ∉ l → a ∉ y::l := by
 
 /--
 info: Try this:
-simp_all only [ne_eq, List.mem_cons, or_self, not_false_eq_true]
+
+    simp_all only [ne_eq, List.mem_cons, or_self, not_false_eq_true]
 -/
 #guard_msgs in
 example {a y : α} {l : List α} : a ≠ y → a ∉ l → a ∉ y::l := by

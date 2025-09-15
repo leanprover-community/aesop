@@ -41,10 +41,11 @@ theorem nonEmpty_append₁ {xs : MyList α} ys :
 
 /--
 info: Try this:
-  intro a
-  obtain @⟨x, xs_1⟩ := a
-  simp_all only [cons_append]
-  apply MyList.NonEmpty.cons
+
+      intro a
+    obtain @⟨x, xs_1⟩ := a
+    simp_all only [cons_append]
+    apply MyList.NonEmpty.cons
 -/
 #guard_msgs in
 theorem nonEmpty_append₁' {xs : MyList α} ys :

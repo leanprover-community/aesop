@@ -14,9 +14,10 @@ inductive MyFalse : Prop
 
 /--
 info: Try this:
-  split
-  next h => sorry
-  next h => sorry
+
+      split
+    next h => sorry
+    next h => sorry
 ---
 warning: declaration uses 'sorry'
 -/
@@ -27,9 +28,10 @@ example {A B : Prop} : if P then A else B := by
 
 /--
 info: Try this:
-  split at h
-  next h_1 => simp_all only [true_or]
-  next h_1 => simp_all only [or_true]
+
+      split at h
+    next h_1 => simp_all only [true_or]
+    next h_1 => simp_all only [or_true]
 -/
 #guard_msgs in
 example (h : if P then A else B) : A ∨ B := by
@@ -37,10 +39,11 @@ example (h : if P then A else B) : A ∨ B := by
 
 /--
 info: Try this:
-  split at h
-  next n => simp_all only [true_or]
-  next n => simp_all only [true_or, or_true]
-  next n_1 x x_1 => simp_all only [imp_false, or_true]
+
+      split at h
+    next n => simp_all only [true_or]
+    next n => simp_all only [true_or, or_true]
+    next n_1 x x_1 => simp_all only [imp_false, or_true]
 -/
 #guard_msgs in
 theorem foo (n : Nat) (h : match n with | 0 => A | 1 => B | _ => C) :
