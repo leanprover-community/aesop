@@ -13,9 +13,10 @@ set_option aesop.smallErrorMessages true
 
 /--
 info: Try this:
-  intro a
-  simp_all only [Nat.add_zero]
-  sorry
+
+      intro a
+    simp_all only [Nat.add_zero]
+    sorry
 ---
 warning: aesop: failed to prove the goal after exhaustive search.
 ---
@@ -35,7 +36,8 @@ inductive Even : Nat → Prop where
 
 /--
 info: Try this:
-sorry
+
+    sorry
 ---
 error: tactic 'aesop' failed, made no progress
 -/
@@ -47,9 +49,10 @@ attribute [aesop safe constructors] Even
 
 /--
 info: Try this:
-  apply Even.add_two
-  apply Even.add_two
-  sorry
+
+      apply Even.add_two
+    apply Even.add_two
+    sorry
 ---
 warning: aesop: failed to prove the goal after exhaustive search.
 ---
