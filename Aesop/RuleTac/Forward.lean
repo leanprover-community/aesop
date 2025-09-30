@@ -161,7 +161,7 @@ def applyForwardRule (goal : MVarId) (e : Expr)
       newGoal := goal
       addedFVars
       removedFVars := ∅
-      targetChanged := .false
+      targetMaybeChanged := false
     }
     if clear then
       let usedPropHyps ← goal.withContext do
@@ -224,7 +224,7 @@ def forwardMatches (ms : Array ForwardRuleMatch) : RuleTac :=
     let diff := {
       oldGoal := input.goal
       newGoal := goal
-      targetChanged := .false
+      targetMaybeChanged := false
       addedFVars, removedFVars
     }
     return (#[{ diff }], some steps, none)

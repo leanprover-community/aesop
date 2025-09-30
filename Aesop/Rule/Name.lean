@@ -16,13 +16,15 @@ inductive PhaseName
   | safe
   | «unsafe»
   deriving Inhabited, BEq, Hashable
-  -- NOTE: Constructors should be listed in alphabetical order for the Ord
-  -- instance.
+  -- NOTE: Constructors must be listed in order for Ord instance.
 
 namespace PhaseName
 
 instance : Ord PhaseName where
   compare s₁ s₂ := compare s₁.toCtorIdx s₂.toCtorIdx
+
+instance : LT PhaseName := ltOfOrd
+instance : LE PhaseName := leOfOrd
 
 instance : ToString PhaseName where
   toString
@@ -30,8 +32,17 @@ instance : ToString PhaseName where
     | safe => "safe"
     | «unsafe» => "unsafe"
 
-end PhaseName
+def next? : PhaseName → Option PhaseName
+  | norm => safe
+  | safe => «unsafe»
+  | «unsafe» => none
 
+def prev? : PhaseName → Option PhaseName
+  | norm => none
+  | safe => norm
+  | «unsafe» => safe
+
+end PhaseName
 
 inductive ScopeName
   | global

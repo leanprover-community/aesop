@@ -53,14 +53,15 @@ structure GoalDiff where
   in the new goal. -/
   removedFVars : Std.HashSet FVarId
   /-- Is the old goal's target RPINF equal to the new goal's target RPINF? -/
-  targetChanged : LBool
+  targetMaybeChanged : Bool
   deriving Inhabited
 
-protected def GoalDiff.empty (oldGoal newGoal : MVarId) : GoalDiff := {
+protected def GoalDiff.empty (goal : MVarId) : GoalDiff := {
+  oldGoal := goal
+  newGoal := goal
   addedFVars := ∅
   removedFVars := ∅
-  targetChanged := .undef
-  oldGoal, newGoal
+  targetMaybeChanged := false
 }
 
 def isRPINFEqual (goal₁ goal₂ : MVarId) (e₁ e₂ : Expr) : BaseM Bool :=
@@ -99,21 +100,18 @@ def diffGoals (old new : MVarId) : BaseM GoalDiff := do
     newGoal := new
     addedFVars := ← getNewFVars old new oldLCtx newLCtx
     removedFVars := ← getNewFVars new old newLCtx oldLCtx
-    targetChanged :=
-      ! (← isRPINFEqual old new (← old.getType) (← new.getType)) |>.toLBool
+    targetMaybeChanged := ! (← isRPINFEqual old new (← old.getType) (← new.getType))
   }
 
 namespace GoalDiff
 
-def targetChanged' (diff : GoalDiff) : BaseM Bool :=
-  match diff.targetChanged with
-  | .true => return true
-  | .false => return false
-  | .undef => do
-    let eq ←
-      isRPINFEqual diff.oldGoal diff.newGoal (← diff.oldGoal.getType)
-        (← diff.newGoal.getType)
-    return ! eq
+def isEmpty (diff : GoalDiff) : Bool :=
+  diff.addedFVars.isEmpty &&
+  diff.removedFVars.isEmpty &&
+  ! diff.targetMaybeChanged
+
+def hasAddedFVars (diff : GoalDiff) : Bool :=
+  ! diff.addedFVars.isEmpty
 
 /--
 If `diff₁` is the difference between goals `g₁` and `g₂` and `diff₂` is the
@@ -138,7 +136,7 @@ def comp (diff₁ diff₂ : GoalDiff) : GoalDiff where
         removedFVars
       else
         removedFVars.insert fvarId
-  targetChanged := lBoolOr diff₁.targetChanged diff₂.targetChanged
+  targetMaybeChanged := diff₁.targetMaybeChanged || diff₂.targetMaybeChanged
 
 def checkCore (diff : GoalDiff) (old new : MVarId) :
     BaseM (Option MessageData) := do
@@ -195,12 +193,7 @@ def checkCore (diff : GoalDiff) (old new : MVarId) :
   -- Check the target
   let oldTgt ← old.getType
   let newTgt ← new.getType
-  if ← (pure $ diff.targetChanged == .true) <&&>
-     isRPINFEqual old new oldTgt newTgt then
-    let oldTgt ← old.withContext do addMessageContext m!"{oldTgt}"
-    let newTgt ← new.withContext do addMessageContext m!"{newTgt}"
-    return some m!"diff says target changed, but old target{indentD oldTgt}\nis reducibly defeq to new target{indentD newTgt}"
-  if ← (pure $ diff.targetChanged == .false) <&&>
+  if ← (pure <| ! diff.targetMaybeChanged) <&&>
      notM (isRPINFEqual old new oldTgt newTgt) then
     let oldTgt ← old.withContext do addMessageContext m!"{oldTgt}"
     let newTgt ← new.withContext do addMessageContext m!"{newTgt}"

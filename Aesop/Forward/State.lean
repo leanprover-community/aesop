@@ -756,12 +756,27 @@ structure ForwardState where
   /-- Normalised types of all non-implementation detail hypotheses in the
   local context. -/
   hypTypes : PHashSet RPINF
+  /-- Diff between the goal represented by this forward state and the last goal
+  for which we have processed norm rules. If this is empty, the forward state
+  accurately represents the partial applications of norm rules to its goal. If
+  it's non-empty, we still need to process the hypotheses added in this diff.
+  `hypTypes` does not participate in this lazy updating scheme, so it's always
+  up to date for the goal. -/
+  unprocessedNormDiff : GoalDiff
+  /-- See `unprocessedNormDiff`. -/
+  unprocessedSafeDiff : GoalDiff
+  /-- See `unprocessedNormDiff`. -/
+  unprocessedUnsafeDiff : GoalDiff
  deriving Inhabited
 
 namespace ForwardState
 
-instance : EmptyCollection ForwardState where
-  emptyCollection := by refine' {..} <;> exact .empty
+/-- Get the combined unprocessed diff for the given phase and all earlier phases. -/
+def unprocessedDiff (phase : PhaseName) (fs : ForwardState) : GoalDiff :=
+  match phase with
+  | .norm => fs.unprocessedNormDiff
+  | .safe => fs.unprocessedNormDiff.comp fs.unprocessedSafeDiff
+  | .unsafe => fs.unprocessedNormDiff.comp fs.unprocessedSafeDiff |>.comp fs.unprocessedUnsafeDiff
 
 instance : ToMessageData ForwardState where
   toMessageData fs :=
@@ -789,10 +804,7 @@ def addHypCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
   goal.withContext do
   withConstAesopTraceNode .forward (return m!"add hyp {Expr.fvar h} ({h.name})") do
     let hTypeRPINF ← rpinf (← h.getType)
-    if (← isProp hTypeRPINF.toExpr) && fs.hypTypes.contains hTypeRPINF then
-      aesop_trace[forward] "a hyp with the same (propositional) type was already added"
-      return (fs,ruleMatches)
-    let fs := { fs with hypTypes := fs.hypTypes.insert hTypeRPINF }
+    let mut fs := { fs with hypTypes := fs.hypTypes.insert hTypeRPINF }
     ms.foldlM (init := (fs, ruleMatches)) λ (fs, ruleMatches) (r, i) => do
       withConstAesopTraceNode .forward (return m!"rule {r.name}, premise {i}") do
         let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState
