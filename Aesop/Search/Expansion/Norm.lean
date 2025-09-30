@@ -39,15 +39,14 @@ def getForwardState : NormM ForwardState :=
   return (← getThe NormM.State).forwardState
 
 def getResetForwardState : NormM ForwardState := do
-  modifyGetThe NormM.State λ s => (s.forwardState, { s with forwardState := ∅ })
+  modifyGetThe NormM.State λ s => (s.forwardState, { s with forwardState := default })
 
 def updateForwardState (fs : ForwardState) (newMatches : Array ForwardRuleMatch)
-    (erasedHyps : Std.HashSet FVarId) : NormM Unit :=
+    (erasedHyps : Std.HashSet FVarId) (consumedForwardRuleMatches : Array ForwardRuleMatch) : NormM Unit :=
   modifyThe NormM.State λ s => { s with
     forwardState := fs
     forwardRuleMatches :=
-      s.forwardRuleMatches.update newMatches erasedHyps
-        (consumedForwardRuleMatches := #[]) -- We erase the consumed matches separately.
+      s.forwardRuleMatches.update newMatches erasedHyps consumedForwardRuleMatches
   }
 
 def eraseForwardRuleMatch (m : ForwardRuleMatch) : NormM Unit := do
@@ -55,8 +54,13 @@ def eraseForwardRuleMatch (m : ForwardRuleMatch) : NormM Unit := do
 
 def applyDiffToForwardState (diff : GoalDiff) : NormM Unit := do
   let fs ← getResetForwardState
-  let (fs, ms) ← fs.applyGoalDiff (← read).ruleSet diff
-  updateForwardState fs ms diff.removedFVars
+  let fs ← fs.applyGoalDiff diff
+  updateForwardState fs ∅ diff.removedFVars ∅
+
+def progressForwardState : NormM Unit := do
+  let fs ← getResetForwardState
+  let (fs, ms) ← fs.progressToPhase .norm (← read).ruleSet
+  updateForwardState fs ms ∅ ∅
 
 inductive NormRuleResult
   | succeeded (goal : MVarId) (steps? : Option (Array Script.LazyStep))
@@ -91,38 +95,32 @@ def withNormTraceNode (ruleName : DisplayRuleName)
       let emoji := exceptRuleResultToEmoji (optNormRuleResultEmoji ·) r
       return m!"{emoji} {ruleName}"
 
-/-- On success, returns the rule tactic's result, the new forward state and the
-new forward rule matches. If `rule` corresponds to some forward rule matches,
-returns the matches as well. -/
-def runNormRuleTac (rule : NormRule) (input : RuleTacInput) (fs : ForwardState)
-    (rs : LocalRuleSet) :
-    NormM $
-      Option (NormRuleResult × ForwardState × Array ForwardRuleMatch × Std.HashSet FVarId) ×
-      Array ForwardRuleMatch := do
+def runNormRuleTac (rule : NormRule) (input : RuleTacInput) : NormM (Option NormRuleResult) := do
   let preMetaState ← show MetaM _ from saveState
   let result? ← runRuleTac rule.tac.run rule.name preMetaState input
-  let forwardRuleMatches := rule.tac.forwardRuleMatches? |>.getD #[]
+  let consumedForwardRuleMatches := rule.tac.forwardRuleMatches? |>.getD #[]
+  for m in consumedForwardRuleMatches do
+    eraseForwardRuleMatch m
   match result? with
   | .error e =>
     aesop_trace[steps] e.toMessageData
-    return (none, forwardRuleMatches)
+    return none
   | .ok result =>
     let #[rapp] := result.applications
       | err m!"rule did not produce exactly one rule application."
     show MetaM _ from restoreState rapp.postState
     if rapp.goals.isEmpty then
-      return (some (.proved rapp.scriptSteps?, fs, #[], ∅), forwardRuleMatches)
+      return some (.proved rapp.scriptSteps?)
     let (#[{ diff }]) := rapp.goals
       | err m!"rule produced more than one subgoal."
-    let (fs, ms) ← fs.applyGoalDiff rs diff
+    applyDiffToForwardState diff
     let g := diff.newGoal
     if ← Check.rules.isEnabled then
       let mvars := .ofArray input.mvars.toArray
       let actualMVars ← rapp.postState.runMetaM' g.getMVarDependencies
       if ! actualMVars == mvars then
          err "the goal produced by the rule depends on different metavariables than the original goal."
-    let result := .succeeded g rapp.scriptSteps?
-    return (some (result, fs, ms, diff.removedFVars), forwardRuleMatches)
+    return some (.succeeded g rapp.scriptSteps?)
   where
     err {α} (msg : MessageData) : MetaM α := throwError
       "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal input.goal}"
@@ -130,22 +128,14 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) (fs : ForwardState)
 def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (rule : IndexMatchResult NormRule) : NormM (Option NormRuleResult) := do
   profilingRule (.ruleName rule.rule.name) (λ result => result.isSome) do
-    let ruleInput := {
+    let input := {
       indexMatchLocations := rule.locations
       patternSubsts? := rule.patternSubsts?
       options := (← read).options
       goal, mvars
     }
     withNormTraceNode (.ruleName rule.rule.name) do
-      let fs ← getForwardState
-      let (result?, consumedForwardRuleMatches) ←
-        runNormRuleTac rule.rule ruleInput fs (← read).ruleSet
-      for m in consumedForwardRuleMatches do
-        eraseForwardRuleMatch m
-      let (some (result, fs, ms, removedFVars)) := result?
-        | return none
-      updateForwardState fs ms removedFVars
-      return result
+      runNormRuleTac rule.rule input
 
 def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
     (rules : Array (IndexMatchResult NormRule)) :
@@ -323,6 +313,7 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
   let mut anySuccess := false
   while iteration < maxIterations do
     if step.val == 0 then
+      progressForwardState
       let rules ←
         selectNormRules ctx.ruleSet (← getThe NormM.State).forwardRuleMatches
           goal
@@ -395,13 +386,14 @@ partial def normalizeGoalMVar (goal : MVarId)
 -- Returns true if the goal was solved by normalisation.
 def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
     SearchM Q Bool := do
-  let g ← gref.get
-  let preGoal := g.preNormGoal
-  if ← g.isRoot then
+  let preGoal := (← gref.get).preNormGoal
+  if ← (← gref.get).isRoot then
     -- For the root goal, we skip normalization.
     let rootState ← getRootMetaState
     gref.modify (·.setNormalizationState (.normal preGoal rootState #[]))
     return false
+  let g ← gref.get
+  let preGoal := g.preNormGoal
   match g.normalizationState with
   | .provenByNormalization .. => return true
   | .normal .. => return false

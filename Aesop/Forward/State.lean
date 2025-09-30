@@ -753,12 +753,27 @@ structure ForwardState where
   `patSubsts` maps the source `s` to a rule name `r` and pattern substitution `i`
   iff the rule state of `r` contains `i` with source `s`. -/
   patSubsts : PHashMap PatSubstSource (PArray (RuleName × Substitution))
+  /-- Diff between the goal represented by this forward state and the last goal
+  for which we have processed norm rules. If this is empty, the forward state
+  accurately represents the partial applications of norm rules to its goal. If
+  it's non-empty, we still need to process the hypotheses added in this diff.
+  `hypTypes` does not participate in this lazy updating scheme, so it's always
+  up to date for the goal. -/
+  unprocessedNormDiff : GoalDiff
+  /-- See `unprocessedNormDiff`. -/
+  unprocessedSafeDiff : GoalDiff
+  /-- See `unprocessedNormDiff`. -/
+  unprocessedUnsafeDiff : GoalDiff
  deriving Inhabited
 
 namespace ForwardState
 
-instance : EmptyCollection ForwardState where
-  emptyCollection := by refine' {..} <;> exact .empty
+/-- Get the combined unprocessed diff for the given phase and all earlier phases. -/
+def unprocessedDiff (phase : PhaseName) (fs : ForwardState) : GoalDiff :=
+  match phase with
+  | .norm => fs.unprocessedNormDiff
+  | .safe => fs.unprocessedNormDiff.comp fs.unprocessedSafeDiff
+  | .unsafe => fs.unprocessedNormDiff.comp fs.unprocessedSafeDiff |>.comp fs.unprocessedUnsafeDiff
 
 instance : ToMessageData ForwardState where
   toMessageData fs :=
