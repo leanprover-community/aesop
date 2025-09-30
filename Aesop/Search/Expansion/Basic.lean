@@ -5,6 +5,8 @@ Authors: Jannis Limperg
 -/
 
 import Aesop.RuleTac.Basic
+import Aesop.Tree.Data
+import Aesop.Forward.State.ApplyGoalDiff
 
 open Lean
 open Lean.Meta
@@ -26,5 +28,15 @@ def runRuleTac (tac : RuleTac) (ruleName : RuleName)
         if let (some err) ← rapp.check input then
           throwError "{Check.rules.name}: while applying rule {ruleName}: {err}"
   return result
+
+def GoalRef.progressForwardStateToPhase (phase : PhaseName) (rs : LocalRuleSet)
+    (rootMetaState : Meta.SavedState) (gref : GoalRef) : BaseM Unit := do
+  let (fs, ms) ← gref.modifyGet fun g =>
+    ((g.forwardState, g.forwardRuleMatches),
+     g.setForwardState default |>.setForwardRuleMatches default)
+  let (_, metaState) ← (← gref.get).currentGoalAndMetaState rootMetaState
+  let (fs, ms') ← runInMetaState metaState do fs.progressToPhase phase rs
+  gref.modify fun g =>
+    g.setForwardState fs |>.setForwardRuleMatches (ms.insertMany ms')
 
 end Aesop

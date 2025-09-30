@@ -16,7 +16,15 @@ def applyHyp (hyp : FVarId) (goal : MVarId) (md : TransparencyMode) :
   let (goals, #[step]) ← applyS goal (.fvar hyp) none md |>.run
     | throwError "aesop: internal error in applyHyps: multiple steps"
   return {
-    goals := goals.map λ mvarId => { diff := .empty goal mvarId }
+    goals := goals.map λ mvarId => {
+      diff := {
+        oldGoal := goal
+        newGoal := mvarId
+        addedFVars := ∅
+        removedFVars := ∅
+        targetMaybeChanged := true
+      }
+    }
     postState := step.postState
     scriptSteps? := #[step]
     successProbability? := none

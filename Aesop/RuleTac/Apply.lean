@@ -25,7 +25,15 @@ def applyExpr' (goal : MVarId) (e : Expr) (eStx : Term)
         pure e
     let (goals, #[step]) ← applyS goal e eStx md |>.run
       | throwError "aesop: internal error in applyExpr': multiple steps"
-    let goals := goals.map λ newGoal => { diff := .empty goal newGoal }
+    let goals := goals.map λ newGoal => {
+      diff := {
+        oldGoal := goal
+        addedFVars := ∅
+        removedFVars := ∅
+        targetMaybeChanged := true
+        newGoal
+      }
+    }
     return {
       goals
       postState := step.postState
