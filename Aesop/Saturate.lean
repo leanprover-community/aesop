@@ -64,10 +64,10 @@ where
     let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
     let preState ← show MetaM _ from saveState
     if let some diff ← tryNormRules goal mvars preState fs.hypTypes then
-      let (fs, _) ← fs.applyGoalDiff rs diff
+      let fs ← fs.applyGoalDiff diff
       return ← go diff.newGoal fs
     else if let some diff ← trySafeRules goal mvars preState fs.hypTypes then
-      let (fs, _) ← fs.applyGoalDiff rs diff
+      let fs ← fs.applyGoalDiff diff
       return ← go diff.newGoal fs
     else
       clearForwardImplDetailHyps goal
@@ -137,8 +137,10 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
   withExceptionPrefix "saturate: internal error: " do
   goal.withContext do
     goal.checkNotAssigned `saturate
-    let (fs, ruleMatches) ← rs.mkInitialForwardState goal
-    let queue := ruleMatches.foldl (init := ∅) λ queue m => queue.insert m
+    let (fs, ruleMatches₁) ← rs.mkInitialForwardState goal
+    let (fs, ruleMatches₂) ← fs.progressToPhase .safe rs
+    let queue := (ruleMatches₁ ++ ruleMatches₂).foldl (init := ∅) λ queue m =>
+      queue.insert m
     go ∅ fs queue ∅ goal
 where
   go (hypDepths : Std.HashMap FVarId Nat) (fs : ForwardState) (queue : Queue)
@@ -172,8 +174,10 @@ where
             go hypDepths fs queue erasedHyps goal
           else
             let rules ← rs.applicableForwardRules type
+              (minPhase := .norm) (maxPhase := .safe)
             let patInsts ←
               rs.forwardRulePatternSubstsInLocalDecl (← hyp.getDecl)
+                (minPhase := .norm) (maxPhase := .safe)
             let (fs, ruleMatches) ←
               fs.addHypWithPatSubsts goal hyp rules patInsts
             let queue :=

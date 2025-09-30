@@ -174,6 +174,7 @@ def SafeRulesResult.toEmoji : SafeRulesResult → String
   | skipped => ruleSkippedEmoji
 
 def runFirstSafeRule (gref : GoalRef) : SearchM Q SafeRulesResult := do
+  gref.progressForwardStateToPhase .safe (← read).ruleSet (← getRootMetaState)
   let g ← gref.get
   if g.unsafeRulesSelected then
     return .skipped
@@ -198,6 +199,8 @@ def applyPostponedSafeRule (r : PostponedSafeRule) (parentRef : GoalRef) :
 
 partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
     (parentRef : GoalRef) : SearchM Q RuleResult := do
+  parentRef.progressForwardStateToPhase .unsafe (← read).ruleSet
+    (← getRootMetaState)
   let queue ← selectUnsafeRules postponedSafeRules parentRef
   let (remainingQueue, result) ← loop queue
   parentRef.modify λ g => g.setUnsafeQueue remainingQueue
