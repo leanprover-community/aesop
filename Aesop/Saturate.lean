@@ -54,26 +54,22 @@ initialize
 partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId :=
   withExceptionPrefix "saturate: internal error: " do
   goal.checkNotAssigned `saturate
-  -- We use the forward state only to track the hypotheses present in the goal.
-  let (fs, _) ← rs.mkInitialForwardState goal
-  go goal fs
+  go goal
 where
-  go (goal : MVarId) (fs : ForwardState) : SaturateM MVarId :=
+  go (goal : MVarId) : SaturateM MVarId :=
     withIncRecDepth do
     trace[saturate] "goal {goal.name}:{indentD goal}"
     let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
     let preState ← show MetaM _ from saveState
-    if let some diff ← tryNormRules goal mvars preState then
-      let (fs, _) ← fs.applyGoalDiff rs diff
-      return ← go diff.newGoal fs
-    else if let some diff ← trySafeRules goal mvars preState then
-      let (fs, _) ← fs.applyGoalDiff rs diff
-      return ← go diff.newGoal fs
+    if let some newGoal ← tryNormRules goal mvars preState then
+      go newGoal
+    else if let some newGoal ← trySafeRules goal mvars preState then
+      go newGoal
     else
       clearForwardImplDetailHyps goal
 
   tryNormRules (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-      (preState : Meta.SavedState) : SaturateM (Option GoalDiff) :=
+      (preState : Meta.SavedState) : SaturateM (Option MVarId) :=
     withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying normalisation rules") do
       let matchResults ←
         withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting normalisation rules") do
@@ -82,7 +78,7 @@ where
       runFirstRule goal mvars preState matchResults
 
   trySafeRules (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-      (preState : Meta.SavedState) : SaturateM (Option GoalDiff) :=
+      (preState : Meta.SavedState) : SaturateM (Option MVarId) :=
     withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying safe rules") do
       let matchResults ←
         withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting safe rules") do
@@ -114,7 +110,7 @@ where
   runFirstRule {α} (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       (preState : Meta.SavedState)
       (matchResults : Array (IndexMatchResult (Rule α))) :
-      SaturateM (Option GoalDiff) := do
+      SaturateM (Option MVarId) := do
     for matchResult in matchResults do
       let ruleResult? ← runRule goal mvars preState matchResult
       if let some (diff, scriptSteps?) := ruleResult? then
@@ -122,7 +118,7 @@ where
           let some scriptSteps := scriptSteps?
             | throwError "rule '{matchResult.rule.name}' does not support script generation (saturate?)"
           recordScriptSteps scriptSteps
-        return some diff
+        return some diff.newGoal
     return none
 
 namespace Stateful
@@ -134,8 +130,10 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
   withExceptionPrefix "saturate: internal error: " do
   goal.withContext do
     goal.checkNotAssigned `saturate
-    let (fs, ruleMatches) ← rs.mkInitialForwardState goal
-    let queue := ruleMatches.foldl (init := ∅) λ queue m => queue.insert m
+    let (fs, ruleMatches₁) ← rs.mkInitialForwardState goal
+    let (fs, ruleMatches₂) ← fs.progressToPhase .safe rs
+    let queue := (ruleMatches₁ ++ ruleMatches₂).foldl (init := ∅) λ queue m =>
+      queue.insert m
     go ∅ fs queue ∅ goal
 where
   go (hypDepths : Std.HashMap FVarId Nat) (fs : ForwardState) (queue : Queue)
@@ -165,8 +163,10 @@ where
             go hypDepths fs queue erasedHyps goal
           else
             let rules ← rs.applicableForwardRules type
+              (minPhase := .norm) (maxPhase := .safe)
             let patInsts ←
               rs.forwardRulePatternSubstsInLocalDecl (← hyp.getDecl)
+                (minPhase := .norm) (maxPhase := .safe)
             let (fs, ruleMatches) ←
               fs.addHypWithPatSubsts goal hyp rules patInsts
             let queue :=
