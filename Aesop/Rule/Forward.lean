@@ -3,11 +3,14 @@ Copyright (c) 2024 Xavier Généreux. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
+module
 
-import Aesop.Forward.RuleInfo
-import Aesop.Percent
-import Aesop.Rule.Name
-import Aesop.RuleTac.RuleTerm
+public import Aesop.Forward.RuleInfo
+public import Aesop.Percent
+public import Aesop.Rule.Name
+public import Aesop.RuleTac.RuleTerm
+
+@[expose] public section
 
 set_option linter.missingDocs true
 

@@ -3,9 +3,12 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Search.Expansion.Norm
-import Aesop.Tree.AddRapp
+public import Aesop.Search.Expansion.Norm
+public import Aesop.Tree.AddRapp
+
+@[expose] public section
 
 open Lean
 open Lean.Meta

@@ -3,9 +3,12 @@ Copyright (c) 2023 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Util.Basic
-import Aesop.Util.EqualUpToIds
+public import Aesop.Util.Basic
+public import Aesop.Util.EqualUpToIds
+
+@[expose] public section
 
 namespace Aesop
 

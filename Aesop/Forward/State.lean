@@ -3,8 +3,11 @@ Copyright (c) 2024 Xavier Généreux. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
+module
 
-import Aesop.Forward.Match
+public import Aesop.Forward.Match
+
+@[expose] public section
 
 open Lean Lean.Meta
 open ExceptToEmoji (toEmoji)

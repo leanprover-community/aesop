@@ -1,5 +1,9 @@
-import Aesop.Tree.RunMetaM
-import Aesop.Tracing
+module
+
+public import Aesop.Tree.RunMetaM
+public import Aesop.Tracing
+
+@[expose] public section
 
 open Lean
 open MessageData

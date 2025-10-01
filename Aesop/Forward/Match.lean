@@ -3,18 +3,21 @@ Copyright (c) 2024 Xavier Généreux. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
+module
 
-import Aesop.Forward.Match.Types
-import Aesop.Forward.PremiseIndex
-import Aesop.Forward.SlotIndex
-import Aesop.Rule
-import Aesop.Rule.Forward
-import Aesop.RuleTac.Descr
-import Aesop.RuleTac.ElabRuleTerm
-import Aesop.RuleTac.Forward.Basic
-import Aesop.Script.SpecificTactics
-import Batteries.Lean.Meta.UnusedNames
-import Lean
+public import Aesop.Forward.Match.Types
+public import Aesop.Forward.PremiseIndex
+public import Aesop.Forward.SlotIndex
+public import Aesop.Rule
+public import Aesop.Rule.Forward
+public import Aesop.RuleTac.Descr
+public import Aesop.RuleTac.ElabRuleTerm
+public import Aesop.RuleTac.Forward.Basic
+public import Aesop.Script.SpecificTactics
+public import Batteries.Lean.Meta.UnusedNames
+public import Lean
+
+@[expose] public section
 
 set_option linter.missingDocs true
 

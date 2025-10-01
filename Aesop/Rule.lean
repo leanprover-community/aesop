@@ -3,9 +3,12 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
+module
 
-import Aesop.Rule.Basic
-import Aesop.Percent
+public import Aesop.Rule.Basic
+public import Aesop.Percent
+
+@[expose] public section
 
 namespace Aesop
 

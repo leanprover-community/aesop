@@ -3,9 +3,12 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Forward.Substitution
-import Aesop.Rule.Name
+public import Aesop.Forward.Substitution
+public import Aesop.Rule.Name
+
+@[expose] public section
 
 open Lean
 

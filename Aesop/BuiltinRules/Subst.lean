@@ -3,9 +3,12 @@ Copyright (c) 2022--2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Frontend.Attribute
-import Aesop.RuleTac.Forward.Basic
+public import Aesop.Frontend.Attribute
+public import Aesop.RuleTac.Forward.Basic
+
+@[expose] public section
 
 open Lean Lean.Meta Aesop.Script
 

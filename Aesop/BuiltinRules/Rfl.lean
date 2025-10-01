@@ -3,8 +3,11 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Frontend.Attribute
+public import Aesop.Frontend.Attribute
+
+@[expose] public section
 
 open Lean Lean.Elab.Tactic
 

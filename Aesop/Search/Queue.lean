@@ -3,12 +3,15 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Options
-import Aesop.Tracing
-import Aesop.Tree
-import Aesop.Search.Queue.Class
-import Batteries.Data.BinomialHeap.Basic
+public import Aesop.Options
+public import Aesop.Tracing
+public import Aesop.Tree
+public import Aesop.Search.Queue.Class
+public import Batteries.Data.BinomialHeap.Basic
+
+@[expose] public section
 
 open Lean
 open Batteries (BinomialHeap)

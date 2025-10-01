@@ -3,14 +3,17 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
+module
 
-import Aesop.Index.DiscrTreeConfig
-import Aesop.Nanos
-import Aesop.Util.UnorderedArraySet
-import Batteries.Lean.Expr
-import Batteries.Data.String.Basic
-import Lean
-import Std.Data.HashSet.Basic
+public import Aesop.Index.DiscrTreeConfig
+public import Aesop.Nanos
+public import Aesop.Util.UnorderedArraySet
+public import Batteries.Lean.Expr
+public import Batteries.Data.String.Basic
+public import Lean
+public import Std.Data.HashSet.Basic
+
+@[expose] public section
 
 open Lean
 open Lean.Meta Lean.Elab.Tactic

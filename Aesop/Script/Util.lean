@@ -3,10 +3,13 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Util.Basic
-import Aesop.Util.EqualUpToIds
-import Batteries.Lean.Meta.SavedState
+public import Aesop.Util.Basic
+public import Aesop.Util.EqualUpToIds
+public import Batteries.Lean.Meta.SavedState
+
+@[expose] public section
 
 open Lean Std Lean.Meta
 

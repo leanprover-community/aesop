@@ -3,16 +3,19 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Forward.Match
-import Aesop.Index.Basic
-import Aesop.Index.RulePattern
-import Aesop.RulePattern
-import Aesop.Rule.Basic
-import Aesop.Tracing
-import Batteries.Lean.Meta.InstantiateMVars
-import Batteries.Lean.PersistentHashSet
-import Batteries.Lean.Meta.DiscrTree
+public import Aesop.Forward.Match
+public import Aesop.Index.Basic
+public import Aesop.Index.RulePattern
+public import Aesop.RulePattern
+public import Aesop.Rule.Basic
+public import Aesop.Tracing
+public import Batteries.Lean.Meta.InstantiateMVars
+public import Batteries.Lean.PersistentHashSet
+public import Batteries.Lean.Meta.DiscrTree
+
+@[expose] public section
 
 open Lean
 open Lean.Meta

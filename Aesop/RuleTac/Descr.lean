@@ -1,5 +1,9 @@
-import Aesop.RuleTac.Basic
-import Aesop.Forward.Match.Types
+module
+
+public import Aesop.RuleTac.Basic
+public import Aesop.Forward.Match.Types
+
+@[expose] public section
 
 open Lean Lean.Meta
 

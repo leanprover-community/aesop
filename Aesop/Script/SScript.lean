@@ -1,4 +1,8 @@
-import Aesop.Script.Step
+module
+
+public import Aesop.Script.Step
+
+@[expose] public section
 
 open Lean Lean.Meta
 

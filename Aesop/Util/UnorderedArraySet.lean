@@ -3,8 +3,12 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-import Batteries.Data.Array.Merge
-import Lean.Message
+module
+
+public import Batteries.Data.Array.Merge
+public import Lean.Message
+
+@[expose] public section
 
 open Lean Std
 

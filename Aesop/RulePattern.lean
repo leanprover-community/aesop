@@ -3,12 +3,15 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Forward.Substitution
-import Aesop.RPINF
-import Aesop.Rule.Name
-import Aesop.Tracing
-import Aesop.Index.DiscrTreeConfig
+public import Aesop.Forward.Substitution
+public import Aesop.RPINF
+public import Aesop.Rule.Name
+public import Aesop.Tracing
+public import Aesop.Index.DiscrTreeConfig
+
+@[expose] public section
 
 open Lean Lean.Meta
 

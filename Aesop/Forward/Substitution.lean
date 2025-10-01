@@ -3,11 +3,14 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Forward.LevelIndex
-import Aesop.Forward.PremiseIndex
-import Aesop.RPINF.Basic
-import Aesop.Util.Basic
+public import Aesop.Forward.LevelIndex
+public import Aesop.Forward.PremiseIndex
+public import Aesop.RPINF.Basic
+public import Aesop.Util.Basic
+
+@[expose] public section
 
 namespace Aesop
 

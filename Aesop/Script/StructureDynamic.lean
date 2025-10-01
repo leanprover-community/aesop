@@ -3,12 +3,15 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Script.UScript
-import Aesop.Script.UScriptToSScript
-import Aesop.Script.Util
-import Aesop.Script.SScript
-import Aesop.Tracing
+public import Aesop.Script.UScript
+public import Aesop.Script.UScriptToSScript
+public import Aesop.Script.Util
+public import Aesop.Script.SScript
+public import Aesop.Tracing
+
+@[expose] public section
 
 open Lean Lean.Meta
 

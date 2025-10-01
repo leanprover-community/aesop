@@ -3,10 +3,13 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Index.Basic
-import Aesop.RuleTac.GoalDiff
-import Batteries.Lean.Meta.DiscrTree
+public import Aesop.Index.Basic
+public import Aesop.RuleTac.GoalDiff
+public import Batteries.Lean.Meta.DiscrTree
+
+@[expose] public section
 
 set_option linter.missingDocs true
 

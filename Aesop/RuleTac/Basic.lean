@@ -3,17 +3,20 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Forward.Match.Types
-import Aesop.Index.Basic
-import Aesop.Percent
-import Aesop.Rule.Forward
-import Aesop.RuleTac.GoalDiff
-import Aesop.RuleTac.FVarIdSubst
-import Aesop.Script.CtorNames
-import Aesop.Script.Step
-import Batteries.Lean.Meta.SavedState
-import Aesop.Options.Internal
+public import Aesop.Forward.Match.Types
+public import Aesop.Index.Basic
+public import Aesop.Percent
+public import Aesop.Rule.Forward
+public import Aesop.RuleTac.GoalDiff
+public import Aesop.RuleTac.FVarIdSubst
+public import Aesop.Script.CtorNames
+public import Aesop.Script.Step
+public import Batteries.Lean.Meta.SavedState
+public import Aesop.Options.Internal
+
+@[expose] public section
 
 open Lean
 open Lean.Elab.Tactic

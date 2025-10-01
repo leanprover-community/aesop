@@ -1,7 +1,11 @@
-import Aesop.Forward.PremiseIndex
-import Aesop.Forward.SlotIndex
-import Aesop.Forward.Substitution
-import Aesop.Rule.Forward
+module
+
+public import Aesop.Forward.PremiseIndex
+public import Aesop.Forward.SlotIndex
+public import Aesop.Forward.Substitution
+public import Aesop.Rule.Forward
+
+@[expose] public section
 
 set_option linter.missingDocs true
 

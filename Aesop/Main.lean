@@ -3,10 +3,13 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Search.Main
-import Aesop.Frontend.Tactic
-import Aesop.Stats.Extension
+public import Aesop.Search.Main
+public import Aesop.Frontend.Tactic
+public import Aesop.Stats.Extension
+
+@[expose] public section
 
 open Lean
 open Lean.Elab.Tactic
