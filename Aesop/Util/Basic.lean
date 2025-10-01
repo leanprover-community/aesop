@@ -514,7 +514,7 @@ def Name.ofComponents (cs : List Name) : Name :=
     | result, .num _ n => .num result n
     | result, .anonymous => result
 
-@[macro_inline]
+@[macro_inline, expose]
 def withExceptionTransform [Monad m] [MonadError m]
     (f : MessageData → MessageData) (x : m α) : m α := do
   try
@@ -524,7 +524,7 @@ def withExceptionTransform [Monad m] [MonadError m]
     | .internal _ _ => throw e
     | .error ref msg => throw $ .error ref (f msg)
 
-@[macro_inline]
+@[macro_inline, expose]
 def withExceptionPrefix [Monad m] [MonadError m] (pre : MessageData) :
     m α → m α :=
   withExceptionTransform (λ msg => pre ++ msg)

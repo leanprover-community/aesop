@@ -95,7 +95,7 @@ def foldM [Monad m] (f : σ → α → m σ) (init : σ) (s : UnorderedArraySet 
   s.rep.foldlM f init
 
 instance : ForIn m (UnorderedArraySet α) α where
-  forIn s := forIn s.rep
+  forIn s := private forIn s.rep
 
 /-- O(n) -/
 def fold (f : σ → α → σ) (init : σ) (s : UnorderedArraySet α) : σ :=
@@ -135,12 +135,12 @@ def all (p : α → Bool) (s : UnorderedArraySet α) (start := 0) (stop := s.siz
   s.rep.all p start stop
 
 instance [ToString α] : ToString (UnorderedArraySet α) where
-  toString s := toString s.rep
+  toString s := private toString s.rep
 
 instance [ToFormat α] : ToFormat (UnorderedArraySet α) where
-  format s := format s.rep
+  format s := private format s.rep
 
 instance [ToMessageData α] : ToMessageData (UnorderedArraySet α) where
-  toMessageData s := toMessageData s.rep
+  toMessageData s := private toMessageData s.rep
 
 end Aesop.UnorderedArraySet

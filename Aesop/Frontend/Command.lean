@@ -5,13 +5,13 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Frontend.Basic
-public import Aesop.Stats.Report
-public import Batteries.Linter.UnreachableTactic
-public import Aesop.Frontend.Extension
-public import Aesop.Frontend.RuleExpr
+public meta import Aesop.Frontend.Basic
+public meta import Aesop.Stats.Report
+public meta import Batteries.Linter.UnreachableTactic
+public meta import Aesop.Frontend.Extension
+public meta import Aesop.Frontend.RuleExpr
 
-public section
+public meta section
 
 open Lean Lean.Elab Lean.Elab.Command
 

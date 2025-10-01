@@ -5,9 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Search.Main
-public import Aesop.Frontend.Tactic
-public import Aesop.Stats.Extension
+public meta import Aesop.Search.Main
+public meta import Aesop.Frontend.Tactic
+public meta import Aesop.Stats.Extension
 
 public section
 
@@ -17,7 +17,7 @@ open Lean.Elab.Tactic
 namespace Aesop
 
 @[tactic Frontend.Parser.aesopTactic, tactic Frontend.Parser.aesopTactic?]
-def evalAesop : Tactic := λ stx => do
+meta def evalAesop : Tactic := λ stx => do
   profileitM Exception "aesop" (← getOptions) do
   let goal ← getMainGoal
   goal.withContext do

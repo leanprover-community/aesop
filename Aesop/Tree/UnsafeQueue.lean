@@ -55,7 +55,7 @@ instance : Ord UnsafeQueueEntry :=
 end UnsafeQueueEntry
 
 
-def UnsafeQueue := Subarray UnsafeQueueEntry
+@[expose] def UnsafeQueue := Subarray UnsafeQueueEntry
 
 namespace UnsafeQueue
 

@@ -5,10 +5,12 @@ Authors: Jannis Limperg
 -/
 module
 
+public meta import Aesop.Frontend.Extension
+public meta import Aesop.Frontend.RuleExpr
 public import Aesop.Frontend.Extension
 public import Aesop.Frontend.RuleExpr
 
-public section
+public meta section
 
 open Lean
 open Lean.Elab

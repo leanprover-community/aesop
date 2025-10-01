@@ -5,11 +5,11 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Saturate
-public import Aesop.Frontend.Extension
-public import Aesop.Builder.Forward
+public meta import Aesop.Saturate
+public meta import Aesop.Frontend.Extension
+public meta import Aesop.Builder.Forward
 
-public section
+public meta section
 
 open Lean Lean.Meta Lean.Elab Lean.Elab.Term Lean.PrettyPrinter
 

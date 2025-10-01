@@ -17,7 +17,7 @@ set_option linter.missingDocs true
 namespace Aesop
 
 /-- Entry of the rule pattern cache. -/
-def RulePatternCache.Entry := Array (RuleName × Substitution)
+@[expose] def RulePatternCache.Entry := Array (RuleName × Substitution)
 
 set_option linter.missingDocs false in
 /-- A cache for the rule pattern index. -/

@@ -97,7 +97,7 @@ end RappId
 
 /-! ## Iterations -/
 
-def Iteration := Nat
+@[expose] def Iteration := Nat
   deriving Inhabited
 
 namespace Iteration

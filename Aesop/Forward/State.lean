@@ -89,7 +89,7 @@ namespace InstMap
 instance : EmptyCollection InstMap := ⟨⟨.empty⟩⟩
 
 instance : ToMessageData InstMap where
-  toMessageData m :=
+  toMessageData m := private
     ppPHashMap (indent := true) $
       m.map.map λ instMap =>
         ppPHashMap (indent := false) $
@@ -208,7 +208,7 @@ instance : EmptyCollection VariableMap :=
   ⟨⟨.empty⟩⟩
 
 instance : ToMessageData VariableMap where
-  toMessageData m := ppPHashMap (indent := true) m.map
+  toMessageData m := private ppPHashMap (indent := true) m.map
 
 /-- Get the `InstMap` associated with a variable. -/
 def find? (vmap : VariableMap) (var : PremiseIndex) : Option InstMap :=
@@ -371,7 +371,7 @@ instance : ToMessageData ClusterState where
        complete matches:{indentD $ .joinSep (PersistentHashSet.toList cs.completeMatches |>.map toMessageData) "\n"}"
 
 /-- Get the slot with the given index. Panic if the index is invalid. -/
-@[macro_inline, always_inline]
+@[macro_inline, always_inline, expose]
 def slot! (cs : ClusterState) (slot : SlotIndex) : Slot :=
   cs.slots[slot.toNat]!
 

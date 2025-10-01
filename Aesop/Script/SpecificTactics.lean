@@ -8,6 +8,7 @@ module
 public import Aesop.Util.Tactic
 public import Aesop.Util.Tactic.Ext
 public import Aesop.Util.Tactic.Unfold
+public import Aesop.Util.Unfold
 public import Aesop.Script.CtorNames
 public import Aesop.Script.ScriptM
 public import Batteries.Lean.Meta.Inaccessible

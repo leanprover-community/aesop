@@ -115,7 +115,7 @@ structure RuleTacOutput where
 /--
 A `RuleTac` is the tactic that is run when a rule is applied to a goal.
 -/
-def RuleTac := RuleTacInput → BaseM RuleTacOutput
+@[expose] def RuleTac := RuleTacInput → BaseM RuleTacOutput
 
 instance : Inhabited RuleTac := by
   unfold RuleTac; exact inferInstance
@@ -123,7 +123,7 @@ instance : Inhabited RuleTac := by
 /--
 A `RuleTac` which generates only a single `RuleApplication`.
 -/
-def SingleRuleTac :=
+@[expose] def SingleRuleTac :=
   RuleTacInput →
   BaseM (Array Subgoal × Option (Array Script.LazyStep) × Option Percent)
 
@@ -165,7 +165,7 @@ abbrev TacGen := MVarId → MetaM (Array (String × Float))
 
 /-! # Rule Tactic Descriptions -/
 
-def CasesPattern := AbstractMVarsResult
+@[expose] def CasesPattern := AbstractMVarsResult
   deriving Inhabited
 
 inductive CasesTarget

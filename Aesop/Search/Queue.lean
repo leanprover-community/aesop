@@ -59,7 +59,7 @@ protected def ofGoalRef (gref : GoalRef) : BaseIO ActiveGoal := do
 
 end BestFirstQueue.ActiveGoal
 
-def BestFirstQueue :=
+@[expose] def BestFirstQueue :=
   BinomialHeap BestFirstQueue.ActiveGoal BestFirstQueue.ActiveGoal.le
 
 namespace BestFirstQueue

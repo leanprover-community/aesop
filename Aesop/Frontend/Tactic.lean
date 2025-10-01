@@ -61,7 +61,7 @@ syntax (name := aesopTactic)  "aesop"  Aesop.tactic_clause* : tactic
 @[inherit_doc aesopTactic]
 syntax (name := aesopTactic?) "aesop?" Aesop.tactic_clause* : tactic
 
-initialize do
+meta initialize do
   Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``aesopTactic
   Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``aesopTactic?
 
