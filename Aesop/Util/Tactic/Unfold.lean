@@ -5,9 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public meta import Lean
+public import Lean
 
-public meta section
+public section
 
 open Lean Lean.Meta Lean.Elab.Tactic
 

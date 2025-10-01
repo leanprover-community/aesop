@@ -5,10 +5,10 @@ Authors: Jannis Limperg, Kaiyu Yang
 -/
 module
 
-public meta import Aesop.RuleTac.Basic
-public meta import Aesop.Script.Step
+public import Aesop.RuleTac.Basic
+public import Aesop.Script.Step
 
-public meta section
+public section
 
 open Lean Lean.Meta Lean.Elab.Tactic
 open Lean.Elab.Tactic (TacticM evalTactic withoutRecover)

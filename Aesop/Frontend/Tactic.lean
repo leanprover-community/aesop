@@ -5,12 +5,12 @@ Authors: Jannis Limperg
 -/
 module
 
-public meta import Aesop.Frontend.RuleExpr
-public meta import Aesop.Options
-public meta import Batteries.Linter.UnreachableTactic
-public meta import Aesop.Frontend.Extension
+public import Aesop.Frontend.RuleExpr
+public import Aesop.Options
+public import Batteries.Linter.UnreachableTactic
+public import Aesop.Frontend.Extension
 
-public meta section
+public section
 
 open Lean
 open Lean.Meta

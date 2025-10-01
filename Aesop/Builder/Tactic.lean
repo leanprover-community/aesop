@@ -5,9 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public meta import Aesop.Builder.Basic
+public import Aesop.Builder.Basic
 
-public meta section
+public section
 
 open Lean Lean.Meta
 open Lean.Elab.Tactic (TacticM)

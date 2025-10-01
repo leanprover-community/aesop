@@ -5,10 +5,10 @@ Authors: Jannis Limperg
 -/
 module
 
-public meta import Lean
-public meta import Batteries.Tactic.OpenPrivate
+public import Lean
+public import Batteries.Tactic.OpenPrivate
 
-public meta section
+public section
 
 open Lean Lean.Meta Lean.Elab.Tactic
 
