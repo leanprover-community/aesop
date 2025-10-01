@@ -7,7 +7,7 @@ module
 
 public import Aesop.Tree.Traversal
 
-@[expose] public section
+public section
 
 namespace Aesop
 

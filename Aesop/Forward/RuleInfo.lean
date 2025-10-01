@@ -11,7 +11,7 @@ public import Aesop.RulePattern
 public import Aesop.Util.Basic
 public import Aesop.Util.UnionFind
 
-@[expose] public section
+public section
 
 set_option linter.missingDocs true
 

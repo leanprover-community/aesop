@@ -7,7 +7,7 @@ module
 
 public import Lean
 
-@[expose] public section
+public section
 
 set_option linter.missingDocs true
 

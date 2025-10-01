@@ -12,7 +12,7 @@ public import Aesop.Tree.Data.ForwardRuleMatches
 public import Aesop.Tree.UnsafeQueue
 public import Aesop.Forward.State
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

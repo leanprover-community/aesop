@@ -8,7 +8,7 @@ module
 public import Aesop.Frontend.Attribute
 public import Aesop.RuleTac.Forward.Basic
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta Aesop.Script
 

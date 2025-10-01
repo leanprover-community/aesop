@@ -8,7 +8,7 @@ module
 public import Aesop.Rule
 public import Aesop.Rule.Forward
 
-@[expose] public section
+public section
 
 namespace Aesop
 

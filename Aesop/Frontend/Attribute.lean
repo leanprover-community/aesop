@@ -8,7 +8,7 @@ module
 public import Aesop.Frontend.Extension
 public import Aesop.Frontend.RuleExpr
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Elab

@@ -11,7 +11,7 @@ public import Aesop.Stats.Basic
 public import Aesop.RuleSet
 public import Aesop.Tree.TreeM
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

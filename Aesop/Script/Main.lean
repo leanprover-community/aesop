@@ -12,7 +12,7 @@ public import Aesop.Script.OptimizeSyntax
 public import Aesop.Stats.Basic
 public import Aesop.Options.Internal
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Parser.Tactic (tacticSeq)

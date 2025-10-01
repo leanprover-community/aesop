@@ -10,7 +10,7 @@ public import Aesop.Rule.Name
 public import Aesop.RuleTac.Basic
 public import Aesop.RuleTac.Descr
 
-@[expose] public section
+public section
 
 open Lean
 

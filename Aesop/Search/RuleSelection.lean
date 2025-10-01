@@ -8,7 +8,7 @@ module
 public import Aesop.Tree.RunMetaM
 public import Aesop.Search.SearchM
 
-@[expose] public section
+public section
 
 open Lean
 

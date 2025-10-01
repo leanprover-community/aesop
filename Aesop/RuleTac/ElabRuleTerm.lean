@@ -7,7 +7,7 @@ module
 
 public import Aesop.ElabM
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta Lean.Elab.Term Lean.Elab.Tactic
 

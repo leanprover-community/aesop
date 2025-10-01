@@ -3,7 +3,7 @@ module
 public import Aesop.Script.UScriptToSScript
 public import Aesop.Script.Util
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

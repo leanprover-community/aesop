@@ -8,7 +8,7 @@ module
 public import Aesop.Check
 public import Aesop.Options.Public
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

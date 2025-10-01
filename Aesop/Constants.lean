@@ -7,7 +7,7 @@ module
 
 public import Aesop.Percent
 
-@[expose] public section
+public section
 
 namespace Aesop
 

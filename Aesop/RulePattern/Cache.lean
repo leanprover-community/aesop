@@ -8,7 +8,7 @@ module
 public import Aesop.Forward.Substitution
 public import Aesop.Rule.Name
 
-@[expose] public section
+public section
 
 open Lean
 

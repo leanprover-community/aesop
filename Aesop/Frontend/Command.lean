@@ -11,7 +11,7 @@ public import Batteries.Linter.UnreachableTactic
 public import Aesop.Frontend.Extension
 public import Aesop.Frontend.RuleExpr
 
-@[expose] public section
+public section
 
 open Lean Lean.Elab Lean.Elab.Command
 

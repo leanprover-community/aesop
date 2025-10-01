@@ -10,7 +10,7 @@ public import Aesop.Builder.NormSimp
 public import Aesop.Builder.Tactic
 public import Aesop.Builder.Apply
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

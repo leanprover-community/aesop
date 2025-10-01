@@ -10,7 +10,7 @@ public import Aesop.Forward.PremiseIndex
 public import Aesop.RPINF.Basic
 public import Aesop.Util.Basic
 
-@[expose] public section
+public section
 
 namespace Aesop
 

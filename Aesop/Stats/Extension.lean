@@ -7,7 +7,7 @@ module
 
 public import Aesop.Stats.Basic
 
-@[expose] public section
+public section
 
 open Lean
 

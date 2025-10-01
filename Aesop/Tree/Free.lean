@@ -7,7 +7,7 @@ module
 
 public import Aesop.Tree.TreeM
 
-@[expose] public section
+public section
 
 namespace Aesop
 

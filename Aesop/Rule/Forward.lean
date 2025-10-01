@@ -10,7 +10,7 @@ public import Aesop.Percent
 public import Aesop.Rule.Name
 public import Aesop.RuleTac.RuleTerm
 
-@[expose] public section
+public section
 
 set_option linter.missingDocs true
 

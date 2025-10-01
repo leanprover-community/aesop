@@ -7,7 +7,7 @@ module
 
 public import Aesop.Frontend.Extension.Init
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

@@ -10,7 +10,7 @@ public import Batteries.Data.Array.Basic
 public import Lean.Elab.Term
 public import Lean.Meta.Tactic.Simp
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

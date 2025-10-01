@@ -7,7 +7,7 @@ module
 
 public import Aesop.RuleTac.Basic
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

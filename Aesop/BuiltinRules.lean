@@ -18,7 +18,7 @@ public import Aesop.BuiltinRules.Split
 public import Aesop.BuiltinRules.Subst
 public import Aesop.Frontend.Attribute
 
-@[expose] public section
+public section
 
 namespace Aesop.BuiltinRules
 

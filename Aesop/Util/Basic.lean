@@ -13,7 +13,7 @@ public import Batteries.Data.String.Basic
 public import Lean
 public import Std.Data.HashSet.Basic
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta Lean.Elab.Tactic

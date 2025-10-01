@@ -8,7 +8,7 @@ module
 public import Aesop.Stats.Basic
 public import Aesop.RulePattern.Cache
 
-@[expose] public section
+public section
 
 set_option linter.missingDocs true
 

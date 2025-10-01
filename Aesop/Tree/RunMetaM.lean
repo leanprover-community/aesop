@@ -7,7 +7,7 @@ module
 
 public import Aesop.Tree.Data
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

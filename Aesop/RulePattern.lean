@@ -11,7 +11,7 @@ public import Aesop.Rule.Name
 public import Aesop.Tracing
 public import Aesop.Index.DiscrTreeConfig
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

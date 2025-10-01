@@ -12,7 +12,7 @@ public import Aesop.Tree.TreeM
 public import Batteries.Lean.HashSet
 public import Aesop.Tree.RunMetaM
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

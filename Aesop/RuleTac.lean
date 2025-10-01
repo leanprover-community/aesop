@@ -12,7 +12,7 @@ public import Aesop.RuleTac.Forward
 public import Aesop.RuleTac.Preprocess
 public import Aesop.RuleTac.Tactic
 
-@[expose] public section
+public section
 
 open Lean
 

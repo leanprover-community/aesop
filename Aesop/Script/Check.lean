@@ -8,7 +8,7 @@ module
 public import Aesop.Check
 public import Aesop.Script.UScript
 
-@[expose] public section
+public section
 
 open Lean Lean.Elab.Tactic
 open Lean.Parser.Tactic (tacticSeq)

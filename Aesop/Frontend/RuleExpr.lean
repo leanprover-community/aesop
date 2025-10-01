@@ -14,7 +14,7 @@ public import Aesop.Builder.Forward
 public import Aesop.Builder.Unfold
 public import Aesop.RuleSet.Filter
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

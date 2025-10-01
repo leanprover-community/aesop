@@ -17,7 +17,7 @@ public import Aesop.Script.SpecificTactics
 public import Batteries.Lean.Meta.UnusedNames
 public import Lean
 
-@[expose] public section
+public section
 
 set_option linter.missingDocs true
 

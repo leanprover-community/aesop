@@ -16,7 +16,7 @@ public import Aesop.Script.Step
 public import Batteries.Lean.Meta.SavedState
 public import Aesop.Options.Internal
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Elab.Tactic

@@ -8,7 +8,7 @@ module
 public import Aesop.Rule.Basic
 public import Aesop.Percent
 
-@[expose] public section
+public section
 
 namespace Aesop
 

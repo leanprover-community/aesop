@@ -11,7 +11,7 @@ public import Aesop.Tree.Traversal
 public import Aesop.Tree.TreeM
 public import Aesop.Util.UnionFind
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

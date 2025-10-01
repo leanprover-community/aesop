@@ -7,7 +7,7 @@ module
 
 public import Lean.Meta.Tactic.Simp.SimpAll
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 open Simp (UsedSimps)

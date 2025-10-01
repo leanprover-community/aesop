@@ -3,7 +3,7 @@ module
 public import Aesop.Tree.RunMetaM
 public import Aesop.Tracing
 
-@[expose] public section
+public section
 
 open Lean
 open MessageData

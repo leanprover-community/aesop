@@ -8,7 +8,7 @@ module
 public import Batteries.Data.Array.Merge
 public import Lean.Message
 
-@[expose] public section
+public section
 
 open Lean Std
 

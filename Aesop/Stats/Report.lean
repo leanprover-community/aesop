@@ -8,7 +8,7 @@ module
 public import Aesop.Percent
 public import Aesop.Stats.Extension
 
-@[expose] public section
+public section
 
 open Lean
 

@@ -8,7 +8,7 @@ module
 public import Aesop.Search.Expansion.Norm
 public import Aesop.Tree.AddRapp
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

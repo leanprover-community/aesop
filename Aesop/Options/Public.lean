@@ -2,7 +2,7 @@ module
 
 public import Lean
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

@@ -10,7 +10,7 @@ public import Aesop.Rule.Name
 public import Aesop.RulePattern
 public import Aesop.Forward.Match.Types
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

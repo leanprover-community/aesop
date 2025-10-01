@@ -7,7 +7,7 @@ module
 
 public import Aesop.Frontend.Attribute
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

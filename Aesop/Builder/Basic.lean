@@ -10,7 +10,7 @@ public import Aesop.Rule.Name
 public import Aesop.RuleSet.Member
 public import Aesop.RuleTac.ElabRuleTerm
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta Lean.Elab.Term
 

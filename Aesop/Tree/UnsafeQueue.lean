@@ -8,7 +8,7 @@ module
 public import Aesop.Constants
 public import Aesop.Rule
 
-@[expose] public section
+public section
 
 open Lean
 

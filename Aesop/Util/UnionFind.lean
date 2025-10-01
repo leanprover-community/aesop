@@ -7,7 +7,7 @@ module
 
 public import Std.Data.HashMap
 
-@[expose] public section
+public section
 
 namespace Aesop
 

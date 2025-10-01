@@ -9,7 +9,7 @@ public import Aesop.Index.Basic
 public import Aesop.RuleTac.GoalDiff
 public import Batteries.Lean.Meta.DiscrTree
 
-@[expose] public section
+public section
 
 set_option linter.missingDocs true
 

@@ -15,7 +15,7 @@ public import Batteries.Lean.Meta.InstantiateMVars
 public import Batteries.Lean.PersistentHashSet
 public import Batteries.Lean.Meta.DiscrTree
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

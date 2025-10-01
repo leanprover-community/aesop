@@ -16,7 +16,7 @@ public import Aesop.Search.SearchM
 public import Aesop.Tree.State
 public import Batteries.Lean.HashSet
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta Aesop.Script
 

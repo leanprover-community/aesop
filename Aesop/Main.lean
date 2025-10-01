@@ -9,7 +9,7 @@ public import Aesop.Search.Main
 public import Aesop.Frontend.Tactic
 public import Aesop.Stats.Extension
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Elab.Tactic

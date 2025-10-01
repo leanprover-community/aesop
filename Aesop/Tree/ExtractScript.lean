@@ -9,7 +9,7 @@ public import Aesop.Script.UScript
 public import Aesop.Tracing
 public import Aesop.Tree.TreeM
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

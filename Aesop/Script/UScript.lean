@@ -7,7 +7,7 @@ module
 
 public import Aesop.Script.Step
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 open Lean.Parser.Tactic (tacticSeq)

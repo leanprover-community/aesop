@@ -9,7 +9,7 @@ public import Aesop.Util.Basic
 public import Aesop.Util.EqualUpToIds
 public import Batteries.Lean.Meta.SavedState
 
-@[expose] public section
+public section
 
 open Lean Std Lean.Meta
 

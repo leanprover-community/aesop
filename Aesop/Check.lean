@@ -7,7 +7,7 @@ module
 
 public import Lean.Data.Options
 
-@[expose] public section
+public section
 
 open Lean
 

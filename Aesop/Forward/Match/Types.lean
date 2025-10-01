@@ -5,7 +5,7 @@ public import Aesop.Forward.SlotIndex
 public import Aesop.Forward.Substitution
 public import Aesop.Rule.Forward
 
-@[expose] public section
+public section
 
 set_option linter.missingDocs true
 

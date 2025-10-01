@@ -8,7 +8,7 @@ module
 public import Aesop.Forward.Match
 public import Aesop.Rule
 
-@[expose] public section
+public section
 
 set_option linter.missingDocs true
 

@@ -7,7 +7,7 @@ module
 
 public import Aesop.Forward.Match
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 open ExceptToEmoji (toEmoji)

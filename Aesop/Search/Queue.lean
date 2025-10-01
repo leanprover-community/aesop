@@ -11,7 +11,7 @@ public import Aesop.Tree
 public import Aesop.Search.Queue.Class
 public import Batteries.Data.BinomialHeap.Basic
 
-@[expose] public section
+public section
 
 open Lean
 open Batteries (BinomialHeap)

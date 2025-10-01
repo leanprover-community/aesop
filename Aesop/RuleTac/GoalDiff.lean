@@ -9,7 +9,7 @@ public import Aesop.RPINF
 public import Aesop.RuleTac.FVarIdSubst
 public import Aesop.Util.Basic
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

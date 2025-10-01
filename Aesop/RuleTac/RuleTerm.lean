@@ -2,7 +2,7 @@ module
 
 public import Aesop.Rule.Name
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

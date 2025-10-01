@@ -12,7 +12,7 @@ public import Aesop.RuleTac.Forward.Basic
 public import Aesop.Script.SpecificTactics
 public import Batteries.Lean.Meta.UnusedNames
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

@@ -8,7 +8,7 @@ module
 public import Aesop.Exception
 public import Aesop.Search.Expansion
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

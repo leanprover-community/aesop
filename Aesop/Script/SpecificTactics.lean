@@ -12,7 +12,7 @@ public import Aesop.Script.CtorNames
 public import Aesop.Script.ScriptM
 public import Batteries.Lean.Meta.Inaccessible
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

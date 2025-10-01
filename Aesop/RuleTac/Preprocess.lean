@@ -8,7 +8,7 @@ module
 public import Aesop.RuleTac.Basic
 public import Aesop.Script.SpecificTactics
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

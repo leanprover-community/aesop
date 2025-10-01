@@ -8,7 +8,7 @@ module
 public import Aesop.Util.Basic
 public import Aesop.Util.EqualUpToIds
 
-@[expose] public section
+public section
 
 namespace Aesop
 

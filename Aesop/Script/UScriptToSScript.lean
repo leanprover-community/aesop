@@ -9,7 +9,7 @@ public import Aesop.Script.UScript
 public import Aesop.Script.SScript
 public import Aesop.Tracing
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

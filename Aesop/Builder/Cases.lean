@@ -8,7 +8,7 @@ module
 public import Aesop.Builder.Basic
 public import Aesop.RuleTac.Cases
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

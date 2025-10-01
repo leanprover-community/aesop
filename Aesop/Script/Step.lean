@@ -12,7 +12,7 @@ public import Aesop.Script.Util
 public import Aesop.Tracing
 public import Batteries.Tactic.PermuteGoals
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

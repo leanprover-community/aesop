@@ -9,7 +9,7 @@ public import Aesop.Saturate
 public import Aesop.Frontend.Extension
 public import Aesop.Builder.Forward
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta Lean.Elab Lean.Elab.Term Lean.PrettyPrinter
 

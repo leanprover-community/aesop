@@ -8,7 +8,7 @@ module
 public import Batteries.Lean.Meta.Basic
 public import Aesop.Script.GoalWithMVars
 
-@[expose] public section
+public section
 
 open Lean
 

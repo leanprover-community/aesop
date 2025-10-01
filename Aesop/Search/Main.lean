@@ -16,7 +16,7 @@ public import Aesop.Search.Queue
 public import Aesop.Tree
 public import Aesop.Frontend.Extension
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Elab.Tactic (liftMetaTacticAux TacticM)

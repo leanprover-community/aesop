@@ -10,7 +10,7 @@ public import Aesop.Tracing
 public import Aesop.Tree.TreeM
 public import Batteries.Lean.Meta.InstantiateMVars
 
-@[expose] public section
+public section
 
 open Lean
 open Lean.Meta

@@ -9,7 +9,7 @@ public import Aesop.BaseM
 public import Aesop.Script.Step
 public import Aesop.Script.Tactic
 
-@[expose] public section
+public section
 
 open Lean Aesop.Script
 

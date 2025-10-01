@@ -7,7 +7,7 @@ module
 
 public import Aesop.RuleSet
 
-@[expose] public section
+public section
 
 open Lean
 

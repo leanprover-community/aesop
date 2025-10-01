@@ -5,7 +5,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 module
 
-@[expose] public section
+public section
 
 namespace Aesop
 

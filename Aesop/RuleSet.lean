@@ -11,7 +11,7 @@ public import Aesop.RuleSet.Filter
 public import Aesop.RuleSet.Member
 public import Aesop.Tree.Data.ForwardRuleMatches
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 

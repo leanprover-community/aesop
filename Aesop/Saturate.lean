@@ -13,7 +13,7 @@ public import Aesop.Search.Expansion.Basic
 public import Aesop.Script.Check
 public import Batteries.Data.BinomialHeap.Basic
 
-@[expose] public section
+public section
 
 open Lean Lean.Meta
 open Batteries (BinomialHeap)

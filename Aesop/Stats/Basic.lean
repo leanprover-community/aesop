@@ -9,7 +9,7 @@ public import Aesop.Nanos
 public import Aesop.Rule.Name
 public import Aesop.Tracing
 
-@[expose] public section
+public section
 
 open Lean
 
