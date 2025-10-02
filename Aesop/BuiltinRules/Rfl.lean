@@ -14,7 +14,7 @@ open Lean Lean.Elab.Tactic
 namespace Aesop.BuiltinRules
 
 @[aesop safe 0 (rule_sets := [builtin])]
-def rfl : RuleTac :=
+meta def rfl : RuleTac :=
   RuleTac.ofTacticSyntax λ _ => `(tactic| rfl)
 
 end Aesop.BuiltinRules

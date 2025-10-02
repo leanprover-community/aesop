@@ -54,6 +54,8 @@ initialize registerBuiltinAttribute {
   descr := "Register a declaration as an Aesop rule."
   applicationTime := .afterCompilation
   add := λ decl stx attrKind => withRef stx do
+    -- TODO: should be checked in any case where `decl` will be passed to `evalConst`
+    --ensureAttrDeclIsMeta `aesop decl attrKind
     let rules ← runTermElabMAsCoreM do
       let config ← AttrConfig.elab stx
       config.rules.flatMapM (·.buildAdditionalGlobalRules decl)

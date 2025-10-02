@@ -15,7 +15,7 @@ open Lean.Meta
 namespace Aesop.BuiltinRules
 
 @[aesop norm -100 (rule_sets := [builtin])]
-def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
+meta def intros : RuleTac := RuleTac.ofSingleRuleTac λ input => do
     let md? := input.options.introsTransparency?
     let ((goal, newFVarIds), steps) ←
       match md? with

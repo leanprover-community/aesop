@@ -15,7 +15,7 @@ open Lean Lean.Meta Aesop.Script
 
 namespace Aesop.BuiltinRules
 
-private def destructProductHyp? (goal : MVarId) (hyp : FVarId)
+private meta def destructProductHyp? (goal : MVarId) (hyp : FVarId)
     (md : TransparencyMode) : MetaM (Option (LazyStep × MVarId)) :=
   goal.withContext do
     let hypType ← hyp.getType
@@ -84,7 +84,7 @@ private def destructProductHyp? (goal : MVarId) (hyp : FVarId)
         (preserveBinderNames := true) (useNamesForExplicitOnly := false)
       return (goal, lName, rName)
 
-partial def destructProductsCore (goal : MVarId) (md : TransparencyMode) :
+meta def destructProductsCore (goal : MVarId) (md : TransparencyMode) :
     BaseM (MVarId × Array LazyStep) := do
   let result ← go 0 goal |>.run
   if result.fst == goal then
@@ -122,7 +122,7 @@ where
 @[aesop norm 0 (rule_sets := [builtin]) tactic
     (index := [hyp And _ _, hyp Prod _ _, hyp PProd _ _, hyp MProd _ _,
                hyp Exists _, hyp Subtype _, hyp Sigma _, hyp PSigma _])]
-partial def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
+meta def destructProducts : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let md := input.options.destructProductsTransparency
   let (goal, steps) ← destructProductsCore input.goal md
   return (#[{ diff := ← diffGoals input.goal goal }], steps, none)

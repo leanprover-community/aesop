@@ -14,7 +14,7 @@ open Lean Lean.Meta Aesop.Script
 
 namespace Aesop.BuiltinRules
 
-def matchSubstitutableIff? (e : Expr) : Option (Expr × Expr) := do
+meta def matchSubstitutableIff? (e : Expr) : Option (Expr × Expr) := do
   let some (lhs, rhs) := e.iff?
     | failure
   if lhs.isFVar || rhs.isFVar then
@@ -22,7 +22,7 @@ def matchSubstitutableIff? (e : Expr) : Option (Expr × Expr) := do
   else
     failure
 
-def prepareIff? (mvarId : MVarId) (fvarId : FVarId) :
+meta def prepareIff? (mvarId : MVarId) (fvarId : FVarId) :
     ScriptM (Option (MVarId × FVarId)) :=
   mvarId.withContext do
     let ty ← fvarId.getType
@@ -38,7 +38,7 @@ def prepareIff? (mvarId : MVarId) (fvarId : FVarId) :
       return none
     return some (newMVarId, newFVarId)
 
-def prepareIffs (mvarId : MVarId) (fvarIds : Array FVarId) :
+meta def prepareIffs (mvarId : MVarId) (fvarIds : Array FVarId) :
     ScriptM (MVarId × Array FVarId) := do
   let mut mvarId := mvarId
   let mut newFVarIds := Array.mkEmpty fvarIds.size
@@ -50,7 +50,7 @@ def prepareIffs (mvarId : MVarId) (fvarIds : Array FVarId) :
       newFVarIds := newFVarIds.push fvarId
   return (mvarId, newFVarIds)
 
-def substEqs? (goal : MVarId) (fvarIds : Array FVarId) :
+meta def substEqs? (goal : MVarId) (fvarIds : Array FVarId) :
     ScriptM (Option MVarId) := do
   let preGoal := goal
   let preState ← show MetaM _ from saveState
@@ -73,7 +73,7 @@ def substEqs? (goal : MVarId) (fvarIds : Array FVarId) :
   }
   return goal
 
-def substEqsAndIffs? (goal : MVarId) (fvarIds : Array FVarId) :
+meta def substEqsAndIffs? (goal : MVarId) (fvarIds : Array FVarId) :
     ScriptM (Option MVarId) := do
   let preState ← show MetaM _ from saveState
   let (goal, fvarIds) ← prepareIffs goal fvarIds
@@ -84,7 +84,7 @@ def substEqsAndIffs? (goal : MVarId) (fvarIds : Array FVarId) :
     return none
 
 @[aesop (rule_sets := [builtin]) norm -50 tactic (index := [hyp _ = _, hyp _ ↔ _])]
-def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
+meta def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
   input.goal.withContext do
     let hyps ← input.indexMatchLocations.toArray.mapM λ
       | .hyp ldecl => pure ldecl.fvarId
