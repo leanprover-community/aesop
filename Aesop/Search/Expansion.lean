@@ -220,6 +220,7 @@ partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
       | .postponedSafeRule r =>
         return (queue, ← applyPostponedSafeRule r parentRef)
 
+-- TODO move initial forward state logic inside `normalizeGoalIfNecessary`/`runFirst...` etc.
 def expandGoal (gref : GoalRef) : SearchM Q RuleResult := do
   let rs : LocalRuleSet := SearchM.Context.ruleSet (← read)
   -- TODO: test if it's fine to remove this if statement
@@ -253,7 +254,11 @@ def expandGoal (gref : GoalRef) : SearchM Q RuleResult := do
     firstForwardPhase (rs : LocalRuleSet) (phase : PhaseName) : SearchM Q Bool := do
       let forwardPhases := (rs.forwardRuleNames.toList).map (·.phase)
       let state := (← readThe TreeM.Context)
-      -- Q: Comparing ` Iteration.one.succ` is probably a bad hack. Is this ok?
+      /-
+      Q: Comparing ` Iteration.one.succ` is probably a bad hack. Is this ok?
+      Probably should have a flag that tracks for which `phase` the initial forward state has
+      been generated.
+      -/
       if forwardPhases.contains phase ∧ state.currentIteration == (Iteration.one.succ) then
         return True
       else
