@@ -81,7 +81,7 @@ protected def run' (ctx : SearchM.Context) (σ : SearchM.State Q) (tree : Tree)
 protected def run (ruleSet : LocalRuleSet) (options : Aesop.Options')
     (simpConfig : Simp.Config) (simpConfigStx? : Option Term)
     (goal : MVarId) (x : SearchM Q α) : BaseM (α × State Q × Tree) := do
-  let t ← mkInitialTree goal ruleSet
+  let t ← mkInitialTree goal
   let normSimpContext := {
     toContext := ← Simp.mkContext simpConfig (simpTheorems := ruleSet.simpTheoremsArray.map (·.snd))
       (congrTheorems := ← getSimpCongrTheorems)

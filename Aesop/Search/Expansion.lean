@@ -253,6 +253,7 @@ def expandGoal (gref : GoalRef) : SearchM Q RuleResult := do
     firstForwardPhase (rs : LocalRuleSet) (phase : PhaseName) : SearchM Q Bool := do
       let forwardPhases := (rs.forwardRuleNames.toList).map (·.phase)
       let state := (← readThe TreeM.Context)
+      -- Q: Comparing ` Iteration.one.succ` is probably a bad hack. Is this ok?
       if forwardPhases.contains phase ∧ state.currentIteration == (Iteration.one.succ) then
         return True
       else

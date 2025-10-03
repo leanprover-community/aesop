@@ -25,7 +25,7 @@ structure Tree where
   -/
   allIntroducedMVars : Std.HashSet MVarId
 
-def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : BaseM Tree := do
+def mkInitialTree (goal : MVarId) : BaseM Tree := do
   let rootClusterRef ← IO.mkRef $ MVarCluster.mk {
     parent? := none
     goals := #[] -- patched up below
