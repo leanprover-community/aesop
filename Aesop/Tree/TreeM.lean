@@ -32,8 +32,6 @@ def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : BaseM Tree := do
     isIrrelevant := false
     state := NodeState.unknown
   }
-  let (forwardState, ms) ← withConstAesopTraceNode .forward (return m!"building initial forward state") do
-    rs.mkInitialForwardState goal
   let rootGoalRef ← IO.mkRef $ Goal.mk {
     id := GoalId.zero
     parent := rootClusterRef
@@ -46,8 +44,8 @@ def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : BaseM Tree := do
     preNormGoal := goal
     normalizationState := NormalizationState.notNormal
     mvars := .ofHashSet (← goal.getMVarDependencies)
-    forwardState
-    forwardRuleMatches := .ofArray ms
+    forwardState := default
+    forwardRuleMatches := default
     successProbability := Percent.hundred
     addedInIteration := Iteration.one
     lastExpandedInIteration := Iteration.none

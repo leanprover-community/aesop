@@ -221,24 +221,50 @@ partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
         return (queue, ← applyPostponedSafeRule r parentRef)
 
 def expandGoal (gref : GoalRef) : SearchM Q RuleResult := do
+  let rs : LocalRuleSet := SearchM.Context.ruleSet (← read)
+  -- TODO: test if it's fine to remove this if statement
+  if (← firstForwardPhase rs PhaseName.norm) then
+    initializeForwardState gref rs PhaseName.norm
   let provedByNorm ←
     withAesopTraceNode .steps fmtNorm (normalizeGoalIfNecessary gref)
+  let (goalMId, metaState) ←
+    (← gref.get).currentGoalAndMetaState (← getRootMetaState)
   aesop_trace[steps] do
     unless provedByNorm do
-      let (goal, metaState) ←
-        (← gref.get).currentGoalAndMetaState (← getRootMetaState)
       metaState.runMetaM' do
-        aesop_trace![steps] "Goal after normalisation:{indentD goal}"
+        aesop_trace![steps] "Goal after normalisation:{indentD goalMId}"
   if provedByNorm then
     return .proved #[]
+  -- TODO: test if it's fine to remove this if statement
+  if (← firstForwardPhase rs PhaseName.safe) then
+    initializeForwardState gref rs PhaseName.safe
   let safeResult ←
     withAesopTraceNode .steps fmtSafe (runFirstSafeRule gref)
   match safeResult with
   | .succeeded newRapps => return .succeeded newRapps
   | .proved newRapps => return .proved newRapps
-  | .failed postponedSafeRules => doUnsafe postponedSafeRules
+  | .failed postponedSafeRules =>
+    -- TODO: test if it's fine to remove this if statement
+    if (← firstForwardPhase rs PhaseName.unsafe) then
+      initializeForwardState gref rs PhaseName.unsafe
+    doUnsafe postponedSafeRules
   | .skipped => doUnsafe #[]
   where
+    firstForwardPhase (rs : LocalRuleSet) (phase : PhaseName) : SearchM Q Bool := do
+      let forwardPhases := (rs.forwardRuleNames.toList).map (·.phase)
+      let state := (← readThe TreeM.Context)
+      if forwardPhases.contains phase ∧ state.currentIteration == (Iteration.one.succ) then
+        return True
+      else
+        return False
+
+    initializeForwardState (gref : GoalRef) (rs : LocalRuleSet) (phase : PhaseName) := do
+      let (goalMId, _) ← (← gref.get).currentGoalAndMetaState (← getRootMetaState)
+      let (forwardState, ms)
+        ← withConstAesopTraceNode .forward (return m!"building initial forward state") do
+          rs.mkInitialForwardState goalMId phase
+      gref.modify (fun g ↦ (g.setForwardState forwardState).setForwardRuleMatches (.ofArray ms))
+
     doUnsafe (postponedSafeRules : Array PostponedSafeRule) :
         SearchM Q RuleResult := do
       withAesopTraceNode .steps fmtUnsafe do

@@ -11,7 +11,7 @@ open Lean Lean.Meta
 
 namespace Aesop.LocalRuleSet
 
-def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
+def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) (phase : Option PhaseName) :
     BaseM (ForwardState × Array ForwardRuleMatch) :=
   goal.withContext do
     if ! aesop.dev.statefulForward.get (← getOptions) then
@@ -30,7 +30,11 @@ def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
     for ldecl in ← show MetaM _ from getLCtx do
       if ldecl.isImplementationDetail then
         continue
-      let rules ← rs.applicableForwardRules ldecl.type
+      let mut rules := default
+      match phase with
+      | some phase =>
+        rules ← rs.applicableForwardRulesWith ldecl.type (·.name.phase == phase)
+      | none => rules ← rs.applicableForwardRules ldecl.type
       let patInsts ← rs.forwardRulePatternSubstsInLocalDecl ldecl
       let (fs', ruleMatches') ←
         fs.addHypWithPatSubstsCore ruleMatches goal ldecl.fvarId rules patInsts
