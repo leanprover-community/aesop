@@ -19,8 +19,6 @@ variable {i j k l m n o p : Type}
 
 def myProp {I J : Type} (a : I) (b : J) : Prop := sorry
 
-
-
 theorem myThm (a : i) (b : j) (c : k) (d : l) :
     myProp a b ↔ myProp c d := by
   constructor
@@ -28,45 +26,46 @@ theorem myThm (a : i) (b : j) (c : k) (d : l) :
     exact hab
   sorry
 
-#check Aesop.BuiltinRules.empty_false
+-- #check Aesop.BuiltinRules.empty_false
 
 example (h : Empty) : False := by
-  set_option aesop.dev.statefulForward true in
-  set_option trace.profiler.threshold 0 in
-  set_option trace.profiler true in
-  set_option trace.aesop true in
+  -- set_option aesop.dev.statefulForward true in
+  -- set_option trace.profiler.threshold 0 in
+  -- set_option trace.profiler true in
+  -- set_option trace.aesop true in
   aesop
 
 example (a : i) (b : j) (c : k) (d : l) (e : m) (f : n) (g : o) (h : p) :
     myProp a b ↔ myProp c d := by
-  set_option aesop.dev.statefulForward true in
-  set_option trace.profiler.threshold 0 in
-  set_option trace.profiler true in
-  set_option trace.aesop.forward true in
+  -- set_option aesop.dev.statefulForward true in
+  -- set_option trace.profiler.threshold 0 in
+  -- set_option trace.profiler true in
+  -- set_option trace.aesop.forward true in
   aesop (add unsafe forward [myThm])
 
 example : True := by
-  set_option trace.aesop true in
+  -- set_option trace.aesop true in
   aesop
 
 example (a : i) (b : j) (c : k) (d : l) (e : m) (f : n) (g : o) (h : p) :
     True := by
-  set_option aesop.dev.statefulForward true in
-  set_option trace.profiler.threshold 0 in
-  set_option trace.profiler true in
-  set_option trace.aesop true in
+  -- set_option aesop.dev.statefulForward true in
+  -- set_option trace.profiler.threshold 0 in
+  -- set_option trace.profiler true in
+  -- set_option trace.aesop true in
   aesop (add safe forward [myThm, True.intro])
 
 example (a : i) (b : j) (c : k) (d : l) (e : m) :
     False := by
-  set_option aesop.dev.statefulForward true in
-  set_option trace.profiler.threshold 0 in
-  set_option trace.profiler true in
-  aesop (add unsafe forward [myThm])
+  -- set_option aesop.dev.statefulForward true in
+  -- set_option trace.profiler.threshold 0 in
+  -- set_option trace.profiler true in
+  try aesop (add unsafe forward [myThm])
+  sorry
 
 
 example (a b c d : Nat) (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) : a ≤ d := by
-  set_option trace.profiler true in
+  --set_option trace.profiler true in
   aesop (add safe forward Nat.le_trans)
 
 /-
