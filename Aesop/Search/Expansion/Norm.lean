@@ -403,6 +403,17 @@ def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
     let rootState ← getRootMetaState
     gref.modify (·.setNormalizationState (.normal preGoal rootState #[]))
     return false
+  -- Initialize Forward State for Norm forward rules
+  let rs : LocalRuleSet := SearchM.Context.ruleSet (← read)
+  let forwardState := g.forwardState
+  let mut ruleMatches := g.forwardRuleMatches
+  IO.print "in norm the phase progress is: "
+  IO.println forwardState.phaseProgress
+  if (compare forwardState.phaseProgress PhaseName.norm).isLT then
+    let (fs, ms) ← rs.mkInitialForwardStateForPhase g.currentGoal PhaseName.norm forwardState
+    gref.modify (fun g ↦ (g.setForwardState fs).setForwardRuleMatches (ruleMatches.insertMany ms))
+  let g ← gref.get
+  let preGoal := g.preNormGoal
   match g.normalizationState with
   | .provenByNormalization .. => return true
   | .normal .. => return false

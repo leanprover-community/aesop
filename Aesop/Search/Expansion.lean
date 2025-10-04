@@ -175,6 +175,17 @@ def SafeRulesResult.toEmoji : SafeRulesResult → String
 
 def runFirstSafeRule (gref : GoalRef) : SearchM Q SafeRulesResult := do
   let g ← gref.get
+  -- Initialize Forward State for Safe forward rules
+  let rs : LocalRuleSet := SearchM.Context.ruleSet (← read)
+  let forwardState := g.forwardState
+  let mut ruleMatches := g.forwardRuleMatches
+  IO.print "in safe the phase progress is: "
+  IO.println forwardState.phaseProgress
+  if (forwardState.phaseProgress == PhaseName.norm) then
+    let (fs, ms) ← rs.mkInitialForwardStateForPhase g.currentGoal PhaseName.safe forwardState
+    gref.modify (fun g ↦ (g.setForwardState fs).setForwardRuleMatches (ruleMatches.insertMany ms))
+  let g ← gref.get
+  ruleMatches := g.forwardRuleMatches
   if g.unsafeRulesSelected then
     return .skipped
     -- If the unsafe rules have been selected, we have already tried all the
@@ -198,6 +209,18 @@ def applyPostponedSafeRule (r : PostponedSafeRule) (parentRef : GoalRef) :
 
 partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
     (parentRef : GoalRef) : SearchM Q RuleResult := do
+  let g ← parentRef.get
+  -- Initialize Forward State for Unsafe forward rules
+  let rs : LocalRuleSet := SearchM.Context.ruleSet (← read)
+  let forwardState := g.forwardState
+  let mut ruleMatches := g.forwardRuleMatches
+  IO.print "in unsafe the phase progress is: "
+  IO.println forwardState.phaseProgress
+  if (forwardState.phaseProgress == PhaseName.safe) then
+    let (fs, ms) ← rs.mkInitialForwardStateForPhase g.currentGoal PhaseName.unsafe forwardState
+    parentRef.modify (fun g ↦ (g.setForwardState fs).setForwardRuleMatches (ruleMatches.insertMany ms))
+  let g ← parentRef.get
+  ruleMatches := g.forwardRuleMatches
   let queue ← selectUnsafeRules postponedSafeRules parentRef
   let (remainingQueue, result) ← loop queue
   parentRef.modify λ g => g.setUnsafeQueue remainingQueue

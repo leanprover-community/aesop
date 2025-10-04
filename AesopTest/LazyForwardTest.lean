@@ -13,6 +13,7 @@ example {α β γ : Prop} (h : α → β → γ) (h₁ : α) (h₂ : β) : False
   --set_option trace.aesop true in
   set_option trace.aesop true in
   aesop (add safe forward h)
+  sorry
 
 end errors
 
@@ -42,7 +43,7 @@ example (h : Empty) : False := by
   -- set_option aesop.dev.statefulForward true in
   -- set_option trace.profiler.threshold 0 in
   -- set_option trace.profiler true in
-  -- set_option trace.aesop true in
+  set_option trace.aesop true in
   aesop
 
 example (a : i) (b : j) (c : k) (d : l) (e : m) (f : n) (g : o) (h : p) :
@@ -51,11 +52,11 @@ example (a : i) (b : j) (c : k) (d : l) (e : m) (f : n) (g : o) (h : p) :
   -- set_option trace.profiler.threshold 0 in
   -- set_option trace.profiler true in
   -- set_option trace.aesop.forward true in
-  aesop (add unsafe forward [myThm])
+  aesop (add safe forward [myThm])
 
 example : True := by
   -- set_option trace.aesop true in
-  aesop
+  aesop (add unsafe forward True.intro)
 
 example (a : i) (b : j) (c : k) (d : l) (e : m) (f : n) (g : o) (h : p) :
     True := by
@@ -70,16 +71,16 @@ example (a : i) (b : j) (c : k) (d : l) (e : m) :
   -- set_option aesop.dev.statefulForward true in
   -- set_option trace.profiler.threshold 0 in
   -- set_option trace.profiler true in
-  set_option trace.aesop.forward true in
-  try aesop (add unsafe forward [myThm])
+  set_option trace.aesop true in
+  try aesop (add safe forward [myThm])
   sorry
 
 
 example (a b c d : Nat) (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) : a ≤ d := by
   --set_option trace.profiler true in
-  set_option trace.aesop.forward true in
+  set_option trace.aesop true in
   set_option aesop.dev.statefulForward true in
-  aesop (add unsafe forward Nat.le_trans)
+  aesop (add safe forward [Nat.le_trans])
 
 /-
 This situation occurs in the case of `StdBasisMatrix.mul_same`. This is a deprecated lemma,
