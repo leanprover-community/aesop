@@ -223,11 +223,14 @@ partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
 -- TODO move initial forward state logic inside `normalizeGoalIfNecessary`/`runFirst...` etc.
 def expandGoal (gref : GoalRef) : SearchM Q RuleResult := do
   let rs : LocalRuleSet := SearchM.Context.ruleSet (← read)
+  let fs := (← gref.get).forwardState
+  aesop_trace![steps] "current forward state:{indentD (toMessageData (α := ForwardState) fs)}"
   -- TODO: test if it's fine to remove this if statement
   if (← firstForwardPhase rs PhaseName.norm) then
     initializeForwardState gref rs PhaseName.norm
   let provedByNorm ←
     withAesopTraceNode .steps fmtNorm (normalizeGoalIfNecessary gref)
+  aesop_trace![steps] "forward state after norm:{indentD (toMessageData (α := ForwardState) fs)}"
   let (goalMId, metaState) ←
     (← gref.get).currentGoalAndMetaState (← getRootMetaState)
   aesop_trace[steps] do
@@ -265,11 +268,14 @@ def expandGoal (gref : GoalRef) : SearchM Q RuleResult := do
         return False
 
     initializeForwardState (gref : GoalRef) (rs : LocalRuleSet) (phase : PhaseName) := do
-      let (goalMId, _) ← (← gref.get).currentGoalAndMetaState (← getRootMetaState)
-      let (forwardState, ms)
-        ← withConstAesopTraceNode .forward (return m!"building initial forward state") do
-          rs.mkInitialForwardState goalMId phase
-      gref.modify (fun g ↦ (g.setForwardState forwardState).setForwardRuleMatches (.ofArray ms))
+      let g ← gref.get
+      let (goalMId, _) ← g.currentGoalAndMetaState (← getRootMetaState)
+      let fs := g.forwardState
+      withConstAesopTraceNode .forward (return m!"now modifying {goalMId}") do
+      let (forwardState, ms) ← rs.mkInitialForwardState goalMId fs phase
+      withConstAesopTraceNode .forward
+        (return m!"now modifying {(← gref.get).currentGoal.name}") do
+        gref.modify (fun g ↦ (g.setForwardState forwardState).setForwardRuleMatches (.ofArray ms))
 
     doUnsafe (postponedSafeRules : Array PostponedSafeRule) :
         SearchM Q RuleResult := do

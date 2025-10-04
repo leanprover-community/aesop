@@ -6,6 +6,16 @@ Authors: Xavier Généreux
 
 import Aesop
 
+section errors
+
+example {α β γ : Prop} (h : α → β → γ) (h₁ : α) (h₂ : β) (h : Empty) : False := by
+  set_option aesop.dev.statefulForward false in
+  --set_option trace.aesop true in
+  set_option trace.aesop true in
+  aesop (add safe forward h)
+
+end errors
+
 variable {i j k l m n o p : Type}
 
 -- def i : Type := sorry
@@ -60,13 +70,16 @@ example (a : i) (b : j) (c : k) (d : l) (e : m) :
   -- set_option aesop.dev.statefulForward true in
   -- set_option trace.profiler.threshold 0 in
   -- set_option trace.profiler true in
+  set_option trace.aesop.forward true in
   try aesop (add unsafe forward [myThm])
   sorry
 
 
 example (a b c d : Nat) (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) : a ≤ d := by
   --set_option trace.profiler true in
-  aesop (add safe forward Nat.le_trans)
+  set_option trace.aesop.forward true in
+  set_option aesop.dev.statefulForward true in
+  aesop (add unsafe forward Nat.le_trans)
 
 /-
 This situation occurs in the case of `StdBasisMatrix.mul_same`. This is a deprecated lemma,
