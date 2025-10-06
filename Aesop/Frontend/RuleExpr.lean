@@ -3,15 +3,18 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.ElabM
-import Aesop.Percent
-import Aesop.Rule.Name
-import Aesop.Builder.Cases
-import Aesop.Builder.Default
-import Aesop.Builder.Forward
-import Aesop.Builder.Unfold
-import Aesop.RuleSet.Filter
+public import Aesop.ElabM
+public import Aesop.Percent
+public import Aesop.Rule.Name
+public import Aesop.Builder.Cases
+public import Aesop.Builder.Default
+public import Aesop.Builder.Forward
+public import Aesop.Builder.Unfold
+public import Aesop.RuleSet.Filter
+
+public section
 
 open Lean
 open Lean.Meta

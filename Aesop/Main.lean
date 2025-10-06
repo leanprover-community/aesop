@@ -3,10 +3,13 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Search.Main
-import Aesop.Frontend.Tactic
-import Aesop.Stats.Extension
+public meta import Aesop.Search.Main
+public meta import Aesop.Frontend.Tactic
+public meta import Aesop.Stats.Extension
+
+public section
 
 open Lean
 open Lean.Elab.Tactic
@@ -14,7 +17,7 @@ open Lean.Elab.Tactic
 namespace Aesop
 
 @[tactic Frontend.Parser.aesopTactic, tactic Frontend.Parser.aesopTactic?]
-def evalAesop : Tactic := λ stx => do
+meta def evalAesop : Tactic := λ stx => do
   profileitM Exception "aesop" (← getOptions) do
   let goal ← getMainGoal
   goal.withContext do

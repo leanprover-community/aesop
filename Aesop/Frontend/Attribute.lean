@@ -3,9 +3,14 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Frontend.Extension
-import Aesop.Frontend.RuleExpr
+public meta import Aesop.Frontend.Extension
+public meta import Aesop.Frontend.RuleExpr
+public import Aesop.Frontend.Extension
+public import Aesop.Frontend.RuleExpr
+
+public meta section
 
 open Lean
 open Lean.Elab
@@ -49,6 +54,8 @@ initialize registerBuiltinAttribute {
   descr := "Register a declaration as an Aesop rule."
   applicationTime := .afterCompilation
   add := λ decl stx attrKind => withRef stx do
+    -- TODO: should be checked in any case where `decl` will be passed to `evalConst`
+    --ensureAttrDeclIsMeta `aesop decl attrKind
     let rules ← runTermElabMAsCoreM do
       let config ← AttrConfig.elab stx
       config.rules.flatMapM (·.buildAdditionalGlobalRules decl)

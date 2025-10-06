@@ -3,9 +3,12 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Constants
-import Aesop.Rule
+public import Aesop.Constants
+public import Aesop.Rule
+
+public section
 
 open Lean
 
@@ -52,7 +55,7 @@ instance : Ord UnsafeQueueEntry :=
 end UnsafeQueueEntry
 
 
-def UnsafeQueue := Subarray UnsafeQueueEntry
+@[expose] def UnsafeQueue := Subarray UnsafeQueueEntry
 
 namespace UnsafeQueue
 
