@@ -84,7 +84,7 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
   let numLevelParams :=
     (collectLevelParams {} e).params.size +
     (collectLevelMVars {} e).result.size
-  let (premises, _, conclusion) ← withReducible $ forallMetaTelescope e
+  let (premises, _, conclusion) ← withReducible do forallMetaTelescope e
   let premises := premises.map (·.mvarId!)
   let mut premiseToIdx : Std.HashMap MVarId PremiseIndex := ∅
   for h : i in [:premises.size] do
