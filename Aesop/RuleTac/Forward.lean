@@ -100,7 +100,7 @@ partial def makeForwardHyps (e : Expr) (patSubst? : Option Substitution)
 def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (depth : Nat) :
     ScriptM (FVarId × MVarId) := do
   withScriptStep goal (λ (_, g) => #[g]) (λ _ => true) tacticBuilder do
-  withReducible do
+  withReducibleAndInstances do
     let hyp := {
       hyp with
       binderInfo := .default
@@ -123,7 +123,7 @@ def applyForwardRule (goal : MVarId) (e : Expr)
     (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
     (maxDepth? : Option Nat) (existingHypTypes : PHashSet RPINF) :
     ScriptM Subgoal :=
-  withReducible $ goal.withContext do
+  withReducibleAndInstances $ goal.withContext do
     let initialGoal := goal
     let forwardHypData ← getForwardHypData
     let mut newHypProofs := #[]
