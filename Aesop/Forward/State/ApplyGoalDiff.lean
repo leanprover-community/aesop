@@ -37,7 +37,8 @@ where
   addHyp (h : FVarId) (fs : ForwardState)
       (ruleMatches : Array ForwardRuleMatch) :
       BaseM (ForwardState × Array ForwardRuleMatch) := do
-    let rules ← rs.applicableForwardRules (← h.getType)
+    let rules ← rs.applicableForwardRulesWith (← h.getType)
+      (fun r ↦ (compare ↑r.name.phase fs.phaseProgress).isLE)
     let patInsts ← rs.forwardRulePatternSubstsInLocalDecl (← h.getDecl)
     fs.addHypWithPatSubstsCore ruleMatches diff.newGoal h rules patInsts
 

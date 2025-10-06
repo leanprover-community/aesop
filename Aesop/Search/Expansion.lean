@@ -175,6 +175,18 @@ def SafeRulesResult.toEmoji : SafeRulesResult → String
 
 def runFirstSafeRule (gref : GoalRef) : SearchM Q SafeRulesResult := do
   let g ← gref.get
+  let (goal, metaState) ← g.currentGoalAndMetaState (← getRootMetaState)
+  -- Initialize Forward State for Safe forward rules
+  let rs : LocalRuleSet := SearchM.Context.ruleSet (← read)
+  -- These could be inlined.
+  let forwardState := g.forwardState
+  let ruleMatches := g.forwardRuleMatches
+  if (forwardState.phaseProgress == PhaseName.norm) then
+    aesop_trace[forward] "Initializing forward state for safe rules"
+    let (fs, ms) := ←
+      runInMetaState metaState <| rs.mkInitialForwardStateForPhase goal PhaseName.safe forwardState
+    gref.modify (fun g ↦ (g.setForwardState fs).setForwardRuleMatches (ruleMatches.insertMany ms))
+  let g ← gref.get
   if g.unsafeRulesSelected then
     return .skipped
     -- If the unsafe rules have been selected, we have already tried all the
@@ -198,6 +210,18 @@ def applyPostponedSafeRule (r : PostponedSafeRule) (parentRef : GoalRef) :
 
 partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
     (parentRef : GoalRef) : SearchM Q RuleResult := do
+  let g ← parentRef.get
+  let (goal, metaState) ← g.currentGoalAndMetaState (← getRootMetaState)
+  -- Initialize Forward State for Unsafe forward rules
+  let rs : LocalRuleSet := SearchM.Context.ruleSet (← read)
+  -- These could be inlined.
+  let forwardState := g.forwardState
+  let ruleMatches := g.forwardRuleMatches
+  if (forwardState.phaseProgress == PhaseName.safe) then
+    aesop_trace[forward] "Initializing forward state for unsafe rules"
+    let (fs, ms) ←
+      runInMetaState metaState <| rs.mkInitialForwardStateForPhase goal PhaseName.unsafe forwardState
+    parentRef.modify (fun g ↦ (g.setForwardState fs).setForwardRuleMatches (ruleMatches.insertMany ms))
   let queue ← selectUnsafeRules postponedSafeRules parentRef
   let (remainingQueue, result) ← loop queue
   parentRef.modify λ g => g.setUnsafeQueue remainingQueue
