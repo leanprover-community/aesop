@@ -32,30 +32,19 @@ def ForwardState.applyGoalDiff (rs : LocalRuleSet) (diff : GoalDiff)
 where
   eraseHyp (h : FVarId) (fs : ForwardState) : BaseM ForwardState :=
     withConstAesopTraceNode .forward (return m!"erase hyp {Expr.fvar h} ({h.name})") do
-      IO.println "pass in eraseHyp"
       return fs.eraseHyp h (← rpinf (← h.getType))
 
   addHyp (h : FVarId) (fs : ForwardState)
       (ruleMatches : Array ForwardRuleMatch) :
       BaseM (ForwardState × Array ForwardRuleMatch) := do
-    let rules ← rs.applicableForwardRulesWith (← h.getType)
-      (compare ↑·.name.phase fs.phaseProgress|>.isLE)
+    let rules ← rs.applicableForwardRules (← h.getType)
     let patInsts ← rs.forwardRulePatternSubstsInLocalDecl (← h.getDecl)
-    IO.println "pass in addHyp"
-    IO.println rules
-    IO.println "pass in patInst"
-    IO.println (patInsts.map (·.1))
-    IO.println "ruleMatches"
-    withConstAesopTraceNode .forward
-      (return m!"add hyp with matches {ruleMatches.map (fun a ↦ a.match.toMessageData a.rule)}") do
     fs.addHypWithPatSubstsCore ruleMatches diff.newGoal h rules patInsts
 
   updateTarget (fs : ForwardState) (ruleMatches : Array ForwardRuleMatch) :
       BaseM (ForwardState × Array ForwardRuleMatch) := do
     let patInsts ←
       rs.forwardRulePatternSubstsInExpr (← diff.newGoal.getType)
-    IO.println "pass in updtTar"
-    IO.println (patInsts.map (·.1))
     fs.updateTargetPatSubstsCore ruleMatches diff.newGoal patInsts
 
   updateHypTypes (hypTypes : PHashSet RPINF) : BaseM (PHashSet RPINF) := do

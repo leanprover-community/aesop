@@ -756,16 +756,12 @@ structure ForwardState where
   /-- Normalised types of all non-implementation detail hypotheses in the
   local context. -/
   hypTypes : PHashSet RPINF
-  /-- Phase name for which the `ForwardState` has been initialized.
-  `none` means that no phase name has been initialized -/
-  phaseProgress : Option PhaseName
  deriving Inhabited
 
 namespace ForwardState
 
 instance : EmptyCollection ForwardState where
-  emptyCollection := by refine' {..} <;> try exact .empty
-                        exact none
+  emptyCollection := by refine' {..} <;> exact .empty
 
 instance : ToMessageData ForwardState where
   toMessageData fs :=

@@ -55,7 +55,7 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId 
   withExceptionPrefix "saturate: internal error: " do
   goal.checkNotAssigned `saturate
   -- We use the forward state only to track the hypotheses present in the goal.
-  let (fs, _) ← rs.mkInitialForwardState goal ∅ none
+  let (fs, _) ← rs.mkInitialForwardState goal
   go goal fs
 where
   go (goal : MVarId) (fs : ForwardState) : SaturateM MVarId :=
@@ -137,7 +137,7 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
   withExceptionPrefix "saturate: internal error: " do
   goal.withContext do
     goal.checkNotAssigned `saturate
-    let (fs, ruleMatches) ← rs.mkInitialForwardState goal ∅ none
+    let (fs, ruleMatches) ← rs.mkInitialForwardState goal
     let queue := ruleMatches.foldl (init := ∅) λ queue m => queue.insert m
     go ∅ fs queue ∅ goal
 where

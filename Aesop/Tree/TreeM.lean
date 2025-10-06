@@ -25,13 +25,15 @@ structure Tree where
   -/
   allIntroducedMVars : Std.HashSet MVarId
 
-def mkInitialTree (goal : MVarId) : BaseM Tree := do
+def mkInitialTree (goal : MVarId) (rs : LocalRuleSet) : BaseM Tree := do
   let rootClusterRef ← IO.mkRef $ MVarCluster.mk {
     parent? := none
     goals := #[] -- patched up below
     isIrrelevant := false
     state := NodeState.unknown
   }
+  let (forwardState, ms) ← withConstAesopTraceNode .forward (return m!"building initial forward state") do
+    rs.mkInitialForwardState goal
   let rootGoalRef ← IO.mkRef $ Goal.mk {
     id := GoalId.zero
     parent := rootClusterRef
@@ -44,8 +46,8 @@ def mkInitialTree (goal : MVarId) : BaseM Tree := do
     preNormGoal := goal
     normalizationState := NormalizationState.notNormal
     mvars := .ofHashSet (← goal.getMVarDependencies)
-    forwardState := default
-    forwardRuleMatches := default
+    forwardState
+    forwardRuleMatches := .ofArray ms
     successProbability := Percent.hundred
     addedInIteration := Iteration.one
     lastExpandedInIteration := Iteration.none

@@ -220,63 +220,25 @@ partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
       | .postponedSafeRule r =>
         return (queue, ← applyPostponedSafeRule r parentRef)
 
--- TODO move initial forward state logic inside `normalizeGoalIfNecessary`/`runFirst...` etc.
 def expandGoal (gref : GoalRef) : SearchM Q RuleResult := do
-  let rs : LocalRuleSet := SearchM.Context.ruleSet (← read)
-  let fs := (← gref.get).forwardState
-  aesop_trace![steps] "current forward state:{indentD (toMessageData (α := ForwardState) fs)}"
-  -- TODO: test if it's fine to remove this if statement
-  if (← firstForwardPhase rs PhaseName.norm) then
-    initializeForwardState gref rs PhaseName.norm
   let provedByNorm ←
     withAesopTraceNode .steps fmtNorm (normalizeGoalIfNecessary gref)
-  aesop_trace![steps] "forward state after norm:{indentD (toMessageData (α := ForwardState) fs)}"
-  let (goalMId, metaState) ←
-    (← gref.get).currentGoalAndMetaState (← getRootMetaState)
   aesop_trace[steps] do
     unless provedByNorm do
+      let (goal, metaState) ←
+        (← gref.get).currentGoalAndMetaState (← getRootMetaState)
       metaState.runMetaM' do
-        aesop_trace![steps] "Goal after normalisation:{indentD goalMId}"
+        aesop_trace![steps] "Goal after normalisation:{indentD goal}"
   if provedByNorm then
     return .proved #[]
-  -- TODO: test if it's fine to remove this if statement
-  if (← firstForwardPhase rs PhaseName.safe) then
-    initializeForwardState gref rs PhaseName.safe
   let safeResult ←
     withAesopTraceNode .steps fmtSafe (runFirstSafeRule gref)
   match safeResult with
   | .succeeded newRapps => return .succeeded newRapps
   | .proved newRapps => return .proved newRapps
-  | .failed postponedSafeRules =>
-    -- TODO: test if it's fine to remove this if statement
-    if (← firstForwardPhase rs PhaseName.unsafe) then
-      initializeForwardState gref rs PhaseName.unsafe
-    doUnsafe postponedSafeRules
+  | .failed postponedSafeRules => doUnsafe postponedSafeRules
   | .skipped => doUnsafe #[]
   where
-    firstForwardPhase (rs : LocalRuleSet) (phase : PhaseName) : SearchM Q Bool := do
-      let forwardPhases := (rs.forwardRuleNames.toList).map (·.phase)
-      let state := (← readThe TreeM.Context)
-      /-
-      Q: Comparing ` Iteration.one.succ` is probably a bad hack. Is this ok?
-      Probably should have a flag that tracks for which `phase` the initial forward state has
-      been generated.
-      -/
-      if forwardPhases.contains phase ∧ state.currentIteration == (Iteration.one.succ) then
-        return True
-      else
-        return False
-
-    initializeForwardState (gref : GoalRef) (rs : LocalRuleSet) (phase : PhaseName) := do
-      let g ← gref.get
-      let (goalMId, _) ← g.currentGoalAndMetaState (← getRootMetaState)
-      let fs := g.forwardState
-      withConstAesopTraceNode .forward (return m!"now modifying {goalMId}") do
-      let (forwardState, ms) ← rs.mkInitialForwardState goalMId fs phase
-      withConstAesopTraceNode .forward
-        (return m!"now modifying {(← gref.get).currentGoal.name}") do
-        gref.modify (fun g ↦ (g.setForwardState forwardState).setForwardRuleMatches (.ofArray ms))
-
     doUnsafe (postponedSafeRules : Array PostponedSafeRule) :
         SearchM Q RuleResult := do
       withAesopTraceNode .steps fmtUnsafe do
