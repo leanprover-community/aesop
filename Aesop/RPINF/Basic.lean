@@ -99,8 +99,8 @@ instance : ToFormat (PINFRaw md) where
 instance : ToMessageData (PINFRaw md) where
   toMessageData x := toMessageData x.toExpr
 
-/-- An expression in PINF at `reducible` transparency. -/
-abbrev RPINFRaw := PINFRaw .reducible
+/-- An expression in PINF at `instances` transparency. -/
+abbrev RPINFRaw := PINFRaw .instances
 
 set_option linter.missingDocs false in
 /-- Cache for `rpinf`. -/
@@ -139,6 +139,6 @@ instance : ToMessageData (PINF md) where
   toMessageData x := toMessageData x.toExpr
 
 /-- An expression in RPINF together with its RPINF hash. -/
-abbrev RPINF := PINF .reducible
+abbrev RPINF := PINF .instances
 
 end Aesop
