@@ -27,7 +27,7 @@ elab_rules : command
     let rsNames := (ids : Array Ident).map (·.getId)
     let dflt := (← dflt?.mapM (elabBoolLit ·)).getD false
     rsNames.forM checkRuleSetNotDeclared
-    elabCommand $ ← `(initialize ($(quote rsNames).forM $ declareRuleSetUnchecked (isDefault := $(quote dflt))))
+    elabCommand $ ← `(meta initialize ($(quote rsNames).forM $ declareRuleSetUnchecked (isDefault := $(quote dflt))))
 
 elab (name := addRules)
     attrKind:attrKind "add_aesop_rules " e:Aesop.rule_expr : command => do
