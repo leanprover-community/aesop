@@ -43,7 +43,9 @@ where
           mkForallFVars xs (← go e)
       | .proj t i e =>
         return .proj t i (← go e)
-      | .sort .. | .mvar .. | .lit .. | .const .. | .fvar .. =>
+      | .sort u => return .sort <| ← normalizeLevel u
+      | .const n us => return .const n <| ← us.mapM fun u => normalizeLevel u
+      | .mvar .. | .lit .. | .fvar .. =>
         return e
       | .letE .. | .mdata .. | .bvar .. => unreachable!
 
