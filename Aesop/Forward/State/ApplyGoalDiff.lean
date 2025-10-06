@@ -32,17 +32,13 @@ def ForwardState.applyGoalDiff (rs : LocalRuleSet) (diff : GoalDiff)
 where
   eraseHyp (h : FVarId) (fs : ForwardState) : BaseM ForwardState :=
     withConstAesopTraceNode .forward (return m!"erase hyp {Expr.fvar h} ({h.name})") do
-      IO.println "in goal diff erHyp"
-      IO.println (fs.ruleStates.toList.map (·.2.rule))
       return fs.eraseHyp h (← rpinf (← h.getType))
 
   addHyp (h : FVarId) (fs : ForwardState)
       (ruleMatches : Array ForwardRuleMatch) :
       BaseM (ForwardState × Array ForwardRuleMatch) := do
-    let rules ← rs.applicableForwardRules (← h.getType)
-    IO.println "in goal diff addHyp"
-    IO.println (fs.ruleStates.toList.map (·.2.rule))
-    IO.println (ruleMatches.map (·.rule))
+    let rules ← rs.applicableForwardRulesWith (← h.getType)
+      (fun r ↦ (compare ↑r.name.phase fs.phaseProgress).isLE)
     let patInsts ← rs.forwardRulePatternSubstsInLocalDecl (← h.getDecl)
     fs.addHypWithPatSubstsCore ruleMatches diff.newGoal h rules patInsts
 

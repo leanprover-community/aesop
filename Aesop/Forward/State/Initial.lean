@@ -18,35 +18,28 @@ def mkInitialForwardStateForPhase (goal : MVarId) (rs : LocalRuleSet) (phase : P
     if ! aesop.dev.statefulForward.get (← getOptions) then
       -- We still initialise the hyp types since these are also used by
       -- stateless forward reasoning.
-      -- TODO filer
       let mut hypTypes := forwardState.hypTypes
       for ldecl in ← getLCtx do
         if ! ldecl.isImplementationDetail then
           hypTypes := hypTypes.insert (← rpinf ldecl.type)
-      return ({ (forwardState : ForwardState) with hypTypes, phaseProgress := phase}, #[])
-    let mut fs := {forwardState with phaseProgress := phase}
+      return ({ forwardState with hypTypes, phaseProgress := phase}, #[])
+    let mut fs := forwardState
     let mut rm : Array ForwardRuleMatch := #[]
-    rm := rs.constForwardRuleMatches--.filter (·.rule.name.phase == phase)
+    rm := rs.constForwardRuleMatches
     aesop_trace[forward] do
       for m in rm do
         aesop_trace![forward] "match for constant rule {m.rule.name}"
     for ldecl in ← show MetaM _ from getLCtx do
       if ldecl.isImplementationDetail then
         continue
-
       let rules := (← rs.applicableForwardRules ldecl.type).filter (·.1.name.phase == phase)
-      IO.println (rules)
       let patInsts := (← rs.forwardRulePatternSubstsInLocalDecl ldecl)
-      IO.println (patInsts.map (·.1))
       let (fs', rm') ←
         fs.addHypWithPatSubstsCore rm goal ldecl.fvarId rules patInsts
       fs := fs'
       rm := rm'
-      IO.println (fs.ruleStates.toList.map (·.2.rule))
-      IO.println (rm.map (·.rule))
     let patInsts := (← rs.forwardRulePatternSubstsInExpr (← goal.getType))
-    -- IO.println (rm.map (·.rule))
-    -- IO.println (fs.ruleStates.toList.map (·.1))
+    fs :=  {fs with phaseProgress := phase}
     fs.addPatSubstsCore rm goal patInsts
 
 def mkInitialForwardStateForAllPhases (goal : MVarId) (rs : LocalRuleSet) :

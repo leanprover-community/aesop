@@ -794,10 +794,13 @@ def addHypCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
   goal.withContext do
   withConstAesopTraceNode .forward (return m!"add hyp {Expr.fvar h} ({h.name})") do
     let hTypeRPINF ← rpinf (← h.getType)
+    let mut fs := fs
     if (← isProp hTypeRPINF.toExpr) && fs.hypTypes.contains hTypeRPINF then
-      aesop_trace[forward] "a hyp with the same (propositional) type was already added"
-      return (fs,ruleMatches)
-    let fs := { fs with hypTypes := fs.hypTypes.insert hTypeRPINF }
+      if fs.phaseProgress == PhaseName.unsafe then
+        aesop_trace[forward] "a hyp with the same (propositional) type was already added"
+        return (fs,ruleMatches)
+    unless (← isProp hTypeRPINF.toExpr) && fs.hypTypes.contains hTypeRPINF do
+      fs := { fs with hypTypes := fs.hypTypes.insert hTypeRPINF }
     ms.foldlM (init := (fs, ruleMatches)) λ (fs, ruleMatches) (r, i) => do
       withConstAesopTraceNode .forward (return m!"rule {r.name}, premise {i}") do
         let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState

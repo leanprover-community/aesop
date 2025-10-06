@@ -1,5 +1,5 @@
 /-
-Copyright (c) 2025 Jannis Limperg. All rights reserved.
+Copyright (c) 2025 Xavier Généreux. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux
 -/
@@ -8,28 +8,31 @@ import Aesop
 
 section errors
 
+
+/--
+warning: aesop: failed to prove the goal after exhaustive search.
+---
+warning: declaration uses 'sorry' -/
+#guard_msgs in
 example {α β γ : Prop} (h : α → β → γ) (h₁ : α) (h₂ : β) : False := by
-  set_option aesop.dev.statefulForward false in
-  --set_option trace.aesop true in
-  set_option trace.aesop true in
-  aesop (add safe forward h)
+  -- set_option aesop.dev.statefulForward true in
+  -- set_option trace.aesop true in
+  --set_option trace.aesop.forward true in
+  aesop (add norm safe h)
   sorry
 
 end errors
 
 variable {i j k l m n o p : Type}
 
--- def i : Type := sorry
--- def j : Type := sorry
--- def k : Type := sorry
--- def l : Type := sorry
--- def m : Type := sorry
--- def n : Type := sorry
--- def o : Type := sorry
--- def p : Type := sorry
-
+/--
+warning: declaration uses 'sorry' -/
+#guard_msgs in
 def myProp {I J : Type} (a : I) (b : J) : Prop := sorry
 
+/--
+warning: declaration uses 'sorry' -/
+#guard_msgs in
 theorem myThm (a : i) (b : j) (c : k) (d : l) :
     myProp a b ↔ myProp c d := by
   constructor
@@ -43,7 +46,7 @@ example (h : Empty) : False := by
   -- set_option aesop.dev.statefulForward true in
   -- set_option trace.profiler.threshold 0 in
   -- set_option trace.profiler true in
-  set_option trace.aesop true in
+  --set_option trace.aesop true in
   aesop
 
 example (a : i) (b : j) (c : k) (d : l) (e : m) (f : n) (g : o) (h : p) :
@@ -52,7 +55,7 @@ example (a : i) (b : j) (c : k) (d : l) (e : m) (f : n) (g : o) (h : p) :
   -- set_option trace.profiler.threshold 0 in
   -- set_option trace.profiler true in
   -- set_option trace.aesop.forward true in
-  aesop (add safe forward [myThm])
+  aesop (add unsafe forward [myThm])
 
 example : True := by
   -- set_option trace.aesop true in
@@ -66,20 +69,42 @@ example (a : i) (b : j) (c : k) (d : l) (e : m) (f : n) (g : o) (h : p) :
   -- set_option trace.aesop true in
   aesop (add safe forward [myThm, True.intro])
 
+/--
+warning: declaration uses 'sorry' -/
+#guard_msgs in
 example (a : i) (b : j) (c : k) (d : l) (e : m) :
     False := by
   -- set_option aesop.dev.statefulForward true in
   -- set_option trace.profiler.threshold 0 in
   -- set_option trace.profiler true in
-  set_option trace.aesop true in
+  --set_option trace.aesop true in
   try aesop (add safe forward [myThm])
   sorry
 
+/--
+warning: declaration uses 'sorry' -/
+#guard_msgs in
+def a₁ : Nat := sorry
+
+/--
+warning: declaration uses 'sorry' -/
+#guard_msgs in
+def a₂ : Nat := sorry
+
+/--
+warning: declaration uses 'sorry' -/
+#guard_msgs in
+theorem myLe : a₁ ≤ a₂ := sorry
+
+example (c : Nat) (h : a₂ ≤ c) : a₁ ≤ c := by
+  --set_option trace.aesop.forward true in
+  aesop (add norm forward myLe, unsafe forward Nat.le_trans)
+  try sorry
 
 example (a b c d : Nat) (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) : a ≤ d := by
   --set_option trace.profiler true in
-  set_option trace.aesop true in
-  set_option aesop.dev.statefulForward true in
+  -- set_option trace.aesop.forward true in
+  -- set_option aesop.dev.statefulForward true in
   aesop (add safe forward [Nat.le_trans])
 
 /-

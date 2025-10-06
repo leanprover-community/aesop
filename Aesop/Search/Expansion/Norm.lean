@@ -397,6 +397,7 @@ partial def normalizeGoalMVar (goal : MVarId)
 def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
     SearchM Q Bool := do
   let g ← gref.get
+  let (goal, metaState) ← g.currentGoalAndMetaState (← getRootMetaState)
   let preGoal := g.preNormGoal
   if ← g.isRoot then
     -- For the root goal, we skip normalization.
@@ -405,12 +406,13 @@ def normalizeGoalIfNecessary (gref : GoalRef) [Aesop.Queue Q] :
     return false
   -- Initialize Forward State for Norm forward rules
   let rs : LocalRuleSet := SearchM.Context.ruleSet (← read)
+  -- These could be inlined.
   let forwardState := g.forwardState
   let mut ruleMatches := g.forwardRuleMatches
-  IO.print "in norm the phase progress is: "
-  IO.println forwardState.phaseProgress
   if (compare forwardState.phaseProgress PhaseName.norm).isLT then
-    let (fs, ms) ← rs.mkInitialForwardStateForPhase g.currentGoal PhaseName.norm forwardState
+    aesop_trace[forward] "Initializing forward state for norm rules"
+    let (fs, ms) ←
+      runInMetaState metaState <| rs.mkInitialForwardStateForPhase goal PhaseName.norm forwardState
     gref.modify (fun g ↦ (g.setForwardState fs).setForwardRuleMatches (ruleMatches.insertMany ms))
   let g ← gref.get
   let preGoal := g.preNormGoal
