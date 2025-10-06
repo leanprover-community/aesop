@@ -9,7 +9,7 @@ import Aesop
 set_option aesop.check.all true
 set_option aesop.smallErrorMessages true
 
--- Forward rules always operate at reducible transparency.
+-- Forward rules always operate at reducible+instances transparency.
 
 def T := Unit → Empty
 

@@ -14,8 +14,8 @@ local instance : MonadCache Expr Expr m where
   cache k v := MonadCache.cache k (⟨v⟩ : RPINFRaw)
 
 @[specialize]
-partial def rpinfRaw (e : Expr) : m RPINFRaw :=
-  withReducible do return ⟨← go e⟩
+partial def rpinfRaw (e : Expr) : BaseM RPINFRaw :=
+  withReducibleAndInstances do return ⟨← go e⟩
 where
   go (e : Expr) : m Expr :=
     withIncRecDepth do
