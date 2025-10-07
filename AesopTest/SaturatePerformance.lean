@@ -44,8 +44,8 @@ l0 l1 l2 : List α
 fwd : l0.length ≥ 0
 fwd_1 : l1.length ≥ 0
 fwd_2 : l2.length ≥ 0
-fwd_3 : (l0 ++ l1).length ≥ 0
-fwd_4 : (l0 ++ l1 ++ l2).length ≥ 0
+fwd_3 : (l0.append l1).length ≥ 0
+fwd_4 : ((l0.append l1).append l2).length ≥ 0
 ⊢ (l0 ++ l1 ++ l2).length = l0.length + l1.length + l2.length
 -/
 #guard_msgs in
