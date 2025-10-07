@@ -54,17 +54,6 @@ def filter (p : α → Bool) (s : PHashSet α) : PHashSet α :=
 
 end PersistentHashSet
 
--- TODO upstream; generalise to {m : Type u → Type v}.
--- Need to generalise `HashMap.forM` first.
-scoped instance {m : Type u → Type u} [BEq α] [Hashable α] :
-    ForM m (Std.HashMap α β) (α × β) where
-  forM | m, f => m.forM λ a b => f (a, b)
-
--- TODO upstream; generalise to {m : Type u → Type v}.
-scoped instance {m : Type u → Type u} [BEq α] [Hashable α] :
-    ForIn m (Std.HashMap α β) (α × β) where
-  forIn := ForM.forIn
-
 section DiscrTree
 
 open DiscrTree
