@@ -12,7 +12,7 @@ local instance : MonadCache Expr Expr BaseM where
 
 @[specialize]
 partial def rpinfRaw (e : Expr) : BaseM RPINFRaw :=
-  withReducibleAndInstances do return ⟨← go e⟩
+  withReducible do return ⟨← go e⟩
 where
   go (e : Expr) : BaseM Expr :=
     withIncRecDepth do

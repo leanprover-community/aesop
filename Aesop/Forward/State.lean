@@ -392,7 +392,7 @@ def matchPremise? (premises : Array MVarId) (lmvarIds : Array LMVarId)
   withoutModifyingState do
     let isDefEq ←
       withConstAesopTraceNode .forwardDebug (return m!"defeq check") do
-      withReducibleAndInstances do
+      withReducible do
         isDefEq premiseType hypType
     if isDefEq then
       let mut subst := .empty premises.size lmvarIds.size
@@ -661,7 +661,7 @@ def addRawHyp (goal : MVarId) (h : RawHyp) (pi : PremiseIndex) (rs : RuleState) 
     let ruleType ← instantiateMVars (← inferType ruleExpr)
     let (premises, _, _) ←
       withConstAesopTraceNode .forwardDebug (return m!"open rule term") do
-      withReducibleAndInstances do
+      withReducible do
         forallMetaTelescope ruleType
     if premises.size != rs.rule.numPremises then
       aesop_trace[forward] "failed to add hyp or pat inst: rule term{indentD $ toMessageData rs.rule.term}\ndoes not have expected number of premises {rs.rule.numPremises}"
