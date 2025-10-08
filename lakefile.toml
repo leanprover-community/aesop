@@ -13,6 +13,10 @@ rev = "v4.20.0"
 name = "Aesop"
 
 [[lean_lib]]
+name = "AesopPrecomp"
+precompileModules = true
+
+[[lean_lib]]
 name = "AesopTest"
 globs = ["AesopTest.+"]
 leanOptions = {linter.unusedVariables = false}
