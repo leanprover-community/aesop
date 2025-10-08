@@ -178,7 +178,10 @@ def runFirstSafeRule (gref : GoalRef) : SearchM Q SafeRulesResult := do
     return .skipped
     -- If the unsafe rules have been selected, we have already tried all the
     -- safe rules.
-  gref.progressForwardStateToPhase .safe (← read).ruleSet (← getRootMetaState)
+  -- HACK: for the root goal, we always select the `preprocess` rule, so we
+  -- should not progress the forward state.
+  if ! (← (← gref.get).isRoot) then
+    gref.progressForwardStateToPhase .safe (← read).ruleSet (← getRootMetaState)
   let rules ← selectSafeRules (← gref.get)
   let mut postponedRules := {}
   for r in rules do
