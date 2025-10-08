@@ -4,11 +4,12 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Aesop.BaseM
 import Aesop.Forward.Substitution
-import Aesop.RPINF
 import Aesop.Rule.Name
 import Aesop.Tracing
 import Aesop.Index.DiscrTreeConfig
+import AesopPrecomp.RPINF
 
 open Lean Lean.Meta
 

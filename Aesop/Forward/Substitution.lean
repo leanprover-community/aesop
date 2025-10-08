@@ -6,7 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Forward.LevelIndex
 import Aesop.Forward.PremiseIndex
-import Aesop.RPINF.Basic
+import AesopPrecomp.RPINF.Basic
 import Aesop.Util.Basic
 
 namespace Aesop
