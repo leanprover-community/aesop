@@ -42,7 +42,7 @@ where
 
 /-- Bring the forward state up to date for the given phase. The returned
 forward state accurately represents the partial rule applications of the given
-phase and all earlier phases. -/
+phase. -/
 def progressToPhase (phase : PhaseName) (rs : LocalRuleSet) (fs : ForwardState) :
     BaseM (ForwardState × Array ForwardRuleMatch) := do
   withConstAesopTraceNode .forward (fun _ => return m!"progressing forward state to phase {phase}") do
@@ -50,12 +50,7 @@ def progressToPhase (phase : PhaseName) (rs : LocalRuleSet) (fs : ForwardState) 
     trace[forward] "stateful forward reasoning is disabled"
     return (fs, #[])
   let diff := fs.unprocessedDiff phase
-  let fs := {
-    fs with
-    unprocessedNormDiff := .empty diff.newGoal
-    unprocessedSafeDiff := if phase ≥ .safe then .empty diff.newGoal else fs.unprocessedSafeDiff
-    unprocessedUnsafeDiff := if phase ≥ .unsafe then .empty diff.newGoal else fs.unprocessedUnsafeDiff
-  }
+  let fs := fs.clearUnprocessedDiff phase
   diff.newGoal.withContext do
     let (fs, ruleMatches) ←
       diff.addedFVars.foldM (init := (fs, ∅)) λ (fs, ruleMatches) h => do
@@ -65,32 +60,19 @@ def progressToPhase (phase : PhaseName) (rs : LocalRuleSet) (fs : ForwardState) 
     else
       return (fs, ruleMatches)
 where
-  isRelevantDiff (diff : GoalDiff) : Bool :=
-    diff.hasAddedFVars || diff.targetMaybeChanged
-
-  maxPhase : PhaseName := phase
-  minPhase : PhaseName :=
-    if isRelevantDiff fs.unprocessedNormDiff then
-      .norm
-    else if isRelevantDiff fs.unprocessedSafeDiff then
-      .safe
-    else
-      .unsafe
-
   addHyp (h : FVarId) (fs : ForwardState) (diff : GoalDiff)
       (ruleMatches : Array ForwardRuleMatch) :
       BaseM (ForwardState × Array ForwardRuleMatch) := do
-    let rules ← rs.applicableForwardRules (← h.getType) minPhase maxPhase
+    let rules ← rs.applicableForwardRules (← h.getType) phase
     let patInsts ←
-      rs.forwardRulePatternSubstsInLocalDecl (← h.getDecl) minPhase maxPhase
+      rs.forwardRulePatternSubstsInLocalDecl (← h.getDecl) phase
     fs.addHypWithPatSubstsCore ruleMatches diff.newGoal h rules patInsts
 
   updateTarget (fs : ForwardState) (diff : GoalDiff)
       (ruleMatches : Array ForwardRuleMatch) :
       BaseM (ForwardState × Array ForwardRuleMatch) := do
     let patInsts ←
-      rs.forwardRulePatternSubstsInExpr (← diff.newGoal.getType)
-        minPhase maxPhase
+      rs.forwardRulePatternSubstsInExpr (← diff.newGoal.getType) phase
     fs.addPatSubstsCore ruleMatches diff.newGoal patInsts
 
 end Aesop.ForwardState

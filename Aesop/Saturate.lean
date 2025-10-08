@@ -131,9 +131,11 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
   goal.withContext do
     goal.checkNotAssigned `saturate
     let (fs, ruleMatches₁) ← rs.mkInitialForwardState goal
-    let (fs, ruleMatches₂) ← fs.progressToPhase .safe rs
-    let queue := (ruleMatches₁ ++ ruleMatches₂).foldl (init := ∅) λ queue m =>
-      queue.insert m
+    let (fs, ruleMatches₂) ← fs.progressToPhase .norm rs
+    let (fs, ruleMatches₃) ← fs.progressToPhase .safe rs
+    let queue :=
+      (ruleMatches₁ ++ ruleMatches₂ ++ ruleMatches₃).foldl (init := ∅) λ queue m =>
+        queue.insert m
     go ∅ fs queue ∅ goal
 where
   go (hypDepths : Std.HashMap FVarId Nat) (fs : ForwardState) (queue : Queue)
@@ -162,18 +164,20 @@ where
           if maxDepth?.isSome && depth ≥ maxDepth?.get! then
             go hypDepths fs queue erasedHyps goal
           else
-            let rules ← rs.applicableForwardRules type
-              (minPhase := .norm) (maxPhase := .safe)
-            let patInsts ←
-              rs.forwardRulePatternSubstsInLocalDecl (← hyp.getDecl)
-                (minPhase := .norm) (maxPhase := .safe)
-            let (fs, ruleMatches) ←
-              fs.addHypWithPatSubsts goal hyp rules patInsts
-            let queue :=
-              ruleMatches.foldl (init := queue) λ queue m => queue.insert m
+            let (fs, queue) ← addHyp goal (← hyp.getDecl) fs .norm queue
+            let (fs, queue) ← addHyp goal (← hyp.getDecl) fs .safe queue
             go hypDepths fs queue erasedHyps goal
       else
         return goal
+
+  addHyp (goal : MVarId) (hypDecl : LocalDecl) (fs : ForwardState)
+      (phase : PhaseName) (queue : Queue) : SaturateM (ForwardState × Queue) := do
+    let rules ← rs.applicableForwardRules hypDecl.type phase
+    let patInsts ← rs.forwardRulePatternSubstsInLocalDecl hypDecl phase
+    let (fs, ruleMatches) ←
+      fs.addHypWithPatSubsts goal hypDecl.fvarId rules patInsts
+    let queue := ruleMatches.foldl (init := queue) λ queue m => queue.insert m
+    return (fs, queue)
 
 end Stateful
 

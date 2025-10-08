@@ -174,13 +174,12 @@ def SafeRulesResult.toEmoji : SafeRulesResult → String
   | skipped => ruleSkippedEmoji
 
 def runFirstSafeRule (gref : GoalRef) : SearchM Q SafeRulesResult := do
-  gref.progressForwardStateToPhase .safe (← read).ruleSet (← getRootMetaState)
-  let g ← gref.get
-  if g.unsafeRulesSelected then
+  if (← gref.get).unsafeRulesSelected then
     return .skipped
     -- If the unsafe rules have been selected, we have already tried all the
     -- safe rules.
-  let rules ← selectSafeRules g
+  gref.progressForwardStateToPhase .safe (← read).ruleSet (← getRootMetaState)
+  let rules ← selectSafeRules (← gref.get)
   let mut postponedRules := {}
   for r in rules do
     let result ← runSafeRule gref r
