@@ -505,13 +505,12 @@ def applicableSafeRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
   rs.applicableSafeRulesWith fms goal (include? := λ _ => true)
 
 def applicableForwardRulesWith (rs : LocalRuleSet) (e : Expr)
-    (minPhase maxPhase : PhaseName) (include? : ForwardRule → Bool) :
+    (phase : PhaseName) (include? : ForwardRule → Bool) :
     MetaM (Array (ForwardRule × PremiseIndex)) :=
-  withConstAesopTraceNode .forward (return m!"select forward rules with {minPhase} ≤ rule phase ≤ {maxPhase} for {e}") do
+  withConstAesopTraceNode .forward (return m!"select {phase} forward rules for {e}") do
     let rules ← rs.forwardRules.get e
     let rules := rules.filter λ (rule, _) =>
-      let phase := rule.name.phase
-      minPhase ≤ phase && phase ≤ maxPhase && include? rule && !rs.isErased rule.name
+      rule.name.phase == phase && include? rule && !rs.isErased rule.name
     aesop_trace[forward] do
       for (r, i) in rules do
         aesop_trace![forward] mkMsg r i
@@ -520,9 +519,9 @@ def applicableForwardRulesWith (rs : LocalRuleSet) (e : Expr)
     mkMsg r i := m!"{r}, premise {i}" -- Inlining this triggers a Lean bug.
 
 @[inline, always_inline]
-def applicableForwardRules (rs : LocalRuleSet) (e : Expr) (minPhase maxPhase : PhaseName) :
+def applicableForwardRules (rs : LocalRuleSet) (e : Expr) (phase : PhaseName) :
     MetaM (Array (ForwardRule × PremiseIndex)) :=
-  rs.applicableForwardRulesWith e minPhase maxPhase (include? := λ _ => true)
+  rs.applicableForwardRulesWith e phase (include? := λ _ => true)
 
 def constForwardRuleMatches (rs : LocalRuleSet) : Array ForwardRuleMatch :=
   rs.forwardRules.getConstRuleMatches
@@ -530,31 +529,28 @@ def constForwardRuleMatches (rs : LocalRuleSet) : Array ForwardRuleMatch :=
 section ForwardRulePattern
 
 private def postprocessPatSubstMap (rs : LocalRuleSet)
-    (m : RulePatternSubstMap) (minPhase maxPhase : PhaseName) :
+    (m : RulePatternSubstMap) (phase : PhaseName) :
     Array (ForwardRule × Substitution) :=
   m.toFlatArray.filterMap fun (n, patSubst) => do
     let rule ← rs.forwardRules.getRuleWithName? n
-    let phase := rule.name.phase
-    guard <| minPhase ≤ phase && phase ≤ maxPhase
+    guard <| rule.name.phase == phase
     return (rule, patSubst)
 
 def forwardRulePatternSubstsInExpr (rs : LocalRuleSet) (e : Expr)
-    (minPhase maxPhase : PhaseName) :
-    BaseM (Array (ForwardRule × Substitution)) := do
+    (phase : PhaseName) : BaseM (Array (ForwardRule × Substitution)) := do
   withConstAesopTraceNode .forward (return m!"rule patterns in expr {e}:") do
     let ms ← rs.rulePatterns.get e
-    let ms := postprocessPatSubstMap rs ms minPhase maxPhase
+    let ms := postprocessPatSubstMap rs ms phase
     aesop_trace[forward] do
       for (r, inst) in ms do
         aesop_trace![forward] m!"{r}, {inst}"
     return ms
 
 def forwardRulePatternSubstsInLocalDecl (rs : LocalRuleSet) (ldecl : LocalDecl)
-    (minPhase maxPhase : PhaseName) :
-    BaseM (Array (ForwardRule × Substitution)) := do
+    (phase : PhaseName) : BaseM (Array (ForwardRule × Substitution)) := do
   withConstAesopTraceNode .forward (return m!"rule patterns in hyp {ldecl.userName}:") do
     let ms ← rs.rulePatterns.getInLocalDecl ldecl
-    let ms := postprocessPatSubstMap rs ms minPhase maxPhase
+    let ms := postprocessPatSubstMap rs ms phase
     aesop_trace[forward] do
       for (r, inst) in ms do
         aesop_trace![forward] m!"{r}, {inst}"
