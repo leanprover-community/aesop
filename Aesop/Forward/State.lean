@@ -768,12 +768,25 @@ structure ForwardState where
 
 namespace ForwardState
 
-/-- Get the combined unprocessed diff for the given phase and all earlier phases. -/
+/-- Get the unprocessed diff for the given phase. -/
 def unprocessedDiff (phase : PhaseName) (fs : ForwardState) : GoalDiff :=
   match phase with
   | .norm => fs.unprocessedNormDiff
-  | .safe => fs.unprocessedNormDiff.comp fs.unprocessedSafeDiff
-  | .unsafe => fs.unprocessedNormDiff.comp fs.unprocessedSafeDiff |>.comp fs.unprocessedUnsafeDiff
+  | .safe => fs.unprocessedSafeDiff
+  | .unsafe => fs.unprocessedUnsafeDiff
+
+/-- Modify the unprocessed diff for the given phase. -/
+def modifyUnprocessedDiff (phase : PhaseName) (f : GoalDiff → GoalDiff)
+    (fs : ForwardState) : ForwardState :=
+  match phase with
+  | .norm => { fs with unprocessedNormDiff := f fs.unprocessedNormDiff }
+  | .safe => { fs with unprocessedSafeDiff := f fs.unprocessedSafeDiff }
+  | .unsafe => { fs with unprocessedUnsafeDiff := f fs.unprocessedUnsafeDiff }
+
+/-- Replace the unprocessed diff for the given phase with an empty diff. -/
+def clearUnprocessedDiff (phase : PhaseName) (fs : ForwardState) :
+    ForwardState :=
+  fs.modifyUnprocessedDiff phase fun diff => .empty diff.newGoal
 
 instance : ToMessageData ForwardState where
   toMessageData fs :=
