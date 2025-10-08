@@ -12,6 +12,8 @@ open Lean Lean.Meta
 
 namespace Aesop
 
+initialize registerTraceClass `rpinf
+
 /-- `MData` tag for expressions that are proofs. -/
 def mdataPINFIsProofName : Name :=
   `Aesop.pinfIsProof
@@ -111,6 +113,9 @@ structure RPINFCache where
 
 instance : EmptyCollection RPINFCache :=
   ⟨⟨∅⟩⟩
+
+/-- Class for monads that can cache RPINF results. -/
+class abbrev MonadRPINF (m) := MonadCache Expr RPINFRaw m
 
 set_option linter.missingDocs false in
 /-- An expression in PINF at transparency `md`, together with its PINF hash as
