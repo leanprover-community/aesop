@@ -63,6 +63,7 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId 
 where
   go (goal : MVarId) (fs : ForwardState) : SaturateM MVarId :=
     withIncRecDepth do
+    checkSystem "saturate"
     trace[saturate] "goal {goal.name}:{indentD goal}"
     let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
     let preState ← show MetaM _ from saveState
@@ -147,6 +148,7 @@ where
   go (hypDepths : Std.HashMap FVarId Nat) (fs : ForwardState) (queue : Queue)
       (erasedHyps : Std.HashSet FVarId) (goal : MVarId) : SaturateM MVarId := do
     withIncRecDepth do
+    checkSystem "saturate"
     goal.withContext do
       if let some (m, queue) := queue.deleteMin then
         if m.rule.name.phase == .unsafe || m.anyHyp erasedHyps.contains then
