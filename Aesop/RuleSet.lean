@@ -506,7 +506,7 @@ def applicableSafeRules (rs : LocalRuleSet) (fms : ForwardRuleMatches)
 
 def applicableForwardRulesWith (rs : LocalRuleSet) (e : Expr)
     (phase : PhaseName) (include? : ForwardRule → Bool) :
-    MetaM (Array (ForwardRule × PremiseIndex)) :=
+    BaseM (Array (ForwardRule × PremiseIndex)) :=
   withConstAesopTraceNode .forward (return m!"select {phase} forward rules for {e}") do
     let rules ← rs.forwardRules.get e
     let rules := rules.filter λ (rule, _) =>
@@ -520,7 +520,7 @@ def applicableForwardRulesWith (rs : LocalRuleSet) (e : Expr)
 
 @[inline, always_inline]
 def applicableForwardRules (rs : LocalRuleSet) (e : Expr) (phase : PhaseName) :
-    MetaM (Array (ForwardRule × PremiseIndex)) :=
+    BaseM (Array (ForwardRule × PremiseIndex)) :=
   rs.applicableForwardRulesWith e phase (include? := λ _ => true)
 
 def constForwardRuleMatches (rs : LocalRuleSet) : Array ForwardRuleMatch :=
