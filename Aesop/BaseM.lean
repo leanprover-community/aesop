@@ -6,10 +6,12 @@ Authors: Jannis Limperg
 
 import Aesop.Stats.Basic
 import Aesop.RulePattern.Cache
+import Aesop.Index.Forward.Cache
 
 set_option linter.missingDocs true
 
 open Lean
+open Std (HashMap)
 
 namespace Aesop
 
@@ -17,6 +19,8 @@ namespace Aesop
 structure BaseM.State where
   /-- The rule pattern cache. -/
   rulePatternCache : RulePatternCache
+  /-- A cache for forward rule selection. -/
+  forwardRuleCache : ForwardRuleCache
   /-- The RPINF cache. -/
   rpinfCache : RPINFCache
   /-- Stats collected during an Aesop call. -/
@@ -34,7 +38,8 @@ namespace BaseM
 
 /-- Run a `BaseM` action. -/
 protected def run (x : BaseM α) (stats : Stats := ∅) : MetaM (α × Stats) := do
-  let (a, s) ← StateRefT'.run x { stats, rulePatternCache := ∅, rpinfCache := ∅ }
+  let initState : BaseM.State := by refine' { stats, .. } <;> exact ∅
+  let (a, s) ← StateRefT'.run x initState
   return (a, s.stats)
 
 instance : MonadHashMapCacheAdapter Expr RulePatternCache.Entry BaseM where
@@ -45,6 +50,11 @@ instance : MonadHashMapCacheAdapter Expr RulePatternCache.Entry BaseM where
 instance : MonadHashMapCacheAdapter Expr RPINFRaw BaseM where
   getCache := return (← get).rpinfCache.map
   modifyCache f := modify λ s => { s with rpinfCache.map := f s.rpinfCache.map }
+
+instance : MonadHashMapCacheAdapter Expr (Array (RuleName × PremiseIndex)) BaseM where
+  getCache := return (← get).forwardRuleCache.map
+  modifyCache f := modify fun s =>
+    { s with forwardRuleCache.map := f s.forwardRuleCache.map }
 
 instance : MonadStats BaseM where
   modifyGetStats f := modifyGet λ s =>
