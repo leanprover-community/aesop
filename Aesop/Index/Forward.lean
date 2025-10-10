@@ -67,12 +67,23 @@ def insert (r : ForwardRule) (idx : ForwardIndex) : ForwardIndex := Id.run do
     let nameToRule := idx.nameToRule.insert r.name r
     return { idx with tree, nameToRule }
 
+open MonadCache in
+variable [Monad m] [MonadLiftT MetaM m]
+  [MonadCache Expr (Array (RuleName × PremiseIndex)) m] in
 /-- Get the forward rules whose maximal premises likely unify with `e`.
 Each returned pair `(r, i)` contains a rule `r` and the index `i` of the premise
 of `r` that likely unifies with `e`. -/
 def get (idx : ForwardIndex) (e : Expr) :
-    MetaM (Array (ForwardRule × PremiseIndex)) :=
-  getUnify idx.tree e
+    m (Array (ForwardRule × PremiseIndex)) := do
+  if let some (results : Array (RuleName × PremiseIndex)) ← findCached? e then
+    results.mapM fun (n, i) => do
+      let some r := idx.nameToRule[n]
+        | show MetaM _ from throwError "aesop: internal error at {decl_name%}: no forward rule for forward rule name {n}"
+      return (r, i)
+  else
+    let results ← getUnify idx.tree e
+    cache e <| results.map fun (r, i) => (r.name, i)
+    return results
 
 /-- Get the forward rule with the given rule name. -/
 def getRuleWithName? (n : RuleName) (idx : ForwardIndex) : Option ForwardRule :=
