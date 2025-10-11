@@ -64,45 +64,42 @@ where
     trace[saturate] "goal {goal.name}:{indentD goal}"
     let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
     let preState ← show MetaM _ from saveState
-    if let some diff ← tryNormRules goal mvars preState fs.hypTypes then
+    if let some diff ← tryNormRules goal mvars preState then
       let (fs, _) ← fs.applyGoalDiff rs diff
       return ← go diff.newGoal fs
-    else if let some diff ← trySafeRules goal mvars preState fs.hypTypes then
+    else if let some diff ← trySafeRules goal mvars preState then
       let (fs, _) ← fs.applyGoalDiff rs diff
       return ← go diff.newGoal fs
     else
       clearForwardImplDetailHyps goal
 
   tryNormRules (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-      (preState : Meta.SavedState) (hypTypes : PHashSet RPINF) :
-      SaturateM (Option GoalDiff) :=
+      (preState : Meta.SavedState) : SaturateM (Option GoalDiff) :=
     withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying normalisation rules") do
       let matchResults ←
         withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting normalisation rules") do
         rs.applicableNormalizationRulesWith ∅ goal
           (include? := (isForwardOrDestructRuleName ·.name))
-      runFirstRule goal mvars preState matchResults hypTypes
+      runFirstRule goal mvars preState matchResults
 
   trySafeRules (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-      (preState : Meta.SavedState) (hypTypes : PHashSet RPINF) :
-      SaturateM (Option GoalDiff) :=
+      (preState : Meta.SavedState) : SaturateM (Option GoalDiff) :=
     withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying safe rules") do
       let matchResults ←
         withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting safe rules") do
         rs.applicableSafeRulesWith ∅ goal
           (include? := (isForwardOrDestructRuleName ·.name))
-      runFirstRule goal mvars preState matchResults hypTypes
+      runFirstRule goal mvars preState matchResults
 
   runRule {α} (goal : MVarId) (mvars : UnorderedArraySet MVarId)
-      (preState : Meta.SavedState) (matchResult : IndexMatchResult (Rule α))
-      (hypTypes : PHashSet RPINF) :
+      (preState : Meta.SavedState) (matchResult : IndexMatchResult (Rule α)) :
       SaturateM (Option (GoalDiff × Option (Array Script.LazyStep))) := do
     withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} running rule {matchResult.rule.name}") do
     let input := {
       indexMatchLocations := matchResult.locations
       patternSubsts? := matchResult.patternSubsts?
       options := (← read).options
-      hypTypes, goal, mvars
+      goal, mvars
     }
     let tacResult ←
       runRuleTac matchResult.rule.tac.run matchResult.rule.name preState input
@@ -117,10 +114,10 @@ where
 
   runFirstRule {α} (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       (preState : Meta.SavedState)
-      (matchResults : Array (IndexMatchResult (Rule α)))
-      (hypTypes : PHashSet RPINF) : SaturateM (Option GoalDiff) := do
+      (matchResults : Array (IndexMatchResult (Rule α))) :
+      SaturateM (Option GoalDiff) := do
     for matchResult in matchResults do
-      let ruleResult? ← runRule goal mvars preState matchResult hypTypes
+      let ruleResult? ← runRule goal mvars preState matchResult
       if let some (diff, scriptSteps?) := ruleResult? then
         if (← read).options.generateScript then
           let some scriptSteps := scriptSteps?
@@ -151,15 +148,11 @@ where
         if m.rule.name.phase == .unsafe || m.anyHyp erasedHyps.contains then
           return ← go hypDepths fs queue erasedHyps goal
         trace[saturate] "goal:{indentD goal}"
-        let oldGoal := goal
-        let some (goal, hyp, removedHyps) ←
-          m.apply goal (skip? := some (fs.hypTypes.contains ·))
+        let some (goal, hyp, removedHyps) ← m.apply goal
           | return ← go hypDepths fs queue erasedHyps goal
         goal.withContext do
           -- TODO use applyGoalDiff
-          let fs ← removedHyps.foldlM (init := fs) λ fs h => do
-            let type ← oldGoal.withContext do rpinf (← h.getType)
-            return fs.eraseHyp h type
+          let fs := removedHyps.foldl (init := fs) λ fs h => fs.eraseHyp h
           let type ← hyp.getType
           let erasedHyps := erasedHyps.insertMany removedHyps
           let mut depth := 0
