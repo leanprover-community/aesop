@@ -267,7 +267,7 @@ def normSimp (goal : MVarId) (goalMVars : Std.HashSet MVarId) :
     checkSimp "norm simp" (mayCloseGoal := true) goal do
       tryCatchRuntimeEx
         (withNormTraceNode .normSimp do
-          withMaxHeartbeats (← read).options.maxSimpHeartbeats do
+          withAtMostMaxHeartbeats (← read).options.maxSimpHeartbeats do
             normSimpCore goal goalMVars)
         (λ e => throwError "aesop: error in norm simp: {e.toMessageData}")
 
@@ -287,7 +287,7 @@ def normUnfold (goal : MVarId) : NormM (Option NormRuleResult) := do
     checkSimp "unfold simp" (mayCloseGoal := false) goal do
       tryCatchRuntimeEx
         (withNormTraceNode .normUnfold do
-          withMaxHeartbeats (← read).options.maxUnfoldHeartbeats do
+          withAtMostMaxHeartbeats (← read).options.maxUnfoldHeartbeats do
             normUnfoldCore goal)
         (λ e => throwError "aesop: error in norm unfold: {e.toMessageData}")
 

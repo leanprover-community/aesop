@@ -422,33 +422,22 @@ where
     |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
     |> String.intercalate "\n"
 
-/--
-Runs a computation for at most the given number of heartbeats, ignoring the
-global heartbeat limit. Note that heartbeats spent on the computation still
-count towards the global heartbeat count.
--/
-def withMaxHeartbeats [Monad m] [MonadLiftT BaseIO m]
-    [MonadWithReaderOf Core.Context m] (n : Nat) (x : m α) : m α := do
-  let numHeartbeats ← IO.getNumHeartbeats
-  let f s := {
-    s with
-    initHeartbeats := numHeartbeats
-    maxHeartbeats := n
-  }
-  withReader f x
 
 /--
-Runs a computation for at most the given number of heartbeats or the
-global heartbeat limit, whichever is lower. Note that heartbeats spent on the
-computation still count towards the global heartbeat count. If 0 is given, the
-global heartbeat limit is used.
+Runs a computation until it has either consumed the given number of heartbeats
+or reached the global heartbeat limit, whichever comes first. Heartbeats spent
+on the computation count towards the global heartbeat count. If 0 is given,
+the computation is run unchanged, i.e., until it reaches the global heartbeat
+limit.
 -/
 def withAtMostMaxHeartbeats [Monad m] [MonadLiftT BaseIO m] [MonadLiftT CoreM m]
     [MonadWithReaderOf Core.Context m] (n : Nat) (x : m α) : m α := do
-  let globalMaxHeartbeats ← getMaxHeartbeats
-  let maxHeartbeats :=
-    if n == 0 then globalMaxHeartbeats else min n globalMaxHeartbeats
-  withMaxHeartbeats maxHeartbeats x
+  if n == 0 then
+    x
+  else
+    let currHeartbeats := (← IO.getNumHeartbeats) - (← getInitHeartbeats)
+    let maxHeartbeats := min (currHeartbeats + n) (← getMaxHeartbeats)
+    withReader (fun s => { s with maxHeartbeats }) x
 
 open Lean.Elab Lean.Elab.Term in
 def elabPattern (stx : Syntax) : TermElabM Expr :=
