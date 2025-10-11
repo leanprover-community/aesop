@@ -423,9 +423,9 @@ where
     |> String.intercalate "\n"
 
 /--
-Runs a computation for at most the given number of heartbeats times 1000,
-ignoring the global heartbeat limit. Note that heartbeats spent on the
-computation still count towards the global heartbeat count.
+Runs a computation for at most the given number of heartbeats, ignoring the
+global heartbeat limit. Note that heartbeats spent on the computation still
+count towards the global heartbeat count.
 -/
 def withMaxHeartbeats [Monad m] [MonadLiftT BaseIO m]
     [MonadWithReaderOf Core.Context m] (n : Nat) (x : m α) : m α := do
@@ -433,12 +433,12 @@ def withMaxHeartbeats [Monad m] [MonadLiftT BaseIO m]
   let f s := {
     s with
     initHeartbeats := numHeartbeats
-    maxHeartbeats := n * 1000
+    maxHeartbeats := n
   }
   withReader f x
 
 /--
-Runs a computation for at most the given number of heartbeats times 1000 or the
+Runs a computation for at most the given number of heartbeats or the
 global heartbeat limit, whichever is lower. Note that heartbeats spent on the
 computation still count towards the global heartbeat count. If 0 is given, the
 global heartbeat limit is used.
