@@ -163,30 +163,30 @@ def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
 /-- Apply a forward rule match to a goal. This adds the hypothesis corresponding
 to the match to the local context. Returns the new goal, the added hypothesis
 and the hypotheses that were removed (if any). Hypotheses may be removed if the
-match is for a `destruct` rule. If the `skip` function, when applied to the
-normalised type of the new hypothesis, returns true, then the hypothesis is not
-added to the local context. -/
-def apply (goal : MVarId) (m : ForwardRuleMatch) (skip? : Option (RPINF → Bool)) :
+match is for a `destruct` rule. If the match cannot be reconstructed or produces
+a propositional hypothesis that already exists, it is not applied. -/
+def apply (goal : MVarId) (m : ForwardRuleMatch) :
     ScriptT BaseM (Option (MVarId × FVarId × Array FVarId)) :=
   withConstAesopTraceNode .forward (return m!"apply complete match") do
   goal.withContext do
-    let name ← getUnusedUserName forwardHypPrefix
     let some prf ← m.getProof goal
       | return none
+    let name ← getUnusedUserName forwardHypPrefix
     let type ← inferType prf
-    if let some skip := skip? then
-      let doSkip ← withConstAesopTraceNode .forwardDebug (return m!"check whether hyp already exists") do
-        let result := skip (← rpinf type)
-        aesop_trace[forwardDebug] "already exists: {result}"
-        pure result
-      if doSkip then
-        return none
+    let doSkip ← withAesopTraceNode .forwardDebug (fun r => return m!"{exceptEmoji r} check whether hyp already exists") do
+      let typeRPINF ← rpinf type
+      (← getLCtx).anyM fun ldecl => do
+        if ldecl.isImplementationDetail then
+          return false
+        return typeRPINF == (← rpinf ldecl.type)
+    if doSkip then
+      return none
     let hyp := { userName := name, value := prf, type }
     let (goal, #[hyp]) ← assertHypothesisS goal hyp (md := .default)
       | unreachable!
     if ! m.rule.destruct then
       return some (goal, hyp, #[])
-    let usedPropHyps ← goal.withContext $ m.getPropHyps
+    let usedPropHyps ← goal.withContext do m.getPropHyps
     let (goal, _) ← tryClearManyS goal usedPropHyps
     return some (goal, hyp, usedPropHyps)
 

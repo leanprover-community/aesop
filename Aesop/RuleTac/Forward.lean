@@ -18,7 +18,7 @@ namespace Aesop.RuleTac
 
 partial def makeForwardHyps (e : Expr) (patSubst? : Option Substitution)
     (immediate : UnorderedArraySet PremiseIndex) (maxDepth? : Option Nat)
-    (forwardHypData : ForwardHypData) (existingHypTypes : PHashSet RPINF) :
+    (forwardHypData : ForwardHypData) :
     BaseM (Array (Expr × Nat) × Array FVarId) :=
   withNewMCtxDepth (allowLevelAssignments := true) do
     let type ← inferType e
@@ -41,8 +41,8 @@ partial def makeForwardHyps (e : Expr) (patSubst? : Option Substitution)
     loop (app : Expr) (instMVars : Array MVarId) (immediateMVars : Array MVarId)
         (i : Nat) (proofsAcc : Array (Expr × Nat)) (currentMaxHypDepth : Nat)
         (currentUsedHyps : Array FVarId) (usedHypsAcc : Array FVarId)
-        (proofTypesAcc : Std.HashSet RPINF) :
-        BaseM (Array (Expr × Nat) × Array FVarId × Std.HashSet RPINF) := do
+        (proofTypesAcc : Array Expr) :
+        BaseM (Array (Expr × Nat) × Array FVarId × Array Expr) := do
       if h : immediateMVars.size > 0 ∧ i < immediateMVars.size then
         -- We go through the immediate mvars back to front. This is more
         -- efficient because assigning later mvars may already determine the
@@ -84,17 +84,20 @@ partial def makeForwardHyps (e : Expr) (patSubst? : Option Substitution)
             let inst ← synthInstance (← instMVar.getType)
             instMVar.assign inst
         let proof := (← abstractMVars app).expr
-        let type ← rpinf (← inferType proof)
-        let redundant :=
-          proofTypesAcc.contains type || existingHypTypes.contains type
-        if redundant then
+        let type ← inferType proof
+        let hypExists ← withAesopTraceNode .forwardDebug (fun r => return "{exceptEmoji r} check whether hyp already exists") do
+          withNewMCtxDepth do
+            proofTypesAcc.anyM (isDefEq type ·)
+            <||>
+            (← getLCtx).anyM fun ldecl =>
+              pure (! ldecl.isImplementationDetail) <&&> isDefEq ldecl.type type
+        if hypExists then
           return (proofsAcc, usedHypsAcc, proofTypesAcc)
-        else
-          let depth := currentMaxHypDepth + 1
-          let proofsAcc := proofsAcc.push (proof, depth)
-          let proofTypesAcc := proofTypesAcc.insert type
-          let usedHypsAcc := usedHypsAcc ++ currentUsedHyps
-          return (proofsAcc, usedHypsAcc, proofTypesAcc)
+        let depth := currentMaxHypDepth + 1
+        let proofsAcc := proofsAcc.push (proof, depth)
+        let proofTypesAcc := proofTypesAcc.push type
+        let usedHypsAcc := usedHypsAcc ++ currentUsedHyps
+        return (proofsAcc, usedHypsAcc, proofTypesAcc)
 
 def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (depth : Nat) :
     ScriptM (FVarId × MVarId) := do
@@ -120,9 +123,8 @@ where
 def applyForwardRule (goal : MVarId) (e : Expr)
     (patSubsts? : Option (Std.HashSet Substitution))
     (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
-    (maxDepth? : Option Nat) (existingHypTypes : PHashSet RPINF) :
-    ScriptM Subgoal :=
-  withReducibleAndInstances $ goal.withContext do
+    (maxDepth? : Option Nat) : ScriptM Subgoal :=
+  withReducibleAndInstances do goal.withContext do
     let initialGoal := goal
     let forwardHypData ← getForwardHypData
     let mut newHypProofs := #[]
@@ -131,13 +133,11 @@ def applyForwardRule (goal : MVarId) (e : Expr)
       for patSubst in patSubsts do
         let (newHypProofs', usedHyps') ←
           makeForwardHyps e patSubst immediate maxDepth? forwardHypData
-            existingHypTypes
         newHypProofs := newHypProofs ++ newHypProofs'
         usedHyps := usedHyps ++ usedHyps'
     else
       let (newHypProofs', usedHyps') ←
         makeForwardHyps e none immediate maxDepth? forwardHypData
-          existingHypTypes
       newHypProofs := newHypProofs'
       usedHyps := usedHyps'
     usedHyps :=
@@ -181,7 +181,7 @@ def forwardExpr (e : Expr) (immediate : UnorderedArraySet PremiseIndex)
   SingleRuleTac.toRuleTac λ input => input.goal.withContext do
     let (goal, steps) ←
       applyForwardRule input.goal e input.patternSubsts? immediate
-        (clear := clear) input.options.forwardMaxDepth? input.hypTypes
+        (clear := clear) input.options.forwardMaxDepth?
       |>.run
     return (#[goal], steps, none)
 
@@ -204,14 +204,13 @@ def forward (t : RuleTerm) (immediate : UnorderedArraySet PremiseIndex)
 
 def forwardMatches (ms : Array ForwardRuleMatch) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
-    let skip type := input.hypTypes.contains type
     let mut goal := input.goal
     let mut addedFVars := ∅
     let mut removedFVars := ∅
     let mut anySuccess := false
     let mut steps := #[]
     for m in ms do
-      let (some (goal', hyp, removedFVars'), steps') ← m.apply goal (some skip) |>.run
+      let (some (goal', hyp, removedFVars'), steps') ← m.apply goal |>.run
         | continue
       anySuccess := true
       goal := goal'
