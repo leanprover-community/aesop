@@ -70,26 +70,6 @@ structure Options where
   -/
   maxSafePrefixRuleApplications := 50
   /--
-  Heartbeat limit for individual Aesop rules. If a rule goes over this limit, it
-  fails, but Aesop itself continues until it reaches the limit set by the
-  `maxHeartbeats` option. If `maxRuleHeartbeats = 0` or `maxRuleHeartbeats` is
-  greater than `maxHeartbeats`, the `maxHeartbeats` limit is used for the
-  individual rules as well.
-  -/
-  maxRuleHeartbeats := 0
-  /--
-  Heartbeat limit for Aesop's builtin `simp` rule. If `simp` goes over this
-  limit, Aesop fails. If `maxSimpHeartbeats = 0`, there is no limit for `simp`
-  (but the global heartbeat limit still applies).
-  -/
-  maxSimpHeartbeats := 0
-  /--
-  Heartbeat limit for Aesop's builtin `unfold` rule. If `unfold` goes over this
-  limit, Aesop fails. If `maxUnfoldHeartbeats = 0`, there is no limit for
-  `unfold` (but the global heartbeat limit still applies).
-  -/
-  maxUnfoldHeartbeats := 0
-  /--
   The transparency used by the `applyHyps` builtin rule. The rule applies a
   hypothesis `h : T` if `T ≡ ∀ (x₁ : X₁) ... (xₙ : Xₙ), Y` at the given
   transparency and if additionally the goal's target is defeq to `Y` at the

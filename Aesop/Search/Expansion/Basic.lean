@@ -15,11 +15,10 @@ def runRuleTac (tac : RuleTac) (ruleName : RuleName)
     (preState : Meta.SavedState) (input : RuleTacInput) :
     BaseM (Except Exception RuleTacOutput) := do
   let result ←
-    tryCatchRuntimeEx
-      (Except.ok <$> runInMetaState preState do
-        withAtMostMaxHeartbeats input.options.maxRuleHeartbeats do
-          tac input)
-      (λ e => return .error e)
+    try
+      Except.ok <$> runInMetaState preState do tac input
+    catch e =>
+      return .error e
   if ← Check.rules.isEnabled then
     if let .ok ruleOutput := result then
       ruleOutput.applications.forM λ rapp => do
