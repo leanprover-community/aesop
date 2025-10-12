@@ -3,11 +3,14 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Index.Basic
-import Aesop.Rule.Name
-import Aesop.RuleTac.Basic
-import Aesop.RuleTac.Descr
+public import Aesop.Index.Basic
+public import Aesop.Rule.Name
+public import Aesop.RuleTac.Basic
+public import Aesop.RuleTac.Descr
+
+public section
 
 open Lean
 

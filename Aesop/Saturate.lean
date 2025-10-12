@@ -3,14 +3,17 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Forward.State.ApplyGoalDiff
-import Aesop.Forward.State.Initial
-import Aesop.RuleSet
-import Aesop.RuleTac
-import Aesop.Search.Expansion.Basic
-import Aesop.Script.Check
-import Batteries.Data.BinomialHeap.Basic
+public import Aesop.Forward.State.ApplyGoalDiff
+public import Aesop.Forward.State.Initial
+public import Aesop.RuleSet
+public import Aesop.RuleTac
+public import Aesop.Search.Expansion.Basic
+public import Aesop.Script.Check
+public import Batteries.Data.BinomialHeap.Basic
+
+public section
 
 open Lean Lean.Meta
 open Batteries (BinomialHeap)

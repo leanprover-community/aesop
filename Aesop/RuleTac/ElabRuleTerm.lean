@@ -3,8 +3,11 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.ElabM
+public import Aesop.ElabM
+
+public section
 
 open Lean Lean.Meta Lean.Elab.Term Lean.Elab.Tactic
 

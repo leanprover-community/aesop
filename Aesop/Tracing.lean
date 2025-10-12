@@ -3,11 +3,14 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Util.Basic
-import Batteries.Data.Array.Basic
-import Lean.Elab.Term
-import Lean.Meta.Tactic.Simp
+public import Aesop.Util.Basic
+public import Batteries.Data.Array.Basic
+public import Lean.Elab.Term
+public import Lean.Meta.Tactic.Simp
+
+public section
 
 open Lean Lean.Meta
 
@@ -85,10 +88,10 @@ section
 
 open Lean.Elab Lean.Elab.Term
 
-private def isFullyQualifiedGlobalName (n : Name) : MacroM Bool :=
+private meta def isFullyQualifiedGlobalName (n : Name) : MacroM Bool :=
   return (← Macro.resolveGlobalName n).any (·.fst == n)
 
-def resolveTraceOption (stx : Ident) : MacroM Name :=
+meta def resolveTraceOption (stx : Ident) : MacroM Name :=
   withRef stx do
     let n := stx.getId
     let fqn := ``TraceOption ++ n
