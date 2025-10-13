@@ -8,14 +8,7 @@ import Benchmark.Basic
 
 open Aesop
 open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
-
-def withStatefulForward [MonadWithOptions m] (opt : Bool) (k : m α) : m α :=
-  withOptions (fun opts ↦ aesop.dev.statefulForward.set opts opt) k
-
-local instance : MonadWithOptions CommandElabM where
-  withOptions f x := do
-    let options := f (← getOptions)
-    withScope (fun s ↦ {s with opts := options}) x
+open Lean.Parser.Tactic (tacticSeq)
 
 /-
 ## The `bchmk` command.
@@ -30,8 +23,9 @@ value in `l`.
 
 See `Benchmark/Basic` for the definition of the `Benchmark` type.
 -/
-elab "bchmk " nIter:num " with " l:term " using " b:term : command => do
-  let mut steps ← liftTermElabM do
+elab "bchmk " nIter:num " with " l:term " using " b:term ts?:(" by " tacticSeq)? : command => do
+  let ts? : Option (TSyntax ``tacticSeq) := ts?.map (⟨·.raw⟩)
+  let steps ← liftTermElabM do
     let l ← elabTerm l (some $ toTypeExpr (List Nat))
     unsafe Lean.Meta.evalExpr (List Nat) (toTypeExpr (List Nat)) l
   let nIter := nIter.getNat
@@ -44,7 +38,7 @@ elab "bchmk " nIter:num " with " l:term " using " b:term : command => do
     for i in steps do
       let mut avr : Nat := 0
       for _ in [:nIter] do
-        avr := avr + (← withStatefulForward b $ benchmark.fn i).nanos
+        avr := avr + (← benchmark.run i ts? (statefulForward := b)).nanos
       ltimes := ltimes.push ((i, avr / nIter))
     IO.println ("StatefulForward: " ++ toString b)
     for point in (ltimes.map (fun (i,n) ↦ (i, n.toFloat / 1000000))).toList do

@@ -7,15 +7,12 @@ Authors: Jannis Limperg, Xavier Généreux
 import Benchmark.Basic
 
 open Aesop Lean Lean.Meta Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
+open Lean.Parser.Tactic (tacticSeq)
 
-elab "testTrans " nHyps:num firstNum:num " by " ts:tacticSeq : command => do
+def testTrans (nHyps firstNum : Nat) (ts? : Option (TSyntax ``tacticSeq)) : CommandElabM Nanos := do
   let P := mkIdent `P
-  elabCommand $ ← `(command| axiom $P : SNat → SNat → Prop)
-  elabCommand $ ← `(command| @[aesop safe forward] axiom $(mkIdent `rule) : ∀ x y z, $P x y → $P y z → $P x z)
-  let some nHyps := nHyps.raw.isNatLit?
-    | throwUnsupportedSyntax
-  let some firstNum := firstNum.raw.isNatLit?
-    | throwUnsupportedSyntax
+  elabCommand.go $ ← `(command| axiom $P : SNat → SNat → Prop)
+  elabCommand.go $ ← `(command| @[aesop safe forward] axiom $(mkIdent `rule) : ∀ x y z, $P x y → $P y z → $P x z)
   let P := mkIdent `P
   let mut binders : TSyntaxArray ``Term.bracketedBinder := #[]
   for i in [:nHyps] do
@@ -23,16 +20,10 @@ elab "testTrans " nHyps:num firstNum:num " by " ts:tacticSeq : command => do
     let x₁ ← mkNum i
     let x₂ ← mkNum (i + 1)
     binders := binders.push $ ← `(bracketedBinder| (_ : $P $x₁ $x₂))
-  elabCommand $ ← `(theorem foo $binders:bracketedBinder* : True := by $ts)
+  let ts ← ts?.getDM `(tacticSeq| time saturate; trivial)
+  elabCommand.go $ ← `(theorem foo $binders:bracketedBinder* : True := by $ts)
+  timeRef.get
 
--- set_option trace.profiler true in
--- testTrans 5 300 by
---   set_option maxHeartbeats 5000000 in
---   set_option maxRecDepth   1000000 in
---   --set_option maxHeartbeats 1000000 in
---   set_option aesop.dev.statefulForward false in
---   saturate
---   trivial
 /--
 #### Transitivity.
 
@@ -46,15 +37,6 @@ Saturating this goal adds a total of `n(n-1)/2` hypotheses to the context.
 
 `a` determines how long it takes to match hypotheses against premises.
 -/
-def benchTrans (a : Nat) : Benchmark where
+def trans (a : Nat) : Benchmark where
   title := s!"Transitivity (term size {a})"
-  fn := fun n => do
-    let mut nHs := Syntax.mkNatLit n
-    let mut fH := Syntax.mkNatLit a
-    liftCoreM $ withoutModifyingState $ liftCommandElabM do
-      elabCommand <| ← `(testTrans $nHs $fH by
-        set_option maxRecDepth   1000000 in
-        set_option maxHeartbeats 5000000 in
-        time saturate
-        trivial)
-      timeRef.get
+  fn n ts? := testTrans (nHyps := n) (firstNum := a) ts?

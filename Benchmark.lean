@@ -52,24 +52,19 @@ This take about 8 minutes on our machine (a MacBook Pro with an Apple M2 Pro
 processor and 32GB of RAM).
 -/
 
-/- We effectively disable Lean's deterministic timeout mechanism
-(`maxHeartbeats`) and its global limit on recursion depth (`maxRecDepth`). -/
-set_option maxHeartbeats 100000000
-set_option maxRecDepth   100000000
-
 /- Uncomment to reveal benchmark parameters. -/
 -- #check benchTrans
 -- #check benchIndep
 -- #check benchDepth
 
 /- Transitivity benchmark -/
-bchmk 1 with pows 6  using benchTrans 0
-bchmk 1 with pows 6  using benchTrans 100
+bchmk 1 with pows 6  using trans 0
+bchmk 1 with pows 6  using trans 100
 
 /- Independence benchmark -/
-bchmk 1 with pows 6  using benchIndep 6 0
-bchmk 1 with pows 6  using benchIndep 6 100
+bchmk 1 with pows 6  using indep 6 0
+bchmk 1 with pows 6  using indep 6 100
 
 /- Depth benchmark -/
-bchmk 1 with steps 6 using benchDepth 6 0 100 0
-bchmk 1 with steps 6 using benchDepth 6 0 100 100
+bchmk 1 with steps 6 using depth 6 0 100 0
+bchmk 1 with steps 6 using depth 6 0 100 100

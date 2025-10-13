@@ -6,6 +6,10 @@ Authors: Jannis Limperg, Xavier Généreux
 
 import Benchmark.Basic
 
+open Lean.Parser.Tactic (tacticSeq)
+
+set_option Elab.async false
+
 /-
 Note :
 - Having `2 ^ m` rules also means that we have `nPs * 2 ^ m` hyps since everything
@@ -15,18 +19,12 @@ is independent.
 open Aesop
 open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
 
-elab "testIndep " nPremises:num nRules:num a:num " by " ts:tacticSeq : command => do
-  let some nPs := nPremises.raw.isNatLit?
-    | throwUnsupportedSyntax
-  let some nRules := nRules.raw.isNatLit?
-    | throwUnsupportedSyntax
-  let some a := a.raw.isNatLit?
-    | throwUnsupportedSyntax
-  let mut pNames := Array.mkEmpty nPs
+def testIndep (nPremises nRules a : Nat) (ts? : Option (TSyntax ``tacticSeq)) : CommandElabM Nanos := do
+  let mut pNames := Array.mkEmpty nPremises
   let mut pNamesArr : Array (Array Name) := Array.mkEmpty nRules
   for i in [:nRules] do
-    pNames := Array.mkEmpty nPs
-    for j in [:nPs] do
+    pNames := Array.mkEmpty nPremises
+    for j in [:nPremises] do
       pNames := pNames.push (Name.mkSimple $ "P" ++ toString i ++ toString j)
     pNamesArr := pNamesArr.push pNames
 
@@ -35,11 +33,11 @@ elab "testIndep " nPremises:num nRules:num a:num " by " ts:tacticSeq : command =
     qNames := qNames.push (Name.mkSimple $ "Q" ++ toString i)
 
   for qName in qNames do
-      elabCommand $ ← `(command| axiom $(mkIdent qName) : Prop)
+      elabCommand.go <| ← `(command| axiom $(mkIdent qName) : Prop)
 
   for pNames' in pNamesArr do
     for pName in pNames' do
-      elabCommand $ ← `(command| axiom $(mkIdent pName) : SNat → Prop)
+      elabCommand.go <| ← `(command| axiom $(mkIdent pName) : SNat → Prop)
 
   let mut binders : TSyntaxArray ``Term.bracketedBinder := #[]
   let mut accBinders : TSyntaxArray ``Term.bracketedBinder := #[]
@@ -50,7 +48,7 @@ elab "testIndep " nPremises:num nRules:num a:num " by " ts:tacticSeq : command =
         `(bracketedBinder| ($(mkIdent $ .mkSimple $
           "p" ++ toString i ++ toString j) : $(mkIdent pName):ident $(mkIdent `n)))
     let sig : Term ← `(∀ $(mkIdent `n) $binders:bracketedBinder*, $(mkIdent qNames[i]!):ident)
-    elabCommand $ ← `(command|
+    elabCommand.go <| ← `(command|
       @[aesop safe forward]
       axiom $(mkIdent $ .mkSimple $ "l" ++ toString i):ident : $sig:term
     )
@@ -59,23 +57,12 @@ elab "testIndep " nPremises:num nRules:num a:num " by " ts:tacticSeq : command =
         `(bracketedBinder| ($(mkIdent $ .mkSimple $
           "p" ++ toString i ++ toString j) : $(mkIdent pName):ident (snat% $(Syntax.mkNatLit a))))
     accBinders := accBinders.append binders
-  elabCommand $ ← `(command|
-    theorem $(mkIdent $ .mkSimple $ "t") $accBinders:bracketedBinder*
-      : True := by $ts
-  )
 
-/-
-/- **Uncomment for single test** :-/
-testIndep 6 10 0 by
-  set_option maxHeartbeats 5000000 in
-  set_option aesop.dev.statefulForward false in
-  set_option trace.profiler true in
-  --set_option trace.aesop.forward true in
-  --set_option trace.saturate true in
-  --set_option profiler true in
-  saturate
-  trivial
--/
+  let ts ← ts?.getDM do `(tacticSeq| time saturate; trivial)
+  elabCommand.go <| ← `(command|
+    theorem $(mkIdent $ .mkSimple $ "t") $accBinders:bracketedBinder* : True := by $ts
+  )
+  timeRef.get
 
 /--
 #### Independent rules.
@@ -95,16 +82,6 @@ and a context containing precisely `P`.
 - `nRs` : Number of unique rules; they are independent but have the same number
   of premises.
 -/
-def benchIndep (nPs a : Nat) : Benchmark where
+def indep (nPs a : Nat) : Benchmark where
   title := s!"Independence (variable number of rules, {nPs} premises per rule, term size {a})"
-  fn := fun nRs => do
-    let mut nPs := Syntax.mkNatLit nPs
-    let mut nRs := Syntax.mkNatLit nRs
-    let mut a := Syntax.mkNatLit a
-    liftCoreM $ withoutModifyingState $ liftCommandElabM do
-    elabCommand <| ← `(testIndep $nPs $nRs $a by
-      set_option maxRecDepth   1000000 in
-      set_option maxHeartbeats 5000000 in
-      time saturate
-      trivial)
-    timeRef.get
+  fn nRs ts? := testIndep (nPremises := nPs) (nRules := nRs) (a := a) ts?

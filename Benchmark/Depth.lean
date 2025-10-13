@@ -6,33 +6,25 @@ Authors: Jannis Limperg, Xavier Généreux
 
 import Benchmark.Basic
 
+open Lean.Parser.Tactic (tacticSeq)
+
 open Aesop
 open Lean Lean.Elab Lean.Elab.Command Lean.Elab.Term Lean.Parser
 
-elab "test " nPremises:num nQs:num nLemmas:num depth:num a:num " by " ts:tacticSeq : command => do
-  let some nPs := nPremises.raw.isNatLit?
-    | throwUnsupportedSyntax
-  let some nQs := nQs.raw.isNatLit?
-    | throwUnsupportedSyntax
-  let some nLemmas := nLemmas.raw.isNatLit?
-    | throwUnsupportedSyntax
-  let some depth := depth.raw.isNatLit?
-    | throwUnsupportedSyntax
-  let some a := a.raw.isNatLit?
-    | throwUnsupportedSyntax
+def testDepth (nPs nQs nLemmas depth a : Nat) (ts? : Option (TSyntax ``tacticSeq)) : CommandElabM Nanos := do
   let mut pNames := Array.mkEmpty nPs
   let mut qNames := Array.mkEmpty nQs
   for i in [:nPs] do
     pNames := pNames.push (Name.mkSimple $ "P" ++ toString i)
   -- Create `axiom Pi : SNat → Prop` for i ∈ [0..nPs - 1]
   for pName in pNames do
-    elabCommand $ ← `(command| axiom $(mkIdent pName) : SNat → Prop)
+    elabCommand.go $ ← `(command| axiom $(mkIdent pName) : SNat → Prop)
 
   for i in [:nQs] do
     qNames := qNames.push (Name.mkSimple $ "Q" ++ toString i)
   -- Create `axiom Pi : SNat → Prop` for i ∈ [0..nPs - 1]
   for qName in qNames do
-    elabCommand $ ← `(command| axiom $(mkIdent qName) : SNat → Prop)
+    elabCommand.go $ ← `(command| axiom $(mkIdent qName) : SNat → Prop)
 
   let binders : TSyntaxArray ``Term.bracketedBinder ←
     (pNames).mapIdxM λ i pName => do
@@ -41,7 +33,7 @@ elab "test " nPremises:num nQs:num nLemmas:num depth:num a:num " by " ts:tacticS
   let sig : Term ← `(∀ $(mkIdent `n) $binders:bracketedBinder*, True)
 
   for i in [:nLemmas] do
-    elabCommand $ ← `(command|
+    elabCommand.go $ ← `(command|
       @[aesop safe forward]
       axiom $(mkIdent $ .mkSimple $ "l" ++ toString i):ident : $sig:term
     )
@@ -66,10 +58,12 @@ elab "test " nPremises:num nQs:num nLemmas:num depth:num a:num " by " ts:tacticS
         $(mkIdent qName):ident (snat% $(Syntax.mkNatLit a))))
   -- Create `theorem t1 (p1 : P1 (snat% a)) ... (pm : Pm (snat% a)) : True := by ts`
   -- where m = nPs.
-  elabCommand $ ← `(command|
+  let ts ← ts?.getDM `(tacticSeq| time saturate; trivial)
+  elabCommand.go $ ← `(command|
     theorem $(mkIdent $ .mkSimple $ "t") $binders:bracketedBinder* $bindersQ:bracketedBinder*
       : True := by $ts
   )
+  timeRef.get
 
 /-
  **Uncomment for single test** :
@@ -112,18 +106,6 @@ with the chosen slot ordering, leads to similar behaviour.
 - `d` : The depth: This is the number of slots considered before the procedure stops
    as the hypotheses are incompatible. This is well defined for `d ∈ [1,nPs]`.
 -/
-def benchDepth (nPs nQs nRs a : Nat) : Benchmark where
+def depth (nPs nQs nRs a : Nat) : Benchmark where
   title := s!"Depth (variable depth, {nPs} premises per rule, {nQs} additional hypotheses, {nRs} rules, term size {a})"
-  fn := fun d => do
-    let mut nPs := Syntax.mkNatLit nPs
-    let mut nQs := Syntax.mkNatLit nQs
-    let mut nRs := Syntax.mkNatLit nRs
-    let mut d := Syntax.mkNatLit d
-    let mut a := Syntax.mkNatLit a
-    liftCoreM $ withoutModifyingState $ liftCommandElabM do
-      elabCommand <| ← `(test $nPs $nQs $nRs $d $a by
-        set_option maxRecDepth   1000000 in
-        set_option maxHeartbeats 5000000 in
-        time saturate
-        trivial)
-      timeRef.get
+  fn depth ts? := testDepth (nPs := nPs) (nQs := nQs) (nLemmas := nRs) (a := a) (depth := depth) ts?
