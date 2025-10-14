@@ -17,9 +17,10 @@ variable {α β γ δ ι: Type}
 
 /--
 info: Try this:
-  ext : 1
-  · sorry
-  · sorry
+
+      ext : 1
+    · sorry
+    · sorry
 ---
 warning: declaration uses 'sorry'
 -/
@@ -31,11 +32,12 @@ example {p q : MyProd α β} : p = q := by
 
 /--
 info: Try this:
-  ext : 1
-  · sorry
-  · ext : 1
+
+      ext : 1
     · sorry
-    · sorry
+    · ext : 1
+      · sorry
+      · sorry
 ---
 warning: declaration uses 'sorry'
 -/
@@ -47,10 +49,11 @@ example {p q : MyProd α (MyProd β γ)} : p = q := by
 
 /--
 info: Try this:
-  ext : 1
-  · ext x : 1
-    sorry
-  · sorry
+
+      ext : 1
+    · ext x : 1
+      sorry
+    · sorry
 ---
 warning: declaration uses 'sorry'
 -/
@@ -62,11 +65,12 @@ example {p q : MyProd (α → β) γ} : p = q := by
 
 /--
 info: Try this:
-  ext : 1
-  · ext x : 1
-    sorry
-  · ext x x_1 : 2
-    sorry
+
+      ext : 1
+    · ext x : 1
+      sorry
+    · ext x x_1 : 2
+      sorry
 ---
 warning: declaration uses 'sorry'
 -/
@@ -90,9 +94,10 @@ axiom T_ext : ∀ x y : T, u = v → (∀ u v : U, u = v) → x = y
 
 /--
 info: Try this:
-  ext u v : 1
-  · sorry
-  · sorry
+
+      ext u v : 1
+    · sorry
+    · sorry
 ---
 warning: declaration uses 'sorry'
 -/

@@ -54,17 +54,6 @@ def filter (p : α → Bool) (s : PHashSet α) : PHashSet α :=
 
 end PersistentHashSet
 
--- TODO upstream; generalise to {m : Type u → Type v}.
--- Need to generalise `HashMap.forM` first.
-scoped instance {m : Type u → Type u} [BEq α] [Hashable α] :
-    ForM m (Std.HashMap α β) (α × β) where
-  forM | m, f => m.forM λ a b => f (a, b)
-
--- TODO upstream; generalise to {m : Type u → Type v}.
-scoped instance {m : Type u → Type u} [BEq α] [Hashable α] :
-    ForIn m (Std.HashMap α β) (α × β) where
-  forIn := ForM.forIn
-
 section DiscrTree
 
 open DiscrTree
@@ -432,34 +421,6 @@ where
     s.splitOn "\n"
     |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
     |> String.intercalate "\n"
-
-/--
-Runs a computation for at most the given number of heartbeats times 1000,
-ignoring the global heartbeat limit. Note that heartbeats spent on the
-computation still count towards the global heartbeat count.
--/
-def withMaxHeartbeats [Monad m] [MonadLiftT BaseIO m]
-    [MonadWithReaderOf Core.Context m] (n : Nat) (x : m α) : m α := do
-  let numHeartbeats ← IO.getNumHeartbeats
-  let f s := {
-    s with
-    initHeartbeats := numHeartbeats
-    maxHeartbeats := n * 1000
-  }
-  withReader f x
-
-/--
-Runs a computation for at most the given number of heartbeats times 1000 or the
-global heartbeat limit, whichever is lower. Note that heartbeats spent on the
-computation still count towards the global heartbeat count. If 0 is given, the
-global heartbeat limit is used.
--/
-def withAtMostMaxHeartbeats [Monad m] [MonadLiftT BaseIO m] [MonadLiftT CoreM m]
-    [MonadWithReaderOf Core.Context m] (n : Nat) (x : m α) : m α := do
-  let globalMaxHeartbeats ← getMaxHeartbeats
-  let maxHeartbeats :=
-    if n == 0 then globalMaxHeartbeats else min n globalMaxHeartbeats
-  withMaxHeartbeats maxHeartbeats x
 
 open Lean.Elab Lean.Elab.Term in
 def elabPattern (stx : Syntax) : TermElabM Expr :=
