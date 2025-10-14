@@ -58,13 +58,13 @@ processor and 32GB of RAM).
 -- #check benchDepth
 
 /- Transitivity benchmark -/
-bchmk 1 with pows 6  using trans 0
-bchmk 1 with pows 6  using trans 100
+-- bchmk 1 with pows 6  using trans 0
+-- bchmk 1 with pows 6  using trans 100
 
-/- Independence benchmark -/
-bchmk 1 with pows 6  using indep 6 0
-bchmk 1 with pows 6  using indep 6 100
+-- /- Independence benchmark -/
+-- bchmk 1 with pows 6  using indep 6 0
+-- bchmk 1 with pows 6  using indep 6 100
 
-/- Depth benchmark -/
-bchmk 1 with steps 6 using depth 6 0 100 0
-bchmk 1 with steps 6 using depth 6 0 100 100
+-- /- Depth benchmark -/
+-- bchmk 1 with steps 6 using depth 6 0 100 0
+-- bchmk 1 with steps 6 using depth 6 0 100 100
