@@ -34,6 +34,9 @@ warning: declaration uses 'sorry' -/
 #guard_msgs in
 instance (α : Type) [myInst2 α] : myInst1 α := sorry
 
+/--
+warning: declaration uses 'sorry' -/
+#guard_msgs in
 def myProp {α : Type} [myInst2 α] (m : myDef α): Prop := sorry
 
 /--
