@@ -13,7 +13,7 @@ set_option pp.mvars false
 /--
 info: Try this:
 
-      have fwd : γ₁ ∧ γ₂ := r₁ a b
+  [apply]     have fwd : γ₁ ∧ γ₂ := r₁ a b
     have fwd_1 : δ₁ ∧ δ₂ := r₂ a
 ---
 error: unsolved goals
@@ -36,7 +36,7 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
 /--
 info: Try this:
 
-      have fwd : β := h₁ h₃
+  [apply]     have fwd : β := h₁ h₃
     have fwd_1 : γ := h₂ fwd
 ---
 error: unsolved goals
@@ -55,7 +55,7 @@ example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ
 /--
 info: Try this:
 
-    have fwd : β := h₁ h₃
+  [apply]   have fwd : β := h₁ h₃
 ---
 error: unsolved goals
 α β γ : Prop
@@ -72,7 +72,7 @@ example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ
 /--
 info: Try this:
 
-    have fwd : β := h₁ h₃
+  [apply]   have fwd : β := h₁ h₃
 ---
 error: unsolved goals
 α β γ : Prop
@@ -89,7 +89,7 @@ example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ
 /--
 info: Try this:
 
-      have fwd : β := h₁ h₄
+  [apply]     have fwd : β := h₁ h₄
     have fwd_1 : γ := h₂ fwd
 ---
 error: unsolved goals
@@ -109,7 +109,7 @@ example {α β γ δ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : γ �
 /--
 info: Try this:
 
-      have fwd : β := h₁ h₄
+  [apply]     have fwd : β := h₁ h₄
     have fwd_1 : γ := h₂ h₄
 ---
 error: unsolved goals
@@ -145,7 +145,7 @@ axiom bc : B → C
 /--
 info: Try this:
 
-    have fwd : P := rule P (Q ∧ R) h
+  [apply]   have fwd : P := rule P (Q ∧ R) h
 -/
 #guard_msgs in
 example (rule : ∀ α β, α ∧ β → α) (h : P ∧ Q ∧ R) : P := by
@@ -156,7 +156,7 @@ example (rule : ∀ α β, α ∧ β → α) (h : P ∧ Q ∧ R) : P := by
 /--
 info: Try this:
 
-      have fwd : B := ab a
+  [apply]     have fwd : B := ab a
     have fwd_1 : C := bc fwd
 ---
 error: unsolved goals
@@ -175,7 +175,7 @@ end
 /--
 info: Try this:
 
-    have fwd : R a b := h₁ a b h₂ h₃
+  [apply]   have fwd : R a b := h₁ a b h₂ h₃
 ---
 error: unsolved goals
 α : Sort u_1
@@ -197,7 +197,7 @@ example {P Q R : α → β → Prop} (h₁ : ∀ a b, P a b → Q a b → R a b)
 /--
 info: Try this:
 
-    have fwd : R a b := h₁ a b h₂ h₄
+  [apply]   have fwd : R a b := h₁ a b h₂ h₄
 ---
 error: unsolved goals
 α : Sort u_1
@@ -233,7 +233,7 @@ example {P Q R : α → α → Prop} (h₁ : ∀ a b, P a b → Q b a → R a b)
 /--
 info: Try this:
 
-    have fwd : R b a := h₁ b a h₄ h₃
+  [apply]   have fwd : R b a := h₁ b a h₄ h₃
 ---
 error: unsolved goals
 α : Sort u_1
@@ -254,7 +254,7 @@ example {P Q R : α → α → Prop} (h₁ : ∀ a b, P a b → Q b a → R a b)
 /--
 info: Try this:
 
-      have fwd : R c c := h₁ c d d c h₂ h₅
+  [apply]     have fwd : R c c := h₁ c d d c h₂ h₅
     have fwd_1 : R c b := h₁ c d a b h₂ h₃
     have fwd_2 : R b c := h₁ b a d c h₄ h₅
     have fwd_3 : R b b := h₁ b a a b h₄ h₃
@@ -282,7 +282,7 @@ example {P Q R : α → α → Prop} (h₁ : ∀ a b c d, P a b → Q c d → R 
 /--
 info: Try this:
 
-      have fwd : S a d := h₁ a b c d h₂ h₃ h₄
+  [apply]     have fwd : S a d := h₁ a b c d h₂ h₃ h₄
     have fwd_1 : S a c := h₁ a b d c h₂ h₃ h₅
 ---
 error: unsolved goals
@@ -306,7 +306,7 @@ example {P Q R S : α → α → Prop} (h₁ : ∀ a b c d, P a b → Q b a → 
 /--
 info: Try this:
 
-    have fwd : R b a := h₁ a b h₂ h₃ h₄
+  [apply]   have fwd : R b a := h₁ a b h₂ h₃ h₄
 ---
 error: unsolved goals
 α : Sort u_1
@@ -329,7 +329,7 @@ example {P : α → Prop} {Q R : α → α → Prop}
 /--
 info: Try this:
 
-    have fwd : R b a := h₁ a b h₆ h₅ h₄
+  [apply]   have fwd : R b a := h₁ a b h₆ h₅ h₄
 ---
 error: unsolved goals
 α : Sort u_1
@@ -354,7 +354,7 @@ example {P : α → Prop} {Q R : α → α → Prop}
 /--
 info: Try this:
 
-      have fwd : R c d := h₁ d c h₃ h₂ h₇
+  [apply]     have fwd : R c d := h₁ d c h₃ h₂ h₇
     have fwd_1 : R b a := h₁ a b h₆ h₅ h₄
 ---
 error: unsolved goals
@@ -443,7 +443,7 @@ end MatchRedundancy
 /--
 info: Try this:
 
-      have fwd : γ₁ ∧ γ₂ := r₁ a b
+  [apply]     have fwd : γ₁ ∧ γ₂ := r₁ a b
     simp_all only [and_self, implies_true, true_and]
     obtain ⟨left, right⟩ := fwd
     have fwd : δ₁ ∧ δ₂ := r₂ a
