@@ -57,10 +57,11 @@ def getCasesIndexingMode (decl : Name) (indexMd : TransparencyMode)
   else
     .or <$> casesPatterns.mapM (·.toIndexingMode)
 
-def casesCore (info : InductiveVal) (pats : Array CasesPattern)
+/-- `decl` is either the name of the inductive type described by `info`, or a
+type synonym for it at transparency `default` or `md` (whichever is larger). -/
+def casesCore (decl : Name) (info : InductiveVal) (pats : Array CasesPattern)
     (imode? : Option IndexingMode) (md indexMd : TransparencyMode)
     (phase : PhaseSpec) : MetaM LocalRuleSetMember := do
-  let decl := info.name
   pats.forM (·.check decl)
   let imode ← imode?.getDM $ getCasesIndexingMode decl indexMd pats
   let target := mkCasesTarget decl pats
@@ -75,8 +76,8 @@ def cases : RuleBuilder := λ input => do
     -- TODO `Meta.cases` may assign and introduce metavariables.
     -- (Specifically, it can *replace* existing metavariables, which Aesop
     -- counts as an assignment and an introduction.)
-  let info ← elabInductiveRuleIdent .cases input.term
-  casesCore info opts.casesPatterns opts.indexingMode? opts.casesTransparency
+  let (decl, info) ← elabInductiveRuleIdent .cases input.term opts.casesTransparency
+  casesCore decl info opts.casesPatterns opts.indexingMode? opts.casesTransparency
     opts.casesIndexTransparency input.phase
 
 end Aesop.RuleBuilder

@@ -15,19 +15,20 @@ inductive FancyAnd (α β : Prop) : Prop
 
 /--
 info: Try this:
-  apply And.intro
-  ·
-    cases h with
-    | dummy p =>
-      have fwd : False := Aesop.BuiltinRules.empty_false p
-      simp_all only
-    | and a b => simp_all only
-  ·
-    cases h with
-    | dummy p =>
-      have fwd : False := Aesop.BuiltinRules.empty_false p
-      simp_all only
-    | and a b => simp_all only
+
+      apply And.intro
+    ·
+      cases h with
+      | dummy p =>
+        have fwd : False := Aesop.BuiltinRules.empty_false p
+        simp_all only
+      | and a b => simp_all only
+    ·
+      cases h with
+      | dummy p =>
+        have fwd : False := Aesop.BuiltinRules.empty_false p
+        simp_all only
+      | and a b => simp_all only
 -/
 #guard_msgs in
 example {α β} (h : FancyAnd α β) : α ∧ β := by
@@ -43,8 +44,9 @@ structure MyTrue : Prop
 
 /--
 info: Try this:
-  rcases h with ⟨⟩ | @⟨x_1, xs_1, a, a_1⟩
-  apply MyTrue.mk
+
+      rcases h with ⟨⟩ | @⟨x_1, xs_1, a, a_1⟩
+    apply MyTrue.mk
 -/
 #guard_msgs in
 example {P : α → Prop} (h : All P (x :: xs)) : MyTrue := by
