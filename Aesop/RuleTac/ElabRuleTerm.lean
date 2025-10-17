@@ -20,13 +20,34 @@ def elabGlobalRuleIdent? (stx : Term) : TermElabM (Option Name) :=
   catch _ =>
     return none
 
-def elabInductiveRuleIdent? (stx : Term) : TermElabM (Option InductiveVal) := do
+def matchInductiveTypeSynonym? (decl : Name) : MetaM (Option InductiveVal) :=
+  withoutModifyingState do
+    let decl ← mkConstWithFreshMVarLevels decl
+    let type ← inferType decl
+    forallTelescope type λ args _ => do
+      let app ← whnf <| mkAppN decl args
+      let .const redDecl _ := app.getAppFn'
+        | return none
+      try
+        getConstInfoInduct redDecl
+      catch _ =>
+        return none
+
+/-- Elaborate an identifier for a rule that applies to inductive types, e.g.
+`cases`. The identifier must unambiguously refer to a global constant that is
+either an inductive type or reduces to one. For the reduction test, we use
+the larger transparency among `default` and `md`. -/
+def elabInductiveRuleIdent? (stx : Term) (md : TransparencyMode) :
+    TermElabM (Option (Name × InductiveVal)) := do
   let some decl ← elabGlobalRuleIdent? stx
     | return none
-  try
-    getConstInfoInduct decl
-  catch _ =>
-    return none
+  let indVal? ←
+    try
+      some <$> getConstInfoInduct decl
+    catch _ =>
+      withAtLeastTransparency md do
+        matchInductiveTypeSynonym? decl
+  return indVal?.map ((decl, ·))
 
 -- HACK: We ignore the output goals, so this is only likely to work for
 -- functions that might as well be in `TermElabM`.

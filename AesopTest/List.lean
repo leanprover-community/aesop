@@ -1053,7 +1053,7 @@ theorem head_mem_head' [Inhabited α] : ∀ {l : List α} (_ : l ≠ []), ihead 
   aesop
 
 -- attribute [-simp] cons_ihead_tail
-theorem cons_head_tail [Inhabited α] {l : List α} (h : l ≠ []) : (ihead l)::(tail l) = l := by
+theorem cons_head_tail' [Inhabited α] {l : List α} (h : l ≠ []) : (ihead l)::(tail l) = l := by
   aesop
 
 end List

@@ -35,9 +35,13 @@ def targetMatchingConclusion (type : Expr) : MetaM IndexingMode := do
   let path ← getConclusionDiscrTreeKeys type
   return target path
 
-def hypsMatchingConst (decl : Name) : MetaM IndexingMode := do
-  let path ← getConstDiscrTreeKeys decl
-  return hyps path
+def hypsMatchingConst (decl : Name) : MetaM IndexingMode :=
+  withoutModifyingState do
+  withReducible do
+    let c ← mkConstWithFreshMVarLevels decl
+    let (args, _) ← forallMetaTelescope (← inferType c)
+    let app := mkAppN c args
+    hyps <$> DiscrTree.mkPath app
 
 end IndexingMode
 

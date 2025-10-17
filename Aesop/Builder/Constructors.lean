@@ -42,7 +42,7 @@ def constructorsCore (info : InductiveVal) (imode? : Option IndexingMode)
     phase.toRule info.name .constructors .global tac imode none
 
 def constructors : RuleBuilder := λ input => do
-  let info ← elabInductiveRuleIdent .constructors input.term
+  let (_, info) ← elabInductiveRuleIdent .constructors input.term .default
   let opts := input.options
   constructorsCore info opts.indexingMode? opts.constructorsTransparency
     opts.constructorsIndexTransparency input.phase

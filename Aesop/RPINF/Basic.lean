@@ -29,19 +29,18 @@ mutual
   expressions are type-correct, in PINF and have defeq types. -/
   def pinfEqCore : (x y : Expr) → Bool
     | .bvar i₁, .bvar i₂ => i₁ == i₂
-    | .fvar id₁, .fvar id₂ => id₁ == id₂
+    | .fvar id₁, .fvar id₂
     | .mvar id₁, .mvar id₂ => id₁ == id₂
     | .sort u, .sort v => u == v
     | .const n₁ us, .const n₂ vs => n₁ == n₂ && us == vs
     | .app f₁ e₁, .app f₂ e₂ => pinfEq f₁ f₂ && pinfEq e₁ e₂
-    | .lam _ t₁ e₁ bi₁, .lam _ t₂ e₂ bi₂ =>
-      bi₁ == bi₂ && pinfEq t₁ t₂ && pinfEq e₁ e₂
-    | .forallE _ t₁ e₁ bi₁, .forallE _ t₂ e₂ bi₂ =>
-      bi₁ == bi₂ && pinfEq t₁ t₂ && pinfEq e₁ e₂
-    | .letE _ t₁ v₁ e₁ _, .letE _ t₂ v₂ e₂ _ =>
-      pinfEq v₁ v₂ && pinfEq t₁ t₂ && pinfEq e₁ e₂
+    | .lam _ t₁ e₁ bi₁, .lam _ t₂ e₂ bi₂
+    | .forallE _ t₁ e₁ bi₁, .forallE _ t₂ e₂ bi₂ => bi₁ == bi₂ && pinfEq t₁ t₂ && pinfEq e₁ e₂
+    | .letE _ t₁ v₁ e₁ _, .letE _ t₂ v₂ e₂ _ => pinfEq v₁ v₂ && pinfEq t₁ t₂ && pinfEq e₁ e₂
     | .lit l₁, .lit l₂ => l₁ == l₂
-    | .mdata d e₁, e₂ | e₁, .mdata d e₂ => mdataIsProof d || pinfEq e₁ e₂
+    | .proj n₁ i₁ e₁, .proj n₂ i₂ e₂ => i₁ == i₂ && n₁ == n₂ && pinfEq e₁ e₂
+    | .mdata d e₁, e₂
+    | e₁, .mdata d e₂ => mdataIsProof d || pinfEq e₁ e₂
     | _, _ => false
 
   @[inherit_doc pinfEqCore]

@@ -108,11 +108,11 @@ def elabGlobalRuleIdent (builderName : BuilderName) (term : Term) :
   else
     throwError "aesop: {builderName} builder: expected '{term}' to be an unambiguous global constant"
 
-def elabInductiveRuleIdent (builderName : BuilderName) (term : Term) :
-    TermElabM InductiveVal := do
-  if let some info ← elabInductiveRuleIdent? term then
+def elabInductiveRuleIdent (builderName : BuilderName) (term : Term) (md : TransparencyMode) :
+    TermElabM (Name × InductiveVal) := do
+  if let some info ← elabInductiveRuleIdent? term md then
     return info
   else
-    throwError "aesop: {builderName} builder: expected '{term}' to be an inductive type or structure"
+    throwError "aesop: {builderName} builder: expected '{term}' to be an inductive type or structure (or to reduce to one at the given transparency)"
 
 end Aesop
