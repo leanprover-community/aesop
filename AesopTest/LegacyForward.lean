@@ -70,7 +70,8 @@ example (rule : ∀ α β, α ∧ β → α) (h : P ∧ Q ∧ R) : P := by
 
 /--
 info: Try this:
-have fwd : P := rule P (Q ∧ R) h
+
+    have fwd : P := rule P (Q ∧ R) h
 -/
 #guard_msgs in
 example (rule : ∀ α β, α ∧ β → α) (h : P ∧ Q ∧ R) : P := by
@@ -80,8 +81,9 @@ example (rule : ∀ α β, α ∧ β → α) (h : P ∧ Q ∧ R) : P := by
 
 /--
 info: Try this:
-  have fwd : γ₁ ∧ γ₂ := r₁ a b
-  have fwd_1 : δ₁ ∧ δ₂ := r₂ a
+
+      have fwd : γ₁ ∧ γ₂ := r₁ a b
+    have fwd_1 : δ₁ ∧ δ₂ := r₂ a
 -/
 #guard_msgs in
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
@@ -93,8 +95,9 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
 
 /--
 info: Try this:
-  have fwd : β := h₁ h₃
-  have fwd_1 : γ := h₂ fwd
+
+      have fwd : β := h₁ h₃
+    have fwd_1 : γ := h₂ fwd
 -/
 #guard_msgs in
 example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ := by
@@ -105,7 +108,8 @@ example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ
 
 /--
 info: Try this:
-have fwd : β := h₁ h₃
+
+    have fwd : β := h₁ h₃
 ---
 error: unsolved goals
 α β γ : Prop
@@ -121,7 +125,8 @@ example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ
 
 /--
 info: Try this:
-have fwd : β := h₁ h₃
+
+    have fwd : β := h₁ h₃
 ---
 error: unsolved goals
 α β γ : Prop
@@ -137,8 +142,9 @@ example {α β γ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : α) : γ
 
 /--
 info: Try this:
-  have fwd : β := h₁ h₄
-  have fwd_1 : γ := h₂ fwd
+
+      have fwd : β := h₁ h₄
+    have fwd_1 : γ := h₂ fwd
 ---
 error: unsolved goals
 α β γ δ : Prop
@@ -156,8 +162,9 @@ example {α β γ δ : Prop} (h₁ : α → β) (h₂ : β → γ) (h₃ : γ �
 
 /--
 info: Try this:
-  have fwd : β := h₁ h₄
-  have fwd_1 : γ := h₂ h₄
+
+      have fwd : β := h₁ h₄
+    have fwd_1 : γ := h₂ h₄
 ---
 error: unsolved goals
 α β γ δ : Prop
@@ -185,8 +192,9 @@ axiom bc : B → C
 
 /--
 info: Try this:
-  have fwd : B := ab a
-  have fwd_1 : C := bc fwd
+
+      have fwd : B := ab a
+    have fwd_1 : C := bc fwd
 -/
 #guard_msgs in
 noncomputable example : A → C := by
@@ -204,11 +212,12 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
 
 /--
 info: Try this:
-  have fwd : γ₁ ∧ γ₂ := r₁ a b
-  simp_all only [and_self, implies_true, true_and]
-  obtain ⟨left, right⟩ := fwd
-  have fwd : δ₁ ∧ δ₂ := r₂ a
-  simp_all only [and_self, implies_true]
+
+      have fwd : γ₁ ∧ γ₂ := r₁ a b
+    simp_all only [and_self, implies_true, true_and]
+    obtain ⟨left, right⟩ := fwd
+    have fwd : δ₁ ∧ δ₂ := r₂ a
+    simp_all only [and_self, implies_true]
 -/
 #guard_msgs in
 example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ₁ ∧ γ₂)
