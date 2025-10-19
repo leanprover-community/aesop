@@ -16,7 +16,7 @@ axiom R {α} : α → α → Prop
 /--
 info: Try this:
 
-      have fwd : R b y := sym h₃
+  [apply]     have fwd : R b y := sym h₃
     have fwd_1 : R a x := sym h₂
     have fwd_2 : R b b := tran (y := y) fwd h₃
     have fwd_3 : R y y := tran (y := b) h₃ fwd
