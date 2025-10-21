@@ -15,7 +15,7 @@ inductive MyFalse : Prop
 /--
 info: Try this:
 
-      split
+  [apply]     split
     next h => sorry
     next h => sorry
 ---
@@ -29,7 +29,7 @@ example {A B : Prop} : if P then A else B := by
 /--
 info: Try this:
 
-      split at h
+  [apply]     split at h
     next h_1 => simp_all only [true_or]
     next h_1 => simp_all only [or_true]
 -/
@@ -40,7 +40,7 @@ example (h : if P then A else B) : A ∨ B := by
 /--
 info: Try this:
 
-      split at h
+  [apply]     split at h
     next n => simp_all only [true_or]
     next n => simp_all only [true_or, or_true]
     next n_1 x x_1 => simp_all only [imp_false, or_true]
