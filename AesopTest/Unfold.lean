@@ -23,7 +23,7 @@ def WalkingCospan_elim : WalkingCospan → Sum Empty Empty := id
 /--
 info: Try this:
 
-      unfold WalkingCospan at h
+  [apply]     unfold WalkingCospan at h
     unfold WidePullbackShape at h
     cases h with
     | inl val =>
@@ -49,7 +49,7 @@ def Bar := False
 /--
 info: Try this:
 
-      unfold Bar Foo
+  [apply]     unfold Bar Foo
     unfold Foo at h₁
     unfold Foo Bar at h₂
     simp_all only

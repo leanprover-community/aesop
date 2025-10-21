@@ -14,7 +14,7 @@ set_option aesop.smallErrorMessages true
 /--
 info: Try this:
 
-      intro a
+  [apply]     intro a
     simp_all only [Nat.add_zero]
     sorry
 ---
@@ -37,7 +37,7 @@ inductive Even : Nat → Prop where
 /--
 info: Try this:
 
-    sorry
+  [apply]   sorry
 ---
 error: tactic 'aesop' failed, made no progress
 -/
@@ -50,7 +50,7 @@ attribute [aesop safe constructors] Even
 /--
 info: Try this:
 
-      apply Even.add_two
+  [apply]     apply Even.add_two
     apply Even.add_two
     sorry
 ---

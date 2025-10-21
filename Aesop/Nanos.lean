@@ -35,7 +35,7 @@ instance : HDiv Nanos Nat Nanos where
 
 def printAsMillis (n : Nanos) : String :=
   let str := toString (n.nanos.toFloat / 1000000)
-  match str.split λ c => c == '.' with
+  match str.splitToList λ c => c == '.' with
   | [beforePoint] => beforePoint ++ "ms"
   | [beforePoint, afterPoint] => beforePoint ++ "." ++ afterPoint.take 1 ++ "ms"
   | _ => unreachable!
