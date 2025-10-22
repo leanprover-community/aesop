@@ -16,7 +16,7 @@ inductive FancyAnd (α β : Prop) : Prop
 /--
 info: Try this:
 
-      apply And.intro
+  [apply]     apply And.intro
     ·
       cases h with
       | dummy p =>
@@ -45,7 +45,7 @@ structure MyTrue : Prop
 /--
 info: Try this:
 
-      rcases h with ⟨⟩ | @⟨x_1, xs_1, a, a_1⟩
+  [apply]     rcases h with ⟨⟩ | @⟨x_1, xs_1, a, a_1⟩
     apply MyTrue.mk
 -/
 #guard_msgs in

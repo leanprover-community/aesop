@@ -65,7 +65,7 @@ def fifty : Percent :=
 
 def toHumanString (p : Percent) : String :=
   let str := toString (p.toFloat * 100)
-  match str.split λ c => c == '.' with
+  match str.splitToList λ c => c == '.' with
   | [beforePoint] => beforePoint ++ "%"
   | [beforePoint, afterPoint] =>
     beforePoint ++ "." ++ afterPoint.take 4 ++ "%"
