@@ -3,10 +3,13 @@ Copyright (c) 2022-2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Nanos
-import Aesop.Rule.Name
-import Aesop.Tracing
+public import Aesop.Nanos
+public import Aesop.Rule.Name
+public import Aesop.Tracing
+
+public section
 
 open Lean
 

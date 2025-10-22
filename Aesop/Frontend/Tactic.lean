@@ -3,11 +3,14 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Frontend.RuleExpr
-import Aesop.Options
-import Batteries.Linter.UnreachableTactic
-import Aesop.Frontend.Extension
+public import Aesop.Frontend.RuleExpr
+public import Aesop.Options
+public import Batteries.Linter.UnreachableTactic
+public import Aesop.Frontend.Extension
+
+public section
 
 open Lean
 open Lean.Meta
@@ -58,7 +61,7 @@ syntax (name := aesopTactic)  "aesop"  Aesop.tactic_clause* : tactic
 @[inherit_doc aesopTactic]
 syntax (name := aesopTactic?) "aesop?" Aesop.tactic_clause* : tactic
 
-initialize do
+meta initialize do
   Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``aesopTactic
   Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``aesopTactic?
 

@@ -3,13 +3,16 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
+module
 
-import Aesop.Constants
-import Aesop.Script.Step
-import Aesop.Tracing
-import Aesop.Tree.Data.ForwardRuleMatches
-import Aesop.Tree.UnsafeQueue
-import Aesop.Forward.State
+public import Aesop.Constants
+public import Aesop.Script.Step
+public import Aesop.Tracing
+public import Aesop.Tree.Data.ForwardRuleMatches
+public import Aesop.Tree.UnsafeQueue
+public import Aesop.Forward.State
+
+public section
 
 open Lean
 open Lean.Meta
@@ -94,7 +97,7 @@ end RappId
 
 /-! ## Iterations -/
 
-def Iteration := Nat
+@[expose] def Iteration := Nat
   deriving Inhabited
 
 namespace Iteration

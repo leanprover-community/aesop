@@ -3,13 +3,16 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Forward.Match
-import Aesop.RuleTac.Basic
-import Aesop.RuleTac.ElabRuleTerm
-import Aesop.RuleTac.Forward.Basic
-import Aesop.Script.SpecificTactics
-import Batteries.Lean.Meta.UnusedNames
+public import Aesop.Forward.Match
+public import Aesop.RuleTac.Basic
+public import Aesop.RuleTac.ElabRuleTerm
+public import Aesop.RuleTac.Forward.Basic
+public import Aesop.Script.SpecificTactics
+public import Batteries.Lean.Meta.UnusedNames
+
+public section
 
 open Lean
 open Lean.Meta
