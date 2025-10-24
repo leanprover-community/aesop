@@ -7,12 +7,9 @@ module
 
 public import Aesop.Forward.State.ApplyGoalDiff
 public import Aesop.RuleTac
-public import Aesop.RuleTac.ElabRuleTerm
-public import Aesop.Script.SpecificTactics
 public import Aesop.Search.Expansion.Basic
 public import Aesop.Search.Expansion.Simp
 public import Aesop.Search.RuleSelection
-public import Aesop.Search.SearchM
 public import Aesop.Tree.State
 public import Batteries.Lean.HashSet
 

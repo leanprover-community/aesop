@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Util.EqualUpToIds
 public import Aesop.Script.Tactic
 public import Aesop.Script.TacticState
 public import Aesop.Script.Util

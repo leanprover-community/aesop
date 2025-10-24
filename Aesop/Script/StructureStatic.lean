@@ -1,7 +1,6 @@
 module
 
 public import Aesop.Script.UScriptToSScript
-public import Aesop.Script.Util
 
 public section
 

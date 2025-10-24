@@ -7,7 +7,6 @@ module
 
 public import Aesop.RPINF
 public import Aesop.RuleTac.FVarIdSubst
-public import Aesop.Util.Basic
 
 public section
 

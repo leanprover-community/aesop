@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Forward.Match
-public import Aesop.Rule
 
 public section
 

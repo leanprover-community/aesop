@@ -1,7 +1,6 @@
 module
 
 public import Aesop.Tree.RunMetaM
-public import Aesop.Tracing
 
 public section
 

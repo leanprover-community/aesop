@@ -5,9 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Check
 public import Aesop.Tree.State
-public import Aesop.Tree.Traversal
 public import Aesop.Tree.TreeM
 public import Batteries.Lean.HashSet
 public import Aesop.Tree.RunMetaM

@@ -5,10 +5,8 @@ Authors: Xavier Généreux, Jannis Limperg
 -/
 module
 
-public import Aesop.Forward.PremiseIndex
 public import Aesop.Forward.SlotIndex
 public import Aesop.RulePattern
-public import Aesop.Util.Basic
 public import Aesop.Util.UnionFind
 
 public section

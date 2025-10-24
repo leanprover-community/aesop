@@ -7,8 +7,6 @@ module
 
 public import Aesop.Util.Basic
 public import Batteries.Data.Array.Basic
-public import Lean.Elab.Term
-public import Lean.Meta.Tactic.Simp
 
 public section
 

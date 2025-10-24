@@ -5,9 +5,6 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Util.Basic
-public import Aesop.Rule.Name
-public import Aesop.RulePattern
 public import Aesop.Forward.Match.Types
 
 public section

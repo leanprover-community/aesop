@@ -5,11 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Forward.Substitution
 public import Aesop.RPINF
-public import Aesop.Rule.Name
-public import Aesop.Tracing
-public import Aesop.Index.DiscrTreeConfig
 
 public section
 

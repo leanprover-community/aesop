@@ -7,7 +7,6 @@ module
 
 public import Aesop.Forward.State.ApplyGoalDiff
 public import Aesop.Forward.State.Initial
-public import Aesop.RuleSet
 public import Aesop.RuleTac
 public import Aesop.Search.Expansion.Basic
 public import Aesop.Script.Check

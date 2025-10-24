@@ -5,11 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Check
 public import Aesop.Forward.State.ApplyGoalDiff
 public import Aesop.Tree.Traversal
 public import Aesop.Tree.TreeM
-public import Aesop.Util.UnionFind
 
 public section
 

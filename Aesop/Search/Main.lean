@@ -5,15 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Check
-public import Aesop.Options
-public import Aesop.RuleSet
-public import Aesop.Script.Check
 public import Aesop.Script.Main
-public import Aesop.Search.Expansion
 public import Aesop.Search.ExpandSafePrefix
 public import Aesop.Search.Queue
-public import Aesop.Tree
 public import Aesop.Frontend.Extension
 
 public section

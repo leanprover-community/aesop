@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Script.UScript
-public import Aesop.Tracing
 public import Aesop.Tree.TreeM
 
 public section

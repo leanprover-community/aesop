@@ -1,6 +1,5 @@
 module
 
-public import Aesop.Util.Basic
 public import Aesop.BaseM
 
 public section
