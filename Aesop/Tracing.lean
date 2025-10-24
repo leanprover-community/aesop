@@ -7,7 +7,7 @@ module
 
 public import Lean.Meta.Tactic.Simp.SimpTheorems
 import Aesop.Util.Basic
-meta import Lean.Parser.Do
+public meta import Lean.Parser.Do
 
 public section
 

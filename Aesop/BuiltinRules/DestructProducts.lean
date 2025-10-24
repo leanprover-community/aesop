@@ -9,8 +9,10 @@ public meta import Aesop.RuleTac.Basic
 public meta import Aesop.Script.ScriptM
 import Aesop.Frontend.Attribute
 import Aesop.Script.ScriptM
-meta import Aesop.Script.SpecificTactics
-meta import Lean.Meta.Tactic.Apply
+public meta import Aesop.Script.SpecificTactics
+public meta import Lean.Meta.Tactic.Apply
+public meta import Lean.Meta.Tactic.Revert
+public meta import Lean.Meta.Tactic.Intro
 
 public section
 

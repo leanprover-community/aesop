@@ -42,14 +42,14 @@ def forGlobalErasing : MetaM Context := do
 end ElabM.Context
 
 
-abbrev ElabM := ReaderT ElabM.Context $ TermElabM
+abbrev ElabM := ReaderT ElabM.Context $ Term.TermElabM
 
 -- Generate specialized pure/bind implementations so we don't need to optimise
 -- them on the fly at each use site.
 instance : Monad ElabM :=
   { inferInstanceAs (Monad ElabM) with }
 
-protected def ElabM.run (ctx : Context) (x : ElabM α) : TermElabM α := do
+protected def ElabM.run (ctx : Context) (x : ElabM α) : Term.TermElabM α := do
   ReaderT.run x ctx
 
 def shouldParsePriorities : ElabM Bool :=
