@@ -8,6 +8,8 @@ module
 public import Aesop.Tree.Data.ForwardRuleMatches
 public import Aesop.Tree.UnsafeQueue
 public import Aesop.Forward.State
+import Aesop.Constants
+import Batteries.Data.Array.Basic
 
 public section
 

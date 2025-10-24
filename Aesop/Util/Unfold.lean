@@ -5,7 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean
+public import Lean.Meta.Tactic.Simp.Main
+import Lean.Meta.Tactic.Delta
 
 public section
 

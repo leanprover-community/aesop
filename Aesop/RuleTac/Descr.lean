@@ -1,6 +1,8 @@
 module
 
 public import Aesop.RuleTac.Basic
+public import Aesop.Script.CtorNames
+public import Aesop.Forward.Match.Types
 
 public section
 

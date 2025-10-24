@@ -7,8 +7,13 @@ module
 
 public import Aesop.Script.Main
 public import Aesop.Search.ExpandSafePrefix
-public import Aesop.Search.Queue
-public import Aesop.Frontend.Extension
+public import Aesop.Tree.Check
+public import Aesop.Tree.ExtractProof
+public import Aesop.Tree.ExtractScript
+public import Aesop.Tree.Tracing
+import Aesop.Frontend.Extension
+import Aesop.Search.Queue
+import Aesop.Tree.Free
 
 public section
 

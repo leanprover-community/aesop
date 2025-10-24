@@ -7,6 +7,8 @@ module
 
 public import Aesop.Script.UScript
 public import Aesop.Script.SScript
+public import Batteries.Data.Array.Merge
+import Aesop.Tracing
 
 public section
 

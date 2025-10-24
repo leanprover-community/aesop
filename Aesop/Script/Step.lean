@@ -7,9 +7,12 @@ module
 
 public import Aesop.Script.Tactic
 public import Aesop.Script.TacticState
-public import Aesop.Script.Util
-public import Aesop.Tracing
-public import Batteries.Tactic.PermuteGoals
+import Aesop.Tracing
+import Aesop.Script.Util
+import Aesop.Util.Basic
+import Aesop.Util.EqualUpToIds
+import Batteries.Tactic.PermuteGoals
+import Batteries.Lean.Meta.SavedState
 
 public section
 

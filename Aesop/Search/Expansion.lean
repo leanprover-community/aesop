@@ -7,6 +7,10 @@ module
 
 public import Aesop.Search.Expansion.Norm
 public import Aesop.Tree.AddRapp
+public import Aesop.RuleTac
+public import Aesop.Search.RuleSelection
+public import Batteries.Data.Array.Basic
+import Aesop.Search.Expansion.Basic
 
 public section
 

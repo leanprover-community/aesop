@@ -5,11 +5,13 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Forward.Match
 public import Aesop.Index.Basic
 public import Aesop.Index.RulePattern
 public import Batteries.Lean.Meta.InstantiateMVars
-public import Batteries.Lean.PersistentHashSet
+public import Aesop.Index.DiscrTreeConfig
+public import Aesop.Rule.Basic
+import Batteries.Lean.PersistentHashSet
+import Batteries.Lean.Meta.DiscrTree
 
 public section
 

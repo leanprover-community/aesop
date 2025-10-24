@@ -7,9 +7,9 @@ module
 
 public import Aesop.Index.Basic
 public import Aesop.RuleTac.GoalDiff
-public import Aesop.Script.CtorNames
 public import Aesop.Script.Step
 public import Aesop.Options.Internal
+public import Aesop.Percent
 
 public section
 

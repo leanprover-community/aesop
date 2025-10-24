@@ -5,7 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.RPINF
+public import Aesop.BaseM
+import Aesop.RPINF
+import Aesop.Index.DiscrTreeConfig
 
 public section
 

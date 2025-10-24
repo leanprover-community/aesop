@@ -5,7 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Forward.Match.Types
+public import Aesop.Forward.Substitution
 
 public section
 

@@ -1,6 +1,7 @@
 module
 
 public import Aesop.BaseM
+import Batteries.Lean.Expr
 
 public section
 
