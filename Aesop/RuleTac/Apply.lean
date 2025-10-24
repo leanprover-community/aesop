@@ -14,7 +14,6 @@ public section
 
 open Lean
 open Lean.Meta
-open Lean.PrettyPrinter (delab)
 
 namespace Aesop.RuleTac
 
