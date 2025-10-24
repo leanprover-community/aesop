@@ -1,4 +1,8 @@
-import Aesop.Util.Basic
+module
+
+public import Aesop.Util.Basic
+
+public section
 
 open Lean Lean.Meta
 

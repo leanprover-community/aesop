@@ -3,9 +3,12 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Kaiyu Yang
 -/
+module
 
-import Aesop.RuleTac.Basic
-import Aesop.Script.Step
+public import Aesop.RuleTac.Basic
+public import Aesop.Script.Step
+
+public section
 
 open Lean Lean.Meta Lean.Elab.Tactic
 open Lean.Elab.Tactic (TacticM evalTactic withoutRecover)

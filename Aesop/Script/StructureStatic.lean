@@ -1,5 +1,9 @@
-import Aesop.Script.UScriptToSScript
-import Aesop.Script.Util
+module
+
+public import Aesop.Script.UScriptToSScript
+public import Aesop.Script.Util
+
+public section
 
 open Lean Lean.Meta
 

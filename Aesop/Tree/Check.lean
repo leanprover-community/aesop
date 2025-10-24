@@ -3,13 +3,16 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Check
-import Aesop.Tree.State
-import Aesop.Tree.Traversal
-import Aesop.Tree.TreeM
-import Batteries.Lean.HashSet
-import Aesop.Tree.RunMetaM
+public import Aesop.Check
+public import Aesop.Tree.State
+public import Aesop.Tree.Traversal
+public import Aesop.Tree.TreeM
+public import Batteries.Lean.HashSet
+public import Aesop.Tree.RunMetaM
+
+public section
 
 open Lean
 open Lean.Meta
