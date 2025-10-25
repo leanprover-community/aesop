@@ -5,8 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Check
 public import Aesop.Script.UScript
+import Aesop.Check
+import Lean.Elab.Tactic.Basic
 
 public section
 

@@ -6,6 +6,7 @@ Authors: Xavier Généreux, Jannis Limperg
 module
 
 public import Aesop.Forward.Match
+import Aesop.RPINF
 
 public section
 

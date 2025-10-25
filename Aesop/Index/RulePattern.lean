@@ -5,9 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Index.Basic
-public import Aesop.RuleTac.GoalDiff
-public import Batteries.Lean.Meta.DiscrTree
+public import Aesop.RulePattern
+import Aesop.Index.DiscrTreeConfig
+import Batteries.Lean.Meta.DiscrTree
 
 public section
 

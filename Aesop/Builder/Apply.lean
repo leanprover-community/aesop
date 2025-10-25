@@ -6,6 +6,9 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Builder.Basic
+import Aesop.RuleTac.ElabRuleTerm
+import Batteries.Lean.Expr
+import Lean.Meta.MatchUtil
 
 public section
 

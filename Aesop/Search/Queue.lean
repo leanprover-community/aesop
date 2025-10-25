@@ -5,9 +5,6 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Options
-public import Aesop.Tracing
-public import Aesop.Tree
 public import Aesop.Search.Queue.Class
 public import Batteries.Data.BinomialHeap.Basic
 

@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Builder.Basic
+import Aesop.RuleTac.ElabRuleTerm
 
 public section
 

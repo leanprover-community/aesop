@@ -6,16 +6,14 @@ Authors: Xavier Généreux, Jannis Limperg
 module
 
 public import Aesop.Forward.Match.Types
-public import Aesop.Forward.PremiseIndex
-public import Aesop.Forward.SlotIndex
 public import Aesop.Rule
-public import Aesop.Rule.Forward
-public import Aesop.RuleTac.Descr
-public import Aesop.RuleTac.ElabRuleTerm
-public import Aesop.RuleTac.Forward.Basic
-public import Aesop.Script.SpecificTactics
-public import Batteries.Lean.Meta.UnusedNames
-public import Lean
+public import Aesop.Script.ScriptM
+import Aesop.RPINF
+import Aesop.RuleTac.ElabRuleTerm
+import Aesop.Script.SpecificTactics
+import Aesop.RuleTac.Forward.Basic
+import Batteries.Lean.Meta.UnusedNames
+import Lean.Meta.Tactic.Apply
 
 public section
 

@@ -6,6 +6,9 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Builder.Basic
+import Aesop.Index.DiscrTreeConfig
+import Aesop.RuleTac.ElabRuleTerm
+import Batteries.Data.Array.Basic
 
 public section
 

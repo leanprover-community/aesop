@@ -5,9 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Forward.State.Initial
-public import Aesop.RuleSet
 public import Aesop.Tree.Data
+public import Aesop.RuleSet
+import Aesop.Forward.State.Initial
 
 public section
 

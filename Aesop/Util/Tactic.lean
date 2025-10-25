@@ -5,8 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean
-public import Batteries.Tactic.OpenPrivate
+public import Lean.Meta.Basic
+import Lean.Meta.Tactic.Assert
 
 public section
 

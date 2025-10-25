@@ -5,7 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean.Meta.Tactic.Simp.SimpAll
+public import Lean.Meta.Tactic.Simp.Rewrite
+import Lean.Meta.Tactic.Simp.SimpAll
 
 public section
 

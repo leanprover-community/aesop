@@ -1,6 +1,7 @@
 module
 
 public import Aesop.Script.Step
+import Batteries.Tactic.PermuteGoals
 
 public section
 

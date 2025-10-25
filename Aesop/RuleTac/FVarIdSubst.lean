@@ -5,7 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean
+public import Lean.Meta.Tactic.FVarSubst
 
 public section
 
