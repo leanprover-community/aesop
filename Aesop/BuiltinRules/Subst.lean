@@ -86,9 +86,12 @@ meta def substEqsAndIffs? (goal : MVarId) (fvarIds : Array FVarId) :
 @[aesop (rule_sets := [builtin]) norm -50 tactic (index := [hyp _ = _, hyp _ ↔ _])]
 meta def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
   input.goal.withContext do
+    let lctx := (← getLCtx).decls.toArray.filterMap (Option.map (·.fvarId))
     let hyps ← input.indexMatchLocations.toArray.mapM λ
       | .hyp ldecl => pure ldecl.fvarId
       | _ => throwError "unexpected index match location"
+    let hyps := hyps.qsort fun a b =>
+      ((lctx.finIdxOf? a).map Fin.val).getD 0 > ((lctx.finIdxOf? b).map Fin.val).getD 0
     let (some goal, steps) ← substEqsAndIffs? input.goal hyps |>.run
       | throwError "no suitable hypothesis found"
     -- TODO we can construct a better diff here, and doing so would be important
