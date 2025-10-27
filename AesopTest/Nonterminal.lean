@@ -80,3 +80,12 @@ error: unsolved goals
 set_option aesop.warn.nonterminal false in
 example : MyFalse := by
   aesop
+
+/--
+error: unsolved goals
+⊢ False
+-/
+#guard_msgs in
+set_option aesop.warn.nonterminal true in
+example : MyFalse := by
+  aesop (config := { warnOnNonterminal := false })
