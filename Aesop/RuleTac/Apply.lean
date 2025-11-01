@@ -37,7 +37,7 @@ def applyExpr' (goal : MVarId) (e : Expr) (eStx : Term)
     }
 
 def applyExpr (goal : MVarId) (e : Expr) (eStx : Term)
-    (patSubsts? : Option (Std.HashSet Substitution)) (md : TransparencyMode) :
+    (patSubsts? : Option (Array Substitution)) (md : TransparencyMode) :
     BaseM RuleTacOutput := do
   if let some patSubsts := patSubsts? then
     let mut rapps := Array.mkEmpty patSubsts.size

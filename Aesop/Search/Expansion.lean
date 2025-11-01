@@ -56,8 +56,8 @@ def isSuccessfulOrPostponed
 end SafeRuleResult
 
 def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
-    (indexMatchLocations : Std.HashSet IndexMatchLocation)
-    (patternSubsts? : Option (Std.HashSet Substitution))
+    (indexMatchLocations : Array IndexMatchLocation)
+    (patternSubsts? : Option (Array Substitution))
     (options : Options') (hypTypes : PHashSet RPINF) :
     BaseM (Except Exception RuleTacOutput) := do
   let some (postNormGoal, postNormState) := goal.postNormGoalAndMetaState? | throwError
@@ -116,8 +116,8 @@ def withRuleTraceNode (ruleName : RuleName)
       return m!"{emoji} {ruleName}{suffix}"
 
 def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
-    (indexMatchLocations : Std.HashSet IndexMatchLocation)
-    (patternSubsts? : Option (Std.HashSet Substitution)) :
+    (indexMatchLocations : Array IndexMatchLocation)
+    (patternSubsts? : Option (Array Substitution)) :
     SearchM Q (Option RuleTacOutput) := do
   let parent ← parentRef.get
   let ruleOutput? ←
