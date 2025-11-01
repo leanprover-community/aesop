@@ -240,7 +240,7 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
     throwAesopEx (← getRootMVarId) safeGoals safeExpansionSuccess err
   if ! (← treeHasProgress) then
     throwAesopEx (← getRootMVarId) #[] safeExpansionSuccess "made no progress"
-  if opts.warnOnNonterminal then
+  if opts.warnOnNonterminal && aesop.warn.nonterminal.get (← getOptions) then
     logWarning m!"aesop: {err}"
   if ! safeExpansionSuccess then
     logWarning m!"aesop: safe prefix was not fully expanded because the maximum number of rule applications ({(← read).options.maxSafePrefixRuleApplications}) was reached."
