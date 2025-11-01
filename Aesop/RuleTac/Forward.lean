@@ -126,7 +126,7 @@ where
   tacticBuilder _ := Script.TacticBuilder.assertHypothesis goal hyp .reducible
 
 def applyForwardRule (goal : MVarId) (e : Expr)
-    (patSubsts? : Option (Std.HashSet Substitution))
+    (patSubsts? : Option (Array Substitution))
     (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
     (maxDepth? : Option Nat) (existingHypTypes : PHashSet RPINF) :
     ScriptM Subgoal :=
