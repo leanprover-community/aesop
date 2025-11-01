@@ -6,6 +6,9 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Script.Step
+public import Lean.Parser.Term.Basic
+import Batteries.Lean.Meta.SavedState
+meta import Lean.Parser.Term.Basic
 
 public section
 

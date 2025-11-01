@@ -6,9 +6,8 @@ Authors: Xavier Généreux, Jannis Limperg
 module
 
 public import Aesop.Forward.Match.Types
-public import Aesop.Rule.Forward
-public import Aesop.Index.Basic
-public import Batteries.Lean.Meta.DiscrTree
+import Aesop.Index.DiscrTreeConfig
+import Batteries.Lean.Meta.DiscrTree
 
 public section
 

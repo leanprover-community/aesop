@@ -5,8 +5,11 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Frontend.Attribute
-public import Aesop.RuleTac.Forward.Basic
+public meta import Aesop.RuleTac.Basic
+public meta import Aesop.Script.SpecificTactics
+public meta import Aesop.RuleTac.Forward.Basic
+import Aesop.Frontend.Attribute
+import Aesop.Script.SpecificTactics
 
 public section
 

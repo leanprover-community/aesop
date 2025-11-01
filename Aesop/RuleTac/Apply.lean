@@ -6,14 +6,14 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.RuleTac.Basic
-public import Aesop.RuleTac.ElabRuleTerm
-public import Aesop.Script.SpecificTactics
+public import Aesop.RuleTac.RuleTerm
+import Aesop.RuleTac.ElabRuleTerm
+import Aesop.Script.SpecificTactics
 
 public section
 
 open Lean
 open Lean.Meta
-open Lean.PrettyPrinter (delab)
 
 namespace Aesop.RuleTac
 

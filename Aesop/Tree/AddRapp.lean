@@ -5,11 +5,11 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Check
-public import Aesop.Forward.State.ApplyGoalDiff
-public import Aesop.Tree.Traversal
 public import Aesop.Tree.TreeM
-public import Aesop.Util.UnionFind
+import Aesop.Tree.Traversal
+import Aesop.Util.UnionFind
+import Aesop.Forward.State.ApplyGoalDiff
+import Batteries.Lean.Meta.SavedState
 
 public section
 

@@ -5,10 +5,11 @@ Authors: Sebastian Ullrich, Jannis Limperg
 -/
 module
 
-public import Aesop.Frontend.Attribute
-public import Aesop.Frontend.Extension
-public import Aesop.Frontend.RuleExpr
-public import Lean.CoreM
+public meta import Aesop.RuleTac.Basic
+public import Aesop.Script.ScriptM
+public meta import Aesop.Script.SpecificTactics
+import Aesop.Frontend.Attribute
+import Aesop.Script.SpecificTactics
 
 public section
 
