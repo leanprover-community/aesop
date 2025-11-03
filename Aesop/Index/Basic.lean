@@ -46,6 +46,8 @@ def hypsMatchingConst (decl : Name) : MetaM IndexingMode :=
 end IndexingMode
 
 
+/-- The source of a rule match reported by the index. We assume that
+only IndexMatchLocations belonging to the same goal are equated or compared. -/
 inductive IndexMatchLocation
   | none
   | target
@@ -64,7 +66,7 @@ instance : BEq IndexMatchLocation where
   beq
     | none, none => true
     | target, target => true
-    | hyp ldecl₁, hyp ldecl₂ => ldecl₁.fvarId == ldecl₂.fvarId
+    | hyp ldecl₁, hyp ldecl₂ => ldecl₁.index == ldecl₂.index
     | _, _ => false
 
 instance : Ord IndexMatchLocation where
@@ -77,13 +79,13 @@ instance : Ord IndexMatchLocation where
     | none, hyp .. => .lt
     | hyp .., target => .gt
     | hyp .., none => .gt
-    | hyp ldecl₁, hyp ldecl₂ => ldecl₁.fvarId.name.cmp ldecl₂.fvarId.name
+    | hyp ldecl₁, hyp ldecl₂ => compare ldecl₁.index ldecl₂.index
 
 instance : Hashable IndexMatchLocation where
   hash
     | none => 7
     | target => 13
-    | hyp ldecl => mixHash 17 $ hash ldecl.fvarId
+    | hyp ldecl => mixHash 17 <| hash ldecl.index
 
 end IndexMatchLocation
 
@@ -97,11 +99,12 @@ structure IndexMatchResult (α : Type) where
   /-- The rule that should be applied. -/
   rule : α
   /-- Goal locations where the rule matched. The rule's `indexingMode`
-  determines which locations can be contained in this set. -/
-  locations : Std.HashSet IndexMatchLocation
+  determines which locations can be contained in this set. The array contains
+  no duplicates. -/
+  locations : Array IndexMatchLocation
   /-- Pattern substitutions for this rule that were found in the goal. `none`
-  iff the rule doesn't have a pattern. -/
-  patternSubsts? : Option (Std.HashSet Substitution)
+  iff the rule doesn't have a pattern. The array contains no duplicates. -/
+  patternSubsts? : Option (Array Substitution)
   deriving Inhabited
 
 namespace IndexMatchResult
