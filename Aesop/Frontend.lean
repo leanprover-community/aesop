@@ -1,4 +1,6 @@
-import Aesop.Frontend.Attribute
-import Aesop.Frontend.Command
-import Aesop.Frontend.RuleExpr
-import Aesop.Frontend.Tactic
+module
+
+public import Aesop.Frontend.Attribute
+public import Aesop.Frontend.Command
+public import Aesop.Frontend.RuleExpr
+public import Aesop.Frontend.Tactic
