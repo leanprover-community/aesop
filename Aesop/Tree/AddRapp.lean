@@ -3,12 +3,15 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Check
-import Aesop.Forward.State.ApplyGoalDiff
+public import Aesop.Tree.TreeM
 import Aesop.Tree.Traversal
-import Aesop.Tree.TreeM
 import Aesop.Util.UnionFind
+import Aesop.Forward.State.ApplyGoalDiff
+import Batteries.Lean.Meta.SavedState
+
+public section
 
 open Lean
 open Lean.Meta

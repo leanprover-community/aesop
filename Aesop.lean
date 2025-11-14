@@ -1,4 +1,6 @@
-import Aesop.Main
-import Aesop.Frontend.Command
-import Aesop.Frontend.Saturate
-import Aesop.BuiltinRules
+module
+
+public import Aesop.Main
+public import Aesop.Frontend.Command
+public import Aesop.Frontend.Saturate
+public import Aesop.BuiltinRules

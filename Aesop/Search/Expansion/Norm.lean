@@ -3,17 +3,22 @@ Copyright (c) 2023 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Forward.State.ApplyGoalDiff
+public import Aesop.Tree.State
+public import Aesop.Search.SearchM
+public import Aesop.Tree.RunMetaM
+public import Batteries.Lean.Meta.SavedState
 import Aesop.RuleTac
 import Aesop.RuleTac.ElabRuleTerm
 import Aesop.Script.SpecificTactics
+import Aesop.Search.RuleSelection
+import Batteries.Lean.HashSet
+import Aesop.Forward.State.ApplyGoalDiff
 import Aesop.Search.Expansion.Basic
 import Aesop.Search.Expansion.Simp
-import Aesop.Search.RuleSelection
-import Aesop.Search.SearchM
-import Aesop.Tree.State
-import Batteries.Lean.HashSet
+
+public section
 
 open Lean Lean.Meta Aesop.Script
 

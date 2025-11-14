@@ -3,12 +3,17 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Frontend.Basic
-import Aesop.Stats.Report
-import Batteries.Linter.UnreachableTactic
+public meta import Aesop.Frontend.Basic
+public meta import Aesop.Stats.Report
+public meta import Aesop.Frontend.Extension
+public meta import Aesop.Frontend.RuleExpr
+public import Batteries.Linter.UnreachableTactic
 import Aesop.Frontend.Extension
-import Aesop.Frontend.RuleExpr
+import Aesop.Stats.Report
+
+public meta section
 
 open Lean Lean.Elab Lean.Elab.Command
 
@@ -24,7 +29,7 @@ elab_rules : command
     let rsNames := (ids : Array Ident).map (·.getId)
     let dflt := (← dflt?.mapM (elabBoolLit ·)).getD false
     rsNames.forM checkRuleSetNotDeclared
-    elabCommand $ ← `(initialize ($(quote rsNames).forM $ declareRuleSetUnchecked (isDefault := $(quote dflt))))
+    elabCommand $ ← `(meta initialize ($(quote rsNames).forM $ declareRuleSetUnchecked (isDefault := $(quote dflt))))
 
 elab (name := addRules)
     attrKind:attrKind "add_aesop_rules " e:Aesop.rule_expr : command => do

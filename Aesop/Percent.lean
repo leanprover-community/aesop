@@ -3,6 +3,9 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
+module
+
+public section
 
 namespace Aesop
 
@@ -62,7 +65,7 @@ def fifty : Percent :=
 
 def toHumanString (p : Percent) : String :=
   let str := toString (p.toFloat * 100)
-  match str.split λ c => c == '.' with
+  match str.splitToList λ c => c == '.' with
   | [beforePoint] => beforePoint ++ "%"
   | [beforePoint, afterPoint] =>
     beforePoint ++ "." ++ afterPoint.take 4 ++ "%"

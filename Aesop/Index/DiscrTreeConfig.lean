@@ -3,8 +3,13 @@ Copyright (c) 2021-2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Lean
+public import Lean.Meta.Basic
+public import Lean.Meta.DiscrTreeTypes
+import Lean.Meta.DiscrTree
+
+public section
 
 namespace Aesop
 

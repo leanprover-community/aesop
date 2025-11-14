@@ -3,8 +3,13 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Lean
+public import Std.Data.HashSet.Basic
+meta import Lean.Parser.Term.Basic
+import Lean.Parser.Term.Basic
+
+public section
 
 namespace Aesop
 

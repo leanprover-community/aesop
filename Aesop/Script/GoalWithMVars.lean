@@ -1,4 +1,9 @@
-import Lean
+module
+
+public import Lean.Meta.Basic
+import Lean.Meta.CollectMVars
+
+public section
 
 open Lean Std Lean.Meta
 

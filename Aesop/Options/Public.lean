@@ -1,4 +1,8 @@
-import Lean
+module
+
+public import Lean.Data.Options
+
+public section
 
 open Lean Lean.Meta
 
@@ -109,6 +113,7 @@ structure Options where
   terminal := false
   /--
   If `true`, print a warning when Aesop does not prove the goal.
+  This can also be turned off globally with the option `aesop.warn.nonterminal`.
   -/
   warnOnNonterminal := true
   /--
@@ -172,10 +177,18 @@ register_option aesop.dev.statefulForward : Bool := {
 }
 
 /--
-(aesop) Warn when apply builder is applied to a rule with conclusion of the form A ↔ B
+(aesop) Warn when apply builder is applied to a rule with conclusion of the form A ↔ B.
 -/
 register_option aesop.warn.applyIff : Bool := {
-  descr := "(aesop) Warn when apply builder is applied to a rule with conclusion of the form A ↔ B"
+  descr := "(aesop) Warn when apply builder is applied to a rule with conclusion of the form A ↔ B."
+  defValue := true
+}
+
+/--
+(aesop) Warn when `aesop` does not close the goal, i.e. is used as a non-terminal tactic.
+-/
+register_option aesop.warn.nonterminal : Bool := {
+  descr := "(aesop) Warn when `aesop` does not close the goal, i.e. is used as a non-terminal tactic."
   defValue := true
 }
 

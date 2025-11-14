@@ -3,10 +3,14 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Script.UScript
-import Aesop.Script.SScript
+public import Aesop.Script.UScript
+public import Aesop.Script.SScript
+public import Batteries.Data.Array.Merge
 import Aesop.Tracing
+
+public section
 
 open Lean Lean.Meta
 

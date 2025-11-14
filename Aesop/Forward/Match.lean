@@ -3,18 +3,19 @@ Copyright (c) 2024 Xavier Généreux. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
+module
 
-import Aesop.Forward.Match.Types
-import Aesop.Forward.PremiseIndex
-import Aesop.Forward.SlotIndex
-import Aesop.Rule
-import Aesop.Rule.Forward
-import Aesop.RuleTac.Descr
+public import Aesop.Forward.Match.Types
+public import Aesop.Rule
+public import Aesop.Script.ScriptM
+import Aesop.RPINF
 import Aesop.RuleTac.ElabRuleTerm
-import Aesop.RuleTac.Forward.Basic
 import Aesop.Script.SpecificTactics
+import Aesop.RuleTac.Forward.Basic
 import Batteries.Lean.Meta.UnusedNames
-import Lean
+import Lean.Meta.Tactic.Apply
+
+public section
 
 set_option linter.missingDocs true
 

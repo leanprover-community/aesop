@@ -3,12 +3,16 @@ Copyright (c) 2024 Xavier Généreux. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
+module
 
-import Aesop.Forward.PremiseIndex
-import Aesop.Forward.SlotIndex
-import Aesop.RulePattern
-import Aesop.Util.Basic
+public import Aesop.Forward.SlotIndex
+public import Aesop.RulePattern
+import Aesop.Index.DiscrTreeConfig
 import Aesop.Util.UnionFind
+import Lean.Util.CollectLevelParams
+import Batteries.Data.Array.Basic
+
+public section
 
 set_option linter.missingDocs true
 

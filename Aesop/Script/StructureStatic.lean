@@ -1,5 +1,12 @@
+module
+
+public import Aesop.Script.SScript
+public import Aesop.Script.UScript
+import Aesop.Tracing
 import Aesop.Script.UScriptToSScript
 import Aesop.Script.Util
+
+public section
 
 open Lean Lean.Meta
 

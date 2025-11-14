@@ -3,14 +3,17 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.RuleTac.Basic
+public import Aesop.RuleTac.Basic
+public import Aesop.RuleTac.RuleTerm
 import Aesop.RuleTac.ElabRuleTerm
 import Aesop.Script.SpecificTactics
 
+public section
+
 open Lean
 open Lean.Meta
-open Lean.PrettyPrinter (delab)
 
 namespace Aesop.RuleTac
 
@@ -34,7 +37,7 @@ def applyExpr' (goal : MVarId) (e : Expr) (eStx : Term)
     }
 
 def applyExpr (goal : MVarId) (e : Expr) (eStx : Term)
-    (patSubsts? : Option (Std.HashSet Substitution)) (md : TransparencyMode) :
+    (patSubsts? : Option (Array Substitution)) (md : TransparencyMode) :
     BaseM RuleTacOutput := do
   if let some patSubsts := patSubsts? then
     let mut rapps := Array.mkEmpty patSubsts.size

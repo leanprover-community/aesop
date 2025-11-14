@@ -3,13 +3,23 @@ Copyright (c) 2022--2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
+public import Aesop.Util.Tactic.Ext
+public import Aesop.Script.CtorNames
+public import Aesop.Script.ScriptM
+public import Lean.Meta.Tactic.Cases
+public import Lean.Meta.Tactic.Simp.Types
 import Aesop.Util.Tactic
-import Aesop.Util.Tactic.Ext
+import Aesop.Util.Unfold
 import Aesop.Util.Tactic.Unfold
-import Aesop.Script.CtorNames
-import Aesop.Script.ScriptM
+import Batteries.Lean.Meta.Basic
 import Batteries.Lean.Meta.Inaccessible
+import Lean.Elab.Tactic.RCases
+import Lean.Elab.Tactic.Simp
+import Lean.Meta.Tactic.Split
+
+public section
 
 open Lean
 open Lean.Meta

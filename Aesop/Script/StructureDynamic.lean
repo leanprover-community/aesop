@@ -3,12 +3,17 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Script.UScript
+public import Aesop.Script.SScript
+public import Aesop.Script.UScript
+import Aesop.Tracing
 import Aesop.Script.UScriptToSScript
 import Aesop.Script.Util
-import Aesop.Script.SScript
-import Aesop.Tracing
+import Aesop.Util.Basic
+import Batteries.Lean.Meta.SavedState
+
+public section
 
 open Lean Lean.Meta
 

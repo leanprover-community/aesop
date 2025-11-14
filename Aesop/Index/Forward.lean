@@ -3,11 +3,13 @@ Copyright (c) 2024 Xavier Généreux. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Xavier Généreux, Jannis Limperg
 -/
+module
 
-import Aesop.Forward.Match.Types
-import Aesop.Rule.Forward
-import Aesop.Index.Basic
+public import Aesop.Forward.Match.Types
+import Aesop.Index.DiscrTreeConfig
 import Batteries.Lean.Meta.DiscrTree
+
+public section
 
 set_option linter.missingDocs true
 

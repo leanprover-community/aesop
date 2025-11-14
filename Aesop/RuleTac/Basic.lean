@@ -3,17 +3,15 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Forward.Match.Types
-import Aesop.Index.Basic
-import Aesop.Percent
-import Aesop.Rule.Forward
-import Aesop.RuleTac.GoalDiff
-import Aesop.RuleTac.FVarIdSubst
-import Aesop.Script.CtorNames
-import Aesop.Script.Step
-import Batteries.Lean.Meta.SavedState
-import Aesop.Options.Internal
+public import Aesop.Index.Basic
+public import Aesop.RuleTac.GoalDiff
+public import Aesop.Script.Step
+public import Aesop.Options.Internal
+public import Aesop.Percent
+
+public section
 
 open Lean
 open Lean.Elab.Tactic
@@ -30,8 +28,9 @@ structure RuleTacInput where
   /-- The set of mvars that `goal` depends on. -/
   mvars : UnorderedArraySet MVarId
   /-- If the rule is indexed, the locations (i.e. hyps or the target) matched by
-  the rule's index entries. Otherwise an empty set. -/
-  indexMatchLocations : Std.HashSet IndexMatchLocation
+  the rule's index entries. Otherwise an empty set. The array contains no
+  duplicates. -/
+  indexMatchLocations : Array IndexMatchLocation
   /-- If the rule has a pattern, the pattern substitutions that were found in
   the goal. Each substitution is a list of expressions which were found by
   matching the pattern against expressions in the goal. For example, if `h : max
@@ -39,8 +38,8 @@ structure RuleTacInput where
   will be two substitutions `{x ↦ a, y ↦ b}`) and `{x ↦ a, y ↦ c}`.
 
   If the rule does not have a pattern, this is `none`. Otherwise it is
-  guaranteed to be `some xs` with `xs` non-empty. -/
-  patternSubsts? : Option (Std.HashSet Substitution)
+  guaranteed to be `some xs` with `xs` non-empty and duplicate-free. -/
+  patternSubsts? : Option (Array Substitution)
   /-- The options given to Aesop. -/
   options : Options'
   /-- Normalised types of all non-implementation detail hypotheses in the local
@@ -112,7 +111,7 @@ structure RuleTacOutput where
 /--
 A `RuleTac` is the tactic that is run when a rule is applied to a goal.
 -/
-def RuleTac := RuleTacInput → BaseM RuleTacOutput
+@[expose] def RuleTac := RuleTacInput → BaseM RuleTacOutput
 
 instance : Inhabited RuleTac := by
   unfold RuleTac; exact inferInstance
@@ -120,7 +119,7 @@ instance : Inhabited RuleTac := by
 /--
 A `RuleTac` which generates only a single `RuleApplication`.
 -/
-def SingleRuleTac :=
+@[expose] def SingleRuleTac :=
   RuleTacInput →
   BaseM (Array Subgoal × Option (Array Script.LazyStep) × Option Percent)
 
@@ -162,7 +161,7 @@ abbrev TacGen := MVarId → MetaM (Array (String × Float))
 
 /-! # Rule Tactic Descriptions -/
 
-def CasesPattern := AbstractMVarsResult
+@[expose] def CasesPattern := AbstractMVarsResult
   deriving Inhabited
 
 inductive CasesTarget

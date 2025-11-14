@@ -3,9 +3,16 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Search.Expansion.Norm
-import Aesop.Tree.AddRapp
+public import Aesop.Search.Expansion.Norm
+public import Aesop.Tree.AddRapp
+public import Aesop.RuleTac
+public import Aesop.Search.RuleSelection
+public import Batteries.Data.Array.Basic
+import Aesop.Search.Expansion.Basic
+
+public section
 
 open Lean
 open Lean.Meta
@@ -49,8 +56,8 @@ def isSuccessfulOrPostponed
 end SafeRuleResult
 
 def runRegularRuleTac (goal : Goal) (tac : RuleTac) (ruleName : RuleName)
-    (indexMatchLocations : Std.HashSet IndexMatchLocation)
-    (patternSubsts? : Option (Std.HashSet Substitution))
+    (indexMatchLocations : Array IndexMatchLocation)
+    (patternSubsts? : Option (Array Substitution))
     (options : Options') (hypTypes : PHashSet RPINF) :
     BaseM (Except Exception RuleTacOutput) := do
   let some (postNormGoal, postNormState) := goal.postNormGoalAndMetaState? | throwError
@@ -109,8 +116,8 @@ def withRuleTraceNode (ruleName : RuleName)
       return m!"{emoji} {ruleName}{suffix}"
 
 def runRegularRuleCore (parentRef : GoalRef) (rule : RegularRule)
-    (indexMatchLocations : Std.HashSet IndexMatchLocation)
-    (patternSubsts? : Option (Std.HashSet Substitution)) :
+    (indexMatchLocations : Array IndexMatchLocation)
+    (patternSubsts? : Option (Array Substitution)) :
     SearchM Q (Option RuleTacOutput) := do
   let parent ← parentRef.get
   let ruleOutput? ←

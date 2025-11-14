@@ -3,10 +3,13 @@ Copyright (c) 2023 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Lean
+public import Lean.Elab.Exception
 
-open Lean Lean.Elab Lean.Elab.Term
+public section
+
+open Lean Lean.Elab
 
 namespace Aesop.Frontend.Parser
 

@@ -3,11 +3,13 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.ElabM
-import Aesop.Rule.Name
-import Aesop.RuleSet.Member
+public import Aesop.RuleSet.Member
+public import Aesop.ElabM
 import Aesop.RuleTac.ElabRuleTerm
+
+public section
 
 open Lean Lean.Meta Lean.Elab.Term
 

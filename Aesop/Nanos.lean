@@ -3,6 +3,9 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
+
+public section
 
 namespace Aesop
 
@@ -35,7 +38,7 @@ instance : HDiv Nanos Nat Nanos where
 
 def printAsMillis (n : Nanos) : String :=
   let str := toString (n.nanos.toFloat / 1000000)
-  match str.split λ c => c == '.' with
+  match str.splitToList λ c => c == '.' with
   | [beforePoint] => beforePoint ++ "ms"
   | [beforePoint, afterPoint] => beforePoint ++ "." ++ afterPoint.take 1 ++ "ms"
   | _ => unreachable!

@@ -3,10 +3,12 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-import Lean.Replay
-import Aesop.Tracing
-import Aesop.Tree.TreeM
-import Batteries.Lean.Meta.InstantiateMVars
+module
+
+public import Aesop.Tree.TreeM
+import Batteries.Lean.Meta.SavedState
+
+public section
 
 open Lean
 open Lean.Meta

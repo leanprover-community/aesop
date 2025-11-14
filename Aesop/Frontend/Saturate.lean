@@ -3,10 +3,14 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Saturate
-import Aesop.Frontend.Extension
-import Aesop.Builder.Forward
+public meta import Aesop.Saturate
+public meta import Aesop.Frontend.Extension
+public meta import Aesop.Builder.Forward
+import Aesop.RuleSet
+
+public meta section
 
 open Lean Lean.Meta Lean.Elab Lean.Elab.Term Lean.PrettyPrinter
 

@@ -3,14 +3,18 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg, Asta Halkjær From
 -/
+module
 
+public import Aesop.Nanos
+public import Aesop.Util.UnorderedArraySet
+public import Lean.Util.ForEachExpr
+public import Lean.Elab.Tactic.Basic
+public import Lean.Meta.Tactic.Simp.SimpTheorems
 import Aesop.Index.DiscrTreeConfig
-import Aesop.Nanos
-import Aesop.Util.UnorderedArraySet
-import Batteries.Lean.Expr
-import Batteries.Data.String.Basic
-import Lean
-import Std.Data.HashSet.Basic
+import Lean.Elab.SyntheticMVars
+import Lean.Meta.Tactic.TryThis
+
+public section
 
 open Lean
 open Lean.Meta Lean.Elab.Tactic
@@ -472,7 +476,7 @@ def Name.ofComponents (cs : List Name) : Name :=
     | result, .num _ n => .num result n
     | result, .anonymous => result
 
-@[macro_inline]
+@[macro_inline, expose]
 def withExceptionTransform [Monad m] [MonadError m]
     (f : MessageData → MessageData) (x : m α) : m α := do
   try
@@ -482,7 +486,7 @@ def withExceptionTransform [Monad m] [MonadError m]
     | .internal _ _ => throw e
     | .error ref msg => throw $ .error ref (f msg)
 
-@[macro_inline]
+@[macro_inline, expose]
 def withExceptionPrefix [Monad m] [MonadError m] (pre : MessageData) :
     m α → m α :=
   withExceptionTransform (λ msg => pre ++ msg)

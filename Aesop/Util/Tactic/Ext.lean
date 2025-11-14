@@ -3,8 +3,15 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
+public import Lean.Meta.Basic
 import Aesop.Tracing
+import Lean.Elab.Tactic.Basic
+import Lean.Elab.Tactic.Ext
+import Lean.Meta.Tactic.Intro
+
+public section
 
 open Lean Lean.Meta Lean.Elab.Tactic.Ext
 

@@ -3,13 +3,18 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Util.EqualUpToIds
-import Aesop.Script.Tactic
-import Aesop.Script.TacticState
-import Aesop.Script.Util
+public import Aesop.Script.Tactic
+public import Aesop.Script.TacticState
 import Aesop.Tracing
+import Aesop.Script.Util
+import Aesop.Util.Basic
+import Aesop.Util.EqualUpToIds
 import Batteries.Tactic.PermuteGoals
+import Batteries.Lean.Meta.SavedState
+
+public section
 
 open Lean Lean.Meta
 

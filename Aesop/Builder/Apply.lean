@@ -3,8 +3,14 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Builder.Basic
+public import Aesop.Builder.Basic
+import Aesop.RuleTac.ElabRuleTerm
+import Batteries.Lean.Expr
+import Lean.Meta.MatchUtil
+
+public section
 
 open Lean
 open Lean.Meta

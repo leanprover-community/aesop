@@ -3,13 +3,17 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.RuleTac.Apply
-import Aesop.RuleTac.Basic
-import Aesop.RuleTac.Cases
-import Aesop.RuleTac.Forward
-import Aesop.RuleTac.Preprocess
-import Aesop.RuleTac.Tactic
+public import Aesop.RuleTac.Apply
+public import Aesop.RuleTac.Basic
+public import Aesop.RuleTac.Cases
+public import Aesop.RuleTac.Forward
+public import Aesop.RuleTac.Preprocess
+public import Aesop.RuleTac.Tactic
+public import Aesop.RuleTac.Descr
+
+public section
 
 open Lean
 

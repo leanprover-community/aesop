@@ -3,17 +3,19 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Check
-import Aesop.Options
-import Aesop.RuleSet
-import Aesop.Script.Check
-import Aesop.Script.Main
-import Aesop.Search.Expansion
-import Aesop.Search.ExpandSafePrefix
-import Aesop.Search.Queue
-import Aesop.Tree
+public import Aesop.Script.Main
+public import Aesop.Search.ExpandSafePrefix
+public import Aesop.Tree.Check
+public import Aesop.Tree.ExtractProof
+public import Aesop.Tree.ExtractScript
+public import Aesop.Tree.Tracing
 import Aesop.Frontend.Extension
+import Aesop.Search.Queue
+import Aesop.Tree.Free
+
+public section
 
 open Lean
 open Lean.Elab.Tactic (liftMetaTacticAux TacticM)
@@ -238,7 +240,7 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
     throwAesopEx (← getRootMVarId) safeGoals safeExpansionSuccess err
   if ! (← treeHasProgress) then
     throwAesopEx (← getRootMVarId) #[] safeExpansionSuccess "made no progress"
-  if opts.warnOnNonterminal then
+  if opts.warnOnNonterminal && aesop.warn.nonterminal.get (← getOptions) then
     logWarning m!"aesop: {err}"
   if ! safeExpansionSuccess then
     logWarning m!"aesop: safe prefix was not fully expanded because the maximum number of rule applications ({(← read).options.maxSafePrefixRuleApplications}) was reached."

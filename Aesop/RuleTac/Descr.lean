@@ -1,5 +1,10 @@
-import Aesop.RuleTac.Basic
-import Aesop.Forward.Match.Types
+module
+
+public import Aesop.RuleTac.Basic
+public import Aesop.Script.CtorNames
+public import Aesop.Forward.Match.Types
+
+public section
 
 open Lean Lean.Meta
 

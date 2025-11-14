@@ -1,4 +1,9 @@
+module
+
+public import Lean.Meta.Tactic.Induction
 import Aesop.Util.Basic
+
+public section
 
 open Lean Lean.Meta
 

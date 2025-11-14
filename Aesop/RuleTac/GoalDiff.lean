@@ -3,10 +3,12 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
+public import Aesop.BaseM
 import Aesop.RPINF
-import Aesop.RuleTac.FVarIdSubst
-import Aesop.Util.Basic
+
+public section
 
 open Lean Lean.Meta
 

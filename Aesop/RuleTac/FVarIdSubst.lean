@@ -3,8 +3,11 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Lean
+public import Lean.Meta.Tactic.FVarSubst
+
+public section
 
 open Lean Lean.Meta
 

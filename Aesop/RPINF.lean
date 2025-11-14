@@ -1,5 +1,9 @@
-import Aesop.Util.Basic
-import Aesop.BaseM
+module
+
+public import Aesop.BaseM
+import Batteries.Lean.Expr
+
+public section
 
 open Lean Lean.Meta
 

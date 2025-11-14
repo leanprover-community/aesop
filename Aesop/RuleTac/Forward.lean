@@ -3,13 +3,21 @@ Copyright (c) 2022 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
+public import Aesop.RuleTac.Forward.Basic
+public import Aesop.RuleTac.Basic
+public import Aesop.Script.ScriptM
+public import Aesop.Forward.Match.Types
+public import Lean.Meta.Tactic.Assert
+import Aesop.RPINF
 import Aesop.Forward.Match
-import Aesop.RuleTac.Basic
 import Aesop.RuleTac.ElabRuleTerm
-import Aesop.RuleTac.Forward.Basic
 import Aesop.Script.SpecificTactics
+import Lean.Meta.CollectFVars
 import Batteries.Lean.Meta.UnusedNames
+
+public section
 
 open Lean
 open Lean.Meta
@@ -118,7 +126,7 @@ where
   tacticBuilder _ := Script.TacticBuilder.assertHypothesis goal hyp .reducible
 
 def applyForwardRule (goal : MVarId) (e : Expr)
-    (patSubsts? : Option (Std.HashSet Substitution))
+    (patSubsts? : Option (Array Substitution))
     (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
     (maxDepth? : Option Nat) (existingHypTypes : PHashSet RPINF) :
     ScriptM Subgoal :=

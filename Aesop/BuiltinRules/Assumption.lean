@@ -3,8 +3,14 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
+public meta import Aesop.RuleTac.Basic
+public meta import Batteries.Lean.Meta.InstantiateMVars
 import Aesop.Frontend.Attribute
+public meta import Aesop.Script.SpecificTactics
+
+public section
 
 open Lean
 open Lean.Meta
@@ -12,7 +18,7 @@ open Lean.Meta
 namespace Aesop.BuiltinRules
 
 @[aesop safe -50 (rule_sets := [builtin])]
-def assumption : RuleTac := λ input => do
+meta def assumption : RuleTac := λ input => do
   let goal := input.goal
   let md := input.options.assumptionTransparency
   goal.withContext do

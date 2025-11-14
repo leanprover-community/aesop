@@ -3,13 +3,18 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
-import Aesop.Script.Check
+public import Aesop.Script.Check
+public import Aesop.Stats.Basic
+public import Aesop.Options.Internal
+public import Aesop.Util.Basic
+import Aesop.Script.OptimizeSyntax
 import Aesop.Script.StructureDynamic
 import Aesop.Script.StructureStatic
-import Aesop.Script.OptimizeSyntax
-import Aesop.Stats.Basic
-import Aesop.Options.Internal
+import Batteries.Lean.Meta.SavedState
+
+public section
 
 open Lean
 open Lean.Parser.Tactic (tacticSeq)

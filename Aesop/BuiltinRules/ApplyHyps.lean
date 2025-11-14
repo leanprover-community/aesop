@@ -3,15 +3,20 @@ Copyright (c) 2021 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
+public meta import Aesop.RuleTac.Basic
+public meta import Aesop.Script.SpecificTactics
 import Aesop.Frontend.Attribute
+
+public section
 
 namespace Aesop.BuiltinRules
 
 open Lean
 open Lean.Meta
 
-def applyHyp (hyp : FVarId) (goal : MVarId) (md : TransparencyMode) :
+meta def applyHyp (hyp : FVarId) (goal : MVarId) (md : TransparencyMode) :
     BaseM RuleApplication := do
   let (goals, #[step]) ← applyS goal (.fvar hyp) none md |>.run
     | throwError "aesop: internal error in applyHyps: multiple steps"
@@ -23,7 +28,7 @@ def applyHyp (hyp : FVarId) (goal : MVarId) (md : TransparencyMode) :
   }
 
 @[aesop unsafe 75% tactic (rule_sets := [builtin])]
-def applyHyps : RuleTac := λ input =>
+meta def applyHyps : RuleTac := λ input =>
   input.goal.withContext do
     let lctx ← getLCtx
     let md := input.options.applyHypsTransparency

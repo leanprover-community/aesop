@@ -3,11 +3,19 @@ Copyright (c) 2021-2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
-import Aesop.Index
-import Aesop.Index.Forward
-import Aesop.RuleSet.Filter
-import Aesop.RuleSet.Member
-import Aesop.Tree.Data.ForwardRuleMatches
+module
+
+public import Aesop.Index
+public import Aesop.Index.Forward
+public import Aesop.RuleSet.Filter
+public import Aesop.RuleSet.Member
+public import Aesop.Tree.Data.ForwardRuleMatches
+public import Lean.Meta.Tactic.Simp.Types
+import Batteries.Lean.PersistentHashMap
+import Batteries.Lean.PersistentHashSet
+import Lean.Meta.Tactic.Simp.Attr
+
+public section
 
 open Lean Lean.Meta
 

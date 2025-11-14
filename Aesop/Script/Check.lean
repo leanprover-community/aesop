@@ -3,9 +3,13 @@ Copyright (c) 2024 Jannis Limperg. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
+module
 
+public import Aesop.Script.UScript
 import Aesop.Check
-import Aesop.Script.UScript
+import Lean.Elab.Tactic.Basic
+
+public section
 
 open Lean Lean.Elab.Tactic
 open Lean.Parser.Tactic (tacticSeq)
