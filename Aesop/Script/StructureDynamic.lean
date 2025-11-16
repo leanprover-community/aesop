@@ -150,7 +150,7 @@ where
         postGoals := postGoalsWithMVars
         preState, preGoal, postState
       }
-      let postGoals := preGoals[:goalPos] ++ postGoals ++ preGoals[goalPos+1:]
+      let postGoals := preGoals[*...goalPos].copy ++ postGoals ++ preGoals[(goalPos+1)...*].copy
       let postGoals ← postState.runMetaM' do
         postGoals.filterM λ mvarId =>
           return ! (← mvarId.isAssignedOrDelayedAssigned)

@@ -27,7 +27,7 @@ partial def optimizeFocusRenameI : Syntax → m Syntax
         | return stx
       match tac with
       | `(tactic| rename_i $[$ns:ident]*) =>
-        `(tactic| next $[$ns:ident]* => $(tacs[1:]):tactic*)
+        `(tactic| next $[$ns:ident]* => $(tacs[1...*].copy):tactic*)
       | _ => return stx
     | _ => return stx
 
@@ -55,13 +55,13 @@ def optimizeInitialRenameI : Syntax → m Syntax
       if dropUntil == 0 then
         return stx
       else if dropUntil == ns.size then
-        tacsToTacticSeq tacs[1:]
+        tacsToTacticSeq tacs[1...*].copy
       else
         let ns : TSyntaxArray `ident := ns[dropUntil:].toArray
         let tac ← `(tactic| rename_i $[$ns:ident]*)
         let mut result : Array (TSyntax `tactic) := Array.mkEmpty tacs.size
         result := result.push tac
-        result := result ++ tacs[1:]
+        result := result ++ tacs[1...*].copy
         tacsToTacticSeq result
     | _ => return stx
   | stx => return stx
