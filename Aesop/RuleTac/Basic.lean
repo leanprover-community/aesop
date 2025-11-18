@@ -5,16 +5,11 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Forward.Match.Types
 public import Aesop.Index.Basic
-public import Aesop.Percent
-public import Aesop.Rule.Forward
 public import Aesop.RuleTac.GoalDiff
-public import Aesop.RuleTac.FVarIdSubst
-public import Aesop.Script.CtorNames
 public import Aesop.Script.Step
-public import Batteries.Lean.Meta.SavedState
 public import Aesop.Options.Internal
+public import Aesop.Percent
 
 public section
 
@@ -33,8 +28,9 @@ structure RuleTacInput where
   /-- The set of mvars that `goal` depends on. -/
   mvars : UnorderedArraySet MVarId
   /-- If the rule is indexed, the locations (i.e. hyps or the target) matched by
-  the rule's index entries. Otherwise an empty set. -/
-  indexMatchLocations : Std.HashSet IndexMatchLocation
+  the rule's index entries. Otherwise an empty set. The array contains no
+  duplicates. -/
+  indexMatchLocations : Array IndexMatchLocation
   /-- If the rule has a pattern, the pattern substitutions that were found in
   the goal. Each substitution is a list of expressions which were found by
   matching the pattern against expressions in the goal. For example, if `h : max
@@ -42,8 +38,8 @@ structure RuleTacInput where
   will be two substitutions `{x ↦ a, y ↦ b}`) and `{x ↦ a, y ↦ c}`.
 
   If the rule does not have a pattern, this is `none`. Otherwise it is
-  guaranteed to be `some xs` with `xs` non-empty. -/
-  patternSubsts? : Option (Std.HashSet Substitution)
+  guaranteed to be `some xs` with `xs` non-empty and duplicate-free. -/
+  patternSubsts? : Option (Array Substitution)
   /-- The options given to Aesop. -/
   options : Options'
   /-- Normalised types of all non-implementation detail hypotheses in the local

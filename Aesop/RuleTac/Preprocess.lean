@@ -6,7 +6,7 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.RuleTac.Basic
-public import Aesop.Script.SpecificTactics
+import Aesop.Script.SpecificTactics
 
 public section
 

@@ -7,7 +7,6 @@ module
 
 public meta import Aesop.Frontend.Extension
 public meta import Aesop.Frontend.RuleExpr
-public import Aesop.Frontend.Extension
 public import Aesop.Frontend.RuleExpr
 
 public meta section

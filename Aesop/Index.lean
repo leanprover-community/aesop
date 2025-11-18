@@ -5,15 +5,13 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Forward.Match
 public import Aesop.Index.Basic
 public import Aesop.Index.RulePattern
-public import Aesop.RulePattern
-public import Aesop.Rule.Basic
-public import Aesop.Tracing
 public import Batteries.Lean.Meta.InstantiateMVars
-public import Batteries.Lean.PersistentHashSet
-public import Batteries.Lean.Meta.DiscrTree
+public import Aesop.Index.DiscrTreeConfig
+public import Aesop.Rule.Basic
+import Batteries.Lean.PersistentHashSet
+import Batteries.Lean.Meta.DiscrTree
 
 public section
 
@@ -144,7 +142,7 @@ def applicableRules (ri : Index α) (goal : MVarId)
     MetaM (Array (IndexMatchResult (Rule α))) := do
   withConstAesopTraceNode .debug (return "rule selection") do
   goal.instantiateMVars
-  let result := addRules additionalRules #[
+  let result ← addRules additionalRules #[
     (← applicableByTargetRules ri goal include?),
     (← applicableByHypRules ri goal include?),
     (applicableUnindexedRules ri include?)
@@ -155,22 +153,29 @@ def applicableRules (ri : Index α) (goal : MVarId)
 where
   addRules (acc : Array (IndexMatchResult (Rule α)))
       (ruless : Array (Array (Rule α × Array IndexMatchLocation))) :
-      Array (IndexMatchResult (Rule α)) := Id.run do
-    let mut locMap : Std.HashMap (Rule α) (Std.HashSet IndexMatchLocation) := ∅
+      MetaM (Array (IndexMatchResult (Rule α))) := do
+    let mut locMap : Std.HashMap (Rule α) (Array IndexMatchLocation) := ∅
     for rules in ruless do
       for (rule, locs) in rules do
         if let some locs' := locMap[rule]? then
-          locMap := locMap.insert rule (locs'.insertMany locs)
+          locMap := locMap.insert rule (locs' ++ locs)
         else
-          locMap := locMap.insert rule (.ofArray locs)
+          locMap := locMap.insert rule locs
     let mut result := acc
     for (rule, locations) in locMap do
       if rule.pattern?.isSome then
-        let patternSubsts? := patSubstMap[rule.name]?
-        if patternSubsts?.isSome then
-          result := result.push { rule, locations, patternSubsts? }
+        if let some patternSubsts := patSubstMap[rule.name]? then
+          result := result.push {
+            locations := locations.qsortOrd |>.dedupSorted
+            patternSubsts? := some <| patternSubsts.toArray
+            rule
+          }
       else
-        result := result.push { rule, locations, patternSubsts? := none }
+        result := result.push {
+          locations := locations.qsortOrd |>.dedupSorted
+          patternSubsts? := none
+          rule
+        }
     return result
 
 end Aesop.Index

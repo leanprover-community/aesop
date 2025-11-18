@@ -5,8 +5,11 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Frontend.Attribute
-public import Aesop.RuleTac.Forward.Basic
+public meta import Aesop.RuleTac.Basic
+public meta import Aesop.Script.SpecificTactics
+public meta import Aesop.RuleTac.Forward.Basic
+import Aesop.Frontend.Attribute
+import Aesop.Script.SpecificTactics
 
 public section
 
@@ -86,7 +89,7 @@ meta def substEqsAndIffs? (goal : MVarId) (fvarIds : Array FVarId) :
 @[aesop (rule_sets := [builtin]) norm -50 tactic (index := [hyp _ = _, hyp _ ↔ _])]
 meta def subst : RuleTac := RuleTac.ofSingleRuleTac λ input =>
   input.goal.withContext do
-    let hyps ← input.indexMatchLocations.toArray.mapM λ
+    let hyps ← input.indexMatchLocations.mapM λ
       | .hyp ldecl => pure ldecl.fvarId
       | _ => throwError "unexpected index match location"
     let (some goal, steps) ← substEqsAndIffs? input.goal hyps |>.run

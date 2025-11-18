@@ -5,9 +5,10 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Index.Basic
-public import Aesop.RuleTac.GoalDiff
-public import Batteries.Lean.Meta.DiscrTree
+public import Aesop.RulePattern
+public import Aesop.Util.OrderedHashSet
+import Aesop.Index.DiscrTreeConfig
+import Batteries.Lean.Meta.DiscrTree
 
 public section
 
@@ -19,7 +20,7 @@ namespace Aesop
 
 /-- A map from rule names to rule pattern substitutions. When run on a goal,
 the rule pattern index returns such a map. -/
-abbrev RulePatternSubstMap := Std.HashMap RuleName (Std.HashSet Substitution)
+abbrev RulePatternSubstMap := Std.HashMap RuleName (OrderedHashSet Substitution)
 
 namespace RulePatternSubstMap
 
@@ -29,7 +30,7 @@ def insertArray (xs : Array (RuleName × Substitution))
     (m : RulePatternSubstMap) : RulePatternSubstMap :=
   xs.foldl (init := m) λ m (r, inst) =>
     match m[r]? with
-    | none => m.insert r $ (∅ : Std.HashSet _).insert inst
+    | none => m.insert r $ (∅ : OrderedHashSet _).insert inst
     | some insts => m.insert r $ insts.insert inst
 
 /-- Build a rule pattern substitution map from an array of substitutions. -/
@@ -39,7 +40,7 @@ def ofArray (xs : Array (RuleName × Substitution)) : RulePatternSubstMap :=
 /-- Convert a rule pattern substitution map to a flat array of substitutions. -/
 def toFlatArray (m : RulePatternSubstMap) : Array (RuleName × Substitution) :=
   m.fold (init := #[]) λ acc r patInsts =>
-    patInsts.fold (init := acc) λ acc patInst =>
+    patInsts.foldl (init := acc) λ acc patInst =>
       acc.push (r, patInst)
 
 end RulePatternSubstMap

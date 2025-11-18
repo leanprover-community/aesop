@@ -5,16 +5,15 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Check
-public import Aesop.Options
-public import Aesop.RuleSet
-public import Aesop.Script.Check
 public import Aesop.Script.Main
-public import Aesop.Search.Expansion
 public import Aesop.Search.ExpandSafePrefix
-public import Aesop.Search.Queue
-public import Aesop.Tree
-public import Aesop.Frontend.Extension
+public import Aesop.Tree.Check
+public import Aesop.Tree.ExtractProof
+public import Aesop.Tree.ExtractScript
+public import Aesop.Tree.Tracing
+import Aesop.Frontend.Extension
+import Aesop.Search.Queue
+import Aesop.Tree.Free
 
 public section
 
@@ -241,7 +240,7 @@ def handleNonfatalError (err : MessageData) : SearchM Q (Array MVarId) := do
     throwAesopEx (← getRootMVarId) safeGoals safeExpansionSuccess err
   if ! (← treeHasProgress) then
     throwAesopEx (← getRootMVarId) #[] safeExpansionSuccess "made no progress"
-  if opts.warnOnNonterminal then
+  if opts.warnOnNonterminal && aesop.warn.nonterminal.get (← getOptions) then
     logWarning m!"aesop: {err}"
   if ! safeExpansionSuccess then
     logWarning m!"aesop: safe prefix was not fully expanded because the maximum number of rule applications ({(← read).options.maxSafePrefixRuleApplications}) was reached."
