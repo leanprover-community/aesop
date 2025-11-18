@@ -5,11 +5,12 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 module
 
+public import Aesop.Constants
+public import Aesop.Script.Step
+public import Aesop.Tracing
 public import Aesop.Tree.Data.ForwardRuleMatches
 public import Aesop.Tree.UnsafeQueue
 public import Aesop.Forward.State
-import Aesop.Constants
-import Batteries.Data.Array.Basic
 
 public section
 

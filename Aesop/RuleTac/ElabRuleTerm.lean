@@ -6,9 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.ElabM
-public import Lean.Elab.Tactic.Basic
-public import Lean.Meta.Tactic.Simp.Simproc
-import Lean.Elab.Tactic.Simp
 
 public section
 

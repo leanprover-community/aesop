@@ -5,10 +5,10 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.RulePattern
+public import Aesop.Index.Basic
 public import Aesop.Util.OrderedHashSet
-import Aesop.Index.DiscrTreeConfig
-import Batteries.Lean.Meta.DiscrTree
+public import Aesop.RuleTac.GoalDiff
+public import Batteries.Lean.Meta.DiscrTree
 
 public section
 

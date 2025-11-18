@@ -11,7 +11,6 @@ public import Aesop.RuleTac.Cases
 public import Aesop.RuleTac.Forward
 public import Aesop.RuleTac.Preprocess
 public import Aesop.RuleTac.Tactic
-public import Aesop.RuleTac.Descr
 
 public section
 

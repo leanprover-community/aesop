@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
+public import Lean
 
 public section
 

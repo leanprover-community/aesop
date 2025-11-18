@@ -1,7 +1,6 @@
 module
 
-public import Lean.Meta.Basic
-import Lean.Meta.CollectMVars
+public import Lean
 
 public section
 

@@ -16,7 +16,7 @@ public import Aesop.BuiltinRules.Intros
 public import Aesop.BuiltinRules.Rfl
 public import Aesop.BuiltinRules.Split
 public import Aesop.BuiltinRules.Subst
-import Aesop.Frontend.Attribute
+public import Aesop.Frontend.Attribute
 
 public section
 

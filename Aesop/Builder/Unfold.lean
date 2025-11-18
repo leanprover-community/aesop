@@ -6,7 +6,7 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Builder.Basic
-import Aesop.Util.Unfold
+public import Aesop.Util.Unfold
 
 public section
 

@@ -5,10 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
+public import Aesop.Nanos
 public import Aesop.Rule.Name
 public import Aesop.Tracing
-public import Aesop.Nanos
-import Aesop.Util.Basic
 
 public section
 
