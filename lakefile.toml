@@ -9,7 +9,7 @@ leanOptions = {experimental.module = true}
 [[require]]
 name = "batteries"
 git = "https://github.com/leanprover-community/batteries"
-rev = "v4.25.0"
+rev = "v4.25.1"
 
 [[lean_lib]]
 name = "Aesop"
