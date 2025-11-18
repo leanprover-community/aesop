@@ -5,8 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.BaseM
-import Aesop.RPINF
+public import Aesop.RPINF
+public import Aesop.RuleTac.FVarIdSubst
+public import Aesop.Util.Basic
 
 public section
 

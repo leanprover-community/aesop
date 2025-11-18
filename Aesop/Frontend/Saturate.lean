@@ -8,7 +8,6 @@ module
 public meta import Aesop.Saturate
 public meta import Aesop.Frontend.Extension
 public meta import Aesop.Builder.Forward
-import Aesop.RuleSet
 
 public meta section
 

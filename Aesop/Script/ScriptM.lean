@@ -7,6 +7,7 @@ module
 
 public import Aesop.BaseM
 public import Aesop.Script.Step
+public import Aesop.Script.Tactic
 
 public section
 

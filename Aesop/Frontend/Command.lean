@@ -7,11 +7,9 @@ module
 
 public meta import Aesop.Frontend.Basic
 public meta import Aesop.Stats.Report
+public meta import Batteries.Linter.UnreachableTactic
 public meta import Aesop.Frontend.Extension
 public meta import Aesop.Frontend.RuleExpr
-public import Batteries.Linter.UnreachableTactic
-import Aesop.Frontend.Extension
-import Aesop.Stats.Report
 
 public meta section
 

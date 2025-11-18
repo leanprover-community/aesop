@@ -5,15 +5,13 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Batteries.Data.BinomialHeap.Basic
+public import Aesop.Forward.State.ApplyGoalDiff
+public import Aesop.Forward.State.Initial
 public import Aesop.RuleSet
-public import Aesop.Script.ScriptM
-import Aesop.RPINF
-import Aesop.RuleTac
-import Aesop.Script.Check
-import Aesop.Forward.State.ApplyGoalDiff
-import Aesop.Forward.State.Initial
-import Aesop.Search.Expansion.Basic
+public import Aesop.RuleTac
+public import Aesop.Search.Expansion.Basic
+public import Aesop.Script.Check
+public import Batteries.Data.BinomialHeap.Basic
 
 public section
 

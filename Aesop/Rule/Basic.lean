@@ -5,6 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
+public import Aesop.Index.Basic
+public import Aesop.Rule.Name
+public import Aesop.RuleTac.Basic
 public import Aesop.RuleTac.Descr
 
 public section

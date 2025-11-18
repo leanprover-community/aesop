@@ -6,8 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Frontend.Extension.Init
-public import Lean.Meta.Tactic.Simp.Simproc
-import Lean.Meta.Tactic.Simp.Attr
 
 public section
 
