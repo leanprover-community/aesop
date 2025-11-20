@@ -7,28 +7,29 @@ Authors: Jannis Limperg
 import Aesop.Stats.Basic
 import Lean.Data.Position
 
-open Lean
+open Lean Lean.Elab
 
 namespace Aesop
 
 structure StatsFileRecord extends Stats where
   file : String
   position : Option Position
+  declaration : Option Name
   deriving ToJson
 
 namespace StatsFileRecord
 
-variable [Monad m] [MonadLog m] in
-protected def ofStats (aesopStx : Syntax) (stats : Stats) :
-    m StatsFileRecord := do
+variable [Monad m] [MonadLog m] [MonadParentDecl m] in
+protected def ofStats (aesopStx : Syntax) (stats : Stats) : m StatsFileRecord := do
   let file ← getFileName
   let fileMap ← getFileMap
   let position := aesopStx.getPos?.map fileMap.toPosition
-  return { stats with file, position }
+  let declaration ← getParentDeclName?
+  return { stats with file, position, declaration }
 
 end StatsFileRecord
 
-variable [Monad m] [MonadLog m] [MonadOptions m] [MonadLiftT IO m] in
+variable [Monad m] [MonadLog m] [MonadOptions m] [MonadParentDecl m] [MonadLiftT IO m] in
 def appendStatsToStatsFileIfEnabled (aesopStx : Syntax) (stats : Stats) :
     m Unit := do
   let file := aesop.stats.file.get (← getOptions)
