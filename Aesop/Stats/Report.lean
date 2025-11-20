@@ -78,7 +78,7 @@ def scriptsCore (nSlowest := 30) (nontrivialOnly := false) :
     StatsReport := λ statsArray => Id.run do
   let statsArray :=
     if nontrivialOnly then
-      statsArray.filter (·.stats.scriptGenerated.isNontrivial)
+      statsArray.filter (match ·.stats.scriptGenerated with | none => false | some g => g.hasMVar)
     else
       statsArray
   let mut staticallyStructured := 0
@@ -91,17 +91,18 @@ def scriptsCore (nSlowest := 30) (nontrivialOnly := false) :
     let stats := stats.stats
     totalTimes := totalTimes.push stats.total
     match stats.scriptGenerated with
-    | .none => pure ()
-    | .staticallyStructured perfect .. =>
+    | none => pure ()
+    | some g =>
       scriptTimes := scriptTimes.push stats.script
-      staticallyStructured := staticallyStructured + 1
-      if perfect then
-        perfectlyStaticallyStructured := perfectlyStaticallyStructured + 1
-    | .dynamicallyStructured perfect .. =>
-      scriptTimes := scriptTimes.push stats.script
-      dynamicallyStructured := dynamicallyStructured + 1
-      if perfect then
-        perfectlyDynamicallyStructured := perfectlyDynamicallyStructured + 1
+      match g.method with
+      | .static =>
+        staticallyStructured := staticallyStructured + 1
+        if g.perfect then
+          perfectlyStaticallyStructured := perfectlyStaticallyStructured + 1
+      | .dynamic =>
+        dynamicallyStructured := dynamicallyStructured + 1
+        if g.perfect then
+          perfectlyDynamicallyStructured := perfectlyDynamicallyStructured + 1
 
   let slowest := statsArray.qsort (λ s₁ s₂ => s₁.stats.script > s₂.stats.script)
   let slowest := slowest[:nSlowest].toArray
@@ -125,10 +126,9 @@ def scriptsCore (nSlowest := 30) (nontrivialOnly := false) :
      {nSlowest} Aesop calls with slowest script generation:\n\
      {Format.joinSep slowestFmt.toList "\n"}"
 where
-  fmtScriptGenerated : ScriptGenerated → Format
-    | .none => "<none>"
-    | .staticallyStructured perfect _ => f!"static (perfect: {perfect})"
-    | .dynamicallyStructured perfect _ => f!"dynamic (perfect: {perfect})"
+  fmtScriptGenerated : Option ScriptGenerated → Format
+    | none => "<none>"
+    | some g => f!"{g.method} (perfect: {g.perfect})"
 
   fmtTimes (ns : Array Nanos) : Format :=
     let ns := ns.qsortOrd

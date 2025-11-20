@@ -54,12 +54,12 @@ initialize statsExtension : StatsExtension ←
 
 def recordStatsIfEnabled [Monad m] [MonadEnv m] [MonadOptions m]
     (s : StatsExtensionEntry) : m Unit := do
-  if ← isStatsCollectionEnabled then
+  if ← enableStatsCollection then
     modifyEnv λ env => statsExtension.addEntry env s
 
 def recordStatsForCurrentFileIfEnabled [Monad m] [MonadEnv m] [MonadOptions m]
     [MonadLog m] (aesopStx : Syntax) (stats : Stats) : m Unit := do
-  if ← isStatsCollectionEnabled then
+  if ← enableStatsCollection then
     let entry ← StatsExtensionEntry.forCurrentFile aesopStx stats
     modifyEnv λ env => statsExtension.addEntry env entry
 

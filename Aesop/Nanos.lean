@@ -4,6 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jannis Limperg
 -/
 
+import Lean.Data.Json
+
+open Lean
+
 namespace Aesop
 
 structure Nanos where
@@ -32,6 +36,9 @@ instance : Add Nanos where
 
 instance : HDiv Nanos Nat Nanos where
   hDiv n m := ⟨n.nanos / m⟩
+
+instance : ToJson Nanos where
+  toJson | ⟨n⟩ => toJson n
 
 def printAsMillis (n : Nanos) : String :=
   let str := toString (n.nanos.toFloat / 1000000)

@@ -15,7 +15,7 @@ inductive PhaseName
   | norm
   | safe
   | «unsafe»
-  deriving Inhabited, BEq, Hashable
+  deriving Inhabited, BEq, Hashable, ToJson
   -- NOTE: Constructors should be listed in alphabetical order for the Ord
   -- instance.
 
@@ -36,7 +36,7 @@ end PhaseName
 inductive ScopeName
   | global
   | «local»
-  deriving Inhabited, BEq, Hashable
+  deriving Inhabited, BEq, Hashable, ToJson
   -- NOTE: Constructors should be listed in alphabetical order for the Ord
   -- instance.
 
@@ -62,7 +62,7 @@ inductive BuilderName
   | simp
   | tactic
   | unfold
-  deriving Inhabited, BEq, Hashable
+  deriving Inhabited, BEq, Hashable, ToJson
   -- NOTE: Constructors should be listed in alphabetical order for the Ord
   -- instance.
 
@@ -123,9 +123,18 @@ instance : Ord RuleName :=
   ⟨RuleName.compare⟩
 
 instance : ToString RuleName where
-  toString n :=
-    toString n.phase ++ "|" ++ toString n.builder ++ "|" ++ toString n.scope ++
-    "|" ++ toString n.name
+  toString n := s!"{n.phase}|{n.builder}|{n.scope}|{n.name}"
+
+private structure Json where
+  name : Name
+  builder : BuilderName
+  phase : PhaseName
+  scope : ScopeName
+  rendered : String
+  deriving ToJson
+
+instance : ToJson RuleName where
+  toJson n := toJson { n with rendered := toString n : RuleName.Json }
 
 end RuleName
 
@@ -151,5 +160,13 @@ instance : ToString DisplayRuleName where
     | ruleName n => toString n
     | normSimp => "<norm simp>"
     | normUnfold => "<norm unfold>"
+
+private def toJsonRuleName : DisplayRuleName → RuleName
+  | .ruleName n => n
+  | .normSimp => { name := `simp, builder := .simp, phase := .norm, scope := .global }
+  | .normUnfold => { name := `unfold, builder := .unfold, phase := .norm, scope := .global }
+
+instance : ToJson DisplayRuleName where
+  toJson n := toJson n.toJsonRuleName
 
 end Aesop.DisplayRuleName

@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Search.Main
 import Aesop.Frontend.Tactic
 import Aesop.Stats.Extension
+import Aesop.Stats.File
 
 open Lean
 open Lean.Elab.Tactic
@@ -19,8 +20,9 @@ def evalAesop : Tactic := λ stx => do
   let goal ← getMainGoal
   goal.withContext do
     let (_, stats) ← go stx goal |>.run ∅
-    recordStatsForCurrentFileIfEnabled stx stats
     stats.trace .stats
+    recordStatsForCurrentFileIfEnabled stx stats
+    appendStatsToStatsFileIfEnabled stx stats
 where
   go (stx : Syntax) (goal : MVarId) : StateRefT Stats TacticM Unit :=
     profiling (λ s _ t => { s with total := t }) do
