@@ -15,27 +15,29 @@ structure StatsFileRecord extends Stats where
   file : String
   position : Option Position
   declaration : Option Name
+  goalSolved : Bool
   deriving ToJson
 
 namespace StatsFileRecord
 
 variable [Monad m] [MonadLog m] [MonadParentDecl m] in
-protected def ofStats (aesopStx : Syntax) (stats : Stats) : m StatsFileRecord := do
+protected def ofStats (aesopStx : Syntax) (goalSolved : Bool) (stats : Stats) :
+    m StatsFileRecord := do
   let file ← getFileName
   let fileMap ← getFileMap
   let position := aesopStx.getPos?.map fileMap.toPosition
   let declaration ← getParentDeclName?
-  return { stats with file, position, declaration }
+  return { stats with file, position, declaration, goalSolved }
 
 end StatsFileRecord
 
 variable [Monad m] [MonadLog m] [MonadOptions m] [MonadParentDecl m] [MonadLiftT IO m] in
-def appendStatsToStatsFileIfEnabled (aesopStx : Syntax) (stats : Stats) :
-    m Unit := do
+def appendStatsToStatsFileIfEnabled (aesopStx : Syntax) (stats : Stats)
+    (allGoalsSolved : Bool) : m Unit := do
   let file := aesop.stats.file.get (← getOptions)
   if file == "" then
     return
-  let record ← StatsFileRecord.ofStats aesopStx stats
+  let record ← StatsFileRecord.ofStats aesopStx allGoalsSolved stats
   IO.FS.withFile file .append fun hdl => do
     -- Append mode atomically moves the cursor to EOF on write, so there is no
     -- race condition between locking the file and moving to EOF.
