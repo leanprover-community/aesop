@@ -445,7 +445,6 @@ def elabPattern (stx : Syntax) : TermElabM Expr :=
 
 register_option aesop.smallErrorMessages : Bool := {
     defValue := false
-    group := "aesop"
     descr := "(aesop) Print smaller error messages. Used for testing."
   }
 
