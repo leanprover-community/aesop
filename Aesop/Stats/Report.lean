@@ -37,6 +37,7 @@ def default : StatsReport := λ statsArray => Id.run do
   let mut search := 0
   let mut ruleSelection := 0
   let mut script := 0
+  let mut forwardState := 0
   let mut ruleStats : Std.HashMap DisplayRuleName RuleStatsTotals := ∅
   for stats in statsArray do
     let stats := stats.stats
@@ -46,6 +47,7 @@ def default : StatsReport := λ statsArray => Id.run do
     search := search + stats.search
     ruleSelection := ruleSelection + stats.ruleSelection
     script := script + stats.script
+    forwardState := forwardState + stats.forwardState
     ruleStats := stats.ruleStatsTotals (init := ruleStats)
   let samples := statsArray.size
   f!"Statistics for {statsArray.size} Aesop calls in current and imported modules\n\
@@ -56,6 +58,7 @@ def default : StatsReport := λ statsArray => Id.run do
      Rule selection:        {fmtTime ruleSelection samples}\n\
      Script generation:     {fmtTime script samples}\n\
      Search:                {fmtTime search samples}\n\
+     Forward state updates: {fmtTime forwardState samples}\n\
      Rules:{Std.Format.indentD $ fmtRuleStats $ sortRuleStatsTotals $ ruleStats.toArray}"
 where
   fmtTime (n : Nanos) (samples : Nat) : Format :=
