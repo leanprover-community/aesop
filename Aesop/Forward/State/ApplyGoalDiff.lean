@@ -17,7 +17,8 @@ open Lean Lean.Meta
 /-- Apply a goal diff to the state, adding and removing hypotheses as indicated
 by the diff. -/
 def ForwardState.applyGoalDiff (rs : LocalRuleSet) (diff : GoalDiff)
-    (fs : ForwardState) : BaseM (ForwardState × Array ForwardRuleMatch) := do
+    (fs : ForwardState) : BaseM (ForwardState × Array ForwardRuleMatch) :=
+  profilingForwardState do
   if ! aesop.dev.statefulForward.get (← getOptions) then
     -- We still update the hyp types since these are also used by stateless
     -- forward reasoning.

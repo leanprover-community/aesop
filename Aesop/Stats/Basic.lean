@@ -62,21 +62,15 @@ structure Stats where
   search : Nanos
   ruleSelection : Nanos
   script : Nanos
+  forwardState : Nanos
   scriptGenerated : Option ScriptGenerated
   ruleStats : Array RuleStats
   deriving Inhabited
 
 namespace Stats
 
-protected def empty : Stats where
-  total := 0
-  configParsing := 0
-  ruleSetConstruction := 0
-  search := 0
-  ruleSelection := 0
-  script := 0
-  scriptGenerated := none
-  ruleStats := #[]
+protected def empty : Stats := by
+  refine' { scriptGenerated := none, ruleStats := #[], .. } <;> exact 0
 
 instance : EmptyCollection Stats :=
   ⟨Stats.empty⟩
@@ -150,17 +144,18 @@ def _root_.Aesop.sortRuleStatsTotals
 def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
   if ! (← opt.isEnabled) then
     return
+  let { total, configParsing, ruleSetConstruction, search, ruleSelection, script, forwardState, scriptGenerated, ruleStats } := p
   let totalRuleApplications :=
-    p.ruleStats.foldl (init := 0) λ total rp =>
-      total + rp.elapsed
-  aesop_trace![opt] "Total: {p.total.printAsMillis}"
-  aesop_trace![opt] "Configuration parsing: {p.configParsing.printAsMillis}"
-  aesop_trace![opt] "Rule set construction: {p.ruleSetConstruction.printAsMillis}"
-  aesop_trace![opt] "Script generation: {p.script.printAsMillis}"
-  aesop_trace![opt] "Script generated: {match p.scriptGenerated with | none => "no" | some g => g.toString}"
+    ruleStats.foldl (init := 0) λ total rp => total + rp.elapsed
+  aesop_trace![opt] "Total: {total.printAsMillis}"
+  aesop_trace![opt] "Configuration parsing: {configParsing.printAsMillis}"
+  aesop_trace![opt] "Rule set construction: {ruleSetConstruction.printAsMillis}"
+  aesop_trace![opt] "Script generation: {script.printAsMillis}"
+  aesop_trace![opt] "Script generated: {match scriptGenerated with | none => "no" | some g => g.toString}"
   withConstAesopTraceNode opt (collapsed := false)
-      (return m!"Search: {p.search.printAsMillis}") do
-    aesop_trace![opt] "Rule selection: {p.ruleSelection.printAsMillis}"
+      (return m!"Search: {search.printAsMillis}") do
+    aesop_trace![opt] "Rule selection: {ruleSelection.printAsMillis}"
+    aesop_trace![opt] "Forward state updates: {forwardState.printAsMillis}"
     withConstAesopTraceNode opt (collapsed := false)
         (return m!"Rule applications: {totalRuleApplications.printAsMillis}") do
       let timings := sortRuleStatsTotals p.ruleStatsTotals.toArray
@@ -236,6 +231,11 @@ def profilingRule (rule : DisplayRuleName) (wasSuccessful : α → Bool) :
   profiling λ stats a elapsed =>
     let rp := { successful := wasSuccessful a, rule, elapsed }
     { stats with ruleStats := stats.ruleStats.push rp }
+
+@[inline, always_inline]
+def profilingForwardState : m α → m α :=
+  profiling λ stats _ elapsed =>
+    { stats with forwardState := stats.forwardState + elapsed }
 
 def modifyStatsIfEnabled (f : Stats → Stats) : m Unit := do
   if ← enableStats then
