@@ -24,19 +24,13 @@ structure SaturateM.Context where
   options : Aesop.Options'
   deriving Inhabited
 
-structure SaturateM.State where
-  rulePatternCache : RulePatternCache := {}
-  rpinfCache : RPINFCache := ∅
-  deriving Inhabited
-
-abbrev SaturateM :=
-  ReaderT SaturateM.Context $ StateRefT SaturateM.State $ ScriptT BaseM
+abbrev SaturateM := ReaderT SaturateM.Context <| ScriptT BaseM
 
 namespace SaturateM
 
 def run (options : Aesop.Options') (x : SaturateM α) :
     MetaM (α × Array Script.LazyStep) :=
-  (·.fst) <$> (ReaderT.run x { options } |>.run' {} |>.run.run)
+  (·.fst) <$> (ReaderT.run x { options }).run.run
 
 end SaturateM
 
