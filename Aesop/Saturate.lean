@@ -31,9 +31,9 @@ abbrev SaturateM := ReaderT SaturateM.Context <| ScriptT BaseM
 
 namespace SaturateM
 
-def run (options : Aesop.Options') (x : SaturateM α) :
-    MetaM (α × Array Script.LazyStep) :=
-  (·.fst) <$> (ReaderT.run x { options }).run.run
+def run (options : Aesop.Options') (x : SaturateM α) : MetaM (α × Stats) := do
+  let ((a, _), stats) ← ReaderT.run x { options } |>.run.run
+  return (a, stats)
 
 end SaturateM
 
@@ -63,10 +63,10 @@ where
     let preState ← show MetaM _ from saveState
     if let some diff ← tryNormRules goal mvars preState fs.hypTypes then
       let (fs, _) ← fs.applyGoalDiff rs diff
-      return ← go diff.newGoal fs
+      go diff.newGoal fs
     else if let some diff ← trySafeRules goal mvars preState fs.hypTypes then
       let (fs, _) ← fs.applyGoalDiff rs diff
-      return ← go diff.newGoal fs
+      go diff.newGoal fs
     else
       clearForwardImplDetailHyps goal
 
@@ -76,6 +76,7 @@ where
     withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying normalisation rules") do
       let matchResults ←
         withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting normalisation rules") do
+        profilingRuleSelection do
         rs.applicableNormalizationRulesWith ∅ goal
           (include? := (isForwardOrDestructRuleName ·.name))
       runFirstRule goal mvars preState matchResults hypTypes
@@ -86,6 +87,7 @@ where
     withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying safe rules") do
       let matchResults ←
         withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting safe rules") do
+        profilingRuleSelection do
         rs.applicableSafeRulesWith ∅ goal
           (include? := (isForwardOrDestructRuleName ·.name))
       runFirstRule goal mvars preState matchResults hypTypes
@@ -95,6 +97,7 @@ where
       (hypTypes : PHashSet RPINF) :
       SaturateM (Option (GoalDiff × Option (Array Script.LazyStep))) := do
     withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} running rule {matchResult.rule.name}") do
+    profilingRule matchResult.rule.name (·.isSome) do
     let input := {
       indexMatchLocations := matchResult.locations
       patternSubsts? := matchResult.patternSubsts?
@@ -130,8 +133,7 @@ namespace Stateful
 
 abbrev Queue := BinomialHeap ForwardRuleMatch ForwardRuleMatch.le
 
-partial def saturateCore (rs : LocalRuleSet) (goal : MVarId)
-    (options : Options') : SaturateM MVarId :=
+partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId :=
   withExceptionPrefix "saturate: internal error: " do
   goal.withContext do
     goal.checkNotAssigned `saturate
@@ -149,19 +151,20 @@ where
           return ← go hypDepths fs queue erasedHyps goal
         trace[saturate] "goal:{indentD goal}"
         let oldGoal := goal
-        let some (goal, hyp, removedHyps) ←
+        let some (goal, hyp, removedHyps) ← profilingRule m.rule.name (·.isSome) do
           m.apply goal (skip? := some (fs.hypTypes.contains ·))
           | return ← go hypDepths fs queue erasedHyps goal
         goal.withContext do
           -- TODO use applyGoalDiff
-          let fs ← removedHyps.foldlM (init := fs) λ fs h => do
-            let type ← oldGoal.withContext do rpinf (← h.getType)
-            return fs.eraseHyp h type
+          let fs ← profilingForwardState do
+            removedHyps.foldlM (init := fs) λ fs h => do
+              let type ← oldGoal.withContext do rpinf (← h.getType)
+              return fs.eraseHyp h type
           let type ← hyp.getType
           let erasedHyps := erasedHyps.insertMany removedHyps
           let mut depth := 0
           let mut hypDepths := hypDepths
-          let maxDepth? := options.forwardMaxDepth?
+          let maxDepth? := (← read).options.forwardMaxDepth?
           if maxDepth?.isSome then
             depth := 1 + m.foldHyps (init := 0) λ depth h =>
               max depth (hypDepths[h]?.getD 0)
@@ -170,10 +173,11 @@ where
           if maxDepth?.isSome && depth ≥ maxDepth?.get! then
             go hypDepths fs queue erasedHyps goal
           else
-            let rules ← rs.applicableForwardRules type
-            let patInsts ←
-              rs.forwardRulePatternSubstsInLocalDecl (← hyp.getDecl)
-            let (fs, ruleMatches) ←
+            let rules ← profilingRuleSelection do
+              rs.applicableForwardRules type
+            let (fs, ruleMatches) ← profilingForwardState do
+              let patInsts ←
+                rs.forwardRulePatternSubstsInLocalDecl (← hyp.getDecl)
               fs.addHypWithPatSubsts goal hyp rules patInsts
             let queue :=
               ruleMatches.foldl (init := queue) λ queue m => queue.insert m
@@ -183,32 +187,40 @@ where
 
 end Stateful
 
-def saturateMain (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') :
-    MetaM (MVarId × Array Script.LazyStep) := do
-  let doSaturate :=
+def saturateMain' (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId :=
+  profiling (fun stats _ total => { stats with total }) do
+  let preState ← show MetaM _ from saveState
+  let tacticState ←
+    if (← read).options.generateScript then
+      profiling (fun stats _ n => { stats with script := stats.script + n }) do
+      Script.TacticState.mkInitial goal
+    else
+      pure default -- unused when script generation is disabled
+  let preGoal := goal
+  let goal ← profiling (fun stats _ search => { stats with search }) do
     if aesop.dev.statefulForward.get (← getOptions) then
-      Stateful.saturateCore rs goal options
+      Stateful.saturateCore rs goal
     else
       saturateCore rs goal
-  doSaturate.run options
+  if (← read).options.generateScript then
+    let steps ← get
+    let tacticSeq ← profiling (fun stats _ n => { stats with script := stats.script + n }) do
+      let uscript : Script.UScript ← steps.mapM (·.toStep)
+      `(tacticSeq| $(← uscript.render tacticState):tactic*)
+    recordScriptGenerated { method := .static, perfect := true, hasMVar := false }
+    checkRenderedScriptIfEnabled tacticSeq preState preGoal
+      (expectCompleteProof := false)
+    if (← read).options.traceScript then
+      addTryThisTacticSeqSuggestion (← getRef) tacticSeq
+  return goal
+
+def saturateMain (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId := do
+  let goal ← saturateMain' rs goal
+  (← getStats).trace .stats
+  return goal
 
 def saturate (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') :
-    MetaM MVarId := do
-  if ! options.generateScript then
-    (·.fst) <$> saturateMain rs goal options
-  else
-    let preState ← saveState
-    let tacticState ← Script.TacticState.mkInitial goal
-    let preGoal := goal
-    let (goal, steps) ← saturateMain rs goal options
-    let options ← options.toOptions'
-    if options.generateScript then
-      let uscript : Script.UScript ← steps.mapM (·.toStep)
-      let tacticSeq ← `(tacticSeq| $(← uscript.render tacticState):tactic*)
-      checkRenderedScriptIfEnabled tacticSeq preState preGoal
-        (expectCompleteProof := false)
-      if options.traceScript then
-        addTryThisTacticSeqSuggestion (← getRef) tacticSeq
-    return goal
+    MetaM (MVarId × Stats) := do
+  saturateMain rs goal |>.run options
 
 end Aesop
