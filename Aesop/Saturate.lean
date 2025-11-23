@@ -28,9 +28,9 @@ abbrev SaturateM := ReaderT SaturateM.Context <| ScriptT BaseM
 
 namespace SaturateM
 
-def run (options : Aesop.Options') (x : SaturateM α) : MetaM α := do
-  let ((a, _), _) ← ReaderT.run x { options } |>.run.run
-  return a
+def run (options : Aesop.Options') (x : SaturateM α) : MetaM (α × Stats) := do
+  let ((a, _), stats) ← ReaderT.run x { options } |>.run.run
+  return (a, stats)
 
 end SaturateM
 
@@ -213,11 +213,12 @@ def saturateMain' (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId :=
 
 def saturateMain (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId := do
   let goal ← saturateMain' rs goal
-  (← getStats).trace .stats
+  let stats ← getStats
+  stats.trace .stats
   return goal
 
 def saturate (rs : LocalRuleSet) (goal : MVarId) (options : Aesop.Options') :
-    MetaM MVarId := do
+    MetaM (MVarId × Stats) := do
   saturateMain rs goal |>.run options
 
 end Aesop
