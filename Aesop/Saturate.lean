@@ -148,7 +148,7 @@ where
           return ← go hypDepths fs queue erasedHyps goal
         trace[saturate] "goal:{indentD goal}"
         let oldGoal := goal
-        let some (goal, hyp, removedHyps) ←
+        let some (goal, hyp, removedHyps) ← profilingRule m.rule.name (·.isSome) do
           m.apply goal (skip? := some (fs.hypTypes.contains ·))
           | return ← go hypDepths fs queue erasedHyps goal
         goal.withContext do
