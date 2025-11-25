@@ -80,10 +80,11 @@ partial def makeForwardHyps (e : Expr) (patSubst? : Option Substitution)
               return s
       else
         for instMVar in instMVars do
-          let some inst ← instMVar.withContext do synthInstance? (← instMVar.getType)
-            | trace[saturate] "failed to synthesize{indentExpr (← instMVar.getType)}"
-              return (proofsAcc, usedHypsAcc, proofTypesAcc)
-          instMVar.assign inst
+          try
+            instMVar.assign <| ← instMVar.withContext do synthInstance (← instMVar.getType)
+          catch e =>
+            trace[saturate] "failed to synthesize{indentExpr (← instMVar.getType)}"
+            return (proofsAcc, usedHypsAcc, proofTypesAcc)
         let proof := (← abstractMVars app).expr
         let type ← rpinf (← inferType proof)
         let redundant :=
