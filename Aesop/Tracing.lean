@@ -25,7 +25,6 @@ def registerTraceOption (traceName : Name) (descr : String) :
     IO TraceOption := do
   let option ← Option.register (`trace.aesop ++ traceName) {
     defValue := false
-    group := "trace"
     descr
   }
   return { traceClass := `aesop ++ traceName, option }
