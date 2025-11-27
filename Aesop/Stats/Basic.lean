@@ -16,7 +16,41 @@ open Lean
 
 namespace Aesop
 
--- All times are in nanoseconds.
+structure ForwardInstantiationStats where
+  «matches» : Nat
+  hyps : Nat
+  deriving Inhabited, ToJson
+
+structure ForwardClusterStateStats where
+  slots : Nat
+  instantiationStats : Array ForwardInstantiationStats
+  deriving Inhabited, ToJson
+
+structure ForwardRuleStateStats where
+  ruleName : RuleName
+  clusterStateStats : Array ForwardClusterStateStats
+  deriving Inhabited, ToJson
+
+structure ForwardStateStats where
+  ruleStateStats : Array ForwardRuleStateStats
+  deriving Inhabited, ToJson
+
+inductive GoalKind
+  | preNorm
+  | postNorm
+  deriving Inhabited, ToJson
+
+structure GoalStats where
+  goalId : Nat -- We don't use GoalId to avoid an import cycle
+  goalKind : GoalKind
+  /-- Number of fvars in the local context, excluding implementation detail
+  fvars. -/
+  lctxSize : Nat
+  /-- This goal's depth in the search tree. -/
+  depth : Nat
+  forwardStateStats : ForwardStateStats
+  deriving Inhabited, ToJson
+
 structure RuleStats where
   rule : DisplayRuleName
   elapsed : Nanos
@@ -63,14 +97,16 @@ structure Stats where
   ruleSelection : Nanos
   script : Nanos
   forwardState : Nanos
+  rpinf : Nanos
   scriptGenerated : Option ScriptGenerated
   ruleStats : Array RuleStats
+  goalStats : Array GoalStats
   deriving Inhabited
 
 namespace Stats
 
 protected def empty : Stats := by
-  refine' { scriptGenerated := none, ruleStats := #[], .. } <;> exact 0
+  refine' { scriptGenerated := none, ruleStats := #[], goalStats := #[], .. } <;> exact 0
 
 instance : EmptyCollection Stats :=
   ⟨Stats.empty⟩
@@ -144,7 +180,7 @@ def _root_.Aesop.sortRuleStatsTotals
 def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
   if ! (← opt.isEnabled) then
     return
-  let { total, configParsing, ruleSetConstruction, search, ruleSelection, script, forwardState, scriptGenerated, ruleStats } := p
+  let { total, configParsing, ruleSetConstruction, search, ruleSelection, script, forwardState, rpinf, scriptGenerated, ruleStats, goalStats := _goalStats } := p -- TODO print goal stats?
   let totalRuleApplications :=
     ruleStats.foldl (init := 0) λ total rp => total + rp.elapsed
   aesop_trace![opt] "Total: {total.printAsMillis}"
@@ -156,6 +192,7 @@ def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
       (return m!"Search: {search.printAsMillis}") do
     aesop_trace![opt] "Rule selection: {ruleSelection.printAsMillis}"
     aesop_trace![opt] "Forward state updates: {forwardState.printAsMillis}"
+    aesop_trace![opt] "RPINF: {rpinf.printAsMillis}"
     withConstAesopTraceNode opt (collapsed := false)
         (return m!"Rule applications: {totalRuleApplications.printAsMillis} [total / successful / failed]") do
       let timings := sortRuleStatsTotals p.ruleStatsTotals.toArray
