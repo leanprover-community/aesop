@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2025 Jannis Limperg. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Jannis Limperg
+-/
 module
 
 public import Aesop.Util.Basic
@@ -64,6 +69,7 @@ where
 
 def rpinf (e : Expr) : BaseM RPINF :=
   withConstAesopTraceNode .rpinf (return m!"rpinf") do
+  profiling (fun stats _ elapsed => { stats with rpinf := stats.rpinf + elapsed } ) do
     aesop_trace[rpinf] "input:{indentExpr e}"
     let e ← rpinfRaw e
     let hash := pinfHash e.toExpr
