@@ -190,6 +190,16 @@ def erasePatSubst (imap : InstMap) (subst : Substitution) (slot : SlotIndex) :
     let hs := hs.erase { fvarId? := none, subst }
     (ms, hs)
 
+private def pHashSetSize [BEq α] [Hashable α] (s : PHashSet α) : Nat :=
+  s.fold (init := 0) fun n _  => n + 1
+
+def stats (imap : InstMap) : Array ForwardInstantiationStats := Id.run do
+  let mut stats := #[]
+  for (_, m) in imap.map do
+    for (_, (ms, hs)) in m do
+      stats := stats.push { «matches» := pHashSetSize ms, hyps := pHashSetSize hs }
+  return stats
+
 end InstMap
 
 set_option linter.missingDocs false in
@@ -306,6 +316,9 @@ where
       vmap.find var |>.findD slot.index inst |>.2
     else
       panic! s!"substitution contains no instantiation for variable {var}"
+
+def stats (vmap : VariableMap) : Array ForwardInstantiationStats :=
+  vmap.map.foldl (init := #[]) fun acc _ imap => acc ++ imap.stats
 
 end VariableMap
 
@@ -596,6 +609,10 @@ def erasePatSubst (subst : Substitution) (pi : PremiseIndex) (cs : ClusterState)
       completeMatches := filterPHashSet (! ·.containsPatSubst subst) cs.completeMatches
     }
 
+def stats (cs : ClusterState) : ForwardClusterStateStats where
+  slots := cs.slots.size
+  instantiationStats := cs.variableMap.stats
+
 end ClusterState
 
 /-- The source of a pattern substitution. The same substitution can have
@@ -735,6 +752,10 @@ def erasePatSubst (subst : Substitution) (source : PatSubstSource)
 def eraseHyp (h : FVarId) (pi : PremiseIndex) (rs : RuleState) : RuleState :=
   let clusterStates := rs.clusterStates.map (·.eraseHyp h pi)
   { rs with clusterStates }
+
+def stats (rs : RuleState) : ForwardRuleStateStats where
+  ruleName := rs.rule.name
+  clusterStateStats := rs.clusterStates.map (·.stats)
 
 end RuleState
 
@@ -910,5 +931,9 @@ def updateTargetPatSubsts (goal : MVarId)
     (newPatSubsts : Array (ForwardRule × Substitution))
     (fs : ForwardState) : BaseM (ForwardState × Array ForwardRuleMatch) :=
   fs.updateTargetPatSubstsCore #[] goal newPatSubsts
+
+def stats (fs : ForwardState) : ForwardStateStats where
+  ruleStateStats := fs.ruleStates.foldl (init := #[]) fun acc _ rs =>
+    acc.push rs.stats
 
 end Aesop.ForwardState

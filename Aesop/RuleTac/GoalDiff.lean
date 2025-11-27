@@ -7,7 +7,7 @@ Authors: Jannis Limperg
 import Aesop.BaseM
 import Aesop.RuleTac.FVarIdSubst
 import Aesop.Util.Basic
-import AesopPrecomp.RPINF
+import Aesop.RPINF
 
 open Lean Lean.Meta
 

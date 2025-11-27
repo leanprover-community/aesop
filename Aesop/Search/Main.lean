@@ -14,6 +14,7 @@ import Aesop.Search.ExpandSafePrefix
 import Aesop.Search.Queue
 import Aesop.Tree
 import Aesop.Frontend.Extension
+import Aesop.Tree.Stats
 
 open Lean
 open Lean.Elab.Tactic (liftMetaTacticAux TacticM)
@@ -274,10 +275,12 @@ def search (goal : MVarId) (ruleSet? : Option LocalRuleSet := none)
         mkLocalRuleSet rss options
     | some ruleSet => pure ruleSet
   let ⟨Q, _⟩ := options.queue
-  let go : SearchM _ _ := do
-    show SearchM Q _ from
-    try searchLoop
-    finally freeTree
+  let go : SearchM Q _ := do
+    try
+      searchLoop
+    finally
+      collectGoalStatsIfEnabled
+      freeTree
   let ((goals, _, _), stats) ←
     go.run ruleSet options simpConfig simpConfigSyntax? goal |>.run stats
   return (goals, stats)
