@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2025 Jannis Limperg. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Jannis Limperg
+-/
 import AesopPrecomp.RPINF.Basic
 
 open Lean Lean.Meta
@@ -61,7 +66,8 @@ where
       lctx := lctx.modifyLocalDecl fvarId λ _ => ldecl
     withLCtx lctx (← getLocalInstances) k
 
-def rpinf (e : Expr) : m RPINF :=
+@[specialize]
+def rpinfCore (e : Expr) : m RPINF :=
   withTraceNode `rpinf (fun _ => return m!"rpinf") do
     trace[rpinf] "input:{indentExpr e}"
     let e ← rpinfRaw e
