@@ -7,6 +7,7 @@ module
 
 public import Aesop.Stats.Basic
 public import Aesop.RulePattern.Cache
+public import Aesop.RPINF.Basic
 
 public section
 
