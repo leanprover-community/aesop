@@ -84,7 +84,7 @@ def «match» (e : Expr) (pat : RulePattern) : BaseM (Option Substitution) :=
         let inst ← instantiateMVars mvar
         if inst == mvar then
           throwError "RulePattern.match: while matching pattern '{p}' against expression '{e}': expected metavariable ?{(← mvarId.getDecl).userName} ({mvarId.name}) to be assigned"
-        subst := subst.insert ⟨i⟩ (← rpinf inst)
+        subst := subst.insert ⟨i⟩ inst
     for h : i in [:pat.levelArgMap.size] do
       if let some j := pat.levelArgMap[i] then
         let mvar := .mvar lmvarIds[j]!

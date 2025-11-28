@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 
 import Aesop.Stats.Basic
 import Aesop.RulePattern.Cache
+import AesopPrecomp.RPINF
 
 set_option linter.missingDocs true
 
