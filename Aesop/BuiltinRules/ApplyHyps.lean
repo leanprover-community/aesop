@@ -18,8 +18,15 @@ meta def applyHyp (hyp : FVarId) (goal : MVarId) (md : TransparencyMode) :
     BaseM RuleApplication := do
   let (goals, #[step]) ← applyS goal (.fvar hyp) none md |>.run
     | throwError "aesop: internal error in applyHyps: multiple steps"
+  let mkDiff newGoal := return {
+    oldGoal := goal
+    addedFVars := ∅
+    removedFVars := ∅
+    targetChanged := ! (← isRPINFTarget goal newGoal)
+    newGoal
+  }
   return {
-    goals := goals.map λ mvarId => { diff := .empty goal mvarId }
+    goals := ← goals.mapM fun newGoal => return { diff := ← mkDiff newGoal }
     postState := step.postState
     scriptSteps? := #[step]
     successProbability? := none
