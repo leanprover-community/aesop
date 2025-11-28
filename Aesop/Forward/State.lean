@@ -6,6 +6,7 @@ Authors: Xavier Généreux, Jannis Limperg
 module
 
 public import Aesop.Forward.Match
+public import Aesop.EMap
 
 public section
 
@@ -16,20 +17,21 @@ set_option linter.missingDocs true
 
 namespace Aesop
 
-private def ppPHashMap [BEq α] [Hashable α] [ToMessageData α]
-    [ToMessageData β] (indent : Bool) (m : PHashMap α β) : MessageData :=
-  flip MessageData.joinSep "\n" $
-    m.foldl (init := []) λ xs a b =>
-      let x :=
+private def ppMap [ForIn Id ρ (α × β)] [ToMessageData α]
+    [ToMessageData β] (indent : Bool) (m : ρ) : MessageData :=
+  m!"\n".joinSep <| Id.run do
+    let mut entries := #[]
+    for (a, b) in m do
+      entries := entries.push <|
         if indent then
           m!"{a} =>{indentD $ toMessageData b}"
         else
           m!"{a} => {b}"
-      x :: xs
+    return entries.toList
 
 private def ppPHashSet [BEq α] [Hashable α] [ToMessageData α] (s : PHashSet α) :
     MessageData :=
-  toMessageData $ s.fold (init := #[]) λ as a => as.push a
+  toMessageData s.toList
 
 /-- A hypothesis that has not yet been matched against a premise, or a rule
 pattern substitution. -/
@@ -39,6 +41,11 @@ inductive RawHyp where
   /-- The rule pattern substitution. -/
   | patSubst (subst : Substitution)
   deriving Inhabited, BEq, Hashable
+
+instance : ToMessageData RawHyp where
+  toMessageData
+    | .fvarId fvarId => m!"{Expr.fvar fvarId}"
+    | .patSubst s => m!"{s}"
 
 /-- A hypothesis that was matched against a premise, or a rule pattern
 substitution. -/
@@ -81,7 +88,7 @@ set_option linter.missingDocs false in
 `s ↦ e ↦ (ms, hs)` indicates that for the instantiation `e` of slot `s`, we have
 partial matches `ms` and hypotheses `hs`. -/
 structure InstMap where
-  map : PHashMap SlotIndex (PHashMap RPINF (PHashSet Match × PHashSet Hyp))
+  map : PHashMap SlotIndex (EMap (PHashSet Match × PHashSet Hyp))
   deriving Inhabited
 
 namespace InstMap
@@ -90,10 +97,10 @@ instance : EmptyCollection InstMap := ⟨⟨.empty⟩⟩
 
 instance : ToMessageData InstMap where
   toMessageData m := private
-    ppPHashMap (indent := true) $
+    ppMap (indent := true) $
       m.map.map λ instMap =>
-        ppPHashMap (indent := false) $
-          instMap.map λ (ms, hs) =>
+        ppMap (indent := false) $
+          instMap.map λ _ (ms, hs) =>
             let hs : Array MessageData :=
               hs.fold (init := #[]) λ hs (h : Hyp) =>
                 match h.fvarId? with
@@ -104,34 +111,50 @@ instance : ToMessageData InstMap where
 /-- Returns the set of matches and hypotheses associated with a slot `slot`
 with instantiation `inst`. -/
 @[inline]
-def find? (imap : InstMap) (slot : SlotIndex) (inst : RPINF) :
-    Option (PHashSet Match × PHashSet Hyp) :=
-  imap.map.find? slot |>.bind λ slotMap => slotMap.find? inst
+def find? (imap : InstMap) (slot : SlotIndex) (inst : Expr) :
+    MetaM (Option (PHashSet Match × PHashSet Hyp)) :=
+  imap.map.find? slot |>.bindM λ slotMap => slotMap.find? inst
 
 /-- Returns the set of matches and hypotheses associated with a slot `slot`
 with instantiation `inst`, or `(∅, ∅)` if `slot` and `inst` do not have any
 associated matches. -/
 @[inline]
-def findD (imap : InstMap) (slot : SlotIndex) (inst : RPINF) :
-    PHashSet Match × PHashSet Hyp :=
-  imap.find? slot inst |>.getD (∅, ∅)
+def findD (imap : InstMap) (slot : SlotIndex) (inst : Expr) :
+    MetaM (PHashSet Match × PHashSet Hyp) :=
+  return (← imap.find? slot inst).getD (∅, ∅)
 
-/-- Applies a transfomation to the data associated to `slot` and `inst`.
+/-- Applies a transformation to the data associated with `slot` and `inst`.
 If there is no such data, the transformation is applied to `(∅, ∅)`. Returns the
 new instantiation map and the result of `f`. -/
-def modify (imap : InstMap) (slot : SlotIndex) (inst : RPINF)
+def modify (imap : InstMap) (slot : SlotIndex) (inst : Expr)
     (f : PHashSet Match → PHashSet Hyp → PHashSet Match × PHashSet Hyp × α) :
-    InstMap × α :=
-  let (ms, hyps) := imap.findD slot inst
-  let (ms, hyps, a) := f ms hyps
-  let slotMap := imap.map.findD slot .empty |>.insert inst (ms, hyps)
-  (⟨imap.map.insert slot slotMap⟩, a)
+    MetaM (InstMap × α) := do
+  if let some map := imap.map.find? slot then
+    let (map, a?) ← map.alter inst fun (ms, hs) =>
+      let (ms, hs, a) := f ms hs
+      if ms.isEmpty && hs.isEmpty then
+        (none, a)
+      else
+        ((ms, hs), a)
+    match a? with
+    | some a => return (⟨imap.map.insert slot map⟩, a)
+    | none =>
+      let (ms, hs, a) := f ∅ ∅
+      if ms.isEmpty && hs.isEmpty then
+        return (imap, a)
+      let map := map.insertNew inst (ms, hs)
+      return (⟨imap.map.insert slot map⟩, a)
+  else
+    let (ms, hs, a) := f ∅ ∅
+    if ms.isEmpty && hs.isEmpty then
+      return (imap, a)
+    return (⟨imap.map.insert slot <| .singleton inst (ms, hs)⟩, a)
 
 /-- Inserts a hyp associated with slot `slot` and instantiation `inst`.
 The hyp must be a valid assignment for the slot's premise. Returns `true` if
 the hyp was not previously associated with `slot` and `inst`. -/
-def insertHyp (imap : InstMap) (slot : SlotIndex) (inst : RPINF) (hyp : Hyp) :
-    InstMap × Bool :=
+def insertHyp (imap : InstMap) (slot : SlotIndex) (inst : Expr) (hyp : Hyp) :
+    MetaM (InstMap × Bool) :=
   imap.modify slot inst λ ms hs =>
     if hs.contains hyp then
       (ms, hs, false)
@@ -141,8 +164,8 @@ def insertHyp (imap : InstMap) (slot : SlotIndex) (inst : RPINF) (hyp : Hyp) :
 /-- Inserts a match associated with slot `slot` and instantiation `inst`.
 The match's level must be `slot`. Returns `true` if the match was not previously
 associated with `slot` and `inst`. -/
-def insertMatchCore (imap : InstMap) (slot : SlotIndex) (inst : RPINF)
-    (m : Match) : InstMap × Bool :=
+def insertMatchCore (imap : InstMap) (slot : SlotIndex) (inst : Expr)
+    (m : Match) : MetaM (InstMap × Bool) :=
   imap.modify slot inst λ ms hs =>
     if ms.contains m then
       (ms, hs, false)
@@ -157,7 +180,7 @@ def insertMatch (imap : InstMap) (var : PremiseIndex) (m : Match) :
     BaseM (InstMap × Bool) := do
   let some inst := m.subst.find? var
     | panic! s!"variable {var} is not assigned in substitution"
-  return imap.insertMatchCore m.level (← rpinf inst) m
+  imap.insertMatchCore m.level inst m
 
 /-- Modify the maps for slot `slot` and all later slots. -/
 def modifyMapsForSlotsFrom (imap : InstMap) (slot : SlotIndex)
@@ -169,7 +192,7 @@ def modifyMapsForSlotsFrom (imap : InstMap) (slot : SlotIndex)
     imap.map.foldl (init := #[]) λ acc slot' _ =>
       if slot ≤ slot' then acc.push slot' else acc
   for i in nextSlots do
-    let maps := imap.map.find! i |>.map λ (ms, hs) => f ms hs
+    let maps := imap.map.find! i |>.map λ _ (ms, hs) => f ms hs
     imaps := imaps.insert i maps
   return { map := imaps }
 
@@ -219,7 +242,7 @@ instance : EmptyCollection VariableMap :=
   ⟨⟨.empty⟩⟩
 
 instance : ToMessageData VariableMap where
-  toMessageData m := private ppPHashMap (indent := true) m.map
+  toMessageData m := private ppMap (indent := true) m.map
 
 /-- Get the `InstMap` associated with a variable. -/
 def find? (vmap : VariableMap) (var : PremiseIndex) : Option InstMap :=
@@ -254,8 +277,7 @@ changed. -/
 def addHyp (vmap : VariableMap) (slot : Slot) (hyp : Hyp) : BaseM (VariableMap × Bool) :=
   slot.common.foldM (init := (vmap, false)) λ (vmap, changed) var => do
     if let some inst := hyp.subst.find? var then
-      let inst ← rpinf inst
-      let (vmap, changed') := vmap.modify var (·.insertHyp slot.index inst hyp)
+      let (vmap, changed') ← vmap.modifyM var (·.insertHyp slot.index inst hyp)
       return (vmap, changed || changed')
     else
       panic! s!"substitution contains no instantiation for variable {var}"
@@ -300,7 +322,7 @@ def findMatches (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
 where
   prevSlotMatches (var : PremiseIndex) : BaseM (PHashSet Match) := do
     if let some inst := subst.find? var then
-      return vmap.find var |>.findD (slot.index - 1) (← rpinf inst) |>.1
+      return (← vmap.find var |>.findD (slot.index - 1) inst).1
     else
       panic! s!"substitution contains no instantiation for variable {var}"
 
@@ -323,7 +345,7 @@ def findHyps (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
 where
   slotHyps (var : PremiseIndex) : BaseM (PHashSet Hyp) := do
     if let some inst := subst.find? var then
-      return vmap.find var |>.findD slot.index (← rpinf inst) |>.2
+      return (← vmap.find var |>.findD slot.index inst).2
     else
       panic! s!"substitution contains no instantiation for variable {var}"
 
@@ -389,7 +411,8 @@ instance : Inhabited ClusterState where
 instance : ToMessageData ClusterState where
   toMessageData cs :=
     m!"variables:{indentD $ toMessageData cs.variableMap}\n\
-       complete matches:{indentD $ .joinSep (PersistentHashSet.toList cs.completeMatches |>.map toMessageData) "\n"}"
+       slot queues:{indentD <| m!"\n".joinSep <| cs.slotQueues.zipIdx.toList.map fun (q, i) => m!"slot {i}: {q.toList}"}\n\
+       complete matches:{indentD $ m!"\n".joinSep (PersistentHashSet.toList cs.completeMatches |>.map toMessageData)}"
 
 /-- Get the slot with the given index. Panic if the index is invalid. -/
 @[macro_inline, always_inline, expose]
