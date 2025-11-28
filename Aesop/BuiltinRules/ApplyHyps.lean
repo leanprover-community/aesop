@@ -19,7 +19,7 @@ def applyHyp (hyp : FVarId) (goal : MVarId) (md : TransparencyMode) :
     oldGoal := goal
     addedFVars := ∅
     removedFVars := ∅
-    targetChanged := ! (← isRPINFTarget goal newGoal)
+    targetChanged := ! (← isGoalDiffDefeqTarget goal newGoal)
     newGoal
   }
   return {

@@ -29,7 +29,7 @@ def applyExpr' (goal : MVarId) (e : Expr) (eStx : Term)
       oldGoal := goal
       addedFVars := ∅
       removedFVars := ∅
-      targetChanged := ! (← isRPINFTarget goal newGoal)
+      targetChanged := ! (← isGoalDiffDefeqTarget goal newGoal)
       newGoal
     }
     let goals ← goals.mapM fun newGoal => return { diff := ← mkDiff newGoal }
