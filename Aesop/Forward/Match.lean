@@ -62,7 +62,7 @@ def addHypOrPatSubst (subst : Substitution) (isPatSubst : Bool)
 
 /-- Returns `true` if the match contains the given hyp. -/
 def containsHyp (hyp : FVarId) (m : Match) : Bool :=
-  m.subst.premises.any (·.any (·.toExpr.containsFVar hyp))
+  m.subst.premises.any (·.any (·.containsFVar hyp))
 
 /-- Returns `true` if the match contains the given pattern substitution. -/
 def containsPatSubst (subst : Substitution) (m : Match) : Bool :=
@@ -76,7 +76,7 @@ namespace CompleteMatch
 match's slots and substitution. For non-immediate arguments, we return `none`.
 The returned levels are suitable assignments for the level mvars of `r`. -/
 def reconstructArgs (r : ForwardRule) (m : CompleteMatch) :
-    Array (Option RPINF) × Array (Option Level) := Id.run do
+    Array (Option Expr) × Array (Option Level) := Id.run do
   assert! m.clusterMatches.size == r.slotClusters.size
   let mut subst : Substitution := .empty r.numPremises r.numLevelParams
   for m in m.clusterMatches do
@@ -106,7 +106,7 @@ def foldHypsM [Monad M] (f : σ → FVarId → M σ) (init : σ)
     (m : ForwardRuleMatch) : M σ :=
   m.match.clusterMatches.foldlM (init := init) λ s cm =>
     cm.subst.premises.foldlM (init := s) λ
-      | s, some { toExpr := e, .. } =>
+      | s, some e =>
         if let .fvar hyp := e.consumeMData then f s hyp else pure s
       | s, _ => pure s
 
@@ -118,7 +118,7 @@ def foldHyps (f : σ → FVarId → σ) (init : σ) (m : ForwardRuleMatch) : σ 
 def anyHyp (m : ForwardRuleMatch) (f : FVarId → Bool) : Bool :=
   m.match.clusterMatches.any λ m =>
     m.subst.premises.any λ
-      | some { toExpr := e, .. } =>
+      | some e =>
         if let .fvar hyp := e.consumeMData then f hyp else false
       | _ => false
 
@@ -152,7 +152,7 @@ def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
         assignLevelMVar lmvarId level
     for arg? in args, mvar in argMVars do
       if let some arg := arg? then
-        mvar.mvarId!.assign arg.toExpr
+        mvar.mvarId!.assign arg
     try
       synthAppInstances `aesop goal argMVars binderInfos
         (synthAssignedInstances := false) (allowSynthFailures := false)

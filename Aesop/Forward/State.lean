@@ -154,10 +154,10 @@ level (i.e., the maximal slot for which `m` contains a hypothesis) and the
 instantiation of `var` given by the map's substitution. Returns `true` if the
 match was not previously associated with this slot and instantiation. -/
 def insertMatch (imap : InstMap) (var : PremiseIndex) (m : Match) :
-    InstMap × Bool := Id.run do
+    BaseM (InstMap × Bool) := do
   let some inst := m.subst.find? var
     | panic! s!"variable {var} is not assigned in substitution"
-  imap.insertMatchCore m.level inst m
+  return imap.insertMatchCore m.level (← rpinf inst) m
 
 /-- Modify the maps for slot `slot` and all later slots. -/
 def modifyMapsForSlotsFrom (imap : InstMap) (slot : SlotIndex)
@@ -232,35 +232,41 @@ def find (vmap : VariableMap) (var : PremiseIndex) : InstMap :=
 /-- Modify the `InstMap` associated to variable `var`. If no such `InstMap`
 exists, the function `f` is applied to the empty `InstMap` and the result is
 associated with `var`. Returns the new variable map and the result of `f`. -/
-def modify (vmap : VariableMap) (var : PremiseIndex) (f : InstMap → InstMap × α) :
-    VariableMap × α :=
+def modifyM [Monad m] (vmap : VariableMap) (var : PremiseIndex)
+    (f : InstMap → m (InstMap × α)) : m (VariableMap × α) := do
   match vmap.map.find? var with
   | none =>
-    let (m, a) := f ∅
-    (⟨vmap.map.insert var m⟩, a)
+    let (m, a) ← f ∅
+    return (⟨vmap.map.insert var m⟩, a)
   | some m =>
-    let (m, a) := f m
-    (⟨vmap.map.insert var m⟩, a)
+    let (m, a) ← f m
+    return (⟨vmap.map.insert var m⟩, a)
+
+@[inherit_doc modifyM]
+def modify (vmap : VariableMap) (var : PremiseIndex) (f : InstMap → InstMap × α) :
+    VariableMap × α :=
+  modifyM (m := Id) vmap var f
 
 /-- Add a hypothesis `hyp`. Precondition: `hyp` matches the premise of slot
 `slot` with substitution `hyp.subst` (and hence `hyp.subst` contains a mapping
 for each variable in `slot.common`). Returns `true` if the variable map
 changed. -/
-def addHyp (vmap : VariableMap) (slot : Slot) (hyp : Hyp) : VariableMap × Bool :=
-  slot.common.fold (init := (vmap, false)) λ (vmap, changed) var =>
+def addHyp (vmap : VariableMap) (slot : Slot) (hyp : Hyp) : BaseM (VariableMap × Bool) :=
+  slot.common.foldM (init := (vmap, false)) λ (vmap, changed) var => do
     if let some inst := hyp.subst.find? var then
+      let inst ← rpinf inst
       let (vmap, changed') := vmap.modify var (·.insertHyp slot.index inst hyp)
-      (vmap, changed || changed')
+      return (vmap, changed || changed')
     else
       panic! s!"substitution contains no instantiation for variable {var}"
 
 /-- Add a match `m`. Precondition: `nextSlot` is the slot with index
 `m.level + 1`. Returns `true` if the variable map changed. -/
 def addMatch (vmap : VariableMap) (nextSlot : Slot) (m : Match) :
-    VariableMap × Bool :=
-  nextSlot.common.fold (init := (vmap, false)) λ (vmap, changed) var =>
-    let (vmap, changed') := vmap.modify var (·.insertMatch var m)
-    (vmap, changed || changed')
+    BaseM (VariableMap × Bool) :=
+  nextSlot.common.foldM (init := (vmap, false)) λ (vmap, changed) var => do
+    let (vmap, changed') ← vmap.modifyM var (·.insertMatch var m)
+    return (vmap, changed || changed')
 
 /-- Remove a hyp from `slot` and all later slots. -/
 def eraseHyp (vmap : VariableMap) (hyp : FVarId) (slot : SlotIndex) :
@@ -276,25 +282,25 @@ def erasePatSubst (vmap : VariableMap) (subst : Substitution) (slot : SlotIndex)
 `subst`. Preconditions: `slot.index` is nonzero, `slot.common` is nonempty and
 each variable contained in `slot.common` is also contained in `subst`. -/
 def findMatches (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
-    Std.HashSet Match := Id.run do
+    BaseM (Std.HashSet Match) := do
   if slot.index == ⟨0⟩ then
     panic! "slot has index 0"
   let common := slot.common.toArray
   if h : 0 < common.size then
     let firstVar := common[0]
-    let mut ms := prevSlotMatches firstVar |> PersistentHashSet.toHashSet
+    let mut ms := PersistentHashSet.toHashSet (← prevSlotMatches firstVar)
     for var in common[1:] do
       if ms.isEmpty then
         break
-      let ms' := prevSlotMatches var
+      let ms' ← prevSlotMatches var
       ms := ms.filter (ms'.contains ·)
     return ms
   else
     panic! "no common variables"
 where
-  prevSlotMatches (var : PremiseIndex) : PHashSet Match :=
+  prevSlotMatches (var : PremiseIndex) : BaseM (PHashSet Match) := do
     if let some inst := subst.find? var then
-      vmap.find var |>.findD (slot.index - 1) inst |>.1
+      return vmap.find var |>.findD (slot.index - 1) (← rpinf inst) |>.1
     else
       panic! s!"substitution contains no instantiation for variable {var}"
 
@@ -302,22 +308,22 @@ where
 Precondition: `slot.common` is nonempty and each variable contained in it is
 also contained in `subst`. -/
 def findHyps (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
-    Std.HashSet Hyp := Id.run do
+    BaseM (Std.HashSet Hyp) := do
   let common := slot.common.toArray
   if h : 0 < common.size then
-    let mut hyps := slotHyps common[0] |> PersistentHashSet.toHashSet
+    let mut hyps := PersistentHashSet.toHashSet (← slotHyps common[0])
     for var in common[1:] do
       if hyps.isEmpty then
         break
-      let hyps' := slotHyps var
+      let hyps' ← slotHyps var
       hyps := hyps.filter (hyps'.contains ·)
     return hyps
   else
     panic! "no common variables"
 where
-  slotHyps (var : PremiseIndex) : PHashSet Hyp :=
+  slotHyps (var : PremiseIndex) : BaseM (PHashSet Hyp) := do
     if let some inst := subst.find? var then
-      vmap.find var |>.findD slot.index inst |>.2
+      return vmap.find var |>.findD slot.index (← rpinf inst) |>.2
     else
       panic! s!"substitution contains no instantiation for variable {var}"
 
@@ -416,7 +422,7 @@ def matchPremise? (premises : Array MVarId) (lmvarIds : Array LMVarId)
       let mut subst := .empty premises.size lmvarIds.size
       for var in slot.deps do
         subst ← updateSubst premises var subst
-      subst := subst.insert slot.premiseIndex $ ← rpinf (.fvar hyp)
+      subst := subst.insert slot.premiseIndex (.fvar hyp)
       for h : i in [:lmvarIds.size] do
         if let some l ← getLevelMVarAssignment? lmvarIds[i] then
           subst := subst.insertLevel ⟨i⟩ (← instantiateLevelMVars l)
@@ -436,7 +442,6 @@ where
         throwError "aesop: internal error: matchPremise?: while matching hyp {hyp.name}: no assignment for variable {var}"
       if ← hasAssignableMVar assignment then
         throwError "aesop: internal error: matchPremise?: assignment has mvar:{indentExpr assignment}"
-      let assignment ← rpinf assignment
       return subst.insert var assignment
 
 /-- Context for the `AddM` monad. -/
@@ -474,7 +479,7 @@ mutual
     else
       let nextSlot := cs.slot! $ slotIdx + 1
       aesop_trace[forward] "add match {m} for slot {slotIdx}"
-      let (vmap, changed) := cs.variableMap.addMatch nextSlot m  -- This is correct; VariableMap.addMatch needs the next slot.
+      let (vmap, changed) ← cs.variableMap.addMatch nextSlot m  -- This is correct; VariableMap.addMatch needs the next slot.
       if ! changed then
         aesop_trace[forward] "match already present"
         return cs
@@ -485,7 +490,7 @@ mutual
         slotMaybeHasMatches_size := by simp [cs.slotMaybeHasMatches_size]
       }
       cs ← cs.addQueuedRawHyps nextSlot
-      for hyp in cs.variableMap.findHyps nextSlot m.subst do
+      for hyp in ← cs.variableMap.findHyps nextSlot m.subst do
         let m := m.addHypOrPatSubst hyp.subst hyp.isPatSubst nextSlot.forwardDeps
         cs ← cs.addMatch m
       return cs
@@ -501,12 +506,12 @@ mutual
           (conclusionDeps := cs.conclusionDeps)
       cs.addMatch m
     else
-      let (vmap, changed) := cs.variableMap.addHyp slot h
+      let (vmap, changed) ← cs.variableMap.addHyp slot h
       if ! changed then
         aesop_trace[forward] "hyp already present"
         return cs
       let mut cs := { cs with variableMap := vmap }
-      for pm in cs.variableMap.findMatches slot h.subst do
+      for pm in ← cs.variableMap.findMatches slot h.subst do
         let m := pm.addHypOrPatSubst h.subst h.isPatSubst slot.forwardDeps
         cs ← cs.addMatch m
       return cs
