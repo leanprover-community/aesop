@@ -55,26 +55,22 @@ structure GoalDiff where
   in the new goal. -/
   removedFVars : Std.HashSet FVarId
   /-- Is the old goal's target RPINF equal to the new goal's target RPINF? -/
-  targetChanged : LBool
+  targetChanged : Bool
   deriving Inhabited
-
-protected def GoalDiff.empty (oldGoal newGoal : MVarId) : GoalDiff := {
-  addedFVars := ∅
-  removedFVars := ∅
-  targetChanged := .undef
-  oldGoal, newGoal
-}
 
 def isRPINFEqual (goal₁ goal₂ : MVarId) (e₁ e₂ : Expr) : BaseM Bool :=
   return (← goal₁.withContext $ rpinf e₁) == (← goal₂.withContext $ rpinf e₂)
 
-def isRPINFEqualLDecl (goal₁ goal₂ : MVarId) (ldecl₁ ldecl₂ : LocalDecl) : BaseM Bool :=
-  match ldecl₁.isLet, ldecl₂.isLet with
-  | false, false =>
-    isRPINFEqual goal₁ goal₂ ldecl₁.type ldecl₂.type
-  | true, true =>
-    isRPINFEqual goal₁ goal₂ ldecl₁.type ldecl₂.type <&&>
-    isRPINFEqual goal₁ goal₂ ldecl₁.value ldecl₂.value
+def isRPINFTarget (goal₁ goal₂ : MVarId) : BaseM Bool := do
+  isRPINFEqual goal₁ goal₂ (← goal₁.getType) (← goal₂.getType)
+
+def isRPINFEqualLDecl (goal₁ goal₂ : MVarId) :
+    (ldecl₁ ldecl₂ : LocalDecl) → BaseM Bool
+  | .cdecl (type := type₁) .., .cdecl (type := type₂) .. =>
+    isRPINFEqual goal₁ goal₂ type₁ type₂
+  | .ldecl (type := type₁) (value := value₁) .., .ldecl (type := type₂) (value := value₂) .. =>
+    isRPINFEqual goal₁ goal₂ type₁ type₂ <&&>
+    isRPINFEqual goal₁ goal₂ value₁ value₂
   | _, _ => return false
 
 def getNewFVars (oldGoal newGoal : MVarId) (oldLCtx newLCtx : LocalContext) :
@@ -101,21 +97,10 @@ def diffGoals (old new : MVarId) : BaseM GoalDiff := do
     newGoal := new
     addedFVars := ← getNewFVars old new oldLCtx newLCtx
     removedFVars := ← getNewFVars new old newLCtx oldLCtx
-    targetChanged :=
-      ! (← isRPINFEqual old new (← old.getType) (← new.getType)) |>.toLBool
+    targetChanged := ! (← isRPINFEqual old new (← old.getType) (← new.getType))
   }
 
 namespace GoalDiff
-
-def targetChanged' (diff : GoalDiff) : BaseM Bool :=
-  match diff.targetChanged with
-  | .true => return true
-  | .false => return false
-  | .undef => do
-    let eq ←
-      isRPINFEqual diff.oldGoal diff.newGoal (← diff.oldGoal.getType)
-        (← diff.newGoal.getType)
-    return ! eq
 
 /--
 If `diff₁` is the difference between goals `g₁` and `g₂` and `diff₂` is the
@@ -140,7 +125,7 @@ def comp (diff₁ diff₂ : GoalDiff) : GoalDiff where
         removedFVars
       else
         removedFVars.insert fvarId
-  targetChanged := lBoolOr diff₁.targetChanged diff₂.targetChanged
+  targetChanged := diff₁.targetChanged || diff₂.targetChanged
 
 def checkCore (diff : GoalDiff) (old new : MVarId) :
     BaseM (Option MessageData) := do
