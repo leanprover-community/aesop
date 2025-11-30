@@ -92,7 +92,6 @@ structure Stats where
   ruleSelection : Nanos
   script : Nanos
   forwardState : Nanos
-  rpinf : Nanos
   scriptGenerated : Option ScriptGenerated
   ruleStats : Array RuleStats
   goalStats : Array GoalStats
@@ -175,7 +174,7 @@ def _root_.Aesop.sortRuleStatsTotals
 def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
   if ! (← opt.isEnabled) then
     return
-  let { total, configParsing, ruleSetConstruction, search, ruleSelection, script, forwardState, rpinf, scriptGenerated, ruleStats, goalStats := _goalStats } := p -- TODO print goal stats?
+  let { total, configParsing, ruleSetConstruction, search, ruleSelection, script, forwardState, scriptGenerated, ruleStats, goalStats := _goalStats } := p -- TODO print goal stats?
   let totalRuleApplications :=
     ruleStats.foldl (init := 0) λ total rp => total + rp.elapsed
   aesop_trace![opt] "Total: {total.printAsMillis}"
@@ -187,7 +186,6 @@ def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
       (return m!"Search: {search.printAsMillis}") do
     aesop_trace![opt] "Rule selection: {ruleSelection.printAsMillis}"
     aesop_trace![opt] "Forward state updates: {forwardState.printAsMillis}"
-    aesop_trace![opt] "RPINF: {rpinf.printAsMillis}"
     withConstAesopTraceNode opt (collapsed := false)
         (return m!"Rule applications: {totalRuleApplications.printAsMillis} [total / successful / failed]") do
       let timings := sortRuleStatsTotals p.ruleStatsTotals.toArray
