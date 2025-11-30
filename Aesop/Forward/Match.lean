@@ -15,6 +15,7 @@ public import Aesop.RuleTac.ElabRuleTerm
 public import Aesop.RuleTac.Forward.Basic
 public import Aesop.Script.SpecificTactics
 public import Batteries.Lean.Meta.UnusedNames
+public import Aesop.Util.Basic
 public import Lean
 
 public section
@@ -166,10 +167,10 @@ def getProof (goal : MVarId) (m : ForwardRuleMatch) : MetaM (Option Expr) :=
 /-- Apply a forward rule match to a goal. This adds the hypothesis corresponding
 to the match to the local context. Returns the new goal, the added hypothesis
 and the hypotheses that were removed (if any). Hypotheses may be removed if the
-match is for a `destruct` rule. If the `skip` function, when applied to the
-normalised type of the new hypothesis, returns true, then the hypothesis is not
-added to the local context. -/
-def apply (goal : MVarId) (m : ForwardRuleMatch) (skip? : Option (RPINF → Bool)) :
+match is for a `destruct` rule. If `skipExistingProps` is `true`, propositional
+hypotheses are not added if another hypothesis with the same type is already
+present in the goal. -/
+def apply (goal : MVarId) (m : ForwardRuleMatch) (skipExistingProps : Bool) :
     ScriptT BaseM (Option (MVarId × FVarId × Array FVarId)) :=
   withConstAesopTraceNode .forward (return m!"apply complete match") do
   goal.withContext do
@@ -177,9 +178,9 @@ def apply (goal : MVarId) (m : ForwardRuleMatch) (skip? : Option (RPINF → Bool
     let some prf ← m.getProof goal
       | return none
     let type ← inferType prf
-    if let some skip := skip? then
+    if skipExistingProps then
       let doSkip ← withConstAesopTraceNode .forwardDebug (return m!"check whether hyp already exists") do
-        let result := skip (← rpinf type)
+        let result ← isHypRedundantReducibleRigid type
         aesop_trace[forwardDebug] "already exists: {result}"
         pure result
       if doSkip then

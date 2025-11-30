@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Tracing
+public import Aesop.Util.Basic
 
 public section
 
@@ -43,12 +44,6 @@ def foldlM (init : σ) (f : σ → Expr → α → m σ) (map : EMap α) : m σ 
 def foldl (init : σ) (f : σ → Expr → α → σ) (map : EMap α) : σ :=
   map.rep.foldl f init
 
-private def isDefEqEMap (s t : Expr) : MetaM Bool := do
-  withAesopTraceNode .forwardDebug (fun r => return m!"{exceptBoolEmoji r} {s} ≟ {t}") do
-  withNewMCtxDepth do
-  withReducible do
-    isDefEq s t
-
 def alterM (e : Expr) (f : α → m (Option α × β)) (map : EMap α) :
     m (EMap α × Option β) := do
   let lctx ← show MetaM _ from getLCtx
@@ -60,7 +55,7 @@ where
     | .cons e' old map => do
       if e'.hasAnyFVar (! lctx.contains ·) then
         return ← go lctx map
-      if ← isDefEqEMap e' e then
+      if ← isDefEqReducibleRigid e' e then
         let (new?, b) ← f old
         match new? with
         | none =>     return (map, b)
@@ -103,7 +98,7 @@ def findWithKey? (e : Expr) (map : EMap α) : MetaM (Option (Expr × α)) := do
   for (e', a) in map.rep do
     if e'.hasAnyFVar (! lctx.contains ·) then
       continue
-    if ← isDefEqEMap e e' then
+    if ← isDefEqReducibleRigid e e' then
       return some (e', a)
   return none
 
