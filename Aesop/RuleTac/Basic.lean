@@ -47,9 +47,6 @@ structure RuleTacInput where
   patternSubsts? : Option (Array Substitution)
   /-- The options given to Aesop. -/
   options : Options'
-  /-- Normalised types of all non-implementation detail hypotheses in the local
-  context of `goal`. -/
-  hypTypes : PHashSet RPINF
   deriving Inhabited
 
 /-- A subgoal produced by a rule. -/

@@ -137,7 +137,6 @@ def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       indexMatchLocations := rule.locations
       patternSubsts? := rule.patternSubsts?
       options := (← read).options
-      hypTypes := (← get).forwardState.hypTypes
       goal, mvars
     }
     withNormTraceNode (.ruleName rule.rule.name) do
