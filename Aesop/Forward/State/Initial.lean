@@ -16,13 +16,7 @@ def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
   profilingForwardState do
   goal.withContext do
     if ! aesop.dev.statefulForward.get (← getOptions) then
-      -- We still initialise the hyp types since these are also used by
-      -- stateless forward reasoning.
-      let mut hypTypes := ∅
-      for ldecl in ← getLCtx do
-        if ! ldecl.isImplementationDetail then
-          hypTypes := hypTypes.insert (← rpinf ldecl.type)
-      return ({ (∅ : ForwardState) with hypTypes }, #[])
+      return (∅, #[])
     let mut fs : ForwardState := ∅
     let mut ruleMatches := rs.constForwardRuleMatches
     aesop_trace[forward] do

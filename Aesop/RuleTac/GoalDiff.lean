@@ -60,12 +60,10 @@ private def hasUnknownFVar (e : Expr) : MetaM Bool := do
   let lctx ← getLCtx
   return e.hasAnyFVar (! lctx.contains ·)
 
-def isGoalDiffDefeqExpr (oldExpr newExpr : Expr) : MetaM Bool :=
-  withReducible do
-  withNewMCtxDepth do
-    if ← hasUnknownFVar oldExpr then
-      return false
-    isDefEq oldExpr newExpr
+def isGoalDiffDefeqExpr (oldExpr newExpr : Expr) : MetaM Bool := do
+  if ← hasUnknownFVar oldExpr then
+    return false
+  isDefEqReducibleRigid oldExpr newExpr
 
 def isGoalDiffDefeqTarget (oldGoal newGoal : MVarId) : MetaM Bool :=
   newGoal.withContext do

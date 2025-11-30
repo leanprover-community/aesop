@@ -565,4 +565,16 @@ scoped instance [MonadParentDecl m] : MonadParentDecl (ReaderT ρ m) where
 scoped instance [MonadParentDecl m] : MonadParentDecl (StateRefT' ω σ m) where
   getParentDeclName? := liftM (m := m) getParentDeclName?
 
+def isDefEqReducibleRigid (s t : Expr) : MetaM Bool := do
+  withNewMCtxDepth do
+  withReducible do
+    isDefEq s t
+
+def isHypRedundantReducibleRigid (type : Expr) : MetaM Bool := do
+  withNewMCtxDepth do
+  withReducible do
+    (← getLCtx).anyM fun ldecl =>
+      pure (! ldecl.isImplementationDetail) <&&>
+      isDefEq type ldecl.type
+
 end Aesop

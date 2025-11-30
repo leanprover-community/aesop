@@ -797,9 +797,6 @@ structure ForwardState where
   `patSubsts` maps the source `s` to a rule name `r` and pattern substitution `i`
   iff the rule state of `r` contains `i` with source `s`. -/
   patSubsts : PHashMap PatSubstSource (PArray (RuleName × Substitution))
-  /-- Normalised types of all non-implementation detail hypotheses in the
-  local context. -/
-  hypTypes : PHashSet RPINF
  deriving Inhabited
 
 namespace ForwardState
@@ -832,11 +829,6 @@ def addHypCore (ruleMatches : Array ForwardRuleMatch) (goal : MVarId)
     (fs : ForwardState) : BaseM (ForwardState × Array ForwardRuleMatch) := do
   goal.withContext do
   withConstAesopTraceNode .forward (return m!"add hyp {Expr.fvar h} ({h.name})") do
-    let hTypeRPINF ← rpinf (← h.getType)
-    if (← isProp hTypeRPINF.toExpr) && fs.hypTypes.contains hTypeRPINF then
-      aesop_trace[forward] "a hyp with the same (propositional) type was already added"
-      return (fs,ruleMatches)
-    let fs := { fs with hypTypes := fs.hypTypes.insert hTypeRPINF }
     ms.foldlM (init := (fs, ruleMatches)) λ (fs, ruleMatches) (r, i) => do
       withConstAesopTraceNode .forward (return m!"rule {r.name}, premise {i}") do
         let rs := fs.ruleStates.find? r.name |>.getD r.initialRuleState
@@ -918,8 +910,7 @@ def erasePatSubsts (source : PatSubstSource) (fs : ForwardState) :
 context `lctx`, then `fs.eraseHyp h ms` represents `lctx` with `h` removed.
 `type` must be the normalised type of `h`. `ms` must contain all rules for which
 `h` may unify with a maximal premise. -/
-def eraseHyp (h : FVarId) (type : RPINF) (fs : ForwardState) :
-    ForwardState := Id.run do
+def eraseHyp (h : FVarId) (fs : ForwardState) : ForwardState := Id.run do
   let mut ruleStates := fs.ruleStates
   for (r, i) in fs.hyps[h].getD {} do
     let some rs := ruleStates.find? r
@@ -929,7 +920,6 @@ def eraseHyp (h : FVarId) (type : RPINF) (fs : ForwardState) :
   let fs := {
     fs with
     hyps := fs.hyps.erase h, ruleStates
-    hypTypes := fs.hypTypes.erase type
   }
   fs.erasePatSubsts (.hyp h)
 

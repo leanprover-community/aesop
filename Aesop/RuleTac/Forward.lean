@@ -13,13 +13,24 @@ import Batteries.Lean.Meta.UnusedNames
 
 open Lean
 open Lean.Meta
+open Std (HashSet)
 
 namespace Aesop.RuleTac
 
-partial def makeForwardHyps (e : Expr) (patSubst? : Option Substitution)
-    (immediate : UnorderedArraySet PremiseIndex) (maxDepth? : Option Nat)
-    (forwardHypData : ForwardHypData) (existingHypTypes : PHashSet RPINF) :
-    BaseM (Array (Expr × Nat) × Array FVarId) :=
+structure ForwardM.Context where
+  maxDepth? : Option Nat
+  forwardHypData : ForwardHypData
+  deriving Inhabited
+
+structure ForwardM.State where
+  toAssert : Array (Expr × Expr × Nat) := #[]
+  usedHyps : Std.HashSet FVarId := ∅
+  deriving Inhabited
+
+abbrev ForwardM := ReaderT ForwardM.Context <| StateRefT ForwardM.State ScriptM
+
+partial def makeForwardHypProofs (e : Expr) (patSubst? : Option Substitution)
+    (immediate : UnorderedArraySet PremiseIndex) : ForwardM Unit :=
   withNewMCtxDepth (allowLevelAssignments := true) do
     let type ← inferType e
     let (argMVars, binderInfos, _) ← openRuleType patSubst? e
@@ -34,15 +45,11 @@ partial def makeForwardHyps (e : Expr) (patSubst? : Option Substitution)
         immediateMVars := immediateMVars.push mvarId
       else if binderInfos[i]!.isInstImplicit then
         instMVars := instMVars.push mvarId
-    let (proofs, usedHyps, _) ←
-      loop app instMVars immediateMVars 0 #[] 0 #[] #[] ∅
-    return (proofs, usedHyps)
+    loop app instMVars immediateMVars 0 0 #[]
   where
     loop (app : Expr) (instMVars : Array MVarId) (immediateMVars : Array MVarId)
-        (i : Nat) (proofsAcc : Array (Expr × Nat)) (currentMaxHypDepth : Nat)
-        (currentUsedHyps : Array FVarId) (usedHypsAcc : Array FVarId)
-        (proofTypesAcc : Std.HashSet RPINF) :
-        BaseM (Array (Expr × Nat) × Array FVarId × Std.HashSet RPINF) := do
+        (i : Nat) (currentMaxHypDepth : Nat) (currentUsedHyps : Array FVarId) :
+        ForwardM Unit := do
       if h : immediateMVars.size > 0 ∧ i < immediateMVars.size then
         -- We go through the immediate mvars back to front. This is more
         -- efficient because assigning later mvars may already determine the
@@ -52,51 +59,61 @@ partial def makeForwardHyps (e : Expr) (patSubst? : Option Substitution)
           -- If the mvar is already assigned, we still need to update and check
           -- the hyp depth.
           let mut currentMaxHypDepth := currentMaxHypDepth
-          let (_, fvarIds) ← (← instantiateMVars (.mvar mvarId)).collectFVars |>.run {}
+          let (_, fvarIds) ← (Expr.mvar mvarId).collectFVars |>.run {}
           for fvarId in fvarIds.fvarIds do
-            let hypDepth := forwardHypData.depths.getD fvarId 0
+            let hypDepth := (← read).forwardHypData.depths.getD fvarId 0
             currentMaxHypDepth := max currentMaxHypDepth hypDepth
-          if let some maxDepth := maxDepth? then
+          if let some maxDepth := (← read).maxDepth? then
             if currentMaxHypDepth + 1 > maxDepth then
-              return (proofsAcc, usedHypsAcc, proofTypesAcc)
-          return ← loop app instMVars immediateMVars (i + 1) proofsAcc
-            currentMaxHypDepth currentUsedHyps usedHypsAcc proofTypesAcc
+              return
+          return ← loop app instMVars immediateMVars (i + 1) currentMaxHypDepth
+                     currentUsedHyps
         let type ← mvarId.getType
-        (← getLCtx).foldlM (init := (proofsAcc, usedHypsAcc, proofTypesAcc)) λ s@(proofsAcc, usedHypsAcc, proofTypesAcc) ldecl => do
+        for ldecl in ← getLCtx do
           if ldecl.isImplementationDetail then
-            return s
-          let hypDepth := forwardHypData.depths.getD ldecl.fvarId 0
+            continue
+          let hypDepth := (← read).forwardHypData.depths.getD ldecl.fvarId 0
           let currentMaxHypDepth := max currentMaxHypDepth hypDepth
-          if let some maxDepth := maxDepth? then
+          if let some maxDepth := (← read).maxDepth? then
             if currentMaxHypDepth + 1 > maxDepth then
-              return s
-          withoutModifyingState do
+              continue
+          let metaState ← show MetaM _ from saveState
+          try
             if ← isDefEq ldecl.type type then
               mvarId.assign (mkFVar ldecl.fvarId)
               let currentUsedHyps := currentUsedHyps.push ldecl.fvarId
-              loop app instMVars immediateMVars (i + 1) proofsAcc
-                currentMaxHypDepth currentUsedHyps usedHypsAcc proofTypesAcc
-            else
-              return s
+              loop app instMVars immediateMVars (i + 1)
+                currentMaxHypDepth currentUsedHyps
+          finally
+            metaState.restore
       else
         for instMVar in instMVars do
           try
             instMVar.assign <| ← instMVar.withContext do synthInstance (← instMVar.getType)
           catch e =>
             trace[saturate] "failed to synthesize{indentExpr (← instMVar.getType)}"
-            return (proofsAcc, usedHypsAcc, proofTypesAcc)
+            return
         let proof := (← abstractMVars app).expr
-        let type ← rpinf (← inferType proof)
-        let redundant :=
-          proofTypesAcc.contains type || existingHypTypes.contains type
-        if redundant then
-          return (proofsAcc, usedHypsAcc, proofTypesAcc)
-        else
+        let type ← inferType proof
+        if ! (← isRedundant type) then
           let depth := currentMaxHypDepth + 1
-          let proofsAcc := proofsAcc.push (proof, depth)
-          let proofTypesAcc := proofTypesAcc.insert type
-          let usedHypsAcc := usedHypsAcc ++ currentUsedHyps
-          return (proofsAcc, usedHypsAcc, proofTypesAcc)
+          modify fun s => {
+            toAssert := s.toAssert.push (proof, type, depth)
+            usedHyps := s.usedHyps.insertMany currentUsedHyps
+          }
+
+    isRedundant (type : Expr) : ForwardM Bool := do
+      (← get).toAssert.anyM (isDefEqReducibleRigid ·.1 type) <||>
+      isHypRedundantReducibleRigid type
+
+def makeForwardHypProofs' (e : Expr)
+    (patSubsts? : Option (Std.HashSet Substitution))
+    (immediate : UnorderedArraySet PremiseIndex) : ForwardM Unit := do
+  if let some patSubsts := patSubsts? then
+    for patSubst in patSubsts do
+      makeForwardHypProofs e patSubst immediate
+  else
+    makeForwardHypProofs e none immediate
 
 def assertForwardHyp (goal : MVarId) (hyp : Hypothesis) (depth : Nat) :
     ScriptM (FVarId × MVarId) := do
@@ -122,60 +139,38 @@ where
 def applyForwardRule (goal : MVarId) (e : Expr)
     (patSubsts? : Option (Std.HashSet Substitution))
     (immediate : UnorderedArraySet PremiseIndex) (clear : Bool)
-    (maxDepth? : Option Nat) (existingHypTypes : PHashSet RPINF) :
+    (maxDepth? : Option Nat) :
     ScriptM Subgoal :=
-  withReducible $ goal.withContext do
+  withReducible do goal.withContext do
     let initialGoal := goal
-    let forwardHypData ← getForwardHypData
-    let mut newHypProofs := #[]
-    let mut usedHyps := ∅
-    if let some patSubsts := patSubsts? then
-      for patSubst in patSubsts do
-        let (newHypProofs', usedHyps') ←
-          makeForwardHyps e patSubst immediate maxDepth? forwardHypData
-            existingHypTypes
-        newHypProofs := newHypProofs ++ newHypProofs'
-        usedHyps := usedHyps ++ usedHyps'
-    else
-      let (newHypProofs', usedHyps') ←
-        makeForwardHyps e none immediate maxDepth? forwardHypData
-          existingHypTypes
-      newHypProofs := newHypProofs'
-      usedHyps := usedHyps'
-    usedHyps :=
-      usedHyps.sortDedup (ord := ⟨λ x y => x.name.quickCmp y.name⟩)
-    if newHypProofs.isEmpty then
-      err
-    let newHypUserNames ← getUnusedUserNames newHypProofs.size forwardHypPrefix
-    let mut newHyps := #[]
-    for (proof, depth) in newHypProofs, userName in newHypUserNames do
-      let type ← inferType proof
-      newHyps := newHyps.push ({ value := proof, type, userName }, depth)
+    let (_, { toAssert, usedHyps }) ←
+      makeForwardHypProofs' e patSubsts? immediate
+        |>.run { maxDepth?, forwardHypData := ← getForwardHypData } |>.run {}
+    if toAssert.isEmpty then
+      throwError "found no instances of {e} (other than possibly those which had been previously added by forward rules)"
     let mut goal := goal
     let mut addedFVars := ∅
-    for (newHyp, depth) in newHyps do
-      let (fvarId, goal') ← assertForwardHyp goal newHyp depth
-      goal := goal'
+    let userNames ← getUnusedUserNames toAssert.size forwardHypPrefix
+    for (value, type, depth) in toAssert, userName in userNames do
+      let (fvarId, mvarId) ← assertForwardHyp goal { userName, type, value } depth
+      goal := mvarId
       addedFVars := addedFVars.insert fvarId
     let mut diff := {
       oldGoal := initialGoal
       newGoal := goal
-      addedFVars
       removedFVars := ∅
-      targetChanged := .false
+      targetChanged := false
+      addedFVars
     }
     if clear then
       let usedPropHyps ← goal.withContext do
-        usedHyps.filterM λ fvarId => isProof (.fvar fvarId)
+        usedHyps.toArray.filterM λ fvarId => isProof (.fvar fvarId)
       let (goal', removedFVars) ← tryClearManyS goal usedPropHyps
       let removedFVars := removedFVars.foldl (init := ∅) λ set fvarId =>
         set.insert fvarId
       goal := goal'
       diff := { diff with newGoal := goal, removedFVars }
     return { diff }
-  where
-    err {α} : MetaM α := throwError
-      "found no instances of {e} (other than possibly those which had been previously added by forward rules)"
 
 @[inline]
 def forwardExpr (e : Expr) (immediate : UnorderedArraySet PremiseIndex)
@@ -183,7 +178,7 @@ def forwardExpr (e : Expr) (immediate : UnorderedArraySet PremiseIndex)
   SingleRuleTac.toRuleTac λ input => input.goal.withContext do
     let (goal, steps) ←
       applyForwardRule input.goal e input.patternSubsts? immediate
-        (clear := clear) input.options.forwardMaxDepth? input.hypTypes
+        (clear := clear) input.options.forwardMaxDepth?
       |>.run
     return (#[goal], steps, none)
 
@@ -206,14 +201,14 @@ def forward (t : RuleTerm) (immediate : UnorderedArraySet PremiseIndex)
 
 def forwardMatches (ms : Array ForwardRuleMatch) : RuleTac :=
   SingleRuleTac.toRuleTac λ input => do
-    let skip type := input.hypTypes.contains type
     let mut goal := input.goal
     let mut addedFVars := ∅
     let mut removedFVars := ∅
     let mut anySuccess := false
     let mut steps := #[]
     for m in ms do
-      let (some (goal', hyp, removedFVars'), steps') ← m.apply goal (some skip) |>.run
+      let (some (goal', hyp, removedFVars'), steps') ←
+        m.apply goal (skipExistingProps := true) |>.run
         | continue
       anySuccess := true
       goal := goal'

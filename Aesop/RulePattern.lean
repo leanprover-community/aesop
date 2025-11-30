@@ -9,7 +9,6 @@ import Aesop.Forward.Substitution
 import Aesop.Rule.Name
 import Aesop.Tracing
 import Aesop.Index.DiscrTreeConfig
-import Aesop.RPINF
 
 open Lean Lean.Meta
 
