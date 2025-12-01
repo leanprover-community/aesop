@@ -87,12 +87,17 @@ partial def makeForwardHypProofs (e : Expr) (patSubst? : Option Substitution)
           finally
             metaState.restore
       else
-        for instMVar in instMVars do
-          try
-            instMVar.assign <| ← instMVar.withContext do synthInstance (← instMVar.getType)
-          catch e =>
-            trace[saturate] "failed to synthesize{indentExpr (← instMVar.getType)}"
-            return
+        try
+          -- `synthAppInstances` uses the `binderInfos` to determine which
+          -- mvars are instances, which in our case is all of them.
+          let binderInfos := Array.replicate instMVars.size BinderInfo.instImplicit
+          -- The `default` `MVarId` passed to `synthAppInstances` is only used
+          -- to format the exception, which we immediately catch.
+          synthAppInstances `aesop default (instMVars.map Expr.mvar) binderInfos
+            (synthAssignedInstances := false) (allowSynthFailures := false)
+        catch _ =>
+          aesop_trace[forward] "instance synthesis failed"
+          return
         let proof := (← abstractMVars app).expr
         let type ← inferType proof
         if ! (← isRedundant type) then
