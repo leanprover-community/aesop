@@ -276,6 +276,7 @@ def modify (vmap : VariableMap) (var : PremiseIndex) (f : InstMap → InstMap ×
 for each variable in `slot.common`). Returns `true` if the variable map
 changed. -/
 def addHyp (vmap : VariableMap) (slot : Slot) (hyp : Hyp) : BaseM (VariableMap × Bool) :=
+  withAesopTraceNode .forwardDebug (fun _ => return m!"VariableMap.addHyp {slot.index}") do
   slot.common.foldM (init := (vmap, false)) λ (vmap, changed) var => do
     if let some inst := hyp.subst.find? var then
       let (vmap, changed') ← vmap.modifyM var (·.insertHyp slot.index inst hyp)
@@ -287,6 +288,7 @@ def addHyp (vmap : VariableMap) (slot : Slot) (hyp : Hyp) : BaseM (VariableMap �
 `m.level + 1`. Returns `true` if the variable map changed. -/
 def addMatch (vmap : VariableMap) (nextSlot : Slot) (m : Match) :
     BaseM (VariableMap × Bool) :=
+  withAesopTraceNode .forwardDebug (fun _ => return m!"VariableMap.addMatch {nextSlot.index.toNat - 1}") do
   nextSlot.common.foldM (init := (vmap, false)) λ (vmap, changed) var => do
     let (vmap, changed') ← vmap.modifyM var (·.insertMatch var m)
     return (vmap, changed || changed')
@@ -306,6 +308,7 @@ def erasePatSubst (vmap : VariableMap) (subst : Substitution) (slot : SlotIndex)
 each variable contained in `slot.common` is also contained in `subst`. -/
 def findMatches (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
     BaseM (Std.HashSet Match) := do
+  withAesopTraceNode .forwardDebug (fun _ => return m!"VariableMap.findMatches {slot.index}") do
   if slot.index == ⟨0⟩ then
     panic! "slot has index 0"
   let common := slot.common.toArray
@@ -332,6 +335,7 @@ Precondition: `slot.common` is nonempty and each variable contained in it is
 also contained in `subst`. -/
 def findHyps (vmap : VariableMap) (slot : Slot) (subst : Substitution) :
     BaseM (Std.HashSet Hyp) := do
+  withAesopTraceNode .forwardDebug (fun _ => return m!"VariableMap.findHyps {slot.index}") do
   let common := slot.common.toArray
   if h : 0 < common.size then
     let mut hyps := PersistentHashSet.toHashSet (← slotHyps common[0])
@@ -722,7 +726,9 @@ def update (goal : MVarId) (rs : RuleState) : BaseM (RuleState × Array ForwardR
     let mut completeMatches := #[]
     for i in [:clusterStates.size] do
       let cs := clusterStates[i]!
-      let (cs, newClusterCompleteMatches) ← cs.update |>.run premises lmvars
+      let (cs, newClusterCompleteMatches) ← withConstAesopTraceNode .forward (return m!"update cluster state {i}") do
+        cs.update |>.run premises lmvars
+      aesop_trace[forwardDebug] "new cluster complete matches: {newClusterCompleteMatches}"
       clusterStates := clusterStates.set! i cs
       let completeMatches' ←
         withConstAesopTraceNode .forwardDebug (return m!"construct new complete matches") do
