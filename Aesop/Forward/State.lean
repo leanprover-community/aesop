@@ -142,13 +142,14 @@ def modify (imap : InstMap) (slot : SlotIndex) (inst : Expr)
       let (ms, hs, a) := f ∅ ∅
       if ms.isEmpty && hs.isEmpty then
         return (imap, a)
-      let map := map.insertNew inst (ms, hs)
+      let map ← map.insertNew inst (ms, hs)
       return (⟨imap.map.insert slot map⟩, a)
   else
     let (ms, hs, a) := f ∅ ∅
     if ms.isEmpty && hs.isEmpty then
       return (imap, a)
-    return (⟨imap.map.insert slot <| .singleton inst (ms, hs)⟩, a)
+    let map ← EMap.singleton inst (ms, hs)
+    return (⟨imap.map.insert slot map⟩, a)
 
 /-- Inserts a hyp associated with slot `slot` and instantiation `inst`.
 The hyp must be a valid assignment for the slot's premise. Returns `true` if
