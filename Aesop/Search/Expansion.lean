@@ -7,6 +7,7 @@ module
 
 public import Aesop.Search.Expansion.Norm
 public import Aesop.Tree.AddRapp
+public import Aesop.Forward.State.UpdateGoal
 
 public section
 
@@ -176,11 +177,12 @@ def SafeRulesResult.toEmoji : SafeRulesResult → String
   | skipped => ruleSkippedEmoji
 
 def runFirstSafeRule (gref : GoalRef) : SearchM Q SafeRulesResult := do
-  let g ← gref.get
-  if g.unsafeRulesSelected then
+  if (← gref.get).unsafeRulesSelected then
     return .skipped
     -- If the unsafe rules have been selected, we have already tried all the
     -- safe rules.
+  gref.updateForwardState .safe
+  let g ← gref.get
   let rules ← selectSafeRules g
   let mut postponedRules := {}
   for r in rules do
@@ -200,6 +202,7 @@ def applyPostponedSafeRule (r : PostponedSafeRule) (parentRef : GoalRef) :
 
 partial def runFirstUnsafeRule (postponedSafeRules : Array PostponedSafeRule)
     (parentRef : GoalRef) : SearchM Q RuleResult := do
+  parentRef.updateForwardState .unsafe
   let queue ← selectUnsafeRules postponedSafeRules parentRef
   let (remainingQueue, result) ← loop queue
   parentRef.modify λ g => g.setUnsafeQueue remainingQueue
