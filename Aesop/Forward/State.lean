@@ -697,6 +697,7 @@ def eraseHyp (h : FVarId) (pi : PremiseIndex) (rs : RuleState) : RuleState :=
   { rs with clusterStates }
 
 def update (goal : MVarId) (rs : RuleState) : BaseM (RuleState × Array ForwardRuleMatch) :=
+  withAesopTraceNode .forward (fun r => return m!"{exceptEmoji r} update rule state {rs.rule.name}") do
   goal.withContext do
   withNewMCtxDepth do
     let some ruleExpr ←
