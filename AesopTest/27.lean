@@ -24,7 +24,7 @@ trace: [aesop.proof] Final proof:
           ((fun (h_2 : All P (x :: xs)) =>
                 (casesOn (P := P) (motive := fun a x_1 => x :: xs = a → h ≍ x_1 → P x ∧ All P xs) h_2
                     (fun h_3 => False.elim (noConfusion_of_Nat List.ctorIdx h_3)) fun {x_1} {xs_1} a a_1 h_3 =>
-                    List.cons.noConfusion (h ≍ cons (P := P) a a_1 → P x ∧ All P xs) x xs x_1 xs_1 h_3 fun head_eq =>
+                    List.cons.noConfusion h_3 fun head_eq =>
                       Eq.ndrec (motive := fun {x_1} =>
                         ∀ (a : P x_1), xs = xs_1 → h ≍ cons (P := P) a a_1 → P x ∧ All P xs)
                         (fun a tail_eq =>
