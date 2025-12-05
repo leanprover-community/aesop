@@ -16,20 +16,21 @@ set_option linter.missingDocs true
 
 namespace Aesop
 
-private def ppPHashMap [BEq α] [Hashable α] [ToMessageData α]
-    [ToMessageData β] (indent : Bool) (m : PHashMap α β) : MessageData :=
-  flip MessageData.joinSep "\n" $
-    m.foldl (init := []) λ xs a b =>
-      let x :=
+private def ppMap [ForIn Id ρ (α × β)] [ToMessageData α]
+    [ToMessageData β] (indent : Bool) (m : ρ) : MessageData :=
+  m!"\n".joinSep <| Id.run do
+    let mut entries := #[]
+    for (a, b) in m do
+      entries := entries.push <|
         if indent then
           m!"{a} =>{indentD $ toMessageData b}"
         else
           m!"{a} => {b}"
-      x :: xs
+    return entries.toList
 
 private def ppPHashSet [BEq α] [Hashable α] [ToMessageData α] (s : PHashSet α) :
     MessageData :=
-  toMessageData $ s.fold (init := #[]) λ as a => as.push a
+  toMessageData s.toList
 
 /-- A hypothesis that has not yet been matched against a premise, or a rule
 pattern substitution. -/
@@ -39,6 +40,11 @@ inductive RawHyp where
   /-- The rule pattern substitution. -/
   | patSubst (subst : Substitution)
   deriving Inhabited, BEq, Hashable
+
+instance : ToMessageData RawHyp where
+  toMessageData
+    | .fvarId fvarId => m!"{Expr.fvar fvarId}"
+    | .patSubst s => m!"{s}"
 
 /-- A hypothesis that was matched against a premise, or a rule pattern
 substitution. -/
@@ -89,19 +95,17 @@ namespace InstMap
 instance : EmptyCollection InstMap := ⟨⟨.empty⟩⟩
 
 instance : ToMessageData InstMap where
-  toMessageData _m := "FIXME"
-    /-
-    ppPHashMap (indent := true) $
+  toMessageData m :=
+    ppMap (indent := true) $
       m.map.map λ instMap =>
-        ppPHashMap (indent := false) $
-          instMap.map λ (ms, hs) =>
+        ppMap (indent := false) $
+          instMap.map λ _ (ms, hs) =>
             let hs : Array MessageData :=
               hs.fold (init := #[]) λ hs (h : Hyp) =>
                 match h.fvarId? with
                 | none => hs.push m!"{h.subst}"
                 | some fvarId => hs.push m!"{Expr.fvar fvarId}"
             m!"{(ppPHashSet ms, hs)}"
-    -/
 
 /-- Returns the set of matches and hypotheses associated with a slot `slot`
 with instantiation `inst`. -/
@@ -237,7 +241,7 @@ instance : EmptyCollection VariableMap :=
   ⟨⟨.empty⟩⟩
 
 instance : ToMessageData VariableMap where
-  toMessageData m := ppPHashMap (indent := true) m.map
+  toMessageData m := ppMap (indent := true) m.map
 
 /-- Get the `InstMap` associated with a variable. -/
 def find? (vmap : VariableMap) (var : PremiseIndex) : Option InstMap :=
@@ -402,7 +406,8 @@ instance : Inhabited ClusterState where
 instance : ToMessageData ClusterState where
   toMessageData cs :=
     m!"variables:{indentD $ toMessageData cs.variableMap}\n\
-       complete matches:{indentD $ .joinSep (PersistentHashSet.toList cs.completeMatches |>.map toMessageData) "\n"}"
+       slot queues:{indentD <| m!"\n".joinSep <| cs.slotQueues.zipIdx.toList.map fun (q, i) => m!"slot {i}: {q.toList}"}\n\
+       complete matches:{indentD $ m!"\n".joinSep (PersistentHashSet.toList cs.completeMatches |>.map toMessageData)}"
 
 /-- Get the slot with the given index. Panic if the index is invalid. -/
 @[macro_inline, always_inline]
