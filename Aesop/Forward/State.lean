@@ -724,9 +724,10 @@ def update (goal : MVarId) (rs : RuleState) : BaseM (RuleState × Array ForwardR
       let cs := clusterStates[i]!
       let (cs, newClusterCompleteMatches) ← cs.update |>.run premises lmvars
       clusterStates := clusterStates.set! i cs
-      completeMatches ←
+      let completeMatches' ←
         withConstAesopTraceNode .forwardDebug (return m!"construct new complete matches") do
           pure <| addCompleteMatches completeMatches clusterStates i newClusterCompleteMatches
+      completeMatches := completeMatches ++ completeMatches'
     return ({ rs with clusterStates }, completeMatches)
 where
   addCompleteMatches (acc : Array ForwardRuleMatch)
