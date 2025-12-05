@@ -703,6 +703,9 @@ def eraseHyp (h : FVarId) (pi : PremiseIndex) (rs : RuleState) : RuleState :=
 
 def update (goal : MVarId) (rs : RuleState) : BaseM (RuleState × Array ForwardRuleMatch) :=
   withAesopTraceNode .forward (fun r => return m!"{exceptEmoji r} update rule state {rs.rule.name}") do
+  if ! rs.clusterStates.all (·.haveHypForEachSlot) then
+    aesop_trace[forward] "skipping update since some cluster states cannot yet have complete matches"
+    return (rs, #[])
   goal.withContext do
   withNewMCtxDepth do
     let some ruleExpr ←
