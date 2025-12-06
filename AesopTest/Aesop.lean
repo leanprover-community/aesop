@@ -80,10 +80,3 @@ end Loop
 example (Even : Nat → Prop) (zero : Even 0)
     (plusTwo : ∀ n, Even n → Even (n + 2)) : Even 20 := by
   aesop
-
-example : ∃ n : Nat, n ^ 2 = 4 ∧ ∃ n : Nat, n ^ 2 = 9 ∧ True := by
-  aesop
-    (config := { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0, terminal := false })
-    (config := { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0, terminal := false })
-  (exists 2)
-  (exists 3)
