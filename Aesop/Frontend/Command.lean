@@ -28,6 +28,8 @@ elab_rules : command
     let dflt := (← dflt?.mapM (elabBoolLit ·)).getD false
     rsNames.forM checkRuleSetNotDeclared
     elabCommand $ ← `(meta initialize ($(quote rsNames).forM $ declareRuleSetUnchecked (isDefault := $(quote dflt))))
+    -- TODO: record dependency on rule set at use site
+    recordExtraRevUseOfCurrentModule
 
 elab (name := addRules)
     attrKind:attrKind "add_aesop_rules " e:Aesop.rule_expr : command => do
