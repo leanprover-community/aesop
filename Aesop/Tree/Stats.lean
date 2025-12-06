@@ -17,6 +17,7 @@ def Goal.stats (g : Goal) : TreeM GoalStats := do
     goalId := g.id.toNat
     goalKind := if g.isNormal then .postNorm else .preNorm
     forwardStateStats := g.forwardState.stats
+    depth := g.depth
     lctxSize
   }
 

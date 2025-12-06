@@ -43,6 +43,8 @@ structure GoalStats where
   /-- Number of fvars in the local context, excluding implementation detail
   fvars. -/
   lctxSize : Nat
+  /-- This goal's depth in the search tree. -/
+  depth : Nat
   forwardStateStats : ForwardStateStats
   deriving Inhabited, ToJson
 
