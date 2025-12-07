@@ -93,7 +93,7 @@ def update (newMatches : Array ForwardRuleMatch)
   let mut ms := forwardRuleMatches
   for m in consumedForwardRuleMatches do
     ms := ms.erase m
-  return forwardRuleMatches.eraseHyps erasedHyps |>.insertMany newMatches
+  return ms.eraseHyps erasedHyps |>.insertMany newMatches
 
 private def pHashSetToArray [BEq α] [Hashable α] (s : PHashSet α) : Array α :=
   s.fold (init := #[]) λ acc x => acc.push x
