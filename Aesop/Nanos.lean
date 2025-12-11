@@ -5,7 +5,11 @@ Authors: Jannis Limperg
 -/
 module
 
+public import Lean.Data.Json.FromToJson.Basic
+
 public section
+
+open Lean
 
 namespace Aesop
 
@@ -35,6 +39,9 @@ instance : Add Nanos where
 
 instance : HDiv Nanos Nat Nanos where
   hDiv n m := ⟨n.nanos / m⟩
+
+instance : ToJson Nanos where
+  toJson | ⟨n⟩ => toJson n
 
 def printAsMillis (n : Nanos) : String :=
   let str := toString (n.nanos.toFloat / 1000000)

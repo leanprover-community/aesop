@@ -8,6 +8,7 @@ module
 public meta import Aesop.Search.Main
 public meta import Aesop.Frontend.Tactic
 public meta import Aesop.Stats.Extension
+public meta import Aesop.Stats.File
 
 public section
 
@@ -22,8 +23,9 @@ meta def evalAesop : Tactic := λ stx => do
   let goal ← getMainGoal
   goal.withContext do
     let (_, stats) ← go stx goal |>.run ∅
-    recordStatsForCurrentFileIfEnabled stx stats
     stats.trace .stats
+    recordStatsForCurrentFileIfEnabled stx stats
+    appendStatsToStatsFileIfEnabled stx stats
 where
   go (stx : Syntax) (goal : MVarId) : StateRefT Stats TacticM Unit :=
     profiling (λ s _ t => { s with total := t }) do
