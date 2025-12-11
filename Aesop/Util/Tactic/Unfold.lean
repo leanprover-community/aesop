@@ -21,13 +21,20 @@ private meta def mkToUnfold (ids : Array Ident) :
     toUnfold := toUnfold.insert decl (← getUnfoldEqnFor? decl)
   return toUnfold
 
-elab "aesop_unfold " ids:ident+ : tactic => do
+/--
+`aesop_unfold id1 id2 ...` unfolds the definitions `id1 id2 ...` in the conclusion of the goal.
+This tactic is used in the output of `aesop?`.
+
+* `aesop_unfold id1 id2 ... at h1 h2 ...` unfolds at the hypotheses `h1 h2 ...` instead.
+-/
+elab (name := aesop_unfold) "aesop_unfold " ids:ident+ : tactic => do
   let toUnfold ← mkToUnfold ids
   liftMetaTactic λ goal => do
     match ← unfoldManyTarget (toUnfold[·]?) goal with
     | none => throwTacticEx `aesop_unfold goal "could not unfold any of the given constants"
     | some (goal, _) => return [goal]
 
+@[tactic_alt aesop_unfold]
 elab "aesop_unfold " ids:ident+ " at " hyps:ident+ : tactic => do
   let toUnfold ← mkToUnfold ids
   liftMetaTactic λ goal => do

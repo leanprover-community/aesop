@@ -116,15 +116,35 @@ def evalSaturate (depth? : Option (TSyntax `num))
     |>.runForwardElab (← getMainGoal)
   liftMetaTactic1 (saturate rs · options)
 
-elab "saturate " depth?:(num)? ppSpace rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic => do
+/-- `saturate` repeatedly applies forward reasoning rules to the hypotheses in the goal.
+By default, `saturate` repeats applying rules until no progress can be made.
+
+* `saturate n`, where `n` is a numeric literal, applies rules to a hypothesis when it reaches a
+  depth of `n`.
+* `saturate [rule, ...]` adds `rule` to the rules to be applied. `rule` can be a term (added as
+  safe forward rule) or `*` (which will use all hypotheses as implications).
+* `saturate using ruleset` adds all rules from the rule set named `ruleset`, in addition to the default ruleset.
+* `saturate? ...` outputs a tactic script after running `saturate` with the given options.
+-/
+elab (name := saturate) "saturate " depth?:(num)? ppSpace rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic => do
   evalSaturate depth? rules? rs? (traceScript := false)
 
+@[tactic_alt saturate]
 elab "saturate? " depth?:(num)? ppSpace rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic => do
   evalSaturate depth? rules? rs? (traceScript := true)
 
-macro "forward " rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic =>
+/-- `forward` applies one round of forward reasoning rules to the hypotheses in the goal.
+This is equivalent to `saturate 1`.
+
+* `forward [rule, ...]` adds `rule` to the rules to be applied. `rule` can be a term (added as
+  safe forward rule) or `*` (which will use all hypotheses as implications).
+* `forward using ruleset` adds all rules from the rule set named `ruleset`, in addition to the default ruleset.
+* `forward? ...` outputs a tactic script after running `forward` with the given options.
+-/
+macro (name := forward) "forward " rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic =>
   `(tactic| saturate 1 $[$rules?]? $[$rs?]?)
 
+@[tactic_alt forward]
 macro "forward? " rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic =>
   `(tactic| saturate? 1 $[$rules?]? $[$rs?]?)
 
