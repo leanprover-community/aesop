@@ -1,7 +1,7 @@
 name: Build
 
 on:
-  push:
+  pull_request:
   merge_group:
 
 jobs:
@@ -11,7 +11,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - uses: leanprover/lean-action@v1
         with:

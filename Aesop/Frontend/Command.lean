@@ -7,11 +7,9 @@ module
 
 public meta import Aesop.Frontend.Basic
 public meta import Aesop.Stats.Report
+public meta import Batteries.Linter.UnreachableTactic
 public meta import Aesop.Frontend.Extension
 public meta import Aesop.Frontend.RuleExpr
-public import Batteries.Linter.UnreachableTactic
-import Aesop.Frontend.Extension
-import Aesop.Stats.Report
 
 public meta section
 
@@ -30,6 +28,8 @@ elab_rules : command
     let dflt := (← dflt?.mapM (elabBoolLit ·)).getD false
     rsNames.forM checkRuleSetNotDeclared
     elabCommand $ ← `(meta initialize ($(quote rsNames).forM $ declareRuleSetUnchecked (isDefault := $(quote dflt))))
+    -- TODO: record dependency on rule set at use site
+    recordExtraRevUseOfCurrentModule
 
 elab (name := addRules)
     attrKind:attrKind "add_aesop_rules " e:Aesop.rule_expr : command => do

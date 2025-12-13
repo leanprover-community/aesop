@@ -5,10 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
-public meta import Aesop.RuleTac.Basic
-public meta import Batteries.Lean.Meta.InstantiateMVars
-import Aesop.Frontend.Attribute
-public meta import Aesop.Script.SpecificTactics
+public import Aesop.Frontend.Attribute
 
 public section
 

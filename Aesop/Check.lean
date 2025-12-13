@@ -16,8 +16,7 @@ namespace Aesop
 initialize Check.all : Lean.Option Bool ←
   Option.register `aesop.check.all
     { defValue := false
-      descr := "(aesop) Enable all runtime checks. Individual checks can still be disabled."
-      group := "tactic" }
+      descr := "(aesop) Enable all runtime checks. Individual checks can still be disabled." }
 
 structure Check where
   toOption : Lean.Option Bool
@@ -42,7 +41,7 @@ end Check
 local macro "register_aesop_check_option" optName:ident descr:str : command =>
   `(initialize option : Lean.Option Bool ←
       Lean.Option.register $(quote $ `aesop.check ++ optName.getId)
-        { defValue := false, descr := $descr, group := "tactic" }
+        { defValue := false, descr := $descr }
 
     def $(mkIdent $ `Check ++ optName.getId) : Aesop.Check := ⟨option⟩)
 

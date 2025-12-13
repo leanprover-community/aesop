@@ -6,11 +6,9 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Frontend.RuleExpr
+public import Aesop.Options
 public import Batteries.Linter.UnreachableTactic
-public import Aesop.RuleSet
-import Aesop.Frontend.Extension
-import Lean.Elab.SyntheticMVars
-import Lean.Meta.Eval
+public import Aesop.Frontend.Extension
 
 public section
 
@@ -58,10 +56,10 @@ clauses are:
   `(simp_config := { zeta := false })` makes Aesop use
   `simp (config := { zeta := false })`.
 -/
-syntax (name := aesopTactic)  "aesop"  Aesop.tactic_clause* : tactic
+syntax (name := aesopTactic)  "aesop" (ppSpace colGt Aesop.tactic_clause)* : tactic
 
 @[inherit_doc aesopTactic]
-syntax (name := aesopTactic?) "aesop?" Aesop.tactic_clause* : tactic
+syntax (name := aesopTactic?) "aesop?" (ppSpace colGt Aesop.tactic_clause)* : tactic
 
 meta initialize do
   Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``aesopTactic

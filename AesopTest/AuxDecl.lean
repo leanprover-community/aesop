@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 
 import Aesop
-import Std.Tactic.BVDecide
 
 /-
 This test case checks whether tactics that make use of auxiliary declarations,

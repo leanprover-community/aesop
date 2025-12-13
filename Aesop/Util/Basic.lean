@@ -5,14 +5,13 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 module
 
+public import Aesop.Index.DiscrTreeConfig
 public import Aesop.Nanos
 public import Aesop.Util.UnorderedArraySet
-public import Lean.Util.ForEachExpr
-public import Lean.Elab.Tactic.Basic
-public import Lean.Meta.Tactic.Simp.SimpTheorems
-import Aesop.Index.DiscrTreeConfig
-import Lean.Elab.SyntheticMVars
-import Lean.Meta.Tactic.TryThis
+public import Batteries.Lean.Expr
+public import Batteries.Data.String.Basic
+public import Lean
+public import Std.Data.HashSet.Basic
 
 public section
 
@@ -446,7 +445,6 @@ def elabPattern (stx : Syntax) : TermElabM Expr :=
 
 register_option aesop.smallErrorMessages : Bool := {
     defValue := false
-    group := "aesop"
     descr := "(aesop) Print smaller error messages. Used for testing."
   }
 

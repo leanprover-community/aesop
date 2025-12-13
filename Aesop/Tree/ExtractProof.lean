@@ -5,8 +5,10 @@ Authors: Jannis Limperg
 -/
 module
 
+public import Lean.Replay
+public import Aesop.Tracing
 public import Aesop.Tree.TreeM
-import Batteries.Lean.Meta.SavedState
+public import Batteries.Lean.Meta.InstantiateMVars
 
 public section
 

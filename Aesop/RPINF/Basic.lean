@@ -5,9 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean.Message
-import Lean.Expr
-import Lean.Util.MonadCache
+public import Lean
 
 public section
 

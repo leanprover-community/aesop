@@ -6,6 +6,7 @@ Authors: Jannis Limperg, Kaiyu Yang
 module
 
 public import Aesop.RuleTac.Basic
+public import Aesop.Script.Step
 
 public section
 

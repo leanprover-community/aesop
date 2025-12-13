@@ -7,6 +7,7 @@ module
 
 public import Aesop.Forward.RuleInfo
 public import Aesop.Percent
+public import Aesop.Rule.Name
 public import Aesop.RuleTac.RuleTerm
 
 public section

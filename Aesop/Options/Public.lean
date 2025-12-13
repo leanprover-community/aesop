@@ -1,6 +1,6 @@
 module
 
-public import Lean.Data.Options
+public import Lean
 
 public section
 
@@ -190,6 +190,22 @@ register_option aesop.warn.applyIff : Bool := {
 register_option aesop.warn.nonterminal : Bool := {
   descr := "(aesop) Warn when `aesop` does not close the goal, i.e. is used as a non-terminal tactic."
   defValue := true
+}
+
+/--
+(aesop) Collect statistics about Aesop invocations.
+-/
+register_option aesop.collectStats : Bool := {
+  descr := "(aesop) Collect statistics about Aesop invocations. Use #aesop_stats to display the collected statistics."
+  defValue := false
+}
+
+/--
+(aesop) Write statistics about Aesop invocations to the given file in JSONL format.
+-/
+register_option aesop.stats.file : String := {
+  descr := "(aesop) Write statistics about Aesop invocations to the given file in JSONL format. Each invocation adds one JSON record to the file."
+  defValue := ""
 }
 
 end Aesop

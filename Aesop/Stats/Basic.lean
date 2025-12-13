@@ -5,10 +5,10 @@ Authors: Jannis Limperg
 -/
 module
 
+public import Aesop.Nanos
 public import Aesop.Rule.Name
 public import Aesop.Tracing
-public import Aesop.Nanos
-import Aesop.Util.Basic
+public import Aesop.Options.Public
 
 public section
 
@@ -16,19 +16,12 @@ open Lean
 
 namespace Aesop
 
-initialize collectStatsOption : Lean.Option Bool ←
-  Lean.Option.register `aesop.collectStats {
-    defValue := false
-    group := "aesop"
-    descr := "(aesop) collect statistics about Aesop invocations. Use #aesop_stats to display the collected statistics."
-  }
-
 -- All times are in nanoseconds.
 structure RuleStats where
   rule : DisplayRuleName
   elapsed : Nanos
   successful : Bool
-  deriving Inhabited
+  deriving Inhabited, ToJson
 
 namespace RuleStats
 
@@ -39,26 +32,26 @@ instance : ToString RuleStats where
 
 end RuleStats
 
+inductive ScriptGenerated.Method where
+  | static
+  | dynamic
+  deriving Inhabited, ToJson
 
-inductive ScriptGenerated
-  | none
-  | staticallyStructured (perfect : Bool) (hasMVar : Bool)
-  | dynamicallyStructured (perfect : Bool) (hasMVar : Bool)
-  deriving Inhabited
+instance : ToString ScriptGenerated.Method where
+  toString
+    | .static => "static"
+    | .dynamic => "dynamic"
+
+structure ScriptGenerated where
+  method : ScriptGenerated.Method
+  perfect : Bool
+  hasMVar : Bool
+  deriving Inhabited, ToJson
 
 namespace ScriptGenerated
 
-protected def toString : ScriptGenerated → String
-  | none => "no"
-  | staticallyStructured perfect _ => s!"with {go perfect} static structuring"
-  | dynamicallyStructured perfect _ => s!"with {go perfect} dynamic structuring"
-where
-  go b := if b then "perfect" else "imperfect"
-
-def isNontrivial : ScriptGenerated → Bool
-  | none => false
-  | staticallyStructured  (hasMVar := hasMVar) ..
-  | dynamicallyStructured (hasMVar := hasMVar) .. => hasMVar
+protected def toString (g : ScriptGenerated) : String :=
+  s!"with {if g.perfect then "perfect" else "imperfect"} {g.method} structuring"
 
 end ScriptGenerated
 
@@ -69,7 +62,7 @@ structure Stats where
   search : Nanos
   ruleSelection : Nanos
   script : Nanos
-  scriptGenerated : ScriptGenerated
+  scriptGenerated : Option ScriptGenerated
   ruleStats : Array RuleStats
   deriving Inhabited
 
@@ -82,7 +75,7 @@ protected def empty : Stats where
   search := 0
   ruleSelection := 0
   script := 0
-  scriptGenerated := .none
+  scriptGenerated := none
   ruleStats := #[]
 
 instance : EmptyCollection Stats :=
@@ -164,7 +157,7 @@ def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
   aesop_trace![opt] "Configuration parsing: {p.configParsing.printAsMillis}"
   aesop_trace![opt] "Rule set construction: {p.ruleSetConstruction.printAsMillis}"
   aesop_trace![opt] "Script generation: {p.script.printAsMillis}"
-  aesop_trace![opt] "Script generated: {p.scriptGenerated.toString}"
+  aesop_trace![opt] "Script generated: {match p.scriptGenerated with | none => "no" | some g => g.toString}"
   withConstAesopTraceNode opt (collapsed := false)
       (return m!"Search: {p.search.printAsMillis}") do
     aesop_trace![opt] "Rule selection: {p.ruleSelection.printAsMillis}"
@@ -206,22 +199,26 @@ instance [MonadOptions m] [MonadStateOf Stats m] : MonadStats m where
 variable [Monad m]
 
 @[inline, always_inline]
-def isStatsCollectionEnabled [MonadOptions m] : m Bool :=
-  collectStatsOption.get <$> getOptions
+def enableStatsCollection [MonadOptions m] : m Bool :=
+  aesop.collectStats.get <$> getOptions
 
 @[inline, always_inline]
-def isStatsTracingEnabled [MonadOptions m] : m Bool :=
+def enableStatsTracing [MonadOptions m] : m Bool :=
   TraceOption.stats.isEnabled
 
 @[inline, always_inline]
-def isStatsCollectionOrTracingEnabled [MonadOptions m] : m Bool :=
-  isStatsCollectionEnabled <||> isStatsTracingEnabled
+def enableStatsFile [MonadOptions m] : m Bool := do
+  return aesop.stats.file.get (← getOptions) != ""
+
+@[inline, always_inline]
+def enableStats [MonadOptions m] : m Bool :=
+  enableStatsCollection <||> enableStatsTracing <||> enableStatsFile
 
 variable [MonadStats m] [MonadLiftT BaseIO m]
 
 @[inline, always_inline]
 def profiling (recordStats : Stats → α → Nanos → Stats) (x : m α) : m α := do
-  if ← isStatsCollectionOrTracingEnabled then
+  if ← enableStats then
     let (result, elapsed) ← time x
     modifyStats (recordStats · result elapsed)
     return result
@@ -240,11 +237,11 @@ def profilingRule (rule : DisplayRuleName) (wasSuccessful : α → Bool) :
     let rp := { successful := wasSuccessful a, rule, elapsed }
     { stats with ruleStats := stats.ruleStats.push rp }
 
-def modifyCurrentStats (f : Stats → Stats) : m Unit := do
-  if ← isStatsCollectionEnabled then
+def modifyStatsIfEnabled (f : Stats → Stats) : m Unit := do
+  if ← enableStats then
     modifyStats f
 
 def recordScriptGenerated (x : ScriptGenerated) : m Unit := do
-  modifyCurrentStats ({ · with scriptGenerated := x })
+  modifyStatsIfEnabled ({ · with scriptGenerated := some x })
 
 end Aesop

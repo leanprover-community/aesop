@@ -5,19 +5,13 @@ Authors: Jannis Limperg
 -/
 module
 
+public import Aesop.Util.Tactic
 public import Aesop.Util.Tactic.Ext
+public import Aesop.Util.Tactic.Unfold
+public import Aesop.Util.Unfold
 public import Aesop.Script.CtorNames
 public import Aesop.Script.ScriptM
-public import Lean.Meta.Tactic.Cases
-public import Lean.Meta.Tactic.Simp.Types
-import Aesop.Util.Tactic
-import Aesop.Util.Unfold
-import Aesop.Util.Tactic.Unfold
-import Batteries.Lean.Meta.Basic
-import Batteries.Lean.Meta.Inaccessible
-import Lean.Elab.Tactic.RCases
-import Lean.Elab.Tactic.Simp
-import Lean.Meta.Tactic.Split
+public import Batteries.Lean.Meta.Inaccessible
 
 public section
 

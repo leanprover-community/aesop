@@ -5,17 +5,14 @@ Authors: Jannis Limperg
 -/
 module
 
+public import Aesop.ElabM
+public import Aesop.Percent
+public import Aesop.Rule.Name
+public import Aesop.Builder.Cases
+public import Aesop.Builder.Default
+public import Aesop.Builder.Forward
+public import Aesop.Builder.Unfold
 public import Aesop.RuleSet.Filter
-public import Aesop.Builder.Basic
-import Aesop.Builder.Apply
-import Aesop.Builder.Cases
-import Aesop.Builder.Constructors
-import Aesop.Builder.Default
-import Aesop.Builder.Forward
-import Aesop.Builder.NormSimp
-import Aesop.Builder.Tactic
-import Aesop.Builder.Unfold
-import Aesop.Index.DiscrTreeConfig
 
 public section
 

@@ -5,9 +5,10 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean.Meta.Tactic.Simp.SimpTheorems
-import Aesop.Util.Basic
-public meta import Lean.Parser.Do
+public import Aesop.Util.Basic
+public import Batteries.Data.Array.Basic
+public import Lean.Elab.Term
+public import Lean.Meta.Tactic.Simp
 
 public section
 
@@ -24,7 +25,6 @@ def registerTraceOption (traceName : Name) (descr : String) :
     IO TraceOption := do
   let option ← Option.register (`trace.aesop ++ traceName) {
     defValue := false
-    group := "trace"
     descr
   }
   return { traceClass := `aesop ++ traceName, option }

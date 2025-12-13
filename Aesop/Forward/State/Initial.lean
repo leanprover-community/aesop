@@ -7,7 +7,6 @@ module
 
 public import Aesop.Forward.State
 public import Aesop.RuleSet
-import Aesop.RPINF
 
 public section
 
