@@ -540,7 +540,8 @@ scoped instance [MonadParentDecl m] : MonadParentDecl (ReaderT ρ m) where
 scoped instance [MonadParentDecl m] : MonadParentDecl (StateRefT' ω σ m) where
   getParentDeclName? := liftM (m := m) getParentDeclName?
 
-def isDefEqReducibleRigid (s t : Expr) : MetaM Bool := do
+def isDefEqReducibleRigid (s t : Expr) : MetaM Bool :=
+  withTraceNodeBefore `aesop.forward.debug (return m!"{s} ≟ {t}") do
   withNewMCtxDepth do
   withReducible do
     isDefEq s t
