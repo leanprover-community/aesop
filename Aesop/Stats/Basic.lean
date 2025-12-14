@@ -157,10 +157,10 @@ def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
     aesop_trace![opt] "Rule selection: {ruleSelection.printAsMillis}"
     aesop_trace![opt] "Forward state updates: {forwardState.printAsMillis}"
     withConstAesopTraceNode opt (collapsed := false)
-        (return m!"Rule applications: {totalRuleApplications.printAsMillis}") do
+        (return m!"Rule applications: {totalRuleApplications.printAsMillis} [total / successful / failed]") do
       let timings := sortRuleStatsTotals p.ruleStatsTotals.toArray
       for (n, t) in timings do
-        aesop_trace![opt] "[{(t.elapsedSuccessful + t.elapsedFailed).printAsMillis} / {t.elapsedSuccessful.printAsMillis} / {t.elapsedFailed.printAsMillis}] {n}"
+        aesop_trace![opt] "[{t.numSuccessful + t.numFailed} {(t.elapsedSuccessful + t.elapsedFailed).printAsMillis} / {t.numSuccessful} {t.elapsedSuccessful.printAsMillis} / {t.numFailed} {t.elapsedFailed.printAsMillis}] {n}"
 
 end Stats
 
