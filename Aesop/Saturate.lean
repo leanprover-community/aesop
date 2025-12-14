@@ -51,22 +51,18 @@ initialize
 partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId :=
   withExceptionPrefix "saturate: internal error: " do
   goal.checkNotAssigned `saturate
-  -- We use the forward state only to track the hypotheses present in the goal.
-  let (fs, _) ← rs.mkInitialForwardState goal
-  go goal fs
+  go goal
 where
-  go (goal : MVarId) (fs : ForwardState) : SaturateM MVarId :=
+  go (goal : MVarId) : SaturateM MVarId :=
     withIncRecDepth do
     checkSystem "saturate"
     trace[saturate] "goal {goal.name}:{indentD goal}"
     let mvars := UnorderedArraySet.ofHashSet $ ← goal.getMVarDependencies
     let preState ← show MetaM _ from saveState
     if let some diff ← tryNormRules goal mvars preState then
-      let (fs, _) ← fs.applyGoalDiff rs diff
-      go diff.newGoal fs
+      go diff.newGoal
     else if let some diff ← trySafeRules goal mvars preState then
-      let (fs, _) ← fs.applyGoalDiff rs diff
-      go diff.newGoal fs
+      go diff.newGoal
     else
       clearForwardImplDetailHyps goal
 
@@ -134,8 +130,13 @@ partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId 
   withExceptionPrefix "saturate: internal error: " do
   goal.withContext do
     goal.checkNotAssigned `saturate
+    let mut queue := ∅
     let (fs, ruleMatches) ← rs.mkInitialForwardState goal
-    let queue := ruleMatches.foldl (init := ∅) λ queue m => queue.insert m
+    for m in ruleMatches do
+      queue := queue.insert m
+    let (fs, ruleMatches) ← fs.update goal (phase? := none)
+    for m in ruleMatches do
+      queue := queue.insert m
     go ∅ fs queue ∅ goal
 where
   go (hypDepths : Std.HashMap FVarId Nat) (fs : ForwardState) (queue : Queue)
@@ -169,10 +170,11 @@ where
           else
             let rules ← profilingRuleSelection do
               rs.applicableForwardRules type
-            let (fs, ruleMatches) ← profilingForwardState do
+            let fs ← profilingForwardState do
               let patInsts ←
                 rs.forwardRulePatternSubstsInLocalDecl (← hyp.getDecl)
-              fs.addHypWithPatSubsts goal hyp rules patInsts
+              return fs.enqueueHypWithPatSubsts hyp rules patInsts
+            let (fs, ruleMatches) ← fs.update goal (phase? := none)
             let queue :=
               ruleMatches.foldl (init := queue) λ queue m => queue.insert m
             go hypDepths fs queue erasedHyps goal
