@@ -84,7 +84,7 @@ private meta def destructProductHyp? (goal : MVarId) (hyp : FVarId)
         (preserveBinderNames := true) (useNamesForExplicitOnly := false)
       return (goal, lName, rName)
 
-meta def destructProductsCore (goal : MVarId) (md : TransparencyMode) :
+meta partial def destructProductsCore (goal : MVarId) (md : TransparencyMode) :
     BaseM (MVarId × Array LazyStep) := do
   let result ← go 0 goal |>.run
   if result.fst == goal then
