@@ -8,6 +8,7 @@ module
 public meta import Aesop.Saturate
 public meta import Aesop.Frontend.Extension
 public meta import Aesop.Builder.Forward
+public meta import Aesop.Stats.File
 
 public meta section
 
@@ -106,7 +107,7 @@ def elabForwardRuleSet (rsNames? : Option (TSyntax ``usingRuleSets))
 
 open Lean.Elab.Tactic
 
-def evalSaturate (depth? : Option (TSyntax `num))
+def evalSaturateCore (stx : Syntax) (depth? : Option (TSyntax `num))
     (rules? : Option (TSyntax ``additionalRules))
     (rs? : Option (TSyntax ``usingRuleSets)) (traceScript : Bool) :
     TacticM Unit := do
@@ -114,18 +115,32 @@ def evalSaturate (depth? : Option (TSyntax `num))
   let options ← mkForwardOptions depth? traceScript
   let rs ← elabForwardRuleSet rs? rules? options
     |>.runForwardElab (← getMainGoal)
-  liftMetaTactic1 (saturate rs · options)
+  let stats ← liftMetaTacticAux fun mvarId => do
+    let (mvarId, stats) ← saturate rs mvarId options
+    return (stats, [mvarId])
+  appendStatsToStatsFileIfEnabled stx stats (allGoalsSolved := false)
 
-elab "saturate " depth?:(num)? ppSpace rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic => do
-  evalSaturate depth? rules? rs? (traceScript := false)
+syntax (name := saturate)
+  "saturate" (ppSpace num)? (ppSpace additionalRules)? (ppSpace usingRuleSets)? : tactic
+syntax (name := saturate?)
+  "saturate?" (ppSpace num)? (ppSpace additionalRules)? (ppSpace usingRuleSets)? : tactic
 
-elab "saturate? " depth?:(num)? ppSpace rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic => do
-  evalSaturate depth? rules? rs? (traceScript := true)
+@[tactic saturate]
+def evalSaturate : Tactic
+  | stx@`(tactic| saturate $[$depth?]? $[$rules?]? $[$usingRuleSets?]?) =>
+    evalSaturateCore stx depth? rules? usingRuleSets? (traceScript := false)
+  | _ => throwUnsupportedSyntax
 
-macro "forward " rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic =>
+@[tactic saturate?]
+def evalSaturate? : Tactic
+  | stx@`(tactic| saturate? $[$depth?]? $[$rules?]? $[$usingRuleSets?]?) =>
+    evalSaturateCore stx depth? rules? usingRuleSets? (traceScript := true)
+  | _ => throwUnsupportedSyntax
+
+macro "forward" rules?:(ppSpace additionalRules)? rs?:(ppSpace usingRuleSets)? : tactic =>
   `(tactic| saturate 1 $[$rules?]? $[$rs?]?)
 
-macro "forward? " rules?:(additionalRules)? ppSpace rs?:(usingRuleSets)? : tactic =>
+macro "forward?" rules?:(ppSpace additionalRules)? rs?:(ppSpace usingRuleSets)? : tactic =>
   `(tactic| saturate? 1 $[$rules?]? $[$rs?]?)
 
 end Aesop.Frontend
