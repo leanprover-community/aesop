@@ -15,8 +15,7 @@ public import Std.Data.HashSet.Basic
 
 public section
 
-open Lean
-open Lean.Meta Lean.Elab.Tactic
+open Lean Lean.Meta Lean.Elab Lean.Elab.Term Lean.Elab.Tactic
 
 namespace Aesop
 
@@ -534,5 +533,11 @@ def compareArraySizeThenLex (cmp : α → α → Ordering) (xs ys : Array α) :
     Ordering :=
   compare xs.size ys.size |>.then $
   compareArrayLex cmp xs ys
+
+scoped instance [MonadParentDecl m] : MonadParentDecl (ReaderT ρ m) where
+  getParentDeclName? := liftM (m := m) getParentDeclName?
+
+scoped instance [MonadParentDecl m] : MonadParentDecl (StateRefT' ω σ m) where
+  getParentDeclName? := liftM (m := m) getParentDeclName?
 
 end Aesop

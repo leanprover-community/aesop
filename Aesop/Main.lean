@@ -22,12 +22,12 @@ meta def evalAesop : Tactic := λ stx => do
   profileitM Exception "aesop" (← getOptions) do
   let goal ← getMainGoal
   goal.withContext do
-    let (_, stats) ← go stx goal |>.run ∅
+    let (solved, stats) ← go stx goal |>.run ∅
     stats.trace .stats
     recordStatsForCurrentFileIfEnabled stx stats
-    appendStatsToStatsFileIfEnabled stx stats
+    appendStatsToStatsFileIfEnabled stx stats solved
 where
-  go (stx : Syntax) (goal : MVarId) : StateRefT Stats TacticM Unit :=
+  go (stx : Syntax) (goal : MVarId) : StateRefT Stats TacticM Bool :=
     profiling (λ s _ t => { s with total := t }) do
       let config ← profiling (λ s _ t => { s with configParsing := t }) do
         Frontend.TacticConfig.parse stx goal
@@ -40,7 +40,9 @@ where
         let (goals, stats) ←
           search goal ruleSet config.options config.simpConfig
             config.simpConfigSyntax? (← getStats)
+        let solved := goals.isEmpty
         replaceMainGoal goals.toList
         modifyStats λ _ => stats
+        return solved
 
 end Aesop
