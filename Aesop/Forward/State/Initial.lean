@@ -16,6 +16,7 @@ namespace Aesop.LocalRuleSet
 
 def mkInitialForwardState (goal : MVarId) (rs : LocalRuleSet) :
     BaseM (ForwardState × Array ForwardRuleMatch) :=
+  profilingForwardState do
   goal.withContext do
     if ! aesop.dev.statefulForward.get (← getOptions) then
       -- We still initialise the hyp types since these are also used by
