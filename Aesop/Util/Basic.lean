@@ -433,7 +433,7 @@ def elabPattern (stx : Syntax) : TermElabM Expr :=
       old with
       mayPostpone := false
       errToSorry := false
-      autoBoundImplicit := false
+      autoBoundImplicitContext := none
       sectionVars := {}
       sectionFVars := {}
       isNoncomputableSection := false
