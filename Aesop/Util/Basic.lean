@@ -349,27 +349,11 @@ variable [Monad m] [MonadQuotation m]
 
 open Parser.Tactic
 
-def withTransparencySeqSyntax (md : TransparencyMode)
-    (k : TSyntax ``tacticSeq) : TSyntax ``tacticSeq := Unhygienic.run do
-  match md with
-  | .default => return k
-  | .all => `(tacticSeq| with_unfolding_all $k)
-  | .reducible => `(tacticSeq| with_reducible $k)
-  | .instances => `(tacticSeq| with_reducible_and_instances $k)
-
 def withAllTransparencySeqSyntax (md : TransparencyMode)
     (k : TSyntax ``tacticSeq) : TSyntax ``tacticSeq :=
   match md with
   | .all => Unhygienic.run `(tacticSeq| with_unfolding_all $k)
   | _ => k
-
-def withTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
-    TSyntax `tactic := Unhygienic.run do
-  match md with
-  | .default   => return k
-  | .all       => `(tactic| with_unfolding_all $k:tactic)
-  | .reducible => `(tactic| with_reducible $k:tactic)
-  | .instances => `(tactic| with_reducible_and_instances $k:tactic)
 
 def withAllTransparencySyntax (md : TransparencyMode) (k : TSyntax `tactic) :
     TSyntax `tactic :=
