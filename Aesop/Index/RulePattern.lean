@@ -76,7 +76,7 @@ instance : EmptyCollection RulePatternIndex :=
 /-- Add a rule pattern to the index. -/
 def add (name : RuleName) (pattern : RulePattern) (idx : RulePatternIndex) :
     RulePatternIndex :=
-  ⟨idx.tree.insertCore pattern.discrTreeKeys { name, pattern }, false⟩
+  ⟨idx.tree.insertKeyValue pattern.discrTreeKeys { name, pattern }, false⟩
 
 /-- Merge two rule pattern indices. Patterns that appear in both indices appear
 twice in the result. -/
