@@ -4,6 +4,45 @@
 # CONFIGURATION
 # ==============================================================================
 
+# Default value for precompileModules
+PRECOMP=false
+
+# Time format
+TIMEFORMAT="this took %R seconds"
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --precomp)
+            PRECOMP="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--precomp true|false]"
+            exit 1
+            ;;
+    esac
+done
+
+# Validate precomp value
+if [[ "$PRECOMP" != "true" && "$PRECOMP" != "false" ]]; then
+    echo "Error: --precomp must be 'true' or 'false'"
+    exit 1
+fi
+
+# Modify lakefile.toml
+echo "--- Setting precompileModules = $PRECOMP in lakefile.toml ---"
+if [[ -f "lakefile.toml" ]]; then
+    # Use sed to replace the precompileModules line
+    # This handles various formats: precompileModules = true/false with/without quotes
+    # Empty string after -i means no backup (works on both Linux and macOS)
+    sed -i '' "s/^precompileModules = .*/precompileModules = $PRECOMP/" lakefile.toml
+    echo "Updated lakefile.toml"
+else
+    echo "Warning: lakefile.toml not found"
+fi
+
 cmd_trans() {
     lake build Benchmark.RunTrans
 }
@@ -41,7 +80,8 @@ parse_lean_output() {
     '
 }
 
-TIMEFORMAT="this took %R seconds"
+echo "--- Deleting .oleans ---"
+lake clean
 
 echo "--- Running Benchmark: Transitivity ---"
 # Capture output and evaluate it
@@ -49,7 +89,7 @@ eval $(time cmd_trans | parse_lean_output "FIG1_")
 
 
 echo "--- Running Benchmark: Depth ---"
-time eval $(cmd_depth | parse_lean_output "FIG2_")
+eval $(time cmd_depth | parse_lean_output "FIG2_")
 
 {
     echo "Transitivity Benchmark"

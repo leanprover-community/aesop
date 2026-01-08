@@ -12,5 +12,5 @@ import Benchmark.Trans
 
 -- TODO : replace with 6!!
 -- /- Transitivity benchmark -/
-bchmk 1 with pows 5  using trans 0
-bchmk 1 with pows 5  using trans 100
+bchmk 1 with pows 4  using trans 0
+bchmk 1 with pows 4  using trans 100
