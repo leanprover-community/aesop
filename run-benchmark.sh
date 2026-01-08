@@ -110,7 +110,7 @@ eval $(time cmd_depth | parse_lean_output "FIG2_")
     echo $FIG2_NAIVE_100
     echo "Inc - 100"
     echo $FIG2_INC_100
-} > $OUTPUT_DIR/synthBenchResults.txt
+} > $OUTPUT_DIR/benchmark_results_numbers.txt
 
 # ==============================================================================
 # LATEX GENERATION
