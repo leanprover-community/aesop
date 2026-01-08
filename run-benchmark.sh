@@ -12,20 +12,6 @@ cmd_depth() {
     lake build Benchmark.RunDepth
 }
 
-# cmd_trans() {
-#     echo "import Benchmark.Command
-# import Benchmark.Trans
-# bchmk 2 with pows 4  using trans 0
-# bchmk 2 with pows 4  using trans 100" | lake env lean --stdin
-# }
-
-# cmd_depth() {
-#     echo "import Benchmark.Command
-# import Benchmark.Depth
-# bchmk 2 with steps 6 using depth 6 0 100 0
-# bchmk 2 with steps 6 using depth 6 0 100 100" | lake env lean --stdin
-# }
-
 OUTPUT_DIR="bench-results"
 OUTPUT_TEX="benchmark_results.tex"
 
@@ -36,27 +22,6 @@ mkdir -p "$OUTPUT_DIR"
 # PARSING LOGIC
 # ==============================================================================
 
-# Function to parse the specific format of your Lean output
-# It reads stdin and sets bash variables for the coordinates
-# Function to parse the specific format of your Lean output
-# parse_lean_output() {
-#     local prefix=$1
-    
-#     # Output the variable assignments to stdout
-#     awk -v pre="$prefix" '
-#         /term size 0\)/      { size=0 }
-#         /term size 100\)/    { size=100 }
-#         /StatefulForward: false/ { algo="naive" }
-#         /StatefulForward: true/  { algo="inc" }
-#         /^\(/ { 
-#             # This matches the coordinate line starting with (
-#             if (size==0 && algo=="naive")   print pre "NAIVE_0=\"" $0 "\""
-#             if (size==0 && algo=="inc")     print pre "INC_0=\"" $0 "\""
-#             if (size==100 && algo=="naive") print pre "NAIVE_100=\"" $0 "\""
-#             if (size==100 && algo=="inc")   print pre "INC_100=\"" $0 "\""
-#         }
-#     '
-# }
 parse_lean_output() {
     local prefix=$1
     
