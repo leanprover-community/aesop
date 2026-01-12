@@ -156,7 +156,7 @@ where
       compareOn (·.deps.size) x y
       |>.then (compareOn (·.premiseIndex) x y)
     ⟩
-    let firstSlot := slots.maxI
+    let firstSlot := slots.rangeMaxI
     let mut unseen := slots |>.erase firstSlot
     let firstSlotForwardDeps : Std.HashSet PremiseIndex :=
       unseen.foldl (init := ∅) λ deps s => deps.insertMany s.deps
@@ -171,7 +171,8 @@ where
     let mut i := 1
     while newSlots.size != slots.size do
       let candidates := unseen.filter (·.deps.any (previousDeps.contains ·))
-      let some slot := candidates.max?
+      let : Ord Slot := inferInstance
+      let some slot := candidates.rangeMax?
         | panic! "no suitable slot found"
       unseen := unseen.erase slot
       let common := previousDeps.filter (slot.deps.contains ·)
