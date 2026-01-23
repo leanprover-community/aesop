@@ -56,15 +56,20 @@ def getImmediatePremises  (type : Expr) (pat? : Option RulePattern) :
         let fvarId := args[i].fvarId!
         let ldecl ← fvarId.getDecl
         let isNondep : MetaM Bool :=
-          args.allM (start := i + 1) λ arg => do
-            let type ← instantiateMVars (← arg.fvarId!.getDecl).type
-            return ! type.containsFVar fvarId
+          notM <| args.anyM (start := i + 1) λ arg => do
+            let type ← instantiateMVars (← inferType arg)
+            -- We do not count instance dependencies here. E.g. for the rule
+            -- type `∀ {S} [Cls S], T`, we consider `S` nondependent since only
+            -- instances depend on it.
+            if (← arg.fvarId!.getBinderInfo) matches .instImplicit then
+              return false
+            return type.containsFVar fvarId
         if ← pure ! ldecl.binderInfo.isInstImplicit <&&> isNondep then
           result := result.push ⟨i⟩
       return UnorderedArraySet.ofDeduplicatedArray result
   | some immediate =>
     -- If immediate names are given, we check that corresponding arguments
-    -- exists and record these arguments' positions.
+    -- exist and record these arguments' positions.
     withReducible $ forallTelescopeReducing type λ args _ => do
       let mut unseen := immediate.sortDedup (ord := ⟨Name.quickCmp⟩)
       let mut result := #[]

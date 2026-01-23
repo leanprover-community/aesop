@@ -44,7 +44,7 @@ def getForwardState : NormM ForwardState :=
 def getResetForwardState : NormM ForwardState := do
   modifyGetThe NormM.State λ s => (s.forwardState, { s with forwardState := ∅ })
 
-def updateForwardState (fs : ForwardState) (newMatches : Array ForwardRuleMatch)
+def modifyForwardState (fs : ForwardState) (newMatches : Array ForwardRuleMatch)
     (erasedHyps : Std.HashSet FVarId) : NormM Unit :=
   modifyThe NormM.State λ s => { s with
     forwardState := fs
@@ -53,13 +53,18 @@ def updateForwardState (fs : ForwardState) (newMatches : Array ForwardRuleMatch)
         (consumedForwardRuleMatches := #[]) -- We erase the consumed matches separately.
   }
 
+def updateForwardState (goal : MVarId) : NormM Unit := do
+  let fs ← getResetForwardState
+  let (fs, ms) ← fs.update goal (phase? := some .norm)
+  modifyForwardState fs ms ∅
+
 def eraseForwardRuleMatch (m : ForwardRuleMatch) : NormM Unit := do
   modifyThe NormM.State λ s => { s with forwardRuleMatches := s.forwardRuleMatches.erase m }
 
 def applyDiffToForwardState (diff : GoalDiff) : NormM Unit := do
   let fs ← getResetForwardState
-  let (fs, ms) ← fs.applyGoalDiff (← read).ruleSet diff
-  updateForwardState fs ms diff.removedFVars
+  let fs ← fs.applyGoalDiff (← read).ruleSet diff
+  modifyForwardState fs #[] diff.removedFVars
 
 inductive NormRuleResult
   | succeeded (goal : MVarId) (steps? : Option (Array Script.LazyStep))
@@ -100,7 +105,7 @@ returns the matches as well. -/
 def runNormRuleTac (rule : NormRule) (input : RuleTacInput) (fs : ForwardState)
     (rs : LocalRuleSet) :
     NormM $
-      Option (NormRuleResult × ForwardState × Array ForwardRuleMatch × Std.HashSet FVarId) ×
+      Option (NormRuleResult × ForwardState × Std.HashSet FVarId) ×
       Array ForwardRuleMatch := do
   let preMetaState ← show MetaM _ from saveState
   let result? ← runRuleTac rule.tac.run rule.name preMetaState input
@@ -114,10 +119,10 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) (fs : ForwardState)
       | err m!"rule did not produce exactly one rule application."
     show MetaM _ from restoreState rapp.postState
     if rapp.goals.isEmpty then
-      return (some (.proved rapp.scriptSteps?, fs, #[], ∅), forwardRuleMatches)
+      return (some (.proved rapp.scriptSteps?, fs, ∅), forwardRuleMatches)
     let (#[{ diff }]) := rapp.goals
       | err m!"rule produced more than one subgoal."
-    let (fs, ms) ← fs.applyGoalDiff rs diff
+    let fs ← fs.applyGoalDiff rs diff
     let g := diff.newGoal
     if ← Check.rules.isEnabled then
       let mvars := .ofArray input.mvars.toArray
@@ -125,7 +130,7 @@ def runNormRuleTac (rule : NormRule) (input : RuleTacInput) (fs : ForwardState)
       if ! actualMVars == mvars then
          err "the goal produced by the rule depends on different metavariables than the original goal."
     let result := .succeeded g rapp.scriptSteps?
-    return (some (result, fs, ms, diff.removedFVars), forwardRuleMatches)
+    return (some (result, fs, diff.removedFVars), forwardRuleMatches)
   where
     err {α} (msg : MessageData) : MetaM α := throwError
       "aesop: error while running norm rule {rule.name}: {msg}\nThe rule was run on this goal:{indentD $ MessageData.ofGoal input.goal}"
@@ -137,7 +142,6 @@ def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       indexMatchLocations := rule.locations
       patternSubsts? := rule.patternSubsts?
       options := (← read).options
-      hypTypes := (← get).forwardState.hypTypes
       goal, mvars
     }
     withNormTraceNode (.ruleName rule.rule.name) do
@@ -146,9 +150,9 @@ def runNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
         runNormRuleTac rule.rule ruleInput fs (← read).ruleSet
       for m in consumedForwardRuleMatches do
         eraseForwardRuleMatch m
-      let (some (result, fs, ms, removedFVars)) := result?
+      let (some (result, fs, removedFVars)) := result?
         | return none
-      updateForwardState fs ms removedFVars
+      modifyForwardState fs #[] removedFVars
       return result
 
 def runFirstNormRule (goal : MVarId) (mvars : UnorderedArraySet MVarId)
@@ -327,6 +331,7 @@ def runNormSteps (goal : MVarId) (steps : Array NormStep)
   let mut anySuccess := false
   while iteration < maxIterations do
     if step.val == 0 then
+      updateForwardState goal
       let rules ←
         selectNormRules ctx.ruleSet (← getThe NormM.State).forwardRuleMatches
           goal

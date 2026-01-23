@@ -20,8 +20,6 @@ namespace Aesop
 structure BaseM.State where
   /-- The rule pattern cache. -/
   rulePatternCache : RulePatternCache
-  /-- The RPINF cache. -/
-  rpinfCache : RPINFCache
   /-- Stats collected during an Aesop call. -/
   stats : Stats
   deriving Inhabited
@@ -37,17 +35,13 @@ namespace BaseM
 
 /-- Run a `BaseM` action. -/
 protected def run (x : BaseM α) (stats : Stats := ∅) : MetaM (α × Stats) := do
-  let (a, s) ← StateRefT'.run x { stats, rulePatternCache := ∅, rpinfCache := ∅ }
+  let (a, s) ← StateRefT'.run x { stats, rulePatternCache := ∅ }
   return (a, s.stats)
 
 instance : MonadHashMapCacheAdapter Expr RulePatternCache.Entry BaseM where
   getCache := return (← get).rulePatternCache.map
   modifyCache f := modify λ s =>
     { s with rulePatternCache.map := f s.rulePatternCache.map }
-
-instance : MonadHashMapCacheAdapter Expr RPINFRaw BaseM where
-  getCache := return (← get).rpinfCache.map
-  modifyCache f := modify λ s => { s with rpinfCache.map := f s.rpinfCache.map }
 
 instance : MonadStats BaseM where
   modifyGetStats f := modifyGet λ s =>

@@ -24,7 +24,7 @@ meta def splitTarget : RuleTac := RuleTac.ofSingleRuleTac λ input => do
   let goals ← goals.mapM (mvarIdToSubgoal input.goal ·)
   return (goals, steps, none)
 
-meta def splitHypothesesCore (goal : MVarId) :
+meta partial def splitHypothesesCore (goal : MVarId) :
     ScriptM (Option (Array MVarId)) :=
   withIncRecDepth do
   let some goals ← splitFirstHypothesisS? goal

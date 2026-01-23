@@ -68,7 +68,7 @@ def foldrM [Monad m] (f : α → β → m β) (init : β)
 def foldr (f : α → β → β) (init : β) (s : OrderedHashSet α) : β :=
   s.toArray.foldr f init
 
-instance : ForIn m (OrderedHashSet α) α where
+instance [Monad m] : ForIn m (OrderedHashSet α) α where
   forIn s b f := ForIn.forIn s.toArray b f
 
 end Aesop.OrderedHashSet
