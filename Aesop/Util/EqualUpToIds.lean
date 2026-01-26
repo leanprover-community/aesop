@@ -178,7 +178,7 @@ mutual
   @[specialize]
   unsafe def exprsEqualUpToIdsCore₂ (e₁ e₂ : Expr) : ExprsEqualUpToIdsM Bool :=
     withIncRecDepth do
-    withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"{← printExpr (← readMCtx₁) (← read).lctx₁ (← read).localInstances₁ e₁} ≟ {← printExpr (← readMCtx₂) (← read).lctx₂ (← read).localInstances₂ e₂}") do
+    withTraceNodeBefore `Aesop.Util.EqualUpToIds (fun _ => return m!"{← printExpr (← readMCtx₁) (← read).lctx₁ (← read).localInstances₁ e₁} ≟ {← printExpr (← readMCtx₂) (← read).lctx₂ (← read).localInstances₂ e₂}") do
       if ptrEq e₁ e₂ then
         trace[Aesop.Util.EqualUpToIds] "pointer-equal"
         return true
@@ -316,7 +316,7 @@ mutual
       if h' : i < decls₁.size then
         let ldecl₁ := decls₁[i]
         let ldecl₂ := decls₂[i]'(by simp [← h, h'])
-        let eq ← withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing hyps {ldecl₁.userName}, {ldecl₂.userName}") do
+        let eq ← withTraceNodeBefore `Aesop.Util.EqualUpToIds (fun _ => return m!"comparing hyps {ldecl₁.userName}, {ldecl₂.userName}") do
           localDeclsEqualUpToIdsCore ldecl₁ ldecl₂ |>.run gctx
         if ! eq then
           return none
@@ -329,7 +329,7 @@ mutual
   @[specialize]
   unsafe def unassignedMVarsEqualUpToIdsCore (mvarId₁ mvarId₂ : MVarId) :
       EqualUpToIdsM Bool :=
-    withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing mvars {mvarId₁.name}, {mvarId₂.name}") do
+    withTraceNodeBefore `Aesop.Util.EqualUpToIds (fun _ => return m!"comparing mvars {mvarId₁.name}, {mvarId₂.name}") do
       if let some result ← equalCommonMVars? mvarId₁ mvarId₂ then
         trace[Aesop.Util.EqualUpToIds] "common mvars are {if result then "identical" else "different"}"
         return result
@@ -351,7 +351,7 @@ mutual
             mdecl₂.localInstances mdecl₂.localInstances
         let some gctx := gctx?
           | return false
-        withTraceNodeBefore `Aesop.Util.EqualUpToIds (return m!"comparing targets") do
+        withTraceNodeBefore `Aesop.Util.EqualUpToIds (fun _ => return m!"comparing targets") do
           if ← exprsEqualUpToIdsCore₁ mdecl₁.type mdecl₂.type |>.run gctx then
             modify λ s =>
               { s with equalMVarIds := s.equalMVarIds.insert mvarId₁ mvarId₂ }

@@ -153,7 +153,7 @@ def withAesopTraceNode (opt : TraceOption)
 @[inline, always_inline]
 def withAesopTraceNodeBefore [ExceptToEmoji ε α] (opt : TraceOption)
     (msg : m MessageData) (k : m α) (collapsed := true) : m α :=
-  withTraceNodeBefore opt.traceClass msg k collapsed
+  withTraceNodeBefore opt.traceClass (fun _ => msg) k collapsed
 
 @[inline, always_inline]
 def withConstAesopTraceNode (opt : TraceOption) (msg : m MessageData) (k : m α)
