@@ -66,7 +66,7 @@ def insert (r : ForwardRule) (idx : ForwardIndex) : ForwardIndex := Id.run do
       for slot in cluster do
         let some discrTreeKeys := slot.typeDiscrTreeKeys?
           | continue
-        tree := tree.insertCore discrTreeKeys (r, slot.premiseIndex)
+        tree := tree.insertKeyValue discrTreeKeys (r, slot.premiseIndex)
     let nameToRule := idx.nameToRule.insert r.name r
     return { idx with tree, nameToRule }
 

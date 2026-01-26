@@ -19,7 +19,7 @@ info: Try this:
     next h => sorry
     next h => sorry
 ---
-warning: declaration uses 'sorry'
+warning: declaration uses `sorry`
 -/
 #guard_msgs in
 example {A B : Prop} : if P then A else B := by

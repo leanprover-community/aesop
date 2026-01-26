@@ -24,7 +24,7 @@ info: Try this:
     have fwd_5 : R x x := tran h₂ fwd_1
     sorry
 ---
-warning: declaration uses 'sorry'
+warning: declaration uses `sorry`
 -/
 #guard_msgs in
 example (α : Type u_1) (x y a b : α) (h₂ : R x a) (h₃ : R y b) : False := by

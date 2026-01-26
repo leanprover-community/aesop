@@ -22,7 +22,7 @@ info: Try this:
     · sorry
     · sorry
 ---
-warning: declaration uses 'sorry'
+warning: declaration uses `sorry`
 -/
 #guard_msgs in
 example {p q : MyProd α β} : p = q := by
@@ -39,7 +39,7 @@ info: Try this:
       · sorry
       · sorry
 ---
-warning: declaration uses 'sorry'
+warning: declaration uses `sorry`
 -/
 #guard_msgs in
 example {p q : MyProd α (MyProd β γ)} : p = q := by
@@ -55,7 +55,7 @@ info: Try this:
       sorry
     · sorry
 ---
-warning: declaration uses 'sorry'
+warning: declaration uses `sorry`
 -/
 #guard_msgs in
 example {p q : MyProd (α → β) γ} : p = q := by
@@ -72,7 +72,7 @@ info: Try this:
     · ext x x_1 : 2
       sorry
 ---
-warning: declaration uses 'sorry'
+warning: declaration uses `sorry`
 -/
 #guard_msgs in
 example {p q : (α → β) × (γ → δ → ι)} : p = q := by
@@ -99,7 +99,7 @@ info: Try this:
     · sorry
     · sorry
 ---
-warning: declaration uses 'sorry'
+warning: declaration uses `sorry`
 -/
 #guard_msgs in
 example (x y : T) : x = y := by
