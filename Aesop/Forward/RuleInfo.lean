@@ -156,6 +156,7 @@ where
       compareOn (·.deps.size) x y
       |>.then (compareOn (·.premiseIndex) x y)
     ⟩
+    -- Needed after https://github.com/leanprover/lean4/pull/11936
     have : Max Slot := ⟨fun a b => if compare a b == .lt then b else a⟩
     let firstSlot := slots.rangeMaxI
     let mut unseen := slots |>.erase firstSlot
