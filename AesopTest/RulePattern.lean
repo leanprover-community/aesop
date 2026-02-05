@@ -46,7 +46,7 @@ axiom triangle (a b : Int) : |a + b| ≤ |a| + |b|
 axiom falso' : True → False
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 Initial goal:
   ⊢ False
 -/

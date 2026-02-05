@@ -18,14 +18,14 @@ example (n : Nat) : n + m = m + n := by
   aesop
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example (n : Nat) : n + m = m + n := by
   aesop (erase Nat.add_comm) (config := { warnOnNonterminal := false })
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example (n : Nat) : n + m = m + n := by

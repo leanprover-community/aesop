@@ -15,7 +15,7 @@ set_option aesop.smallErrorMessages true
 def foo : Nat := 37
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : foo = 37 := by
@@ -32,7 +32,7 @@ example : foo = 37 := by aesop (erase Aesop.BuiltinRules.rfl)
 attribute [-aesop] foo
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : foo = 37 := by
