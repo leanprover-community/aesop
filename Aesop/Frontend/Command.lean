@@ -43,7 +43,7 @@ elab (name := addRules)
     e.buildAdditionalGlobalRules none
   for (rule, rsNames) in rules do
     for rsName in rsNames do
-      addGlobalRule rsName rule attrKind (checkNotExists := true)
+      liftCoreM $ addGlobalRule rsName rule attrKind (checkNotExists := true)
 
 initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addRules
 
@@ -56,7 +56,7 @@ elab (name := eraseRules)
       e.toGlobalRuleFilters
   for fs in filters do
     for (rsFilter, rFilter) in fs do
-      eraseGlobalRules rsFilter rFilter (checkExists := true)
+      liftCoreM $ eraseGlobalRules rsFilter rFilter (checkExists := true)
 
 syntax (name := showRules)
   withPosition("#aesop_rules" (colGt ppSpace ident)*) : command
