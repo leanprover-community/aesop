@@ -43,6 +43,7 @@ elab (name := addRules)
     e.buildAdditionalGlobalRules none
   for (rule, rsNames) in rules do
     for rsName in rsNames do
+      letI : MonadLiftT CoreM CommandElabM := ⟨liftCoreM⟩
       addGlobalRule rsName rule attrKind (checkNotExists := true)
 
 initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addRules
@@ -56,6 +57,7 @@ elab (name := eraseRules)
       e.toGlobalRuleFilters
   for fs in filters do
     for (rsFilter, rFilter) in fs do
+      letI : MonadLiftT CoreM CommandElabM := ⟨liftCoreM⟩
       eraseGlobalRules rsFilter rFilter (checkExists := true)
 
 syntax (name := showRules)
