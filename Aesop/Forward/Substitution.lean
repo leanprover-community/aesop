@@ -7,7 +7,6 @@ module
 
 public import Aesop.Forward.LevelIndex
 public import Aesop.Forward.PremiseIndex
-public import Aesop.RPINF.Basic
 public import Aesop.Util.Basic
 
 public section
@@ -24,7 +23,7 @@ domain `{1, ..., n}` that associates an expression with some or all of the
 premises. -/
 structure Substitution where
   /-- The substitution. -/
-  premises : Array (Option RPINF)
+  premises : Array (Option Expr)
   /-- The level substitution implied by the premise substitution. If `e` is the
   elaborated rule expression (with level params replaced by level mvars), and
   `collectLevelMVars (← instantiateMVars e) = [?m₁, ..., ?mₙ]`, then `levels[i]`
@@ -40,10 +39,19 @@ instance : BEq Substitution where
 instance : Hashable Substitution where
   hash s := hash s.premises
 
+-- TODO This is fairly expensive. Can we get away with Expr.quickComp?
+private def cmpExprs (e₁ e₂ : Expr) : Ordering :=
+  if e₁ == e₂ then
+    .eq
+  else if e₁.lt e₂ then
+    .lt
+  else
+    .gt
+
 instance : Ord Substitution where
-  compare s₁ s₂ :=
-    compare s₁.premises.size s₂.premises.size |>.then $
-    compareArrayLex compare s₁.premises s₂.premises
+  compare s₁ s₂ := private
+    have : Ord Expr := ⟨cmpExprs⟩
+    compareArraySizeThenLex compare s₁.premises s₂.premises
 
 /-- The empty substitution for a rule with the given number of premise
 indexes. -/
@@ -53,13 +61,13 @@ def empty (numPremises numLevels : Nat) : Substitution where
 
 /-- Insert the mapping `pi ↦ inst` into the substitution `s`. Precondition: `pi`
 is in the domain of `s`. -/
-def insert (pi : PremiseIndex) (inst : RPINF) (s : Substitution) :
+def insert (pi : PremiseIndex) (inst : Expr) (s : Substitution) :
     Substitution :=
   { s with premises := s.premises.set! pi.toNat inst }
 
 /-- Get the instantiation associated with premise `pi` in `s`. Precondition:
 `pi` is in the domain of `s`. -/
-def find? (pi : PremiseIndex) (s : Substitution) : Option RPINF :=
+def find? (pi : PremiseIndex) (s : Substitution) : Option Expr :=
   s.premises[pi.toNat]!
 
 /-- Insert the mapping `li ↦ inst` into the substitution `s`. Precondition: `li`
@@ -81,14 +89,14 @@ instance : ToMessageData Substitution where
 
 /-- Merge two substitutions. Precondition: the substitutions are compatible, so
 they must have the same size and if `s₁[x]` and `s₂[x]` are both defined, they
-must be the same value. -/
+must be defeq. -/
+-- FIXME defeq at which transparency?
 def mergeCompatible (s₁ s₂ : Substitution) : Substitution := Id.run do
   assert! s₁.premises.size == s₂.premises.size
   assert! s₁.levels.size == s₂.levels.size
   let mut result := s₁
   for h : i in [:s₂.premises.size] do
     if let some e := s₂.premises[i] then
-      assert! let r := s₁.find? ⟨i⟩; r.isNone || r == some e
       if s₁.premises[i]!.isNone then
         result := result.insert ⟨i⟩ e
   for h : i in [:s₂.levels.size] do
@@ -101,7 +109,7 @@ def mergeCompatible (s₁ s₂ : Substitution) : Substitution := Id.run do
 def containsHyp (hyp : FVarId) (s : Substitution) : Bool :=
   s.premises.any λ
     | none => false
-    | some e => e.toExpr.containsFVar hyp
+    | some e => e.containsFVar hyp
 
 /-- Given `e` with type `∀ (x₁ : T₁) ... (xₙ : Tₙ), U` and a substitution `σ`
 for the arguments `xᵢ`, replace occurrences of `xᵢ` in the body `U` with fresh
@@ -124,7 +132,7 @@ def openRuleType (e : Expr) (subst : Substitution) :
       assignLevelMVar lmvarIds[i] inst
   for h : i in [:mvarIds.size] do
     if let some inst := subst.find? ⟨i⟩ then
-      mvarIds[i].assign inst.toExpr
+      mvarIds[i].assign inst
   return (mvarIds, binfos, body)
 
 /-- Given `rule` of type `∀ (x₁ : T₁) ... (xₙ : Tₙ), U` and a substitution `σ` for
@@ -142,7 +150,7 @@ def specializeRule (rule : Expr) (subst : Substitution) : MetaM Expr :=
       let mut remainingFVarIds := Array.mkEmpty fvarIds.size
       for h : i in [:fvarIds.size] do
         if let some inst := subst.find? ⟨i⟩ then
-          args := args.push $ some inst.toExpr
+          args := args.push $ some inst
         else
           let fvarId := fvarIds[i]
           args := args.push $ some fvarId

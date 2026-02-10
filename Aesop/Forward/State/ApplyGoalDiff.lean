@@ -10,54 +10,37 @@ public import Aesop.RuleSet
 
 public section
 
-namespace Aesop
+namespace Aesop.ForwardState
 
 open Lean Lean.Meta
 
 /-- Apply a goal diff to the state, adding and removing hypotheses as indicated
 by the diff. -/
-def ForwardState.applyGoalDiff (rs : LocalRuleSet) (diff : GoalDiff)
-    (fs : ForwardState) : BaseM (ForwardState × Array ForwardRuleMatch) := do
+def applyGoalDiff (rs : LocalRuleSet) (diff : GoalDiff) (fs : ForwardState) :
+    BaseM ForwardState :=
+  profilingForwardState do
   if ! aesop.dev.statefulForward.get (← getOptions) then
-    -- We still update the hyp types since these are also used by stateless
-    -- forward reasoning.
-    return ({ fs with hypTypes := ← updateHypTypes fs.hypTypes } , #[])
+    return fs
   let fs ← diff.oldGoal.withContext do
-    diff.removedFVars.foldM (init := fs) λ fs h => do eraseHyp h fs
+    diff.removedFVars.foldM (init := fs) λ fs h => eraseHyp h fs
   diff.newGoal.withContext do
-    let (fs, ruleMatches) ←
-      diff.addedFVars.foldM (init := (fs, ∅)) λ (fs, ruleMatches) h => do
-        addHyp h fs ruleMatches
-    if ← diff.targetChanged' then
-      updateTarget fs ruleMatches
+    let fs ← diff.addedFVars.foldM (init := fs) λ fs h => addHyp h fs
+    if diff.targetChanged then
+      updateTarget fs
     else
-      return (fs, ruleMatches)
+      return fs
 where
   eraseHyp (h : FVarId) (fs : ForwardState) : BaseM ForwardState :=
     withConstAesopTraceNode .forward (return m!"erase hyp {Expr.fvar h} ({h.name})") do
-      return fs.eraseHyp h (← rpinf (← h.getType))
+      return fs.eraseHyp h
 
-  addHyp (h : FVarId) (fs : ForwardState)
-      (ruleMatches : Array ForwardRuleMatch) :
-      BaseM (ForwardState × Array ForwardRuleMatch) := do
+  addHyp (h : FVarId) (fs : ForwardState) : BaseM ForwardState := do
     let rules ← rs.applicableForwardRules (← h.getType)
     let patInsts ← rs.forwardRulePatternSubstsInLocalDecl (← h.getDecl)
-    fs.addHypWithPatSubstsCore ruleMatches diff.newGoal h rules patInsts
+    return fs.enqueueHypWithPatSubsts h rules patInsts
 
-  updateTarget (fs : ForwardState) (ruleMatches : Array ForwardRuleMatch) :
-      BaseM (ForwardState × Array ForwardRuleMatch) := do
-    let patInsts ←
-      rs.forwardRulePatternSubstsInExpr (← diff.newGoal.getType)
-    fs.updateTargetPatSubstsCore ruleMatches diff.newGoal patInsts
+  updateTarget (fs : ForwardState) : BaseM ForwardState := do
+    let patInsts ← rs.forwardRulePatternSubstsInExpr (← diff.newGoal.getType)
+    return fs.enqueueTargetPatSubsts patInsts
 
-  updateHypTypes (hypTypes : PHashSet RPINF) : BaseM (PHashSet RPINF) := do
-    let mut hypTypes := hypTypes
-    for fvarId in diff.removedFVars do
-      let type ← diff.oldGoal.withContext do rpinf (← fvarId.getType)
-      hypTypes := hypTypes.erase type
-    for fvarId in diff.addedFVars do
-      let type ← diff.newGoal.withContext do rpinf (← fvarId.getType)
-      hypTypes := hypTypes.insert type
-    return hypTypes
-
-end Aesop
+end Aesop.ForwardState

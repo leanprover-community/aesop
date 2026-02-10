@@ -96,9 +96,9 @@ unsafe def copyGoals (assignedMVars : UnorderedArraySet MVarId)
       runInMetaState parentMetaState do
         let start ← start.get
         let diff ← diffGoals start.currentGoal g.preNormGoal
-        let (forwardState, ms) ← start.forwardState.applyGoalDiff rs diff
+        let forwardState ← start.forwardState.applyGoalDiff rs diff
         let forwardRuleMatches :=
-          start.forwardRuleMatches.update ms diff.removedFVars
+          start.forwardRuleMatches.update #[] diff.removedFVars
             (consumedForwardRuleMatches := #[]) -- TODO unsure whether this is correct
         let mvars ← .ofHashSet <$> g.preNormGoal.getMVarDependencies
         pure (forwardState, forwardRuleMatches, mvars)
@@ -132,9 +132,9 @@ def makeInitialGoal (goal : Subgoal) (mvars : UnorderedArraySet MVarId)
     (successProbability : Percent) (origin : GoalOrigin) : TreeM Goal := do
   let rs := (← read).ruleSet
   let (forwardState, forwardRuleMatches) ← runInMetaState parentMetaState do
-    let (fs, newMatches) ← parentForwardState.applyGoalDiff rs goal.diff
+    let fs ← parentForwardState.applyGoalDiff rs goal.diff
     let ms :=
-      parentForwardMatches.update newMatches goal.diff.removedFVars
+      parentForwardMatches.update #[] goal.diff.removedFVars
         consumedForwardRuleMatches
     pure (fs, ms)
   return Goal.mk {

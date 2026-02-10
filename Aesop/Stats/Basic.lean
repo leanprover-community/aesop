@@ -16,7 +16,41 @@ open Lean
 
 namespace Aesop
 
--- All times are in nanoseconds.
+structure ForwardInstantiationStats where
+  «matches» : Nat
+  hyps : Nat
+  deriving Inhabited, ToJson
+
+structure ForwardClusterStateStats where
+  slots : Nat
+  instantiationStats : Array ForwardInstantiationStats
+  deriving Inhabited, ToJson
+
+structure ForwardRuleStateStats where
+  ruleName : RuleName
+  clusterStateStats : Array ForwardClusterStateStats
+  deriving Inhabited, ToJson
+
+structure ForwardStateStats where
+  ruleStateStats : Array ForwardRuleStateStats
+  deriving Inhabited, ToJson
+
+inductive GoalKind
+  | preNorm
+  | postNorm
+  deriving Inhabited, ToJson
+
+structure GoalStats where
+  goalId : Nat -- We don't use GoalId to avoid an import cycle
+  goalKind : GoalKind
+  /-- Number of fvars in the local context, excluding implementation detail
+  fvars. -/
+  lctxSize : Nat
+  /-- This goal's depth in the search tree. -/
+  depth : Nat
+  forwardStateStats : ForwardStateStats
+  deriving Inhabited, ToJson
+
 structure RuleStats where
   rule : DisplayRuleName
   elapsed : Nanos
@@ -62,21 +96,16 @@ structure Stats where
   search : Nanos
   ruleSelection : Nanos
   script : Nanos
+  forwardState : Nanos
   scriptGenerated : Option ScriptGenerated
   ruleStats : Array RuleStats
+  goalStats : Array GoalStats
   deriving Inhabited
 
 namespace Stats
 
-protected def empty : Stats where
-  total := 0
-  configParsing := 0
-  ruleSetConstruction := 0
-  search := 0
-  ruleSelection := 0
-  script := 0
-  scriptGenerated := none
-  ruleStats := #[]
+protected def empty : Stats := by
+  refine' { scriptGenerated := none, ruleStats := #[], goalStats := #[], .. } <;> exact 0
 
 instance : EmptyCollection Stats :=
   ⟨Stats.empty⟩
@@ -150,22 +179,23 @@ def _root_.Aesop.sortRuleStatsTotals
 def trace (p : Stats) (opt : TraceOption) : CoreM Unit := do
   if ! (← opt.isEnabled) then
     return
+  let { total, configParsing, ruleSetConstruction, search, ruleSelection, script, forwardState, scriptGenerated, ruleStats, goalStats := _goalStats } := p -- TODO print goal stats?
   let totalRuleApplications :=
-    p.ruleStats.foldl (init := 0) λ total rp =>
-      total + rp.elapsed
-  aesop_trace![opt] "Total: {p.total.printAsMillis}"
-  aesop_trace![opt] "Configuration parsing: {p.configParsing.printAsMillis}"
-  aesop_trace![opt] "Rule set construction: {p.ruleSetConstruction.printAsMillis}"
-  aesop_trace![opt] "Script generation: {p.script.printAsMillis}"
-  aesop_trace![opt] "Script generated: {match p.scriptGenerated with | none => "no" | some g => g.toString}"
+    ruleStats.foldl (init := 0) λ total rp => total + rp.elapsed
+  aesop_trace![opt] "Total: {total.printAsMillis}"
+  aesop_trace![opt] "Configuration parsing: {configParsing.printAsMillis}"
+  aesop_trace![opt] "Rule set construction: {ruleSetConstruction.printAsMillis}"
+  aesop_trace![opt] "Script generation: {script.printAsMillis}"
+  aesop_trace![opt] "Script generated: {match scriptGenerated with | none => "no" | some g => g.toString}"
   withConstAesopTraceNode opt (collapsed := false)
-      (return m!"Search: {p.search.printAsMillis}") do
-    aesop_trace![opt] "Rule selection: {p.ruleSelection.printAsMillis}"
+      (return m!"Search: {search.printAsMillis}") do
+    aesop_trace![opt] "Rule selection: {ruleSelection.printAsMillis}"
+    aesop_trace![opt] "Forward state updates: {forwardState.printAsMillis}"
     withConstAesopTraceNode opt (collapsed := false)
-        (return m!"Rule applications: {totalRuleApplications.printAsMillis}") do
+        (return m!"Rule applications: {totalRuleApplications.printAsMillis} [total / successful / failed]") do
       let timings := sortRuleStatsTotals p.ruleStatsTotals.toArray
       for (n, t) in timings do
-        aesop_trace![opt] "[{(t.elapsedSuccessful + t.elapsedFailed).printAsMillis} / {t.elapsedSuccessful.printAsMillis} / {t.elapsedFailed.printAsMillis}] {n}"
+        aesop_trace![opt] "[{t.numSuccessful + t.numFailed} {(t.elapsedSuccessful + t.elapsedFailed).printAsMillis} / {t.numSuccessful} {t.elapsedSuccessful.printAsMillis} / {t.numFailed} {t.elapsedFailed.printAsMillis}] {n}"
 
 end Stats
 
@@ -236,6 +266,11 @@ def profilingRule (rule : DisplayRuleName) (wasSuccessful : α → Bool) :
   profiling λ stats a elapsed =>
     let rp := { successful := wasSuccessful a, rule, elapsed }
     { stats with ruleStats := stats.ruleStats.push rp }
+
+@[inline, always_inline]
+def profilingForwardState : m α → m α :=
+  profiling λ stats _ elapsed =>
+    { stats with forwardState := stats.forwardState + elapsed }
 
 def modifyStatsIfEnabled (f : Stats → Stats) : m Unit := do
   if ← enableStats then

@@ -75,7 +75,7 @@ structure ForwardRuleInfo where
 namespace ForwardRuleInfo
 
 /-- Is this rule a constant rule (i.e., does it have neither premises nor a rule
-pattern)? -/
+pattern)? Note: the rule may still have instance arguments. -/
 def isConstant (r : ForwardRuleInfo) : Bool :=
   r.numPremises == 0 && r.rulePatternInfo?.isNone
 
@@ -87,7 +87,7 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
   let numLevelParams :=
     (collectLevelParams {} e).params.size +
     (collectLevelMVars {} e).result.size
-  let (premises, _, conclusion) ← withReducible do forallMetaTelescope e
+  let (premises, binderInfos, conclusion) ← withReducible do forallMetaTelescope e
   let premises := premises.map (·.mvarId!)
   let mut premiseToIdx : Std.HashMap MVarId PremiseIndex := ∅
   for h : i in [:premises.size] do
@@ -95,6 +95,12 @@ def ofExpr (thm : Expr) (rulePattern? : Option RulePattern)
   let mut slots : Array Slot := Array.mkEmpty premises.size
   let mut allDeps : Std.HashSet PremiseIndex := ∅
   for h : i in [:premises.size] do
+    -- We never generate slots for instance arguments, and we also don't
+    -- count dependencies of instance arguments. Hence, for the rule type
+    -- `∀ {S} [Cls S], T`, a slot is created for `S`, because only instance
+    -- arguments depend on it.
+    if binderInfos[i]! matches .instImplicit then
+      continue
     let mvarId := premises[i]
     let typeDiscrTreeKeys ← mkDiscrTreePath (← mvarId.getType)
     let mut deps : Std.HashSet PremiseIndex := ∅
