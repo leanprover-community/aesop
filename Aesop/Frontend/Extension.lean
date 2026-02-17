@@ -40,7 +40,7 @@ def declareRuleSetUnchecked (rsName : RuleSetName) (isDefault : Bool) :
 def isRuleSetDeclared (rsName : RuleSetName) : IO Bool :=
   return (← getDeclaredRuleSets).contains rsName
 
-variable [Monad m] [MonadError m] [MonadLiftT IO m]
+variable [Monad m] [MonadError m] [MonadLiftT IO m] [MonadLiftT CoreM m]
   [MonadLiftT (ST IO.RealWorld) m] [MonadEnv m] [MonadResolveName m]
 
 def checkRuleSetNotDeclared (rsName : RuleSetName) : m Unit := do

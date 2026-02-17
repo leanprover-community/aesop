@@ -807,8 +807,6 @@ attribute [-simp] reverseAux_eq
 theorem reverse_cons' (a : α) (l : List α) : reverse (a::l) = concat (reverse l) a := by
   aesop
 
-@[simp] theorem reverse_singleton (a : α) : reverse [a] = [a] := rfl
-
 -- TODO: after nightly-2024-08-27, `aesop` can not prove this anymore!
 attribute [-simp] reverse_append in
 @[simp] theorem X.reverse_append (s t : List α) : reverse (s ++ t) = (reverse t) ++ (reverse s) :=

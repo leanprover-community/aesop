@@ -162,7 +162,9 @@ where
       compareOn (·.deps.size) x y
       |>.then (compareOn (·.premiseIndex) x y)
     ⟩
-    let firstSlot := slots.maxI
+    -- Needed after https://github.com/leanprover/lean4/pull/11936
+    have : Max Slot := ⟨fun a b => if compare a b == .lt then b else a⟩
+    let firstSlot := slots.rangeMaxI
     let mut unseen := slots |>.erase firstSlot
     let firstSlotForwardDeps : Std.HashSet PremiseIndex :=
       unseen.foldl (init := ∅) λ deps s => deps.insertMany s.deps
