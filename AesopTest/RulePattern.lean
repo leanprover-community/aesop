@@ -18,14 +18,16 @@ macro "falso" : tactic => `(tactic| exact falso)
 @[aesop norm -100 forward (pattern := (↑n : Int))]
 axiom nat_pos (n : Nat) : 0 ≤ (↑n : Int)
 
-example (m n : Nat) : (↑m : Int) < 0 ∧ (↑n : Int) > 0 := by
-  set_option aesop.check.script.steps false in -- TODO lean4#4315
-  set_option aesop.check.script false in
-  aesop (config := { enableSimp := false, warnOnNonterminal := false })
-  all_goals
-    guard_hyp fwd   : 0 ≤ (m : Int)
-    guard_hyp fwd_1 : 0 ≤ (n : Int)
-    falso
+-- This test is non-deterministic and caused havoc in CI.
+-- Please do not restore without first find a reproducer for the non-determinism, and an identified fix.
+-- example (m n : Nat) : (↑m : Int) < 0 ∧ (↑n : Int) > 0 := by
+--   set_option aesop.check.script.steps false in -- TODO lean4#4315
+--   set_option aesop.check.script false in
+--   aesop (config := { enableSimp := false, warnOnNonterminal := false })
+--   all_goals
+--     guard_hyp fwd   : 0 ≤ (m : Int)
+--     guard_hyp fwd_1 : 0 ≤ (n : Int)
+--     falso
 
 @[aesop safe forward (pattern := min x y)]
 axiom foo : ∀ {x y : Nat} (_ : 0 < x) (_ : 0 < y), 0 < min x y

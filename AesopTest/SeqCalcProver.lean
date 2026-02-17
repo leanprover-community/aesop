@@ -246,7 +246,7 @@ def Cal (l r : List Φ) : (Γ Δ : List (Form Φ)) → Prop
   | Γ, φ ⇒ ψ :: Δ => Cal l r (φ :: Γ) (ψ :: Δ)
 termination_by Γ Δ => sum (Γ.map sizeOf) + sum (Δ.map sizeOf)
 
-instance Cal.instDecidable [DecidableEq Φ] (l r : List Φ) (Γ Δ : List (Form Φ))
+def Cal.instDecidable [DecidableEq Φ] (l r : List Φ) (Γ Δ : List (Form Φ))
   : Decidable (Cal l r Γ Δ) := by
   match Γ, Δ with
   | [], [] => unfold Cal; apply Common.instDecidable l r

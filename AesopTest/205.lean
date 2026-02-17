@@ -16,12 +16,12 @@ axiom R {α} : α → α → Prop
 /--
 info: Try this:
 
-  [apply]     have fwd : R b y := sym h₃
-    have fwd_1 : R a x := sym h₂
-    have fwd_2 : R b b := tran fwd h₃
-    have fwd_3 : R y y := tran h₃ fwd
-    have fwd_4 : R a a := tran fwd_1 h₂
-    have fwd_5 : R x x := tran h₂ fwd_1
+  [apply]     have fwd : R a x := sym h₂
+    have fwd_1 : R b y := sym h₃
+    have fwd_2 : R a a := tran fwd h₂
+    have fwd_3 : R y y := tran h₃ fwd_1
+    have fwd_4 : R b b := tran fwd_1 h₃
+    have fwd_5 : R x x := tran h₂ fwd
     sorry
 ---
 warning: declaration uses `sorry`
