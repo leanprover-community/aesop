@@ -24,7 +24,7 @@ example : I₁ := by
   aesop (config := { strategy := .breadthFirst })
 
 /--
-error: tactic 'aesop' failed, maximum number of rule applications (10) reached. Set the 'maxRuleApplications' option to increase the limit.
+error: Tactic `aesop` failed, maximum number of rule applications (10) reached. Set the 'maxRuleApplications' option to increase the limit.
 -/
 #guard_msgs in
 example : I₁ := by

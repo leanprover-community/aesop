@@ -22,7 +22,7 @@ attribute [-aesop] Even
 def T n := Even n
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : T 6 := by

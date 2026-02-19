@@ -12,7 +12,7 @@ set_option aesop.smallErrorMessages true
 set_option trace.aesop.proof true
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 ---
 trace: [aesop.proof] <no proof>
 -/

@@ -16,7 +16,7 @@ def T := Unit → Empty
 variable {α : Type}
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : T) (u : Unit) : α := by
@@ -25,14 +25,14 @@ example (h : T) (u : Unit) : α := by
 def U := Unit
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : T) (u : U) : α := by
   aesop (config := { terminal := true })
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : T) (u : U) : α := by
@@ -41,7 +41,7 @@ example (h : T) (u : U) : α := by
 abbrev V := Unit
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : Unit → Empty) (u : V) : α := by

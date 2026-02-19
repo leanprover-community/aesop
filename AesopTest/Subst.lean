@@ -12,7 +12,7 @@ set_option aesop.smallErrorMessages true
 -- These test cases test the builtin subst tactic.
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h₁ : x = 5) (h₂ : y = 5) : x = y := by
@@ -25,7 +25,7 @@ example (h₁ : x = 5) (h₂ : y = 5) : x = y := by
 variable {α : Type}
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example {x y z : α} (h₁ : x = y) (h₂ : y = z) : x = z := by
@@ -36,7 +36,7 @@ example {x y z : α} (h₁ : x = y) (h₂ : y = z) : x = z := by
   aesop (config := { useSimpAll := false })
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example {x y : α }(P : ∀ x y, x = y → Prop) (h₁ : x = y) (h₂ : P x y h₁) :
@@ -56,7 +56,7 @@ example {x y : α }(P : ∀ x y, x = y → Prop) (h₁ : x = y) (h₂ : P x y h�
 -- Subst also works for bi-implications.
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h₁ : P ↔ Q) (h₂ : Q ↔ R) (h₃ : P) : R  := by
@@ -70,7 +70,7 @@ example (h₁ : P ↔ Q) (h₂ : Q ↔ R) (h₃ : P) : R  := by
 -- builtin simp rule which turns these into actual homogeneous equalities).
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example {P : α → Prop} {x y z : α} (h₁ : x ≍ y) (h₂ : y ≍ z) (h₃ : P x) :
