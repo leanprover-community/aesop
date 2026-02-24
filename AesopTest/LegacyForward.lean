@@ -233,7 +233,7 @@ example (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ)
 
 -- ... but this fails:
 
-/-- error: tactic 'aesop' failed, failed to prove the goal after exhaustive search. -/
+/-- error: Tactic `aesop` failed, failed to prove the goal after exhaustive search. -/
 #guard_msgs in
 example {α : Prop} (a : α) (b : β) (r₁ : (a : α) → (b : β) → γ)
     (r₂ : (a : α) → δ) : γ ∧ δ := by

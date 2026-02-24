@@ -27,7 +27,7 @@ theorem even'_of_even' : Even' n → Even' n :=
 -- and never visited again.
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : Even' 2 := by
@@ -35,7 +35,7 @@ example : Even' 2 := by
     (config := { terminal := true })
 
 /--
-error: tactic 'aesop' failed, maximum number of rule applications (10) reached. Set the 'maxRuleApplications' option to increase the limit.
+error: Tactic `aesop` failed, maximum number of rule applications (10) reached. Set the 'maxRuleApplications' option to increase the limit.
 -/
 #guard_msgs in
 example : Even' 2 := by

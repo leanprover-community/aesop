@@ -14,7 +14,7 @@ set_option aesop.smallErrorMessages true
 structure A where
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example (h : A → β → γ) (b : β) : γ := by
@@ -29,7 +29,7 @@ example (h : A → β → γ) (b : β) : γ := by
 -- ... and also by the `simp` builder.
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example {P : α → Prop} (h : A → x = y) (p : P x) : P y := by
@@ -39,7 +39,7 @@ example {P : α → Prop} (h : A → x = y) (p : P x) : P y := by
   aesop (add simp (h {}))
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example {P : α → Prop} (h₁ : A → x = y) (h₂ : A → y = z) (p : P x) : P z := by

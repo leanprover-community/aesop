@@ -39,7 +39,7 @@ attribute [aesop 50%] Even.zero Even.plus_two
 -- We can also erase global rules...
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : EvenOrOdd 2 := by
@@ -53,7 +53,7 @@ example : EvenOrOdd 2 := by
 
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : EvenOrOdd 2 := by

@@ -13,7 +13,7 @@ set_option aesop.smallErrorMessages true
 
 structure TT₁ where
 
-/-- error: tactic 'aesop' failed, made no progress -/
+/-- error: Tactic `aesop` failed, made no progress -/
 #guard_msgs in
 example : TT₁ := by
   aesop
@@ -36,7 +36,7 @@ example : TT₂ := by
 
 end Test
 
-/-- error: tactic 'aesop' failed, made no progress -/
+/-- error: Tactic `aesop` failed, made no progress -/
 #guard_msgs in
 example : TT₂ := by
   aesop
@@ -54,7 +54,7 @@ example : TT₃ := by
 
 end Test
 
-/-- error: tactic 'aesop' failed, made no progress -/
+/-- error: Tactic `aesop` failed, made no progress -/
 #guard_msgs in
 example : TT₃ := by
   aesop
@@ -66,7 +66,7 @@ def Test.example : TT₃ := by
 
 structure TT₄ where
 
-/-- error: tactic 'aesop' failed, made no progress -/
+/-- error: Tactic `aesop` failed, made no progress -/
 #guard_msgs in
 example : TT₄ := by
   aesop
@@ -83,7 +83,7 @@ axiom U : Type
 axiom f : T → U
 axiom t : T
 
-/-- error: tactic 'aesop' failed, made no progress -/
+/-- error: Tactic `aesop` failed, made no progress -/
 #guard_msgs in
 example : U := by
   aesop
