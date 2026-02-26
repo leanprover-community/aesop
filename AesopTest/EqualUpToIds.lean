@@ -12,6 +12,8 @@ import Aesop.Tree.RunMetaM
 -- tested by using it in script validation, which is run on almost all Aesop
 -- calls in the test suite.
 
+set_option linter.unreachableTactic false
+
 open Aesop Lean Lean.Elab.Tactic
 
 def assertEqualTactics (t₁ t₂ : TacticM Unit) : TacticM Unit := do
