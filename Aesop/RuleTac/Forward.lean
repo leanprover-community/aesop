@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
+import Lean
 public import Aesop.Forward.Match
 public import Aesop.RuleTac.Basic
 public import Aesop.RuleTac.ElabRuleTerm

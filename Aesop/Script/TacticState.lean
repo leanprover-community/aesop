@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
+import Lean
 import Batteries.Lean.Meta.Basic
 public import Aesop.Script.GoalWithMVars
 

@@ -8,7 +8,11 @@ module
 public import Aesop.Index.DiscrTreeConfig
 public import Aesop.Nanos
 public import Aesop.Util.UnorderedArraySet
-public import Lean
+import Lean
+public import Lean.Meta.DiscrTree.Util
+public import Lean.Meta.Tactic.Simp.SimpTheorems
+public import Lean.Util.ForEachExpr
+public import Lean.Elab.Tactic.Basic
 public import Std.Data.HashSet.Basic
 
 public section

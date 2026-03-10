@@ -5,6 +5,7 @@ Authors: Xavier Généreux, Jannis Limperg
 -/
 module
 
+import Lean.Meta.Tactic.Apply
 public import Aesop.Forward.Match.Types
 public import Aesop.Forward.PremiseIndex
 public import Aesop.Forward.SlotIndex
@@ -16,7 +17,6 @@ public import Aesop.RuleTac.Forward.Basic
 public import Aesop.Script.SpecificTactics
 import Batteries.Lean.Meta.UnusedNames
 public import Aesop.Util.Basic
-public import Lean
 
 public section
 

@@ -5,6 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
+import Lean
+public import Lean.Meta.Tactic.Cases
 public import Aesop.Util.Tactic
 public import Aesop.Util.Tactic.Ext
 public import Aesop.Util.Tactic.Unfold
