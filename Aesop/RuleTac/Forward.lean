@@ -10,7 +10,7 @@ public import Aesop.RuleTac.Basic
 public import Aesop.RuleTac.ElabRuleTerm
 public import Aesop.RuleTac.Forward.Basic
 public import Aesop.Script.SpecificTactics
-public import Batteries.Lean.Meta.UnusedNames
+import Batteries.Lean.Meta.UnusedNames
 
 public section
 

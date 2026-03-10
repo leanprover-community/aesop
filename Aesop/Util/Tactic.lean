@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Lean
-public import Batteries.Tactic.OpenPrivate
 
 public section
 

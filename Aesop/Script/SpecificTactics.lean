@@ -11,7 +11,7 @@ public import Aesop.Util.Tactic.Unfold
 public import Aesop.Util.Unfold
 public import Aesop.Script.CtorNames
 public import Aesop.Script.ScriptM
-public import Batteries.Lean.Meta.Inaccessible
+import Batteries.Lean.Meta.Inaccessible
 
 public section
 

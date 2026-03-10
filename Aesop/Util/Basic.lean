@@ -8,8 +8,6 @@ module
 public import Aesop.Index.DiscrTreeConfig
 public import Aesop.Nanos
 public import Aesop.Util.UnorderedArraySet
-public import Batteries.Lean.Expr
-public import Batteries.Data.String.Basic
 public import Lean
 public import Std.Data.HashSet.Basic
 
