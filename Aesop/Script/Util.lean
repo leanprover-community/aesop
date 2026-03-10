@@ -7,7 +7,7 @@ module
 
 public import Aesop.Util.Basic
 public import Aesop.Util.EqualUpToIds
-public import Batteries.Lean.Meta.SavedState
+import Batteries.Lean.Meta.SavedState
 
 public section
 

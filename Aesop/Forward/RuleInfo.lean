@@ -10,6 +10,7 @@ public import Aesop.Forward.SlotIndex
 public import Aesop.RulePattern
 public import Aesop.Util.Basic
 public import Aesop.Util.UnionFind
+public import Batteries.Data.Array.Basic
 
 public section
 

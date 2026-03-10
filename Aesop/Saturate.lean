@@ -11,7 +11,7 @@ public import Aesop.RuleSet
 public import Aesop.RuleTac
 public import Aesop.Search.Expansion.Basic
 public import Aesop.Script.Check
-public import Batteries.Data.BinomialHeap.Basic
+import Batteries.Data.BinomialHeap.Basic
 
 public section
 
@@ -124,7 +124,7 @@ where
 
 namespace Stateful
 
-abbrev Queue := BinomialHeap ForwardRuleMatch ForwardRuleMatch.le
+private abbrev Queue := BinomialHeap ForwardRuleMatch ForwardRuleMatch.le
 
 partial def saturateCore (rs : LocalRuleSet) (goal : MVarId) : SaturateM MVarId :=
   withExceptionPrefix "saturate: internal error: " do

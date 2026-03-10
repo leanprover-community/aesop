@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
+import Lean
 public import Aesop.Tracing
 
 public section
