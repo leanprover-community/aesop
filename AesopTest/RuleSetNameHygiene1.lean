@@ -15,7 +15,7 @@ macro "aesop_test" : tactic => `(tactic| aesop (rule_sets := [test]))
 structure TT where
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : TT := by

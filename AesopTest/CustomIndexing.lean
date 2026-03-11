@@ -12,7 +12,7 @@ set_option aesop.smallErrorMessages true
 variable {α : Type}
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : α) : α := by

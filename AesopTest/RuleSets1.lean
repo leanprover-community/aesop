@@ -25,7 +25,7 @@ inductive D : Prop where
 | intro
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : A := by
@@ -38,7 +38,7 @@ example : B := by
   aesop (rule_sets := [test_A, test_B])
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : C := by
@@ -54,7 +54,7 @@ attribute [aesop safe (rule_sets := [test_C])] C
 attribute [-aesop] C
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : C := by
@@ -73,7 +73,7 @@ example : D := by
 attribute [-aesop] ad
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : D := by
@@ -97,7 +97,7 @@ example : E := by
 end
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : E := by
@@ -118,7 +118,7 @@ example : E := by
 end EScope
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : E := by
