@@ -68,9 +68,9 @@ where
 
   tryNormRules (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       (preState : Meta.SavedState) : SaturateM (Option GoalDiff) :=
-    withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying normalisation rules") do
+    withTraceNode `saturate (fun _ => return m!"trying normalisation rules") do
       let matchResults ←
-        withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting normalisation rules") do
+        withTraceNode `saturate (fun _ => return m!"selecting normalisation rules") do
         profilingRuleSelection do
         rs.applicableNormalizationRulesWith ∅ goal
           (include? := (isForwardOrDestructRuleName ·.name))
@@ -78,9 +78,9 @@ where
 
   trySafeRules (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       (preState : Meta.SavedState) : SaturateM (Option GoalDiff) :=
-    withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} trying safe rules") do
+    withTraceNode `saturate (fun _ => return m!"trying safe rules") do
       let matchResults ←
-        withTraceNode `saturate (λ res => return m!"{exceptEmoji res} selecting safe rules") do
+        withTraceNode `saturate (fun _ => return m!"selecting safe rules") do
         profilingRuleSelection do
         rs.applicableSafeRulesWith ∅ goal
           (include? := (isForwardOrDestructRuleName ·.name))
@@ -89,7 +89,7 @@ where
   runRule {α} (goal : MVarId) (mvars : UnorderedArraySet MVarId)
       (preState : Meta.SavedState) (matchResult : IndexMatchResult (Rule α)) :
       SaturateM (Option (GoalDiff × Option (Array Script.LazyStep))) := do
-    withTraceNode `saturate (λ res => return m!"{exceptOptionEmoji res} running rule {matchResult.rule.name}") do
+    withTraceNode `saturate (fun _ => return m!"running rule {matchResult.rule.name}") do
     profilingRule matchResult.rule.name (·.isSome) do
     let input := {
       indexMatchLocations := matchResult.locations
