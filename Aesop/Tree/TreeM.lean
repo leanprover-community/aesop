@@ -83,7 +83,7 @@ namespace TreeM
 -- Generate specialized pure/bind implementations so we don't need to optimise
 -- them on the fly at each use site.
 instance : Monad TreeM :=
-  { inferInstanceAs (Monad TreeM) with }
+  { (inferInstance : Monad TreeM) with }
 
 instance (priority := low) : MonadStateOf Tree TreeM where
   get := return (← getThe State).tree
