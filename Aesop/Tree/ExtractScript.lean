@@ -95,7 +95,7 @@ end
 
 @[inline]
 def extractScript : TreeM (UScript × Bool) :=
-  withAesopTraceNode .script (fun _ => return m!"Extract script") do
+  withAesopTraceNode .script (λ r => return m!"{exceptEmoji r} Extract script") do
     (← getRootGoal).extractScriptCore.run
 
 mutual
@@ -131,7 +131,7 @@ mutual
 end
 
 def extractSafePrefixScript : TreeM (UScript × Bool) := do
-  withAesopTraceNode .script (fun _ => return m!"Extract safe prefix script") do
+  withAesopTraceNode .script (λ r => return m!"{exceptEmoji r} Extract safe prefix script") do
     (← getRootGoal).extractSafePrefixScriptCore.run
 
 end Aesop

@@ -127,7 +127,7 @@ def runFirstSuccessfulTacticBuilder (s : LazyStep) : MetaM Tactic :=
 where
   tryTacticBuilder (b : TacticBuilder) : MetaM (Option Tactic) := do
     let tactic ← b
-    withAesopTraceNode .script (fun _ => return m!"{tactic}") do
+    withAesopTraceNode .script (λ res => return m!"{exceptOptionEmoji res} {tactic}") do
       let tacticResult ← observing? do
         runTacticCapturingPostState tactic.uTactic s.preState [s.preGoal]
       let some (actualPostState, actualPostGoals) := tacticResult

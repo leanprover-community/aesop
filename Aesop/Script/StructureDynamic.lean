@@ -82,7 +82,7 @@ structure DynStructureResult where
 
 partial def structureDynamicCore (preState : Meta.SavedState) (preGoal : MVarId)
     (uscript : UScript) : MetaM (Option (UScript × Bool)) :=
-  withAesopTraceNode .script (fun _ => return m!"Dynamically structuring the script") do
+  withAesopTraceNode .script (λ r => return m!"{exceptOptionEmoji r} Dynamically structuring the script") do
     aesop_trace[script] "unstructured script:{indentD $ MessageData.joinSep (uscript.map toMessageData |>.toList) "\n"}"
     let (result?, perfect) ← go preState #[preGoal] |>.run uscript
     let some result := result?
@@ -95,7 +95,7 @@ where
     if h : 0 < preGoals.size then
       -- Try to apply the step for the main goal, then solve the remaining goals.
       let firstGoal := preGoals[0]
-      let result? ← withAesopTraceNode .script (fun _ => return m!"Focusing main goal {firstGoal.name}") do
+      let result? ← withAesopTraceNode .script (λ r => return m!"{exceptOptionEmoji r} Focusing main goal {firstGoal.name}") do
         aesop_trace[script] "goal: {firstGoal.name}{← preState.runMetaM' $ addMessageContext $ indentD firstGoal}"
         goStructured preState preGoals preGoals[0]
       match result? with
@@ -103,7 +103,7 @@ where
       | none =>
         -- If this fails, apply the chronologically next step and solve the remaining goals.
         modify ({ · with perfect := false })
-        withAesopTraceNode .script (fun _ => return m!"Applying step to chronologically first goal") do
+        withAesopTraceNode .script (λ r => return m!"{exceptOptionEmoji r} Applying step to chronologically first goal") do
           goUnstructured preState preGoals
     else
       return some { script := [], postState := preState }

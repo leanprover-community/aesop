@@ -449,7 +449,7 @@ where
       (acc, lctx)
 
   dummyLDecl (name : Name) : LocalDecl :=
-    .cdecl 0 ⟨`_⟩ name (.sort .zero) .default .default
+    .cdecl 0 ⟨`_⟩ name (.sort levelZero) .default .default
 
 def Name.ofComponents (cs : List Name) : Name :=
   cs.foldl (init := .anonymous) λ

@@ -11,7 +11,7 @@ public import Aesop.EMap
 public section
 
 open Lean Lean.Meta
-
+open ExceptToEmoji (toEmoji)
 
 set_option linter.missingDocs true
 
@@ -698,7 +698,7 @@ def eraseHyp (h : FVarId) (pi : PremiseIndex) (rs : RuleState) : RuleState :=
 /-- Add any enqueued hyps to the rule state, potentially generating new
 complete matches in the process. -/
 def update (goal : MVarId) (rs : RuleState) : BaseM (RuleState × Array ForwardRuleMatch) :=
-  withAesopTraceNode .forward (fun _ => return m!"update rule state {rs.rule.name}") do
+  withAesopTraceNode .forward (fun r => return m!"{exceptEmoji r} update rule state {rs.rule.name}") do
   if ! rs.clusterStates.all (·.haveHypForEachSlot) then
     aesop_trace[forward] "skipping update since some cluster states cannot yet have complete matches"
     return (rs, #[])
@@ -895,7 +895,7 @@ def update (goal : MVarId) (fs : ForwardState) (phase? : Option PhaseName) :
     match phase? with
     | none => "all phases"
     | some phase => s!"{phase} phase"
-  withAesopTraceNode .forward (fun _ => return m!"update forward state for {phaseStr}") do
+  withAesopTraceNode .forward (fun r => return m!"{exceptEmoji r} update forward state for {phaseStr}") do
   let toUpdate : Array RuleName :=
     match phase? with
     | none => fs.ruleStates.foldl (init := #[]) fun toUpdate rule _ => toUpdate.push rule
