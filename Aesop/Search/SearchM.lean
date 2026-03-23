@@ -53,19 +53,19 @@ namespace SearchM
 -- Generate specialized pure/bind implementations so we don't need to optimise
 -- them on the fly at each use site.
 instance : Monad (SearchM Q) :=
-  { inferInstanceAs (Monad (SearchM Q)) with }
+  { (inferInstance : Monad (SearchM Q)) with }
 
 instance : MonadRef (SearchM Q) :=
-  { inferInstanceAs (MonadRef (SearchM Q)) with }
+  { (inferInstance : MonadRef (SearchM Q)) with }
 
 instance : Inhabited (SearchM Q α) where
   default := failure
 
 instance : MonadState (State Q) (SearchM Q) :=
-  { inferInstanceAs (MonadStateOf (State Q) (SearchM Q)) with }
+  { (inferInstance : MonadStateOf (State Q) (SearchM Q)) with }
 
 instance : MonadReader Context (SearchM Q) :=
-  { inferInstanceAs (MonadReaderOf Context (SearchM Q)) with }
+  { (inferInstance : MonadReaderOf Context (SearchM Q)) with }
 
 instance : MonadLift TreeM (SearchM Q) where
   monadLift x := do
