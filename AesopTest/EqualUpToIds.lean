@@ -8,6 +8,8 @@ import Aesop.Util.Basic
 import Aesop.Util.EqualUpToIds
 import Aesop.Tree.RunMetaM
 
+set_option linter.unreachableTactic false
+
 -- Some simple test cases for the EqualUpToIds module. The module is mostly
 -- tested by using it in script validation, which is run on almost all Aesop
 -- calls in the test suite.
