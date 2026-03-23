@@ -146,18 +146,18 @@ variable [Monad m] [MonadTrace m] [MonadLiftT BaseIO m] [MonadLiftT IO m]
     [MonadRef m] [AddMessageContext m] [MonadOptions m] [MonadAlwaysExcept ε m]
 
 @[inline, always_inline]
-def withAesopTraceNode (opt : TraceOption)
+def withAesopTraceNode [ExceptToTraceResult ε α] (opt : TraceOption)
     (msg : Except ε α → m MessageData) (k : m α) (collapsed := true) : m α :=
   withTraceNode opt.traceClass msg k collapsed
 
 @[inline, always_inline]
-def withAesopTraceNodeBefore [ExceptToEmoji ε α] (opt : TraceOption)
+def withAesopTraceNodeBefore [ExceptToTraceResult ε α] (opt : TraceOption)
     (msg : m MessageData) (k : m α) (collapsed := true) : m α :=
   withTraceNodeBefore opt.traceClass (fun _ => msg) k collapsed
 
 @[inline, always_inline]
-def withConstAesopTraceNode (opt : TraceOption) (msg : m MessageData) (k : m α)
-    (collapsed := true) : m α :=
+def withConstAesopTraceNode [ExceptToTraceResult ε α] (opt : TraceOption)
+    (msg : m MessageData) (k : m α) (collapsed := true) : m α :=
   withAesopTraceNode opt (λ _ => msg) k collapsed
 
 end

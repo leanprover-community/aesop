@@ -34,8 +34,8 @@ theorem filter_cons_false (h : ¬ p a) : filter p (a :: as) = filter p as := by
 
 @[aesop 50% [constructors, cases]]
 inductive Mem (a : α) : List α → Prop where
-  | head {as} : Mem a (a::as)
-  | tail {as} : Mem a as → Mem a (a'::as)
+  | head {as : _} : Mem a (a::as)
+  | tail {as : _} : Mem a as → Mem a (a'::as)
 
 infix:50 " ∈ " => Mem
 

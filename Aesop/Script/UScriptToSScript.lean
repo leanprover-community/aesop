@@ -93,7 +93,7 @@ where
 end StepTree
 
 partial def orderedUScriptToSScript (uscript : UScript) (tacticState : TacticState) : CoreM SScript :=
-  withAesopTraceNode .script (λ e => return m!"{exceptEmoji e} Converting ordered unstructured script to structured script") do
+  withAesopTraceNode .script (fun _ => return m!"Converting ordered unstructured script to structured script") do
   aesop_trace[script] "unstructured script:{indentD $ MessageData.joinSep (uscript.map toMessageData |>.toList) "\n"}"
   let stepTree := uscript.toStepTree
   aesop_trace[script] "step tree:{indentD $ toMessageData stepTree}"
