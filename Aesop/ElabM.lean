@@ -47,7 +47,7 @@ abbrev ElabM := ReaderT ElabM.Context $ TermElabM
 -- Generate specialized pure/bind implementations so we don't need to optimise
 -- them on the fly at each use site.
 instance : Monad ElabM :=
-  { inferInstanceAs (Monad ElabM) with }
+  { (inferInstance : Monad ElabM) with }
 
 protected def ElabM.run (ctx : Context) (x : ElabM α) : TermElabM α := do
   ReaderT.run x ctx
