@@ -104,50 +104,16 @@ def «elab» (stx : Term) (rule : Expr) : TermElabM RulePattern :=
     aesop_trace[debug] "pattern: {stx}"
     let lmvarIds := collectLevelMVars {} (← instantiateMVars rule) |>.result
     aesop_trace[debug] "level metavariables in rule: {lmvarIds.map Level.mvar}"
-    forallTelescope (← inferType rule) λ fvars _ => do
+    let (numArgs, pat) ← forallTelescope (← inferType rule) λ fvars _ => do
       let pat := (← elabPattern stx).consumeMData
-      let (pat, mvarIds) ← fvarsToMVars fvars pat
-      let discrTreeKeys ← mkDiscrTreePath pat
-      let (pat, mvarIdToPatternPos, lmvarIdToPatternPos) ← abstractMVars' pat
-      let argMap := mvarIds.map (mvarIdToPatternPos[·]?)
-      let levelArgMap := lmvarIds.map (lmvarIdToPatternPos[·]?)
-      aesop_trace[debug] "result: '{pat.expr}' with arg map{indentD $ toMessageData argMap}\nand level arg map{indentD $ toMessageData levelArgMap}"
-      return { pattern := pat, argMap, levelArgMap, discrTreeKeys }
-where
-  fvarsToMVars (fvars : Array Expr) (e : Expr) :
-      MetaM (Expr × Array MVarId) := do
-    let e ← mkLambdaFVars fvars (← instantiateMVars e)
-    let (mvars, _, e) ← lambdaMetaTelescope e (maxMVars? := some fvars.size)
-    return (e, mvars.map (·.mvarId!))
-
-  -- Largely copy-pasta of `abstractMVars`.
-  abstractMVars' (e : Expr) :
-      MetaM (AbstractMVarsResult × Std.HashMap MVarId Nat × Std.HashMap LMVarId Nat) := do
-    let e ← instantiateMVars e
-    let (e, s) := AbstractMVars.abstractExprMVars e
-      { mctx := (← getMCtx)
-        lctx := (← getLCtx)
-        ngen := (← getNGen)
-        abstractLevels := true }
-    setNGen s.ngen
-    setMCtx s.mctx
-    let e := s.lctx.mkLambda s.fvars e
-    let mut fvarIdToMVarId : Std.HashMap FVarId MVarId := ∅
-    for (mvarId, e) in s.emap do
-      if let .fvar fvarId := e then
-        fvarIdToMVarId := fvarIdToMVarId.insert fvarId mvarId
-    let mut mvarIdToPos := ∅
-    for h : i in [:s.fvars.size] do
-      mvarIdToPos := mvarIdToPos.insert fvarIdToMVarId[s.fvars[i].fvarId!]! i
-    let mut paramToLMVarId : Std.HashMap Name LMVarId := ∅
-    for (lmvarId, l) in s.lmap do
-      if let .param n := l then
-        paramToLMVarId := paramToLMVarId.insert n lmvarId
-    let mut lmvarIdToPos := ∅
-    for h : i in [:s.paramNames.size] do
-      lmvarIdToPos := lmvarIdToPos.insert paramToLMVarId[s.paramNames[i]]! i
-    let result :=
-      { paramNames := s.paramNames, mvars := s.mvars, expr := e }
-    return (result, mvarIdToPos, lmvarIdToPos)
+      pure (fvars.size, ← mkLambdaFVars fvars pat)
+    -- Create metavariables outside of the telescope to avoid false dependence on local context, for `abstractMVars`
+    let (mvars, _, pat) ← lambdaMetaTelescope pat (maxMVars? := numArgs)
+    let discrTreeKeys ← mkDiscrTreePath pat
+    let pat ← abstractMVars pat
+    let argMap := mvars.map (pat.exprArgs.idxOf? ·)
+    let levelArgMap := lmvarIds.map (pat.lmvars.idxOf? <| .mvar ·)
+    aesop_trace[debug] "result: '{pat.expr}' with arg map{indentD $ toMessageData argMap}\nand level arg map{indentD $ toMessageData levelArgMap}"
+    return { pattern := pat, argMap, levelArgMap, discrTreeKeys }
 
 end Aesop.RulePattern
