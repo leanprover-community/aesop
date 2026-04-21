@@ -87,7 +87,7 @@ def equalCommonLMVars? (lmvarId₁ lmvarId₂ : LMVarId) :
   match ← readCommonMCtx? with
   | none => return none
   | some mctx =>
-    if mctx.lDepth.contains lmvarId₁ || mctx.lDepth.contains lmvarId₂ then
+    if mctx.lDecls.contains lmvarId₁ || mctx.lDecls.contains lmvarId₂ then
       return some $ lmvarId₁ == lmvarId₂
     else
       return none
