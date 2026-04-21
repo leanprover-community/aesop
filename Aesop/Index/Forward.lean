@@ -5,6 +5,7 @@ Authors: Xavier Généreux, Jannis Limperg
 -/
 module
 
+meta import Lean.Parser.Do
 public import Aesop.Forward.Match.Types
 public import Aesop.Rule.Forward
 public import Aesop.Index.Basic

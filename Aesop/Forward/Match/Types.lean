@@ -1,5 +1,6 @@
 module
 
+meta import Lean.Parser.Do
 public import Aesop.Forward.PremiseIndex
 public import Aesop.Forward.SlotIndex
 public import Aesop.Forward.Substitution

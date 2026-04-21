@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
+meta import Lean.Parser.Do
 public import Aesop.Rule
 public import Aesop.Rule.Forward
 

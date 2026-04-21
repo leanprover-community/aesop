@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
+meta import Lean.Parser.Do
 public import Aesop.Builder.Constructors
 public import Aesop.Builder.NormSimp
 public import Aesop.Builder.Tactic

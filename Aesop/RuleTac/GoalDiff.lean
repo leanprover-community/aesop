@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
+meta import Lean.Parser.Do
 public import Aesop.BaseM
 public import Aesop.RuleTac.FVarIdSubst
 public import Aesop.Util.Basic

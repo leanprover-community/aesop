@@ -5,6 +5,7 @@ Authors: Jannis Limperg, Kaiyu Yang
 -/
 module
 
+meta import Lean.Parser.Do
 public import Aesop.RuleTac.Basic
 public import Aesop.Script.Step
 
