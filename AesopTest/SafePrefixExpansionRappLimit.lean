@@ -15,7 +15,6 @@ warning: aesop: failed to prove the goal. Some goals were not explored because t
 warning: aesop: safe prefix was not fully expanded because the maximum number of rule applications (50) was reached.
 ---
 error: unsolved goals
-case a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a
 ⊢ False
 -/
 #guard_msgs in
