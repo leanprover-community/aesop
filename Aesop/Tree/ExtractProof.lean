@@ -8,7 +8,8 @@ module
 public import Lean.Replay
 public import Aesop.Tracing
 public import Aesop.Tree.TreeM
-public import Batteries.Lean.Meta.InstantiateMVars
+import Batteries.Lean.Meta.InstantiateMVars
+import Batteries.Lean.Meta.SavedState
 
 public section
 

@@ -5,12 +5,14 @@ Authors: Jannis Limperg
 -/
 module
 
+meta import Lean.Parser.Do
 public import Aesop.Script.Check
 public import Aesop.Script.StructureDynamic
 public import Aesop.Script.StructureStatic
 public import Aesop.Script.OptimizeSyntax
 public import Aesop.Stats.Basic
 public import Aesop.Options.Internal
+import Batteries.Lean.Meta.SavedState
 
 public section
 

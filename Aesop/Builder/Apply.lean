@@ -5,7 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
+meta import Lean.Parser.Do
 public import Aesop.Builder.Basic
+import Batteries.Lean.Expr
 
 public section
 

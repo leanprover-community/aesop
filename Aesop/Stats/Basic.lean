@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
+meta import Lean.Parser.Do
 public import Aesop.Nanos
 public import Aesop.Rule.Name
 public import Aesop.Tracing

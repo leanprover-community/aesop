@@ -5,6 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
+import Lean
 public import Aesop.Util.Basic
 public import Aesop.Util.EqualUpToIds
 

@@ -5,6 +5,7 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 module
 
+meta import Lean.Parser.Do
 public import Aesop.Rule.Basic
 public import Aesop.Percent
 
