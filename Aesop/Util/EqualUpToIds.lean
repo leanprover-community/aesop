@@ -50,7 +50,7 @@ abbrev EqualUpToIdsM :=
 -- whole monad stack at every use site. May eventually be covered by `deriving`.
 @[inline, always_inline]
 instance : Monad EqualUpToIdsM :=
-  { inferInstanceAs (Monad EqualUpToIdsM) with }
+  { (inferInstance : Monad EqualUpToIdsM) with }
 
 protected def EqualUpToIdsM.run' (x : EqualUpToIdsM α)
     (commonMCtx? : Option MetavarContext) (mctx₁ mctx₂ : MetavarContext)
