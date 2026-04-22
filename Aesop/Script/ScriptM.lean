@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 module
 
-meta import Lean.Parser.Do
 public import Aesop.BaseM
 public import Aesop.Script.Step
 public import Aesop.Script.Tactic
