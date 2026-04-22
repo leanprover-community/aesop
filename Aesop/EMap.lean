@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 
 module
 
-meta import Lean.Parser.Do
 public import Aesop.Tracing
 public import Aesop.Util.Basic
 
