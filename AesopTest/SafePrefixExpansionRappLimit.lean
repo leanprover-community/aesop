@@ -23,7 +23,7 @@ example : False := by
   aesop
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal. Some goals were not explored because the maximum rule application depth (30) was reached. Set option 'maxRuleApplicationDepth' to increase the limit.
+error: Tactic `aesop` failed, failed to prove the goal. Some goals were not explored because the maximum rule application depth (30) was reached. Set option 'maxRuleApplicationDepth' to increase the limit.
 Initial goal:
   ⊢ False
 Remaining goals after safe rules:

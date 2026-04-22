@@ -8,7 +8,7 @@ def myTacGen : Aesop.TacGen := fun _ => do
   return #[("exact ⟨val - f { val := val, property := property }, fun a ha => by simpa⟩",
             0.9)]
 
-/-- error: tactic 'aesop' failed, made no progress -/
+/-- error: Tactic `aesop` failed, made no progress -/
 #guard_msgs in
 theorem foo (f : { x // 0 < x } → { x // 0 < x }) (val : Nat)
     (property : 0 < val) :

@@ -20,7 +20,7 @@ def unfoldConst («from» to : Name) : Simp.Simproc := λ e =>
 @[irreducible] def T₁ := True
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example : T₁ := by
@@ -32,7 +32,7 @@ example : T₁ := by
   aesop
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example : T₁ := by
@@ -41,7 +41,7 @@ example : T₁ := by
 @[irreducible] def T₂ := True
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example : T₂ := by
@@ -50,7 +50,7 @@ example : T₂ := by
 simproc [aesop_builtin] unfoldT₂ (T₂) := unfoldConst ``T₂ ``True
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example : T₂ := by
