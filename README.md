@@ -203,7 +203,7 @@ showing `NonEmpty ys`. If `nonEmpty_append₁` were registered as a safe rule, w
 would always choose `NonEmpty xs` and never investigate `NonEmpty ys`.
 
 Each unsafe rule is annotated with a **success probability**, here 50%. This is
-a very rough estimate of how likely it is that the rule will to lead to a
+a very rough estimate of how likely it is that the rule will lead to a
 successful proof. It is used to prioritise goals: the initial goal starts with a
 priority of 100% and whenever we apply an unsafe rule, the priority of its
 subgoals is the priority of its parent goal multiplied with the success
