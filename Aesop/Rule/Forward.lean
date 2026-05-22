@@ -5,7 +5,6 @@ Authors: Xavier Généreux, Jannis Limperg
 -/
 module
 
-meta import Lean.Parser.Do
 public import Aesop.Forward.RuleInfo
 public import Aesop.Percent
 public import Aesop.Rule.Name

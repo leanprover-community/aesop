@@ -1,6 +1,5 @@
 module
 
-meta import Lean.Parser.Do
 public import Aesop.RuleTac.Basic
 public import Aesop.Forward.Match.Types
 

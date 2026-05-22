@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 module
 
-meta import Lean.Parser.Do
 public import Aesop.Script.UScript
 public import Aesop.Script.UScriptToSScript
 public import Aesop.Script.Util

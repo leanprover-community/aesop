@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 module
 
-meta import Lean.Parser.Do
 public import Aesop.Percent
 public import Aesop.Stats.Extension
 
