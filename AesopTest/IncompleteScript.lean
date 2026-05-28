@@ -57,7 +57,6 @@ info: Try this:
 warning: aesop: failed to prove the goal after exhaustive search.
 ---
 error: unsolved goals
-case a.a
 ⊢ Even 1
 -/
 #guard_msgs in
