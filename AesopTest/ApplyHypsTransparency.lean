@@ -12,7 +12,7 @@ set_option aesop.smallErrorMessages true
 def T := Unit → Nat
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : T) : Nat := by
@@ -24,14 +24,14 @@ example (h : T) : Nat := by
 @[irreducible] def U := Empty
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : Unit → Empty) : U := by
   aesop (config := { applyHypsTransparency := .reducible, terminal := true })
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : Unit → Empty) : U := by

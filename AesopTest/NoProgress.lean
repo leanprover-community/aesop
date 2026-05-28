@@ -12,7 +12,7 @@ set_option aesop.smallErrorMessages true
 def T := True
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example : T := by
@@ -54,7 +54,7 @@ attribute [aesop 100%] F'_def
 -- goal.
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example : F' := by

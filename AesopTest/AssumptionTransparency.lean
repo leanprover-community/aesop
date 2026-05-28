@@ -12,7 +12,7 @@ set_option aesop.smallErrorMessages true
 def T := Empty
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : T) : Empty := by
@@ -20,7 +20,7 @@ example (h : T) : Empty := by
     (config := { assumptionTransparency := .reducible, terminal := true })
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : T) : Empty := by
@@ -33,7 +33,7 @@ example (h : T) : Empty := by
 @[irreducible] def U := False
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : U) : False := by

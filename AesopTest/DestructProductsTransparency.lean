@@ -17,7 +17,7 @@ structure Sig (α : Sort u) (β : α → Sort v) : Sort _ where
 def T α β := α ∧ β
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : T α β) : Sig α (λ _ => β) := by
@@ -29,7 +29,7 @@ example (h : T α β) : Sig α (λ _ => β) := by
 def U := T
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : U α β) : Sig α (λ _ => β) := by
@@ -39,7 +39,7 @@ example (h : U α β) : Sig α (λ _ => β) := by
   aesop (config := { destructProductsTransparency := .default })
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example (h : U α β ∧ U γ δ) : Sig α (λ _ => γ) := by

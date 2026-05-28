@@ -193,8 +193,8 @@ def throwAesopEx (mvarId : MVarId) (remainingSafeGoals : Array MVarId)
     SearchM Q α := do
   if aesop.smallErrorMessages.get (← getOptions) then
     match msg? with
-    | none => throwError "tactic 'aesop' failed"
-    | some msg => throwError "tactic 'aesop' failed, {msg}"
+    | none => throwError "Tactic `aesop` failed"
+    | some msg => throwError "Tactic `aesop` failed, {msg}"
   else
     let maxRapps := (← read).options.maxSafePrefixRuleApplications
     let suffix :=
@@ -210,8 +210,8 @@ def throwAesopEx (mvarId : MVarId) (remainingSafeGoals : Array MVarId)
         m!"\nRemaining goals after safe rules:{indentD gs}{suffix'}"
     -- Copy-pasta from `Lean.Meta.throwTacticEx`
     match msg? with
-    | none => throwError "tactic 'aesop' failed\nInitial goal:{indentD mvarId}{suffix}"
-    | some msg => throwError "tactic 'aesop' failed, {msg}\nInitial goal:{indentD mvarId}{suffix}"
+    | none => throwError "Tactic `aesop` failed\nInitial goal:{indentD mvarId}{suffix}"
+    | some msg => throwError "Tactic `aesop` failed, {msg}\nInitial goal:{indentD mvarId}{suffix}"
 
 
 -- When we hit a non-fatal error (i.e. the search terminates without a proof
