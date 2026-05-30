@@ -5,7 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean
+import Lean
+public import Std.Data.HashSet.Basic
 
 public section
 

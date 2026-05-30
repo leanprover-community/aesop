@@ -13,7 +13,6 @@ public import Aesop.RuleTac.GoalDiff
 public import Aesop.RuleTac.FVarIdSubst
 public import Aesop.Script.CtorNames
 public import Aesop.Script.Step
-public import Batteries.Lean.Meta.SavedState
 public import Aesop.Options.Internal
 
 public section

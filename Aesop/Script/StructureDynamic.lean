@@ -10,6 +10,7 @@ public import Aesop.Script.UScriptToSScript
 public import Aesop.Script.Util
 public import Aesop.Script.SScript
 public import Aesop.Tracing
+import Batteries.Lean.Meta.SavedState
 
 public section
 

@@ -10,6 +10,7 @@ public import Aesop.Forward.State.ApplyGoalDiff
 public import Aesop.Tree.Traversal
 public import Aesop.Tree.TreeM
 public import Aesop.Util.UnionFind
+import Batteries.Lean.Meta.SavedState
 
 public section
 

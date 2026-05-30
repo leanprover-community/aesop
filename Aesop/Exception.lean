@@ -5,7 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean
+import Lean.Exception
 
 public section
 

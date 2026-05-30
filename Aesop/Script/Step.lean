@@ -10,7 +10,8 @@ public import Aesop.Script.Tactic
 public import Aesop.Script.TacticState
 public import Aesop.Script.Util
 public import Aesop.Tracing
-public import Batteries.Tactic.PermuteGoals
+import Batteries.Tactic.PermuteGoals
+import Batteries.Lean.Meta.SavedState
 
 public section
 
