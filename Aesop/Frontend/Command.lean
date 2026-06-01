@@ -78,7 +78,7 @@ elab_rules : command
 
 def evalStatsReport? (name : Name) : CoreM (Option StatsReport) := do
   try
-    unsafe evalConstCheck StatsReport ``StatsReport name
+    unsafe some <$> evalConstCheck StatsReport ``StatsReport name
   catch _ =>
     return none
 
