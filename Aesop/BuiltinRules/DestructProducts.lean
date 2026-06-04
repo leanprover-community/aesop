@@ -5,8 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Frontend.Attribute
 public meta import Lean.Meta.Tactic.Apply
+public import Aesop.Frontend.Attribute
 
 public section
 
