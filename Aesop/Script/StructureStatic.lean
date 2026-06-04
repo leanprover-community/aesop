@@ -4,7 +4,6 @@ public import Aesop.Script.SScript
 public import Aesop.Script.UScript
 import Aesop.Script.UScriptToSScript
 import Aesop.Script.Util
-import Aesop.Tracing
 
 public section
 
