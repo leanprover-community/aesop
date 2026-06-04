@@ -8,7 +8,7 @@ Authors: Son Ho, Jannis Limperg
 -- assigned during rule pattern matching. Thanks to Son Ho for reporting this
 -- issue.
 
-import Aesop.Frontend.Attribute
+public import Aesop.Frontend.Attribute
 import Aesop.Frontend.Saturate
 
 set_option aesop.check.all true
