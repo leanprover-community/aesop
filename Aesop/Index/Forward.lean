@@ -7,7 +7,6 @@ module
 
 public import Aesop.Forward.Match.Types
 import Batteries.Lean.Meta.DiscrTree
-import Aesop.Index.DiscrTreeConfig
 
 public section
 

@@ -7,7 +7,6 @@ module
 
 public import Aesop.Forward.SlotIndex
 public import Aesop.RulePattern
-import Aesop.Index.DiscrTreeConfig
 import Aesop.Util.UnionFind
 import Batteries.Data.Array.Basic
 

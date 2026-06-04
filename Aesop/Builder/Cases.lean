@@ -7,7 +7,6 @@ module
 
 public import Aesop.Builder.Basic
 import Batteries.Lean.Expr
-import Aesop.Index.DiscrTreeConfig
 import Aesop.RuleTac.Cases
 
 public section

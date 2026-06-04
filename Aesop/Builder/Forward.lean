@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Builder.Basic
-import Aesop.Index.DiscrTreeConfig
 
 public section
 

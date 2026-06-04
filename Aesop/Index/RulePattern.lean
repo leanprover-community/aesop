@@ -8,7 +8,6 @@ module
 public import Aesop.Util.OrderedHashSet
 import Batteries.Lean.Meta.DiscrTree
 public import Aesop.RulePattern
-import Aesop.Index.DiscrTreeConfig
 
 public section
 

@@ -15,7 +15,6 @@ import Aesop.Builder.Forward
 import Aesop.Builder.NormSimp
 import Aesop.Builder.Tactic
 import Aesop.Builder.Unfold
-import Aesop.Index.DiscrTreeConfig
 
 public section
 
