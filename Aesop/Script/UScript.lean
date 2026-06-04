@@ -8,7 +8,6 @@ module
 public import Aesop.Script.Step
 import Batteries.Lean.Meta.SavedState
 meta import Lean.Parser.Term.Basic
-import Lean.Parser.Term.Basic
 
 public section
 
