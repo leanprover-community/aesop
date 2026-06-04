@@ -6,11 +6,11 @@ Authors: Jannis Limperg
 module
 
 public import Lean.Meta.Tactic.Cases
+public import Lean.Meta.Tactic.Simp.Types
 public import Aesop.Util.Tactic.Ext
 public import Aesop.Script.CtorNames
 public import Aesop.Script.ScriptM
 import Batteries.Lean.Meta.Inaccessible
-public import Lean.Meta.Tactic.Simp.Types
 import Aesop.Util.Tactic
 import Aesop.Util.Tactic.Unfold
 import Aesop.Util.Unfold

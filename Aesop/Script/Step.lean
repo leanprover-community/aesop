@@ -7,10 +7,10 @@ module
 
 public import Aesop.Script.Tactic
 public import Aesop.Script.TacticState
+public import Aesop.Tracing
 import Batteries.Tactic.PermuteGoals
 import Batteries.Lean.Meta.SavedState
 import Aesop.Script.Util
-public import Aesop.Tracing
 import Aesop.Util.EqualUpToIds
 
 public section

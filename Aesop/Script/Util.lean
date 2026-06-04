@@ -5,8 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
-import Batteries.Lean.Meta.SavedState
 public import Aesop.Util.Basic
+import Batteries.Lean.Meta.SavedState
 import Aesop.Util.EqualUpToIds
 
 public section

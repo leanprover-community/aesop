@@ -6,10 +6,10 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Search.SearchM
+public import Aesop.Tree.RunMetaM
 public import Aesop.Tree.State
 import Batteries.Lean.HashSet
 public import Batteries.Lean.Meta.SavedState
-public import Aesop.Tree.RunMetaM
 import Aesop.Forward.State.ApplyGoalDiff
 import Aesop.RuleTac
 import Aesop.Search.Expansion.Basic
