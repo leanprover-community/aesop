@@ -5,12 +5,11 @@ Authors: Jannis Limperg
 -/
 module
 
+public import Aesop.Builder.Cases
+public import Aesop.Builder.Default
+public import Aesop.Builder.Forward
+public import Aesop.Builder.Unfold
 public import Aesop.RuleSet.Filter
-public import Aesop.Builder.Basic
-import Aesop.Builder.Cases
-import Aesop.Builder.Default
-import Aesop.Builder.Forward
-import Aesop.Builder.Unfold
 
 public section
 

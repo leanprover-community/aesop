@@ -5,7 +5,6 @@ Authors: Jannis Limperg
 -/
 module
 
-public meta import Aesop.Script.SpecificTactics
 public import Aesop.Frontend.Attribute
 
 public section

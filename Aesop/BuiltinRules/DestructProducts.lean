@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Frontend.Attribute
-public meta import Aesop.Script.SpecificTactics
 public meta import Lean.Meta.Tactic.Apply
 
 public section
