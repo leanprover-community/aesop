@@ -11,7 +11,6 @@ import Aesop.Frontend.Extension
 import Batteries.Linter.UnreachableTactic
 import Lean.Elab.SyntheticMVars
 import Lean.Meta.Eval
-import Std.Do.Triple.SpecLemmas
 
 public section
 

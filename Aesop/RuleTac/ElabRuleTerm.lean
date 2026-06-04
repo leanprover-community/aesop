@@ -9,7 +9,6 @@ public import Lean.Elab.Tactic.Basic
 public import Lean.Meta.Tactic.Simp.Simproc
 public import Aesop.ElabM
 import Lean.Elab.Tactic.Simp
-import Std.Do.Triple.SpecLemmas
 
 public section
 

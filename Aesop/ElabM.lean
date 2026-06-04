@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Lean.Elab.Term.TermElabM
-import Std.Do.Triple.SpecLemmas
 
 public section
 

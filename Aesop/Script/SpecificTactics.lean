@@ -18,7 +18,6 @@ import Batteries.Lean.Meta.Basic
 import Lean.Elab.Tactic.RCases
 import Lean.Elab.Tactic.Simp
 import Lean.Meta.Tactic.Split
-import Std.Do.Triple.SpecLemmas
 
 public section
 

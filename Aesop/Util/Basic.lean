@@ -13,7 +13,6 @@ public import Lean.Util.ForEachExpr
 public import Lean.Elab.Tactic.Basic
 public import Aesop.Index.DiscrTreeConfig
 import Lean.Meta.Tactic.TryThis
-import Std.Do.Triple.SpecLemmas
 
 public section
 

@@ -10,7 +10,6 @@ public import Aesop.RuleTac.Forward.Basic
 import Batteries.Lean.Meta.UnusedNames
 import Lean.Meta.CollectFVars
 import Lean.Meta.Tactic.Apply
-import Std.Do.Triple.SpecLemmas
 
 public section
 
