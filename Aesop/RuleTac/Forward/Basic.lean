@@ -5,8 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean.Meta.Basic
-import Aesop.Util.Basic
+public import Aesop.Util.Basic
 import Lean.Meta.Tactic.Clear
 
 public section

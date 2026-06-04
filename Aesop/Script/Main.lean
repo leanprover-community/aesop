@@ -9,7 +9,6 @@ public import Aesop.Script.Check
 public import Aesop.Stats.Basic
 public import Aesop.Options.Internal
 import Batteries.Lean.Meta.SavedState
-public import Aesop.Util.Basic
 import Aesop.Script.OptimizeSyntax
 import Aesop.Script.StructureDynamic
 import Aesop.Script.StructureStatic

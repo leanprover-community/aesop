@@ -5,8 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean.Meta.Tactic.Simp.SimpTheorems
-import Aesop.Util.Basic
+public import Aesop.Util.Basic
 
 public section
 

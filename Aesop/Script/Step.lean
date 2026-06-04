@@ -11,7 +11,7 @@ import Batteries.Tactic.PermuteGoals
 import Batteries.Lean.Meta.SavedState
 import Aesop.Script.Util
 import Aesop.Tracing
-import Aesop.Util.Basic
+public import Aesop.Util.Basic
 import Aesop.Util.EqualUpToIds
 
 public section

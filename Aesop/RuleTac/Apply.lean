@@ -7,7 +7,7 @@ module
 
 public import Aesop.RuleTac.Basic
 public import Aesop.RuleTac.RuleTerm
-import Aesop.RuleTac.ElabRuleTerm
+public import Aesop.RuleTac.ElabRuleTerm
 import Aesop.Script.SpecificTactics
 
 public section

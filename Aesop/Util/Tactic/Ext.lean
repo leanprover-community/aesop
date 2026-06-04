@@ -7,7 +7,6 @@ module
 
 public import Lean.Meta.Basic
 import Aesop.Tracing
-import Lean.Elab.Tactic.Basic
 import Lean.Elab.Tactic.Ext
 import Lean.Meta.Tactic.Intro
 

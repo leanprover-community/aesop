@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Stats.Basic
-public import Lean.PrettyPrinter
 
 open Lean Lean.Elab
 
