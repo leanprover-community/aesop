@@ -6,8 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.BaseM
-public import Aesop.RuleTac.FVarIdSubst
-public import Aesop.Util.Basic
 
 public section
 

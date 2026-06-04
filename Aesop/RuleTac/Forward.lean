@@ -5,13 +5,18 @@ Authors: Jannis Limperg
 -/
 module
 
-import Lean
-public import Aesop.Forward.Match
 public import Aesop.RuleTac.Basic
-public import Aesop.RuleTac.ElabRuleTerm
 public import Aesop.RuleTac.Forward.Basic
-public import Aesop.Script.SpecificTactics
 import Batteries.Lean.Meta.UnusedNames
+public import Aesop.Forward.Match.Types
+public import Aesop.Script.ScriptM
+public import Lean.Meta.Tactic.Assert
+import Aesop.Forward.Match
+import Aesop.RuleTac.ElabRuleTerm
+import Aesop.Script.SpecificTactics
+import Lean.Meta.CollectFVars
+import Lean.Meta.Tactic.Apply
+import Std.Do.Triple.SpecLemmas
 
 public section
 

@@ -6,8 +6,9 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Builder.Basic
-public import Aesop.RuleTac.Cases
 import Batteries.Lean.Expr
+import Aesop.Index.DiscrTreeConfig
+import Aesop.RuleTac.Cases
 
 public section
 

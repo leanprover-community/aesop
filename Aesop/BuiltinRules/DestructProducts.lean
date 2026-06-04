@@ -5,10 +5,11 @@ Authors: Jannis Limperg
 -/
 module
 
-public meta import Lean.Meta.Tactic.Apply
-public import Aesop.Frontend.Attribute
-public import Aesop.Frontend.Extension
-public import Aesop.Frontend.RuleExpr
+public meta import Aesop.RuleTac.Basic
+public meta import Aesop.Script.ScriptM
+import Aesop.Frontend.Attribute
+meta import Aesop.Script.SpecificTactics
+meta import Lean.Meta.Tactic.Apply
 
 public section
 

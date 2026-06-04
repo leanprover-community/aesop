@@ -5,8 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean.Elab.Tactic.Basic
 public meta import Aesop.Util.Unfold
+public meta import Lean.Elab.Tactic.Basic
+import Lean.Message
 
 public section
 

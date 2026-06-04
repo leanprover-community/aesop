@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Tree.TreeM
-import Aesop.Forward.State
 import Aesop.Tree.RunMetaM
 
 public section

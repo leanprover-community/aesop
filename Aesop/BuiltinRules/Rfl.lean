@@ -5,7 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Frontend.Attribute
+public meta import Aesop.RuleTac.Basic
+import Aesop.Frontend.Attribute
 
 public section
 

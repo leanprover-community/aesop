@@ -5,8 +5,10 @@ Authors: Jannis Limperg
 -/
 module
 
-import Lean
 public import Lean.Meta.Tactic.Simp.Main
+import Lean.Meta.Tactic.Delta
+import Lean.Meta.WHNF
+import Std.Do.Triple.SpecLemmas
 
 public section
 

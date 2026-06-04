@@ -5,13 +5,12 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Check
-public import Aesop.Tree.State
-public import Aesop.Tree.Traversal
 public import Aesop.Tree.TreeM
-public import Aesop.Tree.RunMetaM
 import Batteries.Lean.HashSet
 import Batteries.Lean.Meta.SavedState
+import Aesop.Tree.RunMetaM
+import Aesop.Tree.State
+import Batteries.Data.Array.Basic
 
 public section
 

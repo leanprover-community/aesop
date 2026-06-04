@@ -5,10 +5,12 @@ Authors: Jannis Limperg
 -/
 module
 
-public meta import Aesop.Search.Main
-public meta import Aesop.Frontend.Tactic
 public meta import Aesop.Stats.Extension
 public meta import Aesop.Stats.File
+public import Aesop.Frontend.Tactic
+public meta import Aesop.Util.Basic
+meta import Aesop.Frontend.Tactic
+meta import Aesop.Search.Main
 
 public section
 

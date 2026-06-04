@@ -5,8 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
-import Lean
 public import Lean.Meta.Basic
+import Lean.Meta.Tactic.Assert
 
 public section
 

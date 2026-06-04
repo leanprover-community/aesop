@@ -9,6 +9,7 @@ public meta import Aesop.Saturate
 public meta import Aesop.Frontend.Extension
 public meta import Aesop.Builder.Forward
 public meta import Aesop.Stats.File
+import Aesop.RuleSet
 
 public meta section
 

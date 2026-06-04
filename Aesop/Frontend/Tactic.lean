@@ -5,11 +5,13 @@ Authors: Jannis Limperg
 -/
 module
 
-import Lean
 public import Aesop.Frontend.RuleExpr
-public import Aesop.Options
-public import Batteries.Linter.UnreachableTactic
-public import Aesop.Frontend.Extension
+public import Aesop.RuleSet
+import Aesop.Frontend.Extension
+import Batteries.Linter.UnreachableTactic
+import Lean.Elab.SyntheticMVars
+import Lean.Meta.Eval
+import Std.Do.Triple.SpecLemmas
 
 public section
 

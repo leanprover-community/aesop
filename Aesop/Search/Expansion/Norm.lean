@@ -5,17 +5,18 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Forward.State.ApplyGoalDiff
-public import Aesop.RuleTac
-public import Aesop.RuleTac.ElabRuleTerm
-public import Aesop.Script.SpecificTactics
-public import Aesop.Search.Expansion.Basic
-public import Aesop.Search.Expansion.Simp
-public import Aesop.Search.RuleSelection
 public import Aesop.Search.SearchM
 public import Aesop.Tree.State
 import Batteries.Lean.HashSet
 public import Batteries.Lean.Meta.SavedState
+public import Aesop.Tree.RunMetaM
+import Aesop.Forward.State.ApplyGoalDiff
+import Aesop.RuleTac
+import Aesop.RuleTac.ElabRuleTerm
+import Aesop.Script.SpecificTactics
+import Aesop.Search.Expansion.Basic
+import Aesop.Search.Expansion.Simp
+import Aesop.Search.RuleSelection
 
 public section
 

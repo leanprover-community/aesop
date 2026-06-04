@@ -5,10 +5,11 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Builder.Constructors
-public import Aesop.Builder.NormSimp
-public import Aesop.Builder.Tactic
-public import Aesop.Builder.Apply
+public import Aesop.Builder.Basic
+import Aesop.Builder.Apply
+import Aesop.Builder.Constructors
+import Aesop.Builder.NormSimp
+import Aesop.Builder.Tactic
 
 public section
 

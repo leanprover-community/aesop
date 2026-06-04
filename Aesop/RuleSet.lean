@@ -12,6 +12,8 @@ public import Aesop.RuleSet.Member
 public import Aesop.Tree.Data.ForwardRuleMatches
 import Batteries.Lean.PersistentHashMap
 import Batteries.Lean.PersistentHashSet
+public import Lean.Meta.Tactic.Simp.Types
+import Lean.Meta.Tactic.Simp.Attr
 
 public section
 

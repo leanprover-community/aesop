@@ -1,8 +1,8 @@
 module
 
 public import Aesop.Tree.RunMetaM
-public import Aesop.Tracing
 import Batteries.Lean.Meta.SavedState
+import Batteries.Data.Array.Basic
 
 public section
 

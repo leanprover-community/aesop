@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 
 module
 
-public import Aesop.Tracing
 public import Aesop.Util.Basic
 
 public section
