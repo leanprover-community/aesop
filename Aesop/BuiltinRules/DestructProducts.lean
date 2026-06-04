@@ -8,8 +8,8 @@ module
 public meta import Aesop.RuleTac.Basic
 public meta import Aesop.Script.ScriptM
 import Aesop.Frontend.Attribute
-meta import Aesop.Script.SpecificTactics
-meta import Lean.Meta.Tactic.Apply
+public meta import Aesop.Script.SpecificTactics
+public meta import Lean.Meta.Tactic.Apply
 
 public section
 

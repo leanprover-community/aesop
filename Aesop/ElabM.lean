@@ -10,7 +10,7 @@ import Std.Do.Triple.SpecLemmas
 
 public section
 
-open Lean Lean.Meta Lean.Elab
+open Lean Meta Elab Term
 
 namespace Aesop.ElabM
 
