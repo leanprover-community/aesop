@@ -6,12 +6,12 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.RuleSet
-import Batteries.Data.BinomialHeap.Basic
 public import Aesop.Script.ScriptM
 import Aesop.Forward.State.Initial
 import Aesop.RuleTac
-import Aesop.Script.Check
 import Aesop.Search.Expansion.Basic
+import Aesop.Script.Check
+import Batteries.Data.BinomialHeap.Basic
 
 public section
 
