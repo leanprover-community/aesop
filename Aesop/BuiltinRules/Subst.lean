@@ -8,7 +8,6 @@ module
 public meta import Aesop.RuleTac.Forward.Basic
 public meta import Aesop.Script.SpecificTactics
 public import Aesop.Frontend.Attribute
-import Aesop.Script.SpecificTactics
 
 public section
 

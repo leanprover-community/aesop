@@ -12,7 +12,6 @@ public import Batteries.Lean.Meta.SavedState
 public import Aesop.Tree.RunMetaM
 import Aesop.Forward.State.ApplyGoalDiff
 import Aesop.RuleTac
-import Aesop.Script.SpecificTactics
 import Aesop.Search.Expansion.Basic
 import Aesop.Search.Expansion.Simp
 import Aesop.Search.RuleSelection
