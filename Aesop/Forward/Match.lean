@@ -9,8 +9,8 @@ import Lean.Meta.Tactic.Apply
 public import Aesop.Forward.Match.Types
 public import Aesop.Rule
 public import Aesop.RuleTac.ElabRuleTerm
-import Aesop.RuleTac.Forward.Basic
 public import Aesop.Script.SpecificTactics
+import Aesop.RuleTac.Forward.Basic
 import Batteries.Lean.Meta.UnusedNames
 
 public section

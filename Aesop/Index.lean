@@ -6,12 +6,12 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Index.Basic
+public import Aesop.Index.DiscrTreeConfig
 public import Aesop.Index.RulePattern
 public import Aesop.Rule.Basic
 public import Batteries.Lean.Meta.InstantiateMVars
-import Batteries.Lean.PersistentHashSet
 import Batteries.Lean.Meta.DiscrTree
-public import Aesop.Index.DiscrTreeConfig
+import Batteries.Lean.PersistentHashSet
 
 public section
 
