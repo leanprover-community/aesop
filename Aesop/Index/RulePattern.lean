@@ -5,10 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Index.Basic
 public import Aesop.Util.OrderedHashSet
-public import Aesop.RuleTac.GoalDiff
 import Batteries.Lean.Meta.DiscrTree
+public import Aesop.RulePattern
 
 public section
 

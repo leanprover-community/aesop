@@ -5,8 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Tree.Traversal
 public import Aesop.Tree.TreeM
+import Aesop.Tree.Traversal
 
 public section
 

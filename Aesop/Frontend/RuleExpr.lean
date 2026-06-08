@@ -5,9 +5,6 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.ElabM
-public import Aesop.Percent
-public import Aesop.Rule.Name
 public import Aesop.Builder.Cases
 public import Aesop.Builder.Default
 public import Aesop.Builder.Forward

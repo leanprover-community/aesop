@@ -5,8 +5,6 @@ Authors: Jannis Limperg
 -/
 module
 
-import Lean
-public import Std.Data.HashMap.Basic
 public import Lean.Meta.Tactic.FVarSubst
 
 public section

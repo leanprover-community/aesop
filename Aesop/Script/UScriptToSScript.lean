@@ -7,7 +7,6 @@ module
 
 public import Aesop.Script.UScript
 public import Aesop.Script.SScript
-public import Aesop.Tracing
 
 public section
 

@@ -6,11 +6,10 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Script.UScript
-public import Aesop.Script.UScriptToSScript
-public import Aesop.Script.Util
 public import Aesop.Script.SScript
-public import Aesop.Tracing
 import Batteries.Lean.Meta.SavedState
+import Aesop.Script.UScriptToSScript
+import Aesop.Script.Util
 
 public section
 

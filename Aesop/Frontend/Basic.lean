@@ -5,13 +5,11 @@ Authors: Jannis Limperg
 -/
 module
 
-import Lean
-public import Lean.Exception
 public import Lean.Elab.Exception
 
 public section
 
-open Lean Lean.Elab Lean.Elab.Term
+open Lean Lean.Elab
 
 namespace Aesop.Frontend.Parser
 

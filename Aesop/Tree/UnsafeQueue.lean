@@ -5,8 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Constants
 public import Aesop.Rule
+import Aesop.Constants
 
 public section
 
