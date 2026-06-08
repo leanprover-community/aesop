@@ -16,7 +16,7 @@ inductive Proof : (Γ Δ : List Φ) → Prop where
   | per_l (Γ Γ' Δ) : Proof Γ Δ → Perm Γ' Γ → Proof Γ' Δ
 
 /--
-error: tactic 'aesop' failed, maximum number of rule applications (50) reached. Set the 'maxRuleApplications' option to increase the limit.
+error: Tactic `aesop` failed, maximum number of rule applications (50) reached. Set the 'maxRuleApplications' option to increase the limit.
 -/
 #guard_msgs in
 theorem weaken (Γ Δ : List Φ) (prf : Proof Γ Δ) (δ : Φ) : Proof Γ (δ :: Δ) := by
