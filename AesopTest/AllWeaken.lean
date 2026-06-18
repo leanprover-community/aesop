@@ -18,7 +18,7 @@ axiom weaken {α} (P Q : α → Prop) (wk : ∀ x, P x → Q x) (xs : List α)
   (h : All P xs) : All Q xs
 
 /--
-error: tactic 'aesop' failed, maximum number of rule applications (50) reached. Set the 'maxRuleApplications' option to increase the limit.
+error: Tactic `aesop` failed, maximum number of rule applications (50) reached. Set the 'maxRuleApplications' option to increase the limit.
 -/
 #guard_msgs in
 example : All (· ∈ []) (@List.nil α) := by

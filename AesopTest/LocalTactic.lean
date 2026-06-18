@@ -10,7 +10,7 @@ set_option aesop.check.all true
 set_option aesop.smallErrorMessages true
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example (m n : Nat) : m * n = n * m := by
@@ -23,7 +23,7 @@ example (m n : Nat) : m * n = n * m := by
   aesop (add safe tactic (by rw [Nat.mul_comm m n]))
 
 /--
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example (m n : Nat) : m * n = n * m := by

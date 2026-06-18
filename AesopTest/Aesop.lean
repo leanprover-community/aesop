@@ -50,7 +50,7 @@ structure Wrap (α) where
   unwrap : α
 
 /--
-error: tactic 'aesop' failed, maximum number of rule applications (20) reached. Set the 'maxRuleApplications' option to increase the limit.
+error: Tactic `aesop` failed, maximum number of rule applications (20) reached. Set the 'maxRuleApplications' option to increase the limit.
 -/
 #guard_msgs in
 example (h : α → α) (h' : Wrap α) : α := by
@@ -58,7 +58,7 @@ example (h : α → α) (h' : Wrap α) : α := by
     (config := { maxRuleApplications := 20, maxGoals := 0, maxRuleApplicationDepth := 0, terminal := true })
 
 /--
-error: tactic 'aesop' failed, maximum number of goals (20) reached. Set the 'maxGoals' option to increase the limit.
+error: Tactic `aesop` failed, maximum number of goals (20) reached. Set the 'maxGoals' option to increase the limit.
 -/
 #guard_msgs in
 example (h : α → α) (h' : Wrap α) : α := by
@@ -66,7 +66,7 @@ example (h : α → α) (h' : Wrap α) : α := by
     (config := { maxGoals := 20, maxRuleApplications := 0, maxRuleApplicationDepth := 0, terminal := true })
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal. Some goals were not explored because the maximum rule application depth (20) was reached. Set option 'maxRuleApplicationDepth' to increase the limit.
+error: Tactic `aesop` failed, failed to prove the goal. Some goals were not explored because the maximum rule application depth (20) was reached. Set option 'maxRuleApplicationDepth' to increase the limit.
 -/
 #guard_msgs in
 example (h : α → α) (h' : Wrap α) : α := by
