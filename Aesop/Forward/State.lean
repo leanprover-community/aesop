@@ -79,7 +79,7 @@ def containsHyp (fvarId : FVarId) (h : Hyp) : Bool :=
 
 /-- Does this `Hyp` represent a pattern substitution? -/
 def isPatSubst (h : Hyp) : Bool :=
-  h.fvarId?.isSome
+  h.fvarId?.isNone
 
 end Hyp
 
