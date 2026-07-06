@@ -22,7 +22,7 @@ example : Even 2 := by
 attribute [-aesop] Even
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : Even 2 := by
@@ -43,7 +43,7 @@ example : Even 2 := by
 erase_aesop_rules [ constructors Even ]
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : Even 2 := by

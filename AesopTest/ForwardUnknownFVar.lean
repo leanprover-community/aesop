@@ -11,7 +11,7 @@ attribute [-aesop] Aesop.BuiltinRules.applyHyps
 
 variable (a b c d e f : Nat)
 
-/-- error: tactic 'aesop' failed, failed to prove the goal after exhaustive search. -/
+/-- error: Tactic `aesop` failed, failed to prove the goal after exhaustive search. -/
 #guard_msgs in
 set_option aesop.smallErrorMessages true in
 example (h₃ : c ≤ d) (h₄ : d ≤ e) (h₅ : e ≤ f) (h : a = f) : False := by
