@@ -5,13 +5,14 @@ Authors: Jannis Limperg, Asta Halkjær From
 -/
 module
 
-public import Aesop.Index.DiscrTreeConfig
 public import Aesop.Nanos
 public import Aesop.Util.UnorderedArraySet
-public import Batteries.Lean.Expr
-public import Batteries.Data.String.Basic
-public import Lean
-public import Std.Data.HashSet.Basic
+public import Lean.Meta.DiscrTree.Util
+public import Lean.Meta.Tactic.Simp.SimpTheorems
+public import Lean.Util.ForEachExpr
+public import Lean.Elab.Tactic.Basic
+public import Aesop.Index.DiscrTreeConfig
+import Lean.Meta.Tactic.TryThis
 
 public section
 

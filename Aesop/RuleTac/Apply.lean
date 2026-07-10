@@ -6,6 +6,7 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.RuleTac.Basic
+public import Aesop.RuleTac.RuleTerm
 public import Aesop.RuleTac.ElabRuleTerm
 public import Aesop.Script.SpecificTactics
 

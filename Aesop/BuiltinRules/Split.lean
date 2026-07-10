@@ -6,9 +6,6 @@ Authors: Sebastian Ullrich, Jannis Limperg
 module
 
 public import Aesop.Frontend.Attribute
-public import Aesop.Frontend.Extension
-public import Aesop.Frontend.RuleExpr
-public import Lean.CoreM
 
 public section
 

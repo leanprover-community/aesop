@@ -6,9 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Util.Basic
-public import Batteries.Data.Array.Basic
-public import Lean.Elab.Term
-public import Lean.Meta.Tactic.Simp
 
 public section
 
@@ -110,7 +107,7 @@ macro "aesop_trace![" opt:ident "] " msg:(interpolatedStr(term) <|> term) :
   `(doElem| Lean.addTrace (Aesop.TraceOption.traceClass $opt) $msg)
 
 macro "aesop_trace[" opt:ident "] "
-    msg:(interpolatedStr(term) <|> Parser.Term.do <|> term) : doElem => do
+    msg:(interpolatedStr(term) <|> term) : doElem => do
   let msg := msg.raw
   let opt ← mkIdent <$> resolveTraceOption opt
   match msg with

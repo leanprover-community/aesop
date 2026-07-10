@@ -9,7 +9,7 @@ import Aesop
 set_option aesop.check.all true
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 Initial goal:
   ⊢ False
 Remaining goals after safe rules:

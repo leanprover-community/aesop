@@ -6,6 +6,8 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Tracing
+import Lean.Elab.Tactic.Ext
+import Lean.Meta.Tactic.Intro
 
 public section
 

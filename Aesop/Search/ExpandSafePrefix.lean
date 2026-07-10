@@ -5,8 +5,8 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Exception
 public import Aesop.Search.Expansion
+import Aesop.Exception
 
 public section
 
