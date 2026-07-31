@@ -64,7 +64,7 @@ require aesop from git "https://github.com/leanprover-community/aesop"
 
 You also need to make sure that your `lean-toolchain` file contains the same
 version of Lean 4 as Aesop's, and that your versions of Aesop's dependencies
-(currently only `std4`) match. We unfortunately can't support version ranges at
+(currently only `batteries`) match. We unfortunately can't support version ranges at
 the moment.
 
 Now the following test file should compile:
