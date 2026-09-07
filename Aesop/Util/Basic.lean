@@ -72,30 +72,9 @@ def getConclusionDiscrTreeKeys (type : Expr) : MetaM (Array Key) :=
     -- We use a meta telescope because `DiscrTree.mkPath` ignores metas (they
     -- turn into `Key.star`) but not fvars.
 
-def isEmptyTrie : Trie α → Bool
-  | .node vs children => vs.isEmpty && children.isEmpty
-
-@[specialize]
-private partial def filterTrieM [Monad m] [Inhabited σ] (f : σ → α → m σ)
-    (p : α → m (ULift Bool)) (init : σ) : Trie α → m (Trie α × σ)
-  | .node vs children => do
-    let (vs, acc) ← vs.foldlM (init := (#[], init)) λ (vs, acc) v => do
-      if (← p v).down then
-        return (vs.push v, acc)
-      else
-        return (vs, ← f acc v)
-    let (children, acc) ← go acc 0 children
-    let children := children.filter λ (_, c) => ! isEmptyTrie c
-    return (.node vs children, acc)
-  where
-    go (acc : σ) (i : Nat) (children : Array (Key × Trie α)) :
-        m (Array (Key × Trie α) × σ) := do
-      if h : i < children.size then
-        let (key, t) := children[i]'h
-        let (t, acc) ← filterTrieM f p acc t
-        go acc (i + 1) (children.set i (key, t))
-      else
-        return (children, acc)
+@[deprecated Trie.isEmptyNode (since := "2026-08-19")]
+def isEmptyTrie (t : Trie α) :=
+  t.isEmptyNode
 
 /--
 Remove elements for which `p` returns `false` from the given `DiscrTree`.
@@ -103,25 +82,27 @@ The removed elements are monadically folded over using `f` and `init`, so `f`
 is called once for each removed element and the final state of type `σ` is
 returned.
 -/
-@[specialize]
-def filterDiscrTreeM [Monad m] [Inhabited σ] (p : α → m (ULift Bool))
+@[inline]
+def filterDiscrTreeM [Monad m] (p : α → m Bool)
     (f : σ → α → m σ) (init : σ) (t : DiscrTree α) :
-    m (DiscrTree α × σ) := do
-  let (root, acc) ←
-    t.root.foldlM (init := (.empty, init)) λ (root, acc) key t => do
-      let (t, acc) ← filterTrieM f p acc t
-      let root := if isEmptyTrie t then root else root.insert key t
-      return (root, acc)
-  return (⟨root⟩, acc)
+    m (DiscrTree α × σ) :=
+  StateT.run (s := init) do
+    t.mapArraysM (·.filterMapM (fun v => do
+      if ← p v then
+        return .some v
+      else
+        set (← f (← get) v)
+        return .none))
 
 /--
 Remove elements for which `p` returns `false` from the given `DiscrTree`.
 The removed elements are folded over using `f` and `init`, so `f` is called
 once for each removed element and the final state of type `σ` is returned.
 -/
-def filterDiscrTree [Inhabited σ] (p : α → Bool) (f : σ → α → σ) (init : σ)
+@[inline]
+def filterDiscrTree (p : α → Bool) (f : σ → α → σ) (init : σ)
     (t : DiscrTree α) : DiscrTree α × σ := Id.run $
-  filterDiscrTreeM (λ a => pure ⟨p a⟩) (λ s a => pure (f s a)) init t
+  filterDiscrTreeM (λ a => pure (p a)) (λ s a => pure (f s a)) init t
 
 end DiscrTree
 
