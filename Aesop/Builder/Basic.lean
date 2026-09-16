@@ -5,8 +5,6 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.ElabM
-public import Aesop.Rule.Name
 public import Aesop.RuleSet.Member
 public import Aesop.RuleTac.ElabRuleTerm
 

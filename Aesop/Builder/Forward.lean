@@ -28,7 +28,7 @@ namespace RuleBuilder
 
 def getForwardIndexingMode (type : Expr)
     (immediate : UnorderedArraySet PremiseIndex) : MetaM IndexingMode := do
-  let immediate := immediate.toArray.map (·.toNat)
+  let immediate := immediate.toArray.map PremiseIndex.toNat
   match immediate.max? with
   | some i =>
     withoutModifyingState do

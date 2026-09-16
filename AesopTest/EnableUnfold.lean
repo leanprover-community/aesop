@@ -13,7 +13,7 @@ set_option aesop.smallErrorMessages true
 def T := True
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : T := by

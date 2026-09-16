@@ -1,8 +1,5 @@
 module
 
-public import Aesop.Forward.PremiseIndex
-public import Aesop.Forward.SlotIndex
-public import Aesop.Forward.Substitution
 public import Aesop.Rule.Forward
 
 public section

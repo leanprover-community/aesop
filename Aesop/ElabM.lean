@@ -5,11 +5,11 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Lean
+public import Lean.Elab.Term.TermElabM
 
 public section
 
-open Lean Lean.Meta Lean.Elab
+open Lean Meta Elab Term
 
 namespace Aesop.ElabM
 

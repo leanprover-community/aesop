@@ -39,7 +39,7 @@ info: Try this:
 
   [apply]   sorry
 ---
-error: tactic 'aesop' failed, made no progress
+error: Tactic `aesop` failed, made no progress
 -/
 #guard_msgs in
 example : Even 5 := by
@@ -57,7 +57,6 @@ info: Try this:
 warning: aesop: failed to prove the goal after exhaustive search.
 ---
 error: unsolved goals
-case a.a
 ⊢ Even 1
 -/
 #guard_msgs in

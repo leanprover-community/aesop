@@ -11,7 +11,10 @@ set_option aesop.check.script.steps true
 
 --- Decidable
 
-attribute [aesop unsafe [50% constructors, 50% cases]] Decidable
+def Decidable.toPSum {p : Prop} (h : Decidable p) : PSum p ¬p :=
+  match h with | isTrue h => .inl h | isFalse h => .inr h
+attribute [aesop unsafe 50% apply] Decidable.isFalse Decidable.isTrue
+attribute [aesop unsafe 50% destruct] Decidable.toPSum
 attribute [aesop safe apply] instDecidableAnd
 
 

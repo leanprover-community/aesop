@@ -25,7 +25,7 @@ example (h : (α ∧ β) ∨ γ) : α ∨ γ := by
 -- This test checks that the norm simp config is passed around properly.
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example {α β : Prop} (ha : α) (h : α → β) : β := by
@@ -39,7 +39,7 @@ example {α β : Prop} (ha : α) (h : α → β) : β := by
 -- Ditto.
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : true && false = false := by
@@ -54,7 +54,7 @@ example : true && false = false := by
 -- `simp at *`.
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example {α : Prop} (ha : α) : α := by
@@ -81,7 +81,7 @@ attribute [-aesop] TF
 attribute [aesop simp 3] TF
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : T := by

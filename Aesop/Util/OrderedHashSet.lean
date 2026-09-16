@@ -1,6 +1,6 @@
 module
 
-public import Std.Data.HashSet.Lemmas
+public import Std.Data.HashSet.Basic
 
 public section
 

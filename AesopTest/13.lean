@@ -20,7 +20,7 @@ theorem Perm.any {xs ys : List α} (perm : Perm xs ys) (P : α → Prop)
   induction perm <;> aesop (add safe [constructors Any, cases Any])
 
 /--
-error: tactic 'aesop' failed, maximum number of rule applications (100) reached. Set the 'maxRuleApplications' option to increase the limit.
+error: Tactic `aesop` failed, maximum number of rule applications (100) reached. Set the 'maxRuleApplications' option to increase the limit.
 -/
 #guard_msgs in
 theorem error (P : Nat → Prop) (Δ : List Nat) : Any P Δ := by
@@ -28,7 +28,7 @@ theorem error (P : Nat → Prop) (Δ : List Nat) : Any P Δ := by
     (config := { maxRuleApplications := 100, terminal := true })
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 theorem fine (P : α → Prop) (Δ : List α) : Any P Δ := by

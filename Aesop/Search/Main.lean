@@ -5,17 +5,16 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Check
-public import Aesop.Options
-public import Aesop.RuleSet
-public import Aesop.Script.Check
 public import Aesop.Script.Main
-public import Aesop.Search.Expansion
 public import Aesop.Search.ExpandSafePrefix
-public import Aesop.Search.Queue
-public import Aesop.Tree
-public import Aesop.Tree.Stats
-public import Aesop.Frontend.Extension
+public import Aesop.Tree.Check
+public import Aesop.Tree.ExtractProof
+public import Aesop.Tree.ExtractScript
+public import Aesop.Tree.Tracing
+import Aesop.Frontend.Extension
+import Aesop.Search.Queue
+import Aesop.Tree.Free
+import Aesop.Tree.Stats
 
 public section
 
@@ -193,8 +192,8 @@ def throwAesopEx (mvarId : MVarId) (remainingSafeGoals : Array MVarId)
     SearchM Q α := do
   if aesop.smallErrorMessages.get (← getOptions) then
     match msg? with
-    | none => throwError "tactic 'aesop' failed"
-    | some msg => throwError "tactic 'aesop' failed, {msg}"
+    | none => throwError "Tactic `aesop` failed"
+    | some msg => throwError "Tactic `aesop` failed, {msg}"
   else
     let maxRapps := (← read).options.maxSafePrefixRuleApplications
     let suffix :=
@@ -210,8 +209,8 @@ def throwAesopEx (mvarId : MVarId) (remainingSafeGoals : Array MVarId)
         m!"\nRemaining goals after safe rules:{indentD gs}{suffix'}"
     -- Copy-pasta from `Lean.Meta.throwTacticEx`
     match msg? with
-    | none => throwError "tactic 'aesop' failed\nInitial goal:{indentD mvarId}{suffix}"
-    | some msg => throwError "tactic 'aesop' failed, {msg}\nInitial goal:{indentD mvarId}{suffix}"
+    | none => throwError "Tactic `aesop` failed\nInitial goal:{indentD mvarId}{suffix}"
+    | some msg => throwError "Tactic `aesop` failed, {msg}\nInitial goal:{indentD mvarId}{suffix}"
 
 
 -- When we hit a non-fatal error (i.e. the search terminates without a proof

@@ -178,7 +178,7 @@ theorem subset_trans {l₁ l₂ l₃ : List α} : l₁ ⊆ l₂ → l₂ ⊆ l�
 
 -- END PRELUDE
 
-instance unique_of_is_empty [IsEmpty α] : Unique (List α) := by
+def unique_of_is_empty [IsEmpty α] : Unique (List α) := by
   aesop (add 1% cases List)
 
 -- instance : is_left_id (list α) has_append.append [] :=

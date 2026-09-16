@@ -5,10 +5,7 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Aesop.Options
 public import Aesop.Search.Queue.Class
-public import Aesop.Stats.Basic
-public import Aesop.RuleSet
 public import Aesop.Tree.TreeM
 
 public section

@@ -14,14 +14,14 @@ def Injective₁ (f : α → β) := ∀ x y, f x = f y → x = y
 abbrev Injective₂ (f : α → β) := ∀ x y, f x = f y → x = y
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : Injective₁ (@id Nat) := by
   aesop (config := { terminal := true })
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : Injective₁ (@id Nat) := by
@@ -31,7 +31,7 @@ example : Injective₁ (@id Nat) := by
   aesop (config := { introsTransparency? := some .default })
 
 /--
-error: tactic 'aesop' failed, failed to prove the goal after exhaustive search.
+error: Tactic `aesop` failed, failed to prove the goal after exhaustive search.
 -/
 #guard_msgs in
 example : Injective₂ (@id Nat) := by

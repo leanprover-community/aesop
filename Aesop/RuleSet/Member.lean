@@ -6,7 +6,6 @@ Authors: Jannis Limperg
 module
 
 public import Aesop.Rule
-public import Aesop.Rule.Forward
 
 public section
 
