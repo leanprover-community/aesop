@@ -5,7 +5,9 @@ Authors: Jannis Limperg
 -/
 module
 
-public import Batteries.Lean.Meta.Basic
+public import Lean.Meta.Tactic.Intro
+public import Batteries.Control.AlternativeMonad
+import Lean.Meta.SynthInstance
 
 public section
 
@@ -98,7 +100,7 @@ def equalCommonMVars? (mvarId₁ mvarId₂ : MVarId) :
   match ← readCommonMCtx? with
   | none => return none
   | some mctx =>
-    if mctx.isExprMVarDeclared mvarId₁ || mctx.isExprMVarDeclared mvarId₂ then
+    if mctx.decls.contains mvarId₁ || mctx.decls.contains mvarId₂ then
       return some $ mvarId₁ == mvarId₂
     else
       return none
