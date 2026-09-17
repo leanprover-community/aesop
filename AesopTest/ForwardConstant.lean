@@ -8,6 +8,7 @@ import Aesop
 
 set_option aesop.check.all true
 set_option aesop.smallErrorMessages true
+set_option aesop.warn.constantForward false
 
 structure Foo where
   foo ::
