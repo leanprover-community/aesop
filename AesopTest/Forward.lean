@@ -676,6 +676,8 @@ end Instance
 
 namespace ConstForwardRule
 
+set_option aesop.warn.constantForward false
+
 axiom α : Type
 @[local aesop safe forward]
 axiom a : α
