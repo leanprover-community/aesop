@@ -30,6 +30,7 @@ structure Context where
 
 structure State where
   equalMVarIds : Std.HashMap MVarId MVarId := {}
+  reverseMVarIds : Std.HashMap MVarId MVarId := {}
   equalLMVarIds : Std.HashMap LMVarId LMVarId := {}
   /-- A map from metavariables which are unassigned in the left goal
   to their corresponding expression in the right goal. Only used when
@@ -340,6 +341,9 @@ mutual
         else
           trace[Aesop.Util.EqualUpToIds] "mvar {mvarId₁.name} known to be equal to different mvar {m₂.name}"
           return false
+      else if (← get).reverseMVarIds.contains mvarId₂ then
+        trace[Aesop.Util.EqualUpToIds] "right mvar already corresponds to a different left mvar"
+        return false
       else
         let ctx ← read
         let (some mdecl₁) := ctx.mctx₁.decls.find? mvarId₁ | throwError
@@ -354,7 +358,9 @@ mutual
         withTraceNodeBefore `Aesop.Util.EqualUpToIds (fun _ => return m!"comparing targets") do
           if ← exprsEqualUpToIdsCore₁ mdecl₁.type mdecl₂.type |>.run gctx then
             modify λ s =>
-              { s with equalMVarIds := s.equalMVarIds.insert mvarId₁ mvarId₂ }
+              { s with
+                equalMVarIds := s.equalMVarIds.insert mvarId₁ mvarId₂
+                reverseMVarIds := s.reverseMVarIds.insert mvarId₂ mvarId₁ }
             return true
           else
             return false

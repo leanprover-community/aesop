@@ -79,3 +79,22 @@ example : 0 < 3 := by
   apply Nat.lt_trans
   assert_equal_tactics { apply Nat.lt_trans } { apply Nat.lt_trans }
   (case m => exact 1); all_goals decide
+
+run_meta do
+  let first ← Lean.Meta.mkFreshExprMVar (mkConst ``True)
+  let second ← Lean.Meta.mkFreshExprMVar (mkConst ``True)
+  let renamed ← Lean.Meta.mkFreshExprMVar (mkConst ``True)
+  let another ← Lean.Meta.mkFreshExprMVar (mkConst ``True)
+  let mctx ← getMCtx
+  let collapsed ← tacticStatesEqualUpToIds none mctx mctx
+    #[first.mvarId!, second.mvarId!] #[renamed.mvarId!, renamed.mvarId!]
+  unless !collapsed do
+    throwError "distinct goals were collapsed onto one metavariable"
+  let bijective ← tacticStatesEqualUpToIds none mctx mctx
+    #[first.mvarId!, second.mvarId!] #[renamed.mvarId!, another.mvarId!]
+  unless bijective do
+    throwError "an injective goal renaming was rejected"
+  let repeated ← tacticStatesEqualUpToIds none mctx mctx
+    #[first.mvarId!, first.mvarId!] #[renamed.mvarId!, renamed.mvarId!]
+  unless repeated do
+    throwError "consistent repeated-goal renaming was rejected"
