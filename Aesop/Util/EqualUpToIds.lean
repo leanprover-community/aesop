@@ -31,6 +31,7 @@ structure Context where
 structure State where
   equalMVarIds : Std.HashMap MVarId MVarId := {}
   equalLMVarIds : Std.HashMap LMVarId LMVarId := {}
+  reverseLMVarIds : Std.HashMap LMVarId LMVarId := {}
   /-- A map from metavariables which are unassigned in the left goal
   to their corresponding expression in the right goal. Only used when
   `allowAssignmentDiff = true`. -/
@@ -125,7 +126,7 @@ private def namesEqualUpToMacroScopes (n₁ n₂ : Name) : Bool :=
 mutual
   @[specialize]
   unsafe def levelsEqualUpToIdsCore (l₁ l₂ : Level) : EqualUpToIdsM Bool :=
-    if ptrEq l₁ l₂ then
+    if !l₁.hasMVar && ptrEq l₁ l₂ then
       return true
     else
       levelsEqualUpToIdsCore' l₁ l₂
@@ -145,8 +146,12 @@ mutual
         return result
       else if let some m₂' := (← get).equalLMVarIds[m₁]? then
         return m₂' == m₂
+      else if (← get).reverseLMVarIds.contains m₂ then
+        return false
       else
-        modify λ s => { s with equalLMVarIds := s.equalLMVarIds.insert m₁ m₂ }
+        modify λ s => { s with
+          equalLMVarIds := s.equalLMVarIds.insert m₁ m₂
+          reverseLMVarIds := s.reverseLMVarIds.insert m₂ m₁ }
         return true
     | _, _ => return false
 end
