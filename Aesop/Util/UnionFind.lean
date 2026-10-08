@@ -33,7 +33,7 @@ def add (x : α) (u : UnionFind α) : UnionFind α := Id.run do
     return u
   let rep := u.parents.size.toUSize
   { parents := u.parents.push rep
-    sizes := u.parents.push 1
+    sizes := u.sizes.push 1
     toRep := u.toRep.insert x rep }
 
 def addArray (xs : Array α) (u : UnionFind α) : UnionFind α :=
