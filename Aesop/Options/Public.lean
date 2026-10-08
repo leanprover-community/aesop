@@ -193,6 +193,14 @@ register_option aesop.warn.nonterminal : Bool := {
 }
 
 /--
+(aesop) Warn when the forward builder is applied to a rule with no slots.
+-/
+register_option aesop.warn.constantForward : Bool := {
+  descr := "(aesop) Warn when the forward builder is applied to a rule with no slots."
+  defValue := true
+}
+
+/--
 (aesop) Collect statistics about Aesop invocations.
 -/
 register_option aesop.collectStats : Bool := {
