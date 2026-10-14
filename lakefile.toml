@@ -7,7 +7,7 @@ platformIndependent = true
 [[require]]
 name = "batteries"
 scope = "leanprover-community"
-rev = "nightly-testing"
+rev = "main"
 
 [[lean_lib]]
 name = "Aesop"
