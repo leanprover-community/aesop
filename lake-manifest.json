@@ -8,7 +8,7 @@
    "rev": "4453b52d2468f4c346a8711d728c0742e7483c9b",
    "name": "batteries",
    "manifestFile": "lake-manifest.json",
-   "inputRev": "main",
+   "inputRev": "v4.36.0-rc1",
    "inherited": false,
    "configFile": "lakefile.toml"}],
  "name": "aesop",
