@@ -7,6 +7,7 @@ Authors: Jannis Limperg
 import Aesop.Util.Basic
 import Aesop.Util.EqualUpToIds
 import Aesop.Tree.RunMetaM
+import Batteries.Linter.UnreachableTactic
 
 set_option linter.unreachableTactic false
 
