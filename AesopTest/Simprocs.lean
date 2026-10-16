@@ -58,3 +58,21 @@ example : T₂ := by
 
 example : T₂ := by
   aesop
+
+@[aesop safe]
+inductive ErasedRule : Prop where
+  | intro
+
+example : ErasedRule := by
+  aesop
+
+-- Erasing a rule must preserve unrelated simprocs, including those in other
+-- rule sets visited by the erasure.
+attribute [-aesop] ErasedRule
+
+example : T₂ := by
+  aesop
+
+example : ErasedRule := by
+  fail_if_success aesop (config := { terminal := true })
+  exact .intro
