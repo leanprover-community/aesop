@@ -101,20 +101,20 @@ def sets {α : Type v} [BEq α] [Hashable α] (u : UnionFind α) : Array (Array 
 end UnionFind
 
 /-- Cluster the `as` according to which `bs` are associated to them by `f`. Two
-members `a₁, a₂` of `as` are put in the same cluster iff `f a₁ ∩ f a₂ ≠ ∅`. -/
+members of `as` are put in the same cluster if they are connected by a chain
+of pairs whose `f` images intersect. -/
 def cluster [BEq α] [Hashable α] [BEq β] [Hashable β] (f : α → Array β)
     (as : Array α) : Array (Array α) := Id.run do
   let mut clusters := UnionFind.ofArray as
-  let mut aOccs : Std.HashMap β (Array α) := {}
+  let mut aOccs : Std.HashMap β α := {}
   for a in as do
     for b in f a do
       match aOccs[b]? with
-      | some as' =>
-        for a' in as' do
-          clusters := clusters.merge a a'
-        aOccs := aOccs.insert b (as'.push a)
+      | some a' =>
+        -- All earlier occurrences are already connected to this representative.
+        clusters := clusters.merge a a'
       | none =>
-        aOccs := aOccs.insert b #[a]
+        aOccs := aOccs.insert b a
   return clusters.sets.fst
 
 end Aesop
