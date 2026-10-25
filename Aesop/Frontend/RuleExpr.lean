@@ -170,7 +170,7 @@ def elabSingleIndexingMode (stx : Syntax) : ElabM IndexingMode :=
     | `(indexing_mode| unindexed) => return .unindexed
     | _ => throwUnsupportedSyntax
   where
-    elabKeys (stx : Syntax) : ElabM (Array DiscrTree.Key) :=
+    elabKeys (stx : Syntax) : ElabM IndexingMode :=
       show TermElabM _ from withoutModifyingState do
         mkDiscrTreePath (← elabPattern stx)
 
@@ -300,6 +300,8 @@ syntax Aesop.builder_option : Aesop.feature
 syntax ruleSetsFeature : Aesop.feature
 syntax (name := featIdent) ident : Aesop.feature
 syntax "(" term ")" : Aesop.feature
+syntax (name := featReverseIdent) "← " ident : Aesop.feature
+syntax (name := featReverseParen) "← " "(" term ")" : Aesop.feature
 
 end Parser
 
@@ -309,6 +311,7 @@ inductive Feature
   | builder (b : DBuilderName)
   | builderOption (o : BuilderOption)
   | term (i : Term)
+  | reverseTerm (t : Term)
   | ruleSets (rs : RuleSets)
   deriving Inhabited
 
@@ -326,6 +329,8 @@ partial def «elab» (stx : Syntax) : ElabM Feature :=
     | `(feature| $rs:ruleSetsFeature) => ruleSets <$> RuleSets.elab rs
     | `(feature| $i:ident) => return term i
     | `(feature| ($t:term)) => return term t
+    | `(feature| ← $i:ident) => return reverseTerm i
+    | `(feature| ← ($t:term)) => return reverseTerm t
     | stx => do
       if stx.isOfKind choiceKind then
         let nonIdentAlts :=
@@ -367,7 +372,7 @@ partial def «elab» (stx : Syntax) : ElabM RuleExpr :=
 
 -- Fold the branches of a `RuleExpr`. We treat each branch as a list of features
 -- which we fold over. The result is an array containing one result per branch.
-partial def foldBranchesM {m} [Monad m] (f : σ → Feature → m σ) (init : σ)
+partial def foldBranchesM {m} [Monad m] [Monad m] (f : σ → Feature → m σ) (init : σ)
     (e : RuleExpr) : m (Array σ) :=
   go init #[] e
   where
@@ -388,6 +393,9 @@ structure RuleConfig where
   builder? : Option DBuilderName
   builderOptions : RuleBuilderOptions
   ruleSets : RuleSets
+  -- Whether the rule was given with a `←` modifier (only supported by the
+  -- `simp` builder).
+  reverse : Bool := false
 
 namespace RuleConfig
 
@@ -398,6 +406,10 @@ def addFeature (c : RuleConfig) : Feature → m RuleConfig
     if let some oldTerm := c.term? then
       throwError "duplicate rule '{term}'; rule '{oldTerm}' was already given.\nUse [<term>,...] to give multiple rules."
     return { c with term? := term }
+  | .reverseTerm term => do
+    if let some oldTerm := c.term? then
+      throwError "duplicate rule '{term}'; rule '{oldTerm}' was already given.\nUse [<term>,...] to give multiple rules."
+    return { c with term? := term, reverse := true }
   | .builder builder => return { c with builder? := builder }
   | .builderOption opt =>
     return { c with builderOptions := addBuilderOption c.builderOptions opt }
@@ -457,12 +469,16 @@ def getRuleBuilderInput (c : RuleConfig) : TermElabM RuleBuilderInput := do
   let term ← c.getTerm
   let phase ← c.getPhaseSpec
   let options := c.builderOptions
-  return { term, options, phase }
+  return { term, options, phase, reverse := c.reverse }
 
 def buildRule (c : RuleConfig) :
     ElabM (LocalRuleSetMember × Array RuleSetName) := do
   let builder ← c.getBuilder
   let builderInput ← c.getRuleBuilderInput
+  if builderInput.reverse then
+    match builder with
+    | .regular .simp => pure ()
+    | _ => throwError "aesop: ← is only supported for simp rules"
   let ruleSetMember ← builder.toRuleBuilder builderInput
   return (ruleSetMember, c.ruleSets.ruleSets)
 
@@ -521,6 +537,7 @@ def validateForAdditionalRules (c : RuleConfig) (defaultRuleSet : RuleSetName) :
     priority? := priority
     builder? := builder
     builderOptions, ruleSets
+    reverse := c.reverse
   }
 where
   getPhaseAndPriority (c : RuleConfig) : m (PhaseName × Priority) :=
@@ -593,7 +610,7 @@ def buildAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
   go.run $ .forAdditionalRules goal
 
 def toRuleFilters (e : RuleExpr) :
-    ElabM (Array (RuleSetNameFilter × RuleFilter)) := do
+    ElabM (Array RuleSetNameFilter × RuleFilter) := do
   let initialConfig := {
       term? := none
       phase? := none
@@ -602,11 +619,11 @@ def toRuleFilters (e : RuleExpr) :
       builderOptions := ∅
       ruleSets := ⟨#[]⟩
   }
-  let configs ← e.toRuleConfigs initialConfig
+  let configs ← e.toRuleFilters initialConfig
   configs.mapM (·.toRuleFilter)
 
 def toGlobalRuleFilters (e : RuleExpr) :
-    TermElabM (Array (RuleSetNameFilter × RuleFilter)) := do
+    TermElabM (Array RuleSetNameFilter × RuleFilter) := do
   e.toRuleFilters |>.run $ ← ElabM.Context.forGlobalErasing
 
 def toLocalRuleFilters (e : RuleExpr) : ElabM (Array RuleFilter) :=
