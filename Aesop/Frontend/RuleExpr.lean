@@ -170,7 +170,7 @@ def elabSingleIndexingMode (stx : Syntax) : ElabM IndexingMode :=
     | `(indexing_mode| unindexed) => return .unindexed
     | _ => throwUnsupportedSyntax
   where
-    elabKeys (stx : Syntax) : ElabM IndexingMode :=
+    elabKeys (stx : Syntax) : ElabM (Array DiscrTree.Key) :=
       show TermElabM _ from withoutModifyingState do
         mkDiscrTreePath (← elabPattern stx)
 
@@ -372,7 +372,7 @@ partial def «elab» (stx : Syntax) : ElabM RuleExpr :=
 
 -- Fold the branches of a `RuleExpr`. We treat each branch as a list of features
 -- which we fold over. The result is an array containing one result per branch.
-partial def foldBranchesM {m} [Monad m] [Monad m] (f : σ → Feature → m σ) (init : σ)
+partial def foldBranchesM {m} [Monad m] (f : σ → Feature → m σ) (init : σ)
     (e : RuleExpr) : m (Array σ) :=
   go init #[] e
   where
@@ -610,7 +610,7 @@ def buildAdditionalLocalRules (goal : MVarId) (e : RuleExpr) :
   go.run $ .forAdditionalRules goal
 
 def toRuleFilters (e : RuleExpr) :
-    ElabM (Array RuleSetNameFilter × RuleFilter) := do
+    ElabM (Array (RuleSetNameFilter × RuleFilter)) := do
   let initialConfig := {
       term? := none
       phase? := none
@@ -619,11 +619,11 @@ def toRuleFilters (e : RuleExpr) :
       builderOptions := ∅
       ruleSets := ⟨#[]⟩
   }
-  let configs ← e.toRuleFilters initialConfig
+  let configs ← e.toRuleConfigs initialConfig
   configs.mapM (·.toRuleFilter)
 
 def toGlobalRuleFilters (e : RuleExpr) :
-    TermElabM (Array RuleSetNameFilter × RuleFilter) := do
+    TermElabM (Array (RuleSetNameFilter × RuleFilter)) := do
   e.toRuleFilters |>.run $ ← ElabM.Context.forGlobalErasing
 
 def toLocalRuleFilters (e : RuleExpr) : ElabM (Array RuleFilter) :=
