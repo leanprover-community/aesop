@@ -463,15 +463,26 @@ scoped instance [MonadCache α β m] : MonadCache α β (StateRefT' ω σ m) whe
   findCached? a := MonadCache.findCached? (m := m) a
   cache a b := MonadCache.cache (m := m) a b
 
-/-- A generalized variant of `Meta.SavedState.runMetaM` -/
+/--
+A generalized variant of `Meta.SavedState.runMetaM`.
+
+`x` runs with a fresh child of the current generator for auxiliary declaration
+names. `s.restore` restores the environment but not the generator, so without
+the child, actions run in two states that share an ancestor (e.g. rules applied
+to sibling goals) could add auxiliary declarations with the same name but
+different types, and proof extraction would keep only one of them.
+-/
 def runInMetaState [Monad m] [MonadLiftT MetaM m] [MonadFinally m]
     (s : Meta.SavedState) (x : m α) : m α := do
   let initialState ← show MetaM _ from saveState
+  let (child, parent) := (← show MetaM _ from getDeclNGen).mkChild
   try
     s.restore
+    show MetaM _ from setDeclNGen child
     x
   finally
     initialState.restore
+    show MetaM _ from setDeclNGen parent
 
 def lBoolOr : (x y : LBool) → LBool
   | .true, _ => .true
