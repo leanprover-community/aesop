@@ -19,12 +19,15 @@ private def getSimpEntriesFromPropConst (decl : Name) :
   let thms ← ({} : SimpTheorems).addConst decl
   return SimpTheorems.simpEntries thms
 
-private def getSimpEntriesForConst (decl : Name) : MetaM (Array SimpEntry) := do
+private def getSimpEntriesForConst (decl : Name) (inv : Bool) :
+    MetaM (Array SimpEntry) := do
   let info ← getConstInfo decl
   let mut thms : SimpTheorems := {}
   if (← isProp info.type) then
-    thms ← thms.addConst decl
+    thms ← thms.addConst decl (inv := inv)
   else if info.hasValue then
+    if inv then
+      throwError "aesop: invalid `←` modifier: `{decl}` is a declaration name to be unfolded"
     thms ← thms.addDeclToUnfold decl
   return SimpTheorems.simpEntries thms
 
@@ -38,9 +41,10 @@ def PhaseSpec.getSimpPrio [Monad m] [MonadError m] : PhaseSpec → m Nat
 
 namespace RuleBuilder
 
-def simpCore (decl : Name) (phase : PhaseSpec) : MetaM LocalRuleSetMember :=
+def simpCore (decl : Name) (phase : PhaseSpec) (reverse : Bool) :
+    MetaM LocalRuleSetMember :=
   withExceptionTransform (λ msg => m!"aesop: simp builder: exception while trying to add {decl} as a simp theorem:{indentD msg}") do
-    let entries ← getSimpEntriesForConst decl
+    let entries ← getSimpEntriesForConst decl reverse
     let prio ← phase.getSimpPrio
     let entries := entries.map (updateSimpEntryPriority prio)
     let name :=
@@ -49,12 +53,13 @@ def simpCore (decl : Name) (phase : PhaseSpec) : MetaM LocalRuleSetMember :=
 
 def simp : RuleBuilder := λ input => do
   if let some decl ← elabGlobalRuleIdent? input.term then
-    simpCore decl input.phase
-  else
-    checkElabRuleTermForSimp input.term (isSimpAll := true) -- TODO (isSimpAll := true) correct?
-    return .localNormSimpRule {
-      id := ← mkFreshId
-      simpTheorem := input.term
-    }
+    return ← simpCore decl input.phase input.reverse
+  checkElabRuleTermForSimp input.term (isSimpAll := true) -- TODO (isSimpAll := true) correct?
+    (reverse := input.reverse)
+  return .localNormSimpRule {
+    id := ← mkFreshId
+    simpTheorem := input.term
+    reverse := input.reverse
+  }
 
 end Aesop.RuleBuilder

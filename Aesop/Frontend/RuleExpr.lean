@@ -300,6 +300,8 @@ syntax Aesop.builder_option : Aesop.feature
 syntax ruleSetsFeature : Aesop.feature
 syntax (name := featIdent) ident : Aesop.feature
 syntax "(" term ")" : Aesop.feature
+syntax (name := featReverseIdent) "← " ident : Aesop.feature
+syntax (name := featReverseParen) "← " "(" term ")" : Aesop.feature
 
 end Parser
 
@@ -309,6 +311,7 @@ inductive Feature
   | builder (b : DBuilderName)
   | builderOption (o : BuilderOption)
   | term (i : Term)
+  | reverseTerm (t : Term)
   | ruleSets (rs : RuleSets)
   deriving Inhabited
 
@@ -326,6 +329,8 @@ partial def «elab» (stx : Syntax) : ElabM Feature :=
     | `(feature| $rs:ruleSetsFeature) => ruleSets <$> RuleSets.elab rs
     | `(feature| $i:ident) => return term i
     | `(feature| ($t:term)) => return term t
+    | `(feature| ← $i:ident) => return reverseTerm i
+    | `(feature| ← ($t:term)) => return reverseTerm t
     | stx => do
       if stx.isOfKind choiceKind then
         let nonIdentAlts :=
@@ -388,6 +393,9 @@ structure RuleConfig where
   builder? : Option DBuilderName
   builderOptions : RuleBuilderOptions
   ruleSets : RuleSets
+  -- Whether the rule was given with a `←` modifier (only supported by the
+  -- `simp` builder).
+  reverse : Bool := false
 
 namespace RuleConfig
 
@@ -398,6 +406,10 @@ def addFeature (c : RuleConfig) : Feature → m RuleConfig
     if let some oldTerm := c.term? then
       throwError "duplicate rule '{term}'; rule '{oldTerm}' was already given.\nUse [<term>,...] to give multiple rules."
     return { c with term? := term }
+  | .reverseTerm term => do
+    if let some oldTerm := c.term? then
+      throwError "duplicate rule '{term}'; rule '{oldTerm}' was already given.\nUse [<term>,...] to give multiple rules."
+    return { c with term? := term, reverse := true }
   | .builder builder => return { c with builder? := builder }
   | .builderOption opt =>
     return { c with builderOptions := addBuilderOption c.builderOptions opt }
@@ -457,12 +469,16 @@ def getRuleBuilderInput (c : RuleConfig) : TermElabM RuleBuilderInput := do
   let term ← c.getTerm
   let phase ← c.getPhaseSpec
   let options := c.builderOptions
-  return { term, options, phase }
+  return { term, options, phase, reverse := c.reverse }
 
 def buildRule (c : RuleConfig) :
     ElabM (LocalRuleSetMember × Array RuleSetName) := do
   let builder ← c.getBuilder
   let builderInput ← c.getRuleBuilderInput
+  if builderInput.reverse then
+    match builder with
+    | .regular .simp => pure ()
+    | _ => throwError "aesop: ← is only supported for simp rules"
   let ruleSetMember ← builder.toRuleBuilder builderInput
   return (ruleSetMember, c.ruleSets.ruleSets)
 
@@ -521,6 +537,7 @@ def validateForAdditionalRules (c : RuleConfig) (defaultRuleSet : RuleSetName) :
     priority? := priority
     builder? := builder
     builderOptions, ruleSets
+    reverse := c.reverse
   }
 where
   getPhaseAndPriority (c : RuleConfig) : m (PhaseName × Priority) :=

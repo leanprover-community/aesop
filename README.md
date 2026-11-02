@@ -282,7 +282,10 @@ A rule is a tactic plus some associated metadata. Rules come in three flavours:
 
   Normalisation rules can also be simp lemmas. These are constructed with the
   `simp` builder. They are used by a special `simp` call during
-  the normalisation process.
+  the normalisation process. A simp rule can be given with a `←` modifier,
+  e.g. `aesop (add simp [← h])` or `add_aesop_rules norm simp [← foo]`, to
+  use the lemma right-to-left, exactly like `simp [← h]`. The `←` modifier is
+  only supported for `simp` rules.
 
 - **Safe rules** (keyword `safe`) are applied after normalisation but before any
   unsafe rules. When a safe rule is successfully applied to a goal, the goal

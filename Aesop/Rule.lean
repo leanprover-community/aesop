@@ -174,6 +174,8 @@ A local rule for the norm simplifier.
 structure LocalNormSimpRule where
   id : Name
   simpTheorem : Term
+  -- Whether the simp theorem should be used in reverse direction.
+  reverse := false
   deriving Inhabited
 
 namespace LocalNormSimpRule

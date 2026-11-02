@@ -93,28 +93,34 @@ def elabSimpTheorems (stx : Syntax) (ctx : Simp.Context)
 -- HACK: This produces the syntax "[" lemmas,* "]" which is parsed by
 -- `elabSimpArgs`. This syntax doesn't have an associated parser, so I don't
 -- know how to ensure that the produced syntax is valid.
-def mkSimpArgs (simpTheorem : Term) : Syntax :=
+def mkSimpArgs (simpTheorem : Term) (reverse : Bool) : Syntax :=
+  let simpLemma :=
+    if reverse then
+      Unhygienic.run `(Lean.Parser.Tactic.simpLemma| ← $simpTheorem:term)
+    else
+      Unhygienic.run `(Lean.Parser.Tactic.simpLemma| $simpTheorem:term)
   mkNullNode #[
     mkAtom "[",
-    mkNullNode
-      #[Unhygienic.run `(Lean.Parser.Tactic.simpLemma| $simpTheorem:term)],
+    mkNullNode #[simpLemma],
     mkAtom "]"
   ]
 
 def elabRuleTermForSimpCore (goal : MVarId) (term : Term) (ctx : Simp.Context)
-    (simprocs : Simp.SimprocsArray) (isSimpAll : Bool) :
+    (simprocs : Simp.SimprocsArray) (isSimpAll : Bool) (reverse : Bool) :
     TermElabM (Simp.Context × Simp.SimprocsArray) := do
   withFullElaboration $ runTacticMAsTermElabM goal do
-    elabSimpTheorems (mkSimpArgs term) ctx simprocs isSimpAll
+    elabSimpTheorems (mkSimpArgs term reverse) ctx simprocs isSimpAll
 
-def checkElabRuleTermForSimp (term : Term) (isSimpAll : Bool) : ElabM Unit := do
+def checkElabRuleTermForSimp (term : Term) (isSimpAll : Bool) (reverse : Bool) :
+    ElabM Unit := do
   let ctx ← Simp.mkContext (simpTheorems := #[{}] )
   let simprocs := #[{}]
   discard $ elabRuleTermForSimpCore (← read).goal term ctx simprocs isSimpAll
+    reverse
 
 def elabRuleTermForSimpMetaM (goal : MVarId) (term : Term) (ctx : Simp.Context)
-    (simprocs : Simp.SimprocsArray) (isSimpAll : Bool) :
+    (simprocs : Simp.SimprocsArray) (isSimpAll : Bool) (reverse : Bool) :
     MetaM (Simp.Context × Simp.SimprocsArray) :=
-  elabRuleTermForSimpCore goal term ctx simprocs isSimpAll |>.run'
+  elabRuleTermForSimpCore goal term ctx simprocs isSimpAll reverse |>.run'
 
 end Aesop
