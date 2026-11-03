@@ -108,6 +108,7 @@ def modifyGetGlobalRuleSet (rsName : RuleSetName)
   let (a, rs) := f rs
   let env := ext.modifyState env λ _ => rs.toBaseRuleSet
   let env := simpExt.modifyState env λ _ => rs.simpTheorems
+  let env := simprocExt.modifyState env λ _ => rs.simprocs
   setEnv env
   return a
 
