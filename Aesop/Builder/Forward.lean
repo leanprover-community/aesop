@@ -99,6 +99,11 @@ def forwardCore₂ (t : ElabRuleTerm) (immediate? : Option (Array Name))
   let name ← t.name
   let immediate ← getImmediatePremises (← inferType expr) pat? immediate?
   let info ← ForwardRuleInfo.ofExpr expr pat? immediate
+  if info.slotClusters.isEmpty then
+    if isDestruct then
+      throwError "aesop: destruct builder: rule has no slots.\nDestruct rules without slots cannot clear any hypothesis and are almost certainly a mistake."
+    else if aesop.warn.constantForward.get (← getOptions) then
+      logWarning m!"aesop: forward builder: rule has no slots.\nForward rules without slots are rarely useful and are often tagged by mistake.\nUse `set_option aesop.warn.constantForward false` to disable this warning."
   aesop_trace[forward] "rule type:{indentExpr $ ← inferType expr}"
   withConstAesopTraceNode .forward (return m!"slot clusters") do
     aesop_trace[forward] do
