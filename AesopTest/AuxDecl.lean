@@ -31,3 +31,21 @@ theorem bar
 
 theorem baz (a b : BitVec 1) : (a = 0 ∨ a = 1) ∧ (b = 0 ∨ b = 1) := by
   aesop (add safe 1000 (by bv_decide))
+
+/-
+Rules applied to sibling goals run in states whose environments do not contain
+each other's auxiliary declarations. Here `omega` closes the goals `4 < f 0` and
+`4 < f 1`, as a safe rule and as a norm rule. It used to give both auxiliary
+theorems the same name under synchronous elaboration, and the kernel then
+rejected the extracted proof.
+-/
+
+set_option Elab.async false in
+theorem qux (f : Nat → Nat) (a : Nat) (h : a = 0 ∨ a = 1) (h₀ : f 0 = 5)
+    (h₁ : f 1 = 7) : 4 < f a := by
+  aesop (add safe (by omega)) (config := { enableSimp := false })
+
+set_option Elab.async false in
+theorem quux (f : Nat → Nat) (a : Nat) (h : a = 0 ∨ a = 1) (h₀ : f 0 = 5)
+    (h₁ : f 1 = 7) : 4 < f a := by
+  aesop (add norm (by omega)) (config := { enableSimp := false })
