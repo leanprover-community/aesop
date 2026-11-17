@@ -242,6 +242,7 @@ where
     localRules.foldlM (init := (ctx, simprocs)) λ (ctx, simprocs) r =>
       try
         elabRuleTermForSimpMetaM goal r.simpTheorem ctx simprocs isSimpAll
+          r.reverse
       catch _ =>
         return (ctx, simprocs)
 

@@ -87,6 +87,9 @@ end PhaseSpec
 
 structure RuleBuilderInput where
   term : Term
+  -- Whether the rule was given with a `←` modifier (only supported by the
+  -- `simp` builder).
+  reverse := false
   options : RuleBuilderOptions
   phase : PhaseSpec
   deriving Inhabited
