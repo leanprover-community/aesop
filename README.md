@@ -41,6 +41,26 @@ Aesop is suitable for two main use cases:
   address a certain class of goals. Mathlib tactics such as `measurability`
   and `continuity` are implemented by Aesop.
 
+### Aesop and `grind`
+
+Lean also ships the SMT-style [`grind`
+tactic](https://lean-lang.org/doc/reference/latest/The--grind--tactic/). The
+two tactics overlap, but they optimise for different kinds of automation:
+
+- Reach for `grind` when the goal falls into one of its built-in domains:
+  congruence closure, E-matching with `@[grind]` annotations, case splitting,
+  or specialised solvers such as linear arithmetic and commutative rings. It is
+  part of Lean itself, so it does not require an Aesop dependency.
+- Reach for Aesop when you need programmable proof search. Aesop rules can be
+  split into normalisation, safe, and unsafe phases; given penalties, success
+  probabilities, and rule sets; and implemented by arbitrary tactics. This is
+  what makes Aesop suitable for domain-specific automation such as
+  `measurability` and `continuity`.
+
+Both tactics have a script-generating variant, `grind?` and `aesop?`. As a rule
+of thumb, try `grind` for goals in its built-in domains; use Aesop when you
+want to assemble and tune a rule set for a particular library or proof style.
+
 I only occasionally update this README, so details may be out of date. If you
 have questions, please create an issue or ping me (Jannis Limperg) on the [Lean
 Zulip](https://leanprover.zulipchat.com). Pull requests are very welcome!
