@@ -44,10 +44,8 @@ instance : ToJson Nanos where
   toJson | ⟨n⟩ => toJson n
 
 def printAsMillis (n : Nanos) : String :=
-  let str := toString (n.nanos.toFloat / 1000000)
-  match str.splitToList λ c => c == '.' with
-  | [beforePoint] => beforePoint ++ "ms"
-  | [beforePoint, afterPoint] => beforePoint ++ "." ++ afterPoint.take 1 ++ "ms"
-  | _ => unreachable!
+  let millis := n.nanos / 1000000
+  let tenths := n.nanos / 100000 % 10
+  s!"{millis}.{tenths}ms"
 
 end Aesop.Nanos
