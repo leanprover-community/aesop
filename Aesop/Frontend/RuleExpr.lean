@@ -299,7 +299,12 @@ syntax Aesop.builder_name : Aesop.feature
 syntax Aesop.builder_option : Aesop.feature
 syntax ruleSetsFeature : Aesop.feature
 syntax (name := featIdent) ident : Aesop.feature
-syntax "(" term ")" : Aesop.feature
+/--
+A term in parentheses, optionally followed by projections. The projections are
+attached to the term before it is elaborated, so `(Nat.add_comm n a).symm` can
+be written without an extra pair of parentheses around the whole expression.
+-/
+syntax "(" term ")" ("." rawIdent)* : Aesop.feature
 
 end Parser
 
@@ -325,7 +330,9 @@ partial def «elab» (stx : Syntax) : ElabM Feature :=
     | `(feature| $o:Aesop.builder_option) => builderOption <$> BuilderOption.elab o
     | `(feature| $rs:ruleSetsFeature) => ruleSets <$> RuleSets.elab rs
     | `(feature| $i:ident) => return term i
-    | `(feature| ($t:term)) => return term t
+    | `(feature| ($t:term)$[.$projs]*) =>
+      return term ⟨projs.foldl (init := t) fun t proj =>
+        mkNode ``Parser.Term.proj #[t, mkAtomFrom t ".", proj]⟩
     | stx => do
       if stx.isOfKind choiceKind then
         let nonIdentAlts :=
