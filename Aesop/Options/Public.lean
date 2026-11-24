@@ -138,6 +138,16 @@ structure Options where
   -/
   useDefaultSimpSet := true
   /--
+  When generating a proof script (e.g. with `aesop?`), squeeze a call to the
+  builtin `simp` normalisation rule that closes a goal into `simp_all only [...]`
+  (resp. `simp only [...] at *`). If this option is `false`, such a terminal call
+  is printed without `only`, listing only the lemmas that are not in the default
+  `simp` set, in line with Mathlib's convention of not squeezing terminal
+  `simp`s. Non-terminal calls are always squeezed. The option has no effect when
+  `useDefaultSimpSet` is `false`.
+  -/
+  squeezeTerminalSimp := true
+  /--
   Enable the builtin `unfold` normalisation rule.
   -/
   enableUnfold := true
