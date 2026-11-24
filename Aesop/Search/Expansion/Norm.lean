@@ -175,15 +175,22 @@ def mkNormSimpScriptStep
   let simpOnlyBuilder :=
     TacticBuilder.simpAllOrSimpAtStarOnly (simpAll := ctx.useHyps) preGoal
       ctx.configStx? usedTheorems
+  let options := (← read).options
+  -- If `squeezeTerminalSimp` is `false`, a call that closes the goal is first
+  -- tried without `only`, then squeezed. As for non-terminal calls, the
+  -- unsqueezed call remains the final fallback.
   let tacticBuilders :=
-    if (← read).options.useDefaultSimpSet then
-      #[simpOnlyBuilder, simpBuilder]
+    if options.useDefaultSimpSet then
+      if postGoal?.isNone && ! options.squeezeTerminalSimp then
+        #[simpBuilder, simpOnlyBuilder, simpBuilder]
+      else
+        #[simpOnlyBuilder, simpBuilder]
     else
       #[simpOnlyBuilder]
   return {
     postGoals := postGoal?.toArray
     tacticBuilders
-    tacticBuilders_ne := by simp only [tacticBuilders]; split <;> simp
+    tacticBuilders_ne := by simp only [tacticBuilders]; split <;> (try split) <;> simp
     preGoal, preState, postState
   }
 
